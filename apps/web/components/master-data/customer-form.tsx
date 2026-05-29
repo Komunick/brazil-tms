@@ -27,7 +27,6 @@ export function CustomerForm({
   onCancel,
 }: CustomerFormProps) {
   const t = useTranslations("MasterData.customers");
-  const tCommon = useTranslations("Common");
 
   const {
     register,
