@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+.next/
+out/
+dist/
+build/
+.turbo/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+
+# Test / coverage
+coverage/
+.vitest/
+
+# Supabase local artifacts
+**/supabase/.branches/
+**/supabase/.temp/
+**/supabase/volumes/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+
+# Misc
+*.local
