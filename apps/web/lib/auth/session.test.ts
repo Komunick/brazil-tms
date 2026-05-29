@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   decideAccess,
   evaluateProfile,
+  isOnboardingIncomplete,
   toUserStatus,
   type ProfileRow,
   type SessionResult,
+  type SessionUser,
 } from "./session-core";
 
 const baseProfile: ProfileRow = {
@@ -51,6 +53,29 @@ describe("toUserStatus", () => {
   });
   it("treats unknown status as disabled (fail closed)", () => {
     expect(toUserStatus("weird")).toBe("disabled");
+  });
+});
+
+describe("isOnboardingIncomplete (BFF + shell gate)", () => {
+  const mkUser = (over: Partial<SessionUser> = {}): SessionUser => ({
+    id: "u1",
+    name: "Teste",
+    email: "teste@example.com",
+    role: "dispatcher",
+    status: "active",
+    mustChangePassword: false,
+    lastLoginAt: null,
+    ...over,
+  });
+
+  it("true when the user must change password (temp-password path)", () => {
+    expect(isOnboardingIncomplete(mkUser({ mustChangePassword: true }))).toBe(true);
+  });
+  it("true when the user is still pending (invite not completed)", () => {
+    expect(isOnboardingIncomplete(mkUser({ status: "pending" }))).toBe(true);
+  });
+  it("false for an active user who does not need a change", () => {
+    expect(isOnboardingIncomplete(mkUser())).toBe(false);
   });
 });
 

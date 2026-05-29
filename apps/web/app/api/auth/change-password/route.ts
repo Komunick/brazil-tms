@@ -16,7 +16,8 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: Request): Promise<NextResponse> {
   try {
-    const ctx = await requireAuth();
+    // The ONLY route allowed while onboarding is incomplete (must change password / pending).
+    const ctx = await requireAuth({ allowIncompleteOnboarding: true });
     const body = await request.json();
     const { newPassword } = changePasswordSchema.parse(body);
 

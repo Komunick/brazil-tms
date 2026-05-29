@@ -58,6 +58,15 @@ export function evaluateProfile(
   };
 }
 
+/**
+ * Onboarding is incomplete while a user must change their password (temp-password path) or is
+ * still `pending` (invited, not yet onboarded). Such a user is restricted to the password flow —
+ * enforced in BOTH the shell (decideAccess) and the BFF (requireAuth).
+ */
+export function isOnboardingIncomplete(user: SessionUser): boolean {
+  return user.mustChangePassword || user.status === "pending";
+}
+
 export type AccessDecision = "allow" | "redirect_login" | "redirect_set_password";
 
 /**
@@ -70,8 +79,7 @@ export function decideAccess(
   opts: { isPasswordFlowRoute?: boolean } = {},
 ): AccessDecision {
   if (!session.authenticated) return "redirect_login";
-  const mustComplete = session.user.mustChangePassword || session.user.status === "pending";
-  if (mustComplete && !opts.isPasswordFlowRoute) {
+  if (isOnboardingIncomplete(session.user) && !opts.isPasswordFlowRoute) {
     return "redirect_set_password";
   }
   return "allow";
