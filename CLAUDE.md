@@ -67,6 +67,7 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+Active feature plan: `specs/001-platform-access-shell/plan.md` (Platform, Access, and App Shell).
+For technologies, project structure, BFF/auth patterns, data model, contracts, and setup/test commands,
+read that plan and its `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`.
 <!-- SPECKIT END -->
