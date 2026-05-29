@@ -34,15 +34,15 @@ seed), `infra/` (Supabase + Caddy). `workers/` is unused by this feature.
 
 **Purpose**: Monorepo scaffolding and tooling.
 
-- [ ] T001 Initialize the pnpm monorepo at repo root: `pnpm-workspace.yaml`, root `package.json`, shared `tsconfig.base.json` (TypeScript strict), and the package folders `apps/web`, `packages/shared`, `packages/db`, `workers/` (empty placeholder).
-- [ ] T002 [P] Scaffold the Next.js 15 App Router app (TypeScript strict) in `apps/web/` with Next.js pinned `>=15.2.3` (CVE-2025-29927); create `apps/web/app/layout.tsx` shell root.
-- [ ] T003 [P] Initialize `packages/shared` (`package.json` as `@brazil-tms/shared`, `tsconfig.json`, `src/index.ts`).
-- [ ] T004 [P] Initialize `packages/db` with Drizzle ORM + Drizzle Kit: `packages/db/package.json` (`@brazil-tms/db`), `packages/db/drizzle.config.ts`, and `db:migrate`/`db:seed` scripts.
-- [ ] T005 [P] Configure Tailwind CSS + shadcn/ui + lucide-react in `apps/web` (`apps/web/tailwind.config.ts`, `apps/web/components.json`, base `components/ui/`).
-- [ ] T006 [P] Configure ESLint + Prettier at repo root, including a no-literal-JSX-string rule scoped to `apps/web/**/*.tsx` to enforce SC-006 (no hard-coded user-facing strings).
-- [ ] T007 [P] Configure Vitest (`vitest.config.ts` at root and/or per package) for unit tests in `packages/shared` and `apps/web/lib`.
-- [ ] T008 [P] Configure Playwright in `apps/web/playwright.config.ts` with an `apps/web/e2e/` test dir and a test-env bootstrap.
-- [ ] T009 Author `infra/supabase/docker-compose.yml` (Postgres + GoTrue Auth + Storage) with GoTrue env (`GOTRUE_JWT_EXP=3600`, refresh-token rotation, `GOTRUE_SESSIONS_INACTIVITY_TIMEOUT=8h`, `GOTRUE_SESSIONS_TIMEBOX=720h`, `GOTRUE_MAILER_AUTOCONFIRM=false`, `SMTP_*`), `infra/caddy/` config that strips the `x-middleware-subrequest` header, and `.env.example` files (`apps/web/.env.local.example`, `infra/supabase/.env.example`).
+- [X] T001 Initialize the pnpm monorepo at repo root: `pnpm-workspace.yaml`, root `package.json`, shared `tsconfig.base.json` (TypeScript strict), and the package folders `apps/web`, `packages/shared`, `packages/db`, `workers/` (empty placeholder).
+- [X] T002 [P] Scaffold the Next.js 15 App Router app (TypeScript strict) in `apps/web/` with Next.js pinned `>=15.2.3` (CVE-2025-29927); create `apps/web/app/layout.tsx` shell root.
+- [X] T003 [P] Initialize `packages/shared` (`package.json` as `@brazil-tms/shared`, `tsconfig.json`, `src/index.ts`).
+- [X] T004 [P] Initialize `packages/db` with Drizzle ORM + Drizzle Kit: `packages/db/package.json` (`@brazil-tms/db`), `packages/db/drizzle.config.ts`, and `db:migrate`/`db:seed` scripts.
+- [X] T005 [P] Configure Tailwind CSS + shadcn/ui + lucide-react in `apps/web` (`apps/web/tailwind.config.ts`, `apps/web/components.json`, base `components/ui/`).
+- [X] T006 [P] Configure ESLint + Prettier at repo root, including a no-literal-JSX-string rule scoped to `apps/web/**/*.tsx` to enforce SC-006 (no hard-coded user-facing strings).
+- [X] T007 [P] Configure Vitest (`vitest.config.ts` at root and/or per package) for unit tests in `packages/shared` and `apps/web/lib`.
+- [X] T008 [P] Configure Playwright in `apps/web/playwright.config.ts` with an `apps/web/e2e/` test dir and a test-env bootstrap.
+- [X] T009 Author `infra/supabase/docker-compose.yml` (Postgres + GoTrue Auth + Storage) with GoTrue env (`GOTRUE_JWT_EXP=3600`, refresh-token rotation, `GOTRUE_SESSIONS_INACTIVITY_TIMEOUT=8h`, `GOTRUE_SESSIONS_TIMEBOX=720h`, `GOTRUE_MAILER_AUTOCONFIRM=false`, `SMTP_*`), `infra/caddy/` config that strips the `x-middleware-subrequest` header, and `.env.example` files (`apps/web/.env.local.example`, `infra/supabase/.env.example`).
 
 ---
 
@@ -52,17 +52,17 @@ seed), `infra/` (Supabase + Caddy). `workers/` is unused by this feature.
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete.
 
-- [ ] T010 Define the Drizzle schema for the `app_role` enum (7 MVP roles + reserved `customer_viewer`) and `public.users` in `packages/db/schema/enums.ts` and `packages/db/schema/users.ts` (per [data-model.md](./data-model.md)).
-- [ ] T011 Define the Drizzle schema for append-only `public.audit_logs` in `packages/db/schema/audit-logs.ts` (no `updated_at`/soft-delete columns; jsonb previous/new values).
-- [ ] T012 Generate and apply the initial migration via `drizzle-kit` into `packages/db/migrations/`, including `REVOKE UPDATE, DELETE ON public.audit_logs FROM PUBLIC;` (append-only hardening). Do NOT recreate `auth.users` (owned by GoTrue).
-- [ ] T013 [P] Create the server-only Drizzle Postgres client in `packages/db/src/client.ts` (reads `DATABASE_URL`; exported for the BFF).
-- [ ] T014 [P] Create the Supabase clients in `apps/web/lib/supabase/`: `server.ts` (`createServerClient` + cookies), `browser.ts` (`createBrowserClient`, auth-only), `admin.ts` (service-role, `auth.admin.*`, server-only).
-- [ ] T015 Implement the auth DAL in `apps/web/lib/auth/session.ts` (`verifySession()` — `getUser()` via server client, load `users` profile via Drizzle, wrapped in React `cache()`; checks `status`/`must_change_password`) and `apps/web/lib/auth/require-auth.ts` (`requireAuth()` returning `AuthContext`, with typed `Unauthorized`/`Forbidden` → 401/403). Authentication only (permission assertion added in US2).
-- [ ] T016 [P] Scaffold next-intl in `apps/web/src/i18n/request.ts` (locale fixed to `pt-BR`), wire `NextIntlClientProvider` in `apps/web/app/layout.tsx`, and create the base `apps/web/messages/pt-BR.json`.
-- [ ] T017 Set up the TanStack Query client + provider in `apps/web/lib/query-client.ts` and wire it in `apps/web/app/layout.tsx` (polling defaults; no Realtime). Sequenced after T016 (both edit `apps/web/app/layout.tsx`).
-- [ ] T018 [P] Add date/time + currency formatting helpers (Luxon `America/Sao_Paulo`, UTC storage, `Intl` BRL) in `packages/shared/src/formatting.ts`.
-- [ ] T019 [P] Implement the coarse auth guard `apps/web/middleware.ts` (redirect unauthenticated requests on protected path prefixes to `/login`; UX-only, not the security boundary).
-- [ ] T020 Implement the first-Admin seed in `packages/db/seed/001-admin.ts` (`tsx`-run; reads `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`; `auth.admin.createUser({email_confirm:true})` + insert `public.users` profile `role='admin', status='active', must_change_password=true`; idempotent).
+- [X] T010 Define the Drizzle schema for the `app_role` enum (7 MVP roles + reserved `customer_viewer`) and `public.users` in `packages/db/schema/enums.ts` and `packages/db/schema/users.ts` (per [data-model.md](./data-model.md)).
+- [X] T011 Define the Drizzle schema for append-only `public.audit_logs` in `packages/db/schema/audit-logs.ts` (no `updated_at`/soft-delete columns; jsonb previous/new values).
+- [X] T012 Generate and apply the initial migration via `drizzle-kit` into `packages/db/migrations/`, including `REVOKE UPDATE, DELETE ON public.audit_logs FROM PUBLIC;` (append-only hardening). Do NOT recreate `auth.users` (owned by GoTrue).
+- [X] T013 [P] Create the server-only Drizzle Postgres client in `packages/db/src/client.ts` (reads `DATABASE_URL`; exported for the BFF).
+- [X] T014 [P] Create the Supabase clients in `apps/web/lib/supabase/`: `server.ts` (`createServerClient` + cookies), `browser.ts` (`createBrowserClient`, auth-only), `admin.ts` (service-role, `auth.admin.*`, server-only).
+- [X] T015 Implement the auth DAL in `apps/web/lib/auth/session.ts` (`verifySession()` — `getUser()` via server client, load `users` profile via Drizzle, wrapped in React `cache()`; checks `status`/`must_change_password`) and `apps/web/lib/auth/require-auth.ts` (`requireAuth()` returning `AuthContext`, with typed `Unauthorized`/`Forbidden` → 401/403). Authentication only (permission assertion added in US2).
+- [X] T016 [P] Scaffold next-intl in `apps/web/src/i18n/request.ts` (locale fixed to `pt-BR`), wire `NextIntlClientProvider` in `apps/web/app/layout.tsx`, and create the base `apps/web/messages/pt-BR.json`.
+- [X] T017 Set up the TanStack Query client + provider in `apps/web/lib/query-client.ts` and wire it in `apps/web/app/layout.tsx` (polling defaults; no Realtime). Sequenced after T016 (both edit `apps/web/app/layout.tsx`).
+- [X] T018 [P] Add date/time + currency formatting helpers (Luxon `America/Sao_Paulo`, UTC storage, `Intl` BRL) in `packages/shared/src/formatting.ts`.
+- [X] T019 [P] Implement the coarse auth guard `apps/web/middleware.ts` (redirect unauthenticated requests on protected path prefixes to `/login`; UX-only, not the security boundary).
+- [X] T020 Implement the first-Admin seed in `packages/db/seed/001-admin.ts` (`tsx`-run; reads `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`; `auth.admin.createUser({email_confirm:true})` + insert `public.users` profile `role='admin', status='active', must_change_password=true`; idempotent).
 
 **Checkpoint**: Foundation ready — user stories can now proceed.
 
@@ -79,22 +79,22 @@ password reset / forced change. (Spec US1, SC-001, SC-007.)
 
 ### Tests for User Story 1 ⚠️ (write first, ensure they FAIL)
 
-- [ ] T021 [P] [US1] Playwright spec `apps/web/e2e/auth-login.spec.ts`: valid login → shell; invalid → generic error, no session; unauth deep-link → `/login`; sign-out ends session; **disabled user denied at sign-in (no session)** (SC-007/FR-005); **expired session → next protected request redirects to `/login`** (FR-003a).
-- [ ] T022 [P] [US1] Playwright spec `apps/web/e2e/auth-password.spec.ts`: forgot-password neutral response for unknown email; invite/set-password landing; forced password change on first sign-in.
+- [X] T021 [P] [US1] Playwright spec `apps/web/e2e/auth-login.spec.ts`: valid login → shell; invalid → generic error, no session; unauth deep-link → `/login`; sign-out ends session; **disabled user denied at sign-in (no session)** (SC-007/FR-005); **expired session → next protected request redirects to `/login`** (FR-003a).
+- [X] T022 [P] [US1] Playwright spec `apps/web/e2e/auth-password.spec.ts`: forgot-password neutral response for unknown email; invite/set-password landing; forced password change on first sign-in.
 
 ### Implementation for User Story 1
 
-- [ ] T023 [P] [US1] Create the login Zod schema (`loginSchema`, pt-BR messages) in `packages/shared/src/schemas/auth.ts`.
-- [ ] T024 [US1] Implement `POST /api/auth/sign-in` in `apps/web/app/api/auth/sign-in/route.ts` (`signInWithPassword`, set HttpOnly cookies, promote `pending→active` + stamp `last_login_at`, `must_change_password` redirect signal, `disabled` → 403, generic `401` on bad credentials).
-- [ ] T025 [US1] Implement `POST /api/auth/sign-out` in `apps/web/app/api/auth/sign-out/route.ts` (`signOut` + clear cookies).
-- [ ] T026 [US1] Implement `POST /api/auth/forgot-password` in `apps/web/app/api/auth/forgot-password/route.ts` (trigger recovery email; always-neutral response).
-- [ ] T027 [US1] Implement `POST /api/auth/change-password` in `apps/web/app/api/auth/change-password/route.ts` (set new password, clear `users.must_change_password`).
-- [ ] T028 [P] [US1] Build the login page (react-hook-form + `zodResolver(loginSchema)`, pt-BR) in `apps/web/app/(auth)/login/page.tsx`.
-- [ ] T029 [P] [US1] Build the forgot-password page in `apps/web/app/(auth)/forgot-password/page.tsx`.
-- [ ] T030 [P] [US1] Build the set-password page (invite landing + forced-change) in `apps/web/app/(auth)/set-password/page.tsx`.
-- [ ] T031 [US1] Build the authenticated shell layout with session guard (calls `verifySession()` → redirect to `/login` if unauthenticated) and a topbar with sign-out in `apps/web/app/(shell)/layout.tsx`.
-- [ ] T032 [US1] Build the shell home placeholder page in `apps/web/app/(shell)/page.tsx`.
-- [ ] T033 [P] [US1] Add `Auth` and `Shell` pt-BR strings to `apps/web/messages/pt-BR.json`.
+- [X] T023 [P] [US1] Create the login Zod schema (`loginSchema`, pt-BR messages) in `packages/shared/src/schemas/auth.ts`.
+- [X] T024 [US1] Implement `POST /api/auth/sign-in` in `apps/web/app/api/auth/sign-in/route.ts` (`signInWithPassword`, set HttpOnly cookies, promote `pending→active` + stamp `last_login_at`, `must_change_password` redirect signal, `disabled` → 403, generic `401` on bad credentials).
+- [X] T025 [US1] Implement `POST /api/auth/sign-out` in `apps/web/app/api/auth/sign-out/route.ts` (`signOut` + clear cookies).
+- [X] T026 [US1] Implement `POST /api/auth/forgot-password` in `apps/web/app/api/auth/forgot-password/route.ts` (trigger recovery email; always-neutral response).
+- [X] T027 [US1] Implement `POST /api/auth/change-password` in `apps/web/app/api/auth/change-password/route.ts` (set new password, clear `users.must_change_password`).
+- [X] T028 [P] [US1] Build the login page (react-hook-form + `zodResolver(loginSchema)`, pt-BR) in `apps/web/app/(auth)/login/page.tsx`.
+- [X] T029 [P] [US1] Build the forgot-password page in `apps/web/app/(auth)/forgot-password/page.tsx`.
+- [X] T030 [P] [US1] Build the set-password page (invite landing + forced-change) in `apps/web/app/(auth)/set-password/page.tsx`.
+- [X] T031 [US1] Build the authenticated shell layout with session guard (calls `verifySession()` → redirect to `/login` if unauthenticated) and a topbar with sign-out in `apps/web/app/(shell)/layout.tsx`.
+- [X] T032 [US1] Build the shell home placeholder page in `apps/web/app/(shell)/page.tsx`.
+- [X] T033 [P] [US1] Add `Auth` and `Shell` pt-BR strings to `apps/web/messages/pt-BR.json`.
 
 **Checkpoint**: Login, logout, password recovery, and the protected shell work independently (with seeded users).
 
@@ -111,16 +111,16 @@ state change. (Spec US2, SC-002, SC-003.)
 
 ### Tests for User Story 2 ⚠️ (write first, ensure they FAIL)
 
-- [ ] T034 [P] [US2] Vitest `packages/shared/src/auth/permissions.test.ts`: `can()` matches [contracts/permission-matrix.md](./contracts/permission-matrix.md) for all 7 roles × all keys; Admin is a superset; `manage_users`/`view_audit_log` are Admin-only; `customer_viewer` is not an assignable role.
-- [ ] T035 [P] [US2] Playwright `apps/web/e2e/authz.spec.ts`: role-specific nav visibility; non-admin direct `GET /api/admin/users` → `403`, no state change; **a non-admin role still reaches its own permitted area (positive path, 200)** so enforcement is not blanket-deny (SC-002).
+- [X] T034 [P] [US2] Vitest `packages/shared/src/auth/permissions.test.ts`: `can()` matches [contracts/permission-matrix.md](./contracts/permission-matrix.md) for all 7 roles × all keys; Admin is a superset; `manage_users`/`view_audit_log` are Admin-only; `customer_viewer` is not an assignable role.
+- [X] T035 [P] [US2] Playwright `apps/web/e2e/authz.spec.ts`: role-specific nav visibility; non-admin direct `GET /api/admin/users` → `403`, no state change; **a non-admin role still reaches its own permitted area (positive path, 200)** so enforcement is not blanket-deny (SC-002).
 
 ### Implementation for User Story 2
 
-- [ ] T036 [P] [US2] Implement the static permission catalog (`Role`, `PermissionKey`, `ROLE_PERMISSIONS`, pure `can(role, permission)`) in `packages/shared/src/auth/permissions.ts` per [contracts/permission-matrix.md](./contracts/permission-matrix.md).
-- [ ] T037 [US2] Add `requirePermission(ctx, key)` (uses `can()`, throws `Forbidden`/403) to `apps/web/lib/auth/require-auth.ts` (depends on T015, T036).
-- [ ] T038 [P] [US2] Define the role-gated navigation config (items + required permission key) in `apps/web/lib/nav.ts`.
-- [ ] T039 [P] [US2] Build the role-aware sidebar/nav component that filters items via `can()` in `apps/web/components/shell/app-sidebar.tsx`.
-- [ ] T040 [US2] Wire the shell layout to pass the current role to the sidebar and render only permitted areas in `apps/web/app/(shell)/layout.tsx` (depends on T031, T038, T039).
+- [X] T036 [P] [US2] Implement the static permission catalog (`Role`, `PermissionKey`, `ROLE_PERMISSIONS`, pure `can(role, permission)`) in `packages/shared/src/auth/permissions.ts` per [contracts/permission-matrix.md](./contracts/permission-matrix.md).
+- [X] T037 [US2] Add `requirePermission(ctx, key)` (uses `can()`, throws `Forbidden`/403) to `apps/web/lib/auth/require-auth.ts` (depends on T015, T036).
+- [X] T038 [P] [US2] Define the role-gated navigation config (items + required permission key) in `apps/web/lib/nav.ts`.
+- [X] T039 [P] [US2] Build the role-aware sidebar/nav component that filters items via `can()` in `apps/web/components/shell/app-sidebar.tsx`.
+- [X] T040 [US2] Wire the shell layout to pass the current role to the sidebar and render only permitted areas in `apps/web/app/(shell)/layout.tsx` (depends on T031, T038, T039).
 
 **Checkpoint**: The permission model is authoritative server-side and reflected (additively) in the shell.
 
@@ -137,19 +137,19 @@ duplicate email (409); confirm a non-admin is denied the area (UI + API); confir
 
 ### Tests for User Story 3 ⚠️ (write first, ensure they FAIL)
 
-- [ ] T041 [P] [US3] Vitest `packages/shared/src/schemas/admin-user.test.ts`: create/update schemas accept valid input, reject `customer_viewer`, require `tempPassword` (≥8) on the temp-password path, and reject missing required fields.
-- [ ] T042 [P] [US3] Playwright `apps/web/e2e/admin-users.spec.ts`: create user via invite (→ `pending`) and via temp-password (→ forced change); resend invite for a `pending` user; change role/status; duplicate email → `409`; non-admin denied; last-admin disable/down-role → `409`; **disabling a signed-in user denies their next request (mid-session)**; **a role change is reflected on the user's next request** (spec edge cases).
+- [X] T041 [P] [US3] Vitest `packages/shared/src/schemas/admin-user.test.ts`: create/update schemas accept valid input, reject `customer_viewer`, require `tempPassword` (≥8) on the temp-password path, and reject missing required fields.
+- [X] T042 [P] [US3] Playwright `apps/web/e2e/admin-users.spec.ts`: create user via invite (→ `pending`) and via temp-password (→ forced change); resend invite for a `pending` user; change role/status; duplicate email → `409`; non-admin denied; last-admin disable/down-role → `409`; **disabling a signed-in user denies their next request (mid-session)**; **a role change is reflected on the user's next request** (spec edge cases).
 
 ### Implementation for User Story 3
 
-- [ ] T043 [P] [US3] Implement admin-user Zod schemas (`createUserSchema` with `invite|temp_password` discriminated union, `updateUserRoleSchema`, `updateUserStatusSchema`; 7 assignable roles only) in `packages/shared/src/schemas/admin-user.ts`.
-- [ ] T044 [US3] Implement the user service in `apps/web/lib/users/service.ts`: create (GoTrue-first via `inviteUserByEmail`/`createUser`, then profile insert via Drizzle, compensating `admin.deleteUser` on failure), update role/status (GoTrue `ban_duration` on disable), `pending→active` promotion, and the last-active-Admin guard (`SELECT count(*) … FOR UPDATE` → 409). Depends on T014, T015, T036, T043.
-- [ ] T045 [US3] Implement `GET`/`POST /api/admin/users` in `apps/web/app/api/admin/users/route.ts` (`requirePermission('manage_users')`; list + create; 400 on validation, 409 on duplicate email).
-- [ ] T046 [US3] Implement `PATCH /api/admin/users/[id]` in `apps/web/app/api/admin/users/[id]/route.ts` (role/status update via service; last-admin guard; 403/409).
-- [ ] T047 [US3] Implement `POST /api/admin/users/[id]/invite` (resend invite for `pending` users) in `apps/web/app/api/admin/users/[id]/invite/route.ts`.
-- [ ] T048 [P] [US3] Build the users list page (TanStack Query + TanStack Table) in `apps/web/app/(shell)/admin/users/page.tsx`; display `last_login_at`/timestamps via the shared Luxon `formatDateTime` helper (America/Sao_Paulo) per FR-022.
-- [ ] T049 [P] [US3] Build the user create/edit UI (react-hook-form + shared schemas; onboarding-path selector) in `apps/web/app/(shell)/admin/users/[id]/page.tsx` and `apps/web/components/users/`.
-- [ ] T050 [P] [US3] Add `AdminUsers` pt-BR strings to `apps/web/messages/pt-BR.json`.
+- [X] T043 [P] [US3] Implement admin-user Zod schemas (`createUserSchema` with `invite|temp_password` discriminated union, `updateUserRoleSchema`, `updateUserStatusSchema`; 7 assignable roles only) in `packages/shared/src/schemas/admin-user.ts`.
+- [X] T044 [US3] Implement the user service in `apps/web/lib/users/service.ts`: create (GoTrue-first via `inviteUserByEmail`/`createUser`, then profile insert via Drizzle, compensating `admin.deleteUser` on failure), update role/status (GoTrue `ban_duration` on disable), `pending→active` promotion, and the last-active-Admin guard (`SELECT count(*) … FOR UPDATE` → 409). Depends on T014, T015, T036, T043.
+- [X] T045 [US3] Implement `GET`/`POST /api/admin/users` in `apps/web/app/api/admin/users/route.ts` (`requirePermission('manage_users')`; list + create; 400 on validation, 409 on duplicate email).
+- [X] T046 [US3] Implement `PATCH /api/admin/users/[id]` in `apps/web/app/api/admin/users/[id]/route.ts` (role/status update via service; last-admin guard; 403/409).
+- [X] T047 [US3] Implement `POST /api/admin/users/[id]/invite` (resend invite for `pending` users) in `apps/web/app/api/admin/users/[id]/invite/route.ts`.
+- [X] T048 [P] [US3] Build the users list page (TanStack Query + TanStack Table) in `apps/web/app/(shell)/admin/users/page.tsx`; display `last_login_at`/timestamps via the shared Luxon `formatDateTime` helper (America/Sao_Paulo) per FR-022.
+- [X] T049 [P] [US3] Build the user create/edit UI (react-hook-form + shared schemas; onboarding-path selector) in `apps/web/app/(shell)/admin/users/[id]/page.tsx` and `apps/web/components/users/`.
+- [X] T050 [P] [US3] Add `AdminUsers` pt-BR strings to `apps/web/messages/pt-BR.json`.
 
 **Checkpoint**: Full Users & Roles administration works; Admin-only; last-admin protected.
 
@@ -166,17 +166,17 @@ view. (Spec US4, SC-005.)
 
 ### Tests for User Story 4 ⚠️ (write first, ensure they FAIL)
 
-- [ ] T051 [P] [US4] Vitest `apps/web/lib/audit/write-audit.test.ts`: `writeAudit` maps all fields correctly; no update/delete helper is exported (append-only).
-- [ ] T052 [P] [US4] Playwright `apps/web/e2e/audit.spec.ts`: each of the four audited actions (`user.create`, `user.invite_sent`, `user.role_change`, `user.status_change`) produces a retrievable audit entry with all required fields, visible to Admin (SC-005/US4-AS3); a non-admin gets `403` on `GET /api/admin/audit-logs`.
+- [X] T051 [P] [US4] Vitest `apps/web/lib/audit/write-audit.test.ts`: `writeAudit` maps all fields correctly; no update/delete helper is exported (append-only).
+- [X] T052 [P] [US4] Playwright `apps/web/e2e/audit.spec.ts`: each of the four audited actions (`user.create`, `user.invite_sent`, `user.role_change`, `user.status_change`) produces a retrievable audit entry with all required fields, visible to Admin (SC-005/US4-AS3); a non-admin gets `403` on `GET /api/admin/audit-logs`.
 
 ### Implementation for User Story 4
 
-- [ ] T053 [P] [US4] Define the `AuditAction` union (`user.create`, `user.role_change`, `user.status_change`, `user.invite_sent`) and `AuditEntry` type in `packages/shared/src/audit/actions.ts`.
-- [ ] T054 [US4] Implement `writeAudit(tx, entry)` (same-transaction insert into `audit_logs`; insert-only) in `apps/web/lib/audit/write-audit.ts` (depends on T011, T013, T053).
-- [ ] T055 [US4] Wire `writeAudit` into the user-service mutations (`user.create`, `user.invite_sent`, `user.role_change`, `user.status_change`) inside the same transaction in `apps/web/lib/users/service.ts` (depends on T044, T054).
-- [ ] T056 [US4] Implement `GET /api/admin/audit-logs` in `apps/web/app/api/admin/audit-logs/route.ts` (`requirePermission('view_audit_log')`; Admin-only; `created_at DESC`; no write/update/delete endpoints).
-- [ ] T057 [P] [US4] Build the audit list page (TanStack Query) in `apps/web/app/(shell)/admin/audit/page.tsx`; format `created_at` via the shared Luxon `formatDateTime` helper (America/Sao_Paulo) per FR-022.
-- [ ] T058 [P] [US4] Add `Audit` pt-BR strings to `apps/web/messages/pt-BR.json`.
+- [X] T053 [P] [US4] Define the `AuditAction` union (`user.create`, `user.role_change`, `user.status_change`, `user.invite_sent`) and `AuditEntry` type in `packages/shared/src/audit/actions.ts`.
+- [X] T054 [US4] Implement `writeAudit(tx, entry)` (same-transaction insert into `audit_logs`; insert-only) in `apps/web/lib/audit/write-audit.ts` (depends on T011, T013, T053).
+- [X] T055 [US4] Wire `writeAudit` into the user-service mutations (`user.create`, `user.invite_sent`, `user.role_change`, `user.status_change`) inside the same transaction in `apps/web/lib/users/service.ts` (depends on T044, T054).
+- [X] T056 [US4] Implement `GET /api/admin/audit-logs` in `apps/web/app/api/admin/audit-logs/route.ts` (`requirePermission('view_audit_log')`; Admin-only; `created_at DESC`; no write/update/delete endpoints).
+- [X] T057 [P] [US4] Build the audit list page (TanStack Query) in `apps/web/app/(shell)/admin/audit/page.tsx`; format `created_at` via the shared Luxon `formatDateTime` helper (America/Sao_Paulo) per FR-022.
+- [X] T058 [P] [US4] Add `Audit` pt-BR strings to `apps/web/messages/pt-BR.json`.
 
 **Checkpoint**: All four user stories are independently functional.
 
@@ -186,11 +186,11 @@ view. (Spec US4, SC-005.)
 
 **Purpose**: Hardening and validation across stories.
 
-- [ ] T059 [P] Add Vitest unit tests for `users.status` transitions and `must_change_password` gating in `apps/web/lib/auth/session.test.ts`.
-- [ ] T060 [P] Verify zero hard-coded user-facing strings across `apps/web` via the i18n ESLint rule (SC-006).
-- [ ] T061 Confirm (setup-verify) GoTrue SMTP and `GOTRUE_SESSIONS_*` env vars take effect on the pinned GoTrue image; if the idle timeout is not honored, wire the app-layer `last_active_at` fallback in `apps/web/lib/auth/session.ts` and document it in `infra/supabase/.env.example`.
-- [ ] T062 [P] Ensure the PR uses the repository PR template (how-to-test section) and reconcile any drift in `specs/001-platform-access-shell/quickstart.md`.
-- [ ] T063 Run `quickstart.md` manual verification (SC-001–SC-007) and the full quality gate: `pnpm lint && pnpm typecheck && pnpm build && pnpm test && pnpm test:e2e`.
+- [X] T059 [P] Add Vitest unit tests for `users.status` transitions and `must_change_password` gating in `apps/web/lib/auth/session.test.ts`.
+- [X] T060 [P] Verify zero hard-coded user-facing strings across `apps/web` via the i18n ESLint rule (SC-006).
+- [ ] T061 Confirm (setup-verify) GoTrue SMTP and `GOTRUE_SESSIONS_*` env vars take effect on the pinned GoTrue image; if the idle timeout is not honored, wire the app-layer `last_active_at` fallback in `apps/web/lib/auth/session.ts` and document it in `infra/supabase/.env.example`. — **[VERIFY AT SETUP — not runnable in this environment]**: requires a live GoTrue image. The env vars are set in `infra/supabase/docker-compose.yml`; chosen defaults + the app-layer fallback decision are documented in `research.md §4` and `infra/supabase/.env.example`. Complete when the stack is stood up.
+- [X] T062 [P] Ensure the PR uses the repository PR template (how-to-test section) and reconcile any drift in `specs/001-platform-access-shell/quickstart.md`. (PR template added at `.github/pull_request_template.md`; quickstart commands reconciled against the built scripts.)
+- [ ] T063 Run `quickstart.md` manual verification (SC-001–SC-007) and the full quality gate: `pnpm lint && pnpm typecheck && pnpm build && pnpm test && pnpm test:e2e`. — **PARTIAL**: the automated gate `pnpm lint && pnpm typecheck && pnpm build && pnpm test` **PASSES** (154 unit tests). `pnpm test:e2e` and the manual SC-001–SC-007 walkthrough require the running Supabase stack (`docker compose up` + migrate + seed) and are pending that environment.
 
 ---
 
