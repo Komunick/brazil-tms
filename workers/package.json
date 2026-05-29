@@ -1,0 +1,9 @@
+{
+  "name": "@brazil-tms/workers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "echo \"workers package unused in feature 001 (no-op)\""
+  }
+}

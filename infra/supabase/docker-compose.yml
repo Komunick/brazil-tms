@@ -1,0 +1,108 @@
+# Self-hosted Supabase for Brazil Transports TMS — Postgres + GoTrue (Auth) + Storage ONLY.
+#
+# Hard constraints (constitution / STACK §5): PostgREST is intentionally NOT run and NEVER
+# exposed publicly — the BFF reaches Postgres directly via Drizzle (server-only DATABASE_URL).
+# The only public Supabase API surface is GoTrue (/auth/v1) and Storage (/storage/v1), fronted
+# by the `gateway` (Caddy) which also strips the x-middleware-subrequest header (CVE-2025-29927).
+#
+# Several values are [VERIFY AT SETUP] (see research.md §4/§6/§14): confirm the GoTrue session
+# env vars take effect on the pinned image and that SMTP is configured before relying on invite /
+# forgot-password emails. Copy .env.example -> .env and fill secrets before `docker compose up`.
+
+name: brazil-tms-supabase
+
+services:
+  db:
+    image: supabase/postgres:15.8.1.020
+    restart: unless-stopped
+    ports:
+      - "5432:5432" # server-only in prod; bound for local Drizzle migrate/seed in dev
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "${POSTGRES_DB:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  auth:
+    image: supabase/gotrue:v2.176.1
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: "9999"
+      API_EXTERNAL_URL: ${API_EXTERNAL_URL:-http://localhost:8000}
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}
+      GOTRUE_SITE_URL: ${SITE_URL:-http://localhost:3000}
+      GOTRUE_URI_ALLOW_LIST: ${ADDITIONAL_REDIRECT_URLS:-http://localhost:3000/**}
+      GOTRUE_JWT_SECRET: ${JWT_SECRET}
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      # --- Session policy (FR-003a; research §4) ---
+      GOTRUE_JWT_EXP: "3600" # 1h access token; @supabase/ssr refreshes ~60s before expiry (rolling)
+      GOTRUE_SECURITY_REFRESH_TOKEN_ROTATION_ENABLED: "true"
+      GOTRUE_SECURITY_REFRESH_TOKEN_REUSE_INTERVAL: "10"
+      GOTRUE_SESSIONS_INACTIVITY_TIMEOUT: "8h" # [VERIFY AT SETUP] idle window; app-layer fallback if ineffective
+      GOTRUE_SESSIONS_TIMEBOX: "720h" # 30-day absolute max
+      # --- Provisioning: internal TMS, admin-only, no public sign-up (FR-001) ---
+      GOTRUE_DISABLE_SIGNUP: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      # --- SMTP (required for invite + forgot-password; research §6) [VERIFY AT SETUP] ---
+      GOTRUE_SMTP_HOST: ${SMTP_HOST}
+      GOTRUE_SMTP_PORT: ${SMTP_PORT}
+      GOTRUE_SMTP_USER: ${SMTP_USER}
+      GOTRUE_SMTP_PASS: ${SMTP_PASS}
+      GOTRUE_SMTP_ADMIN_EMAIL: ${SMTP_ADMIN_EMAIL}
+      GOTRUE_SMTP_SENDER_NAME: ${SMTP_SENDER_NAME}
+      GOTRUE_MAILER_URLPATHS_INVITE: /auth/set-password
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /auth/set-password
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /auth/set-password
+    expose:
+      - "9999" # reachable only inside the compose network; public access is via the gateway
+
+  storage:
+    # Provisioned for the platform; UNUSED by feature 001 (no proof/document upload here).
+    image: supabase/storage-api:v1.19.3
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://supabase_storage_admin:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}
+      FILE_SIZE_LIMIT: "52428800"
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: stub
+      GLOBAL_S3_BUCKET: stub
+    volumes:
+      - storage-data:/var/lib/storage
+    expose:
+      - "5000"
+
+  gateway:
+    # Single public Supabase API surface: /auth/v1 + /storage/v1 only (no /rest/v1).
+    image: caddy:2.8-alpine
+    depends_on:
+      - auth
+      - storage
+    restart: unless-stopped
+    ports:
+      - "8000:8000" # NEXT_PUBLIC_SUPABASE_URL=http://localhost:8000 (quickstart.md)
+    volumes:
+      - ../caddy/gateway.Caddyfile:/etc/caddy/Caddyfile:ro
+
+volumes:
+  db-data:
+  storage-data:
