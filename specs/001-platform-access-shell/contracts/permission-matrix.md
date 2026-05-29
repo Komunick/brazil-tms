@@ -64,6 +64,11 @@ Notes:
   may edit) is finalized by the owning feature (spec Assumptions).
 - **Collapse-identical-roles (YAGNI)**: no two MVP roles share an identical set, so none are collapsed
   (research §8).
+- **Forward note (feature 002)**: the "declared now… without editing this catalog" intent holds for the
+  trip-centric keys above, but §18 has no master-data *create/edit* row, so feature 002 **adds** two keys to
+  this catalog — `manage_commercial_data` (Admin, Ops Mgr) and `manage_fleet_data` (Admin, Ops Mgr, Fleet
+  Coord) — and reuses Admin-only `delete_archive` for master-data archive
+  (see `specs/002-master-data-config/contracts/permission-matrix.md`).
 
 ## Invariants (testable — Vitest)
 
