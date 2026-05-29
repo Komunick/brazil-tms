@@ -8,29 +8,58 @@ import { z } from "zod";
  *
  * The DB also enforces the hard invariants (UNIQUE, CHECK, FK); these schemas catch shape/format
  * errors at the boundary (400) before a row is touched, and the services surface DB conflicts (409).
+ *
+ * Optional fields coerce empty-string form inputs to `undefined` (HTML inputs yield "" when blank),
+ * and numeric fields coerce numeric strings, so the same schema validates both JSON bodies and forms.
  */
+
+// ---------------------------------------------------------------------------
+// Coercion helpers
+// ---------------------------------------------------------------------------
+
+/** Treat blank ("" / null) form inputs as "absent" (undefined) for any optional schema. */
+const blankable = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (v === "" || v === null ? undefined : v), schema.optional());
+
+/** Optional nested object: an all-blank object (every field empty/null) collapses to undefined. */
+const optionalObject = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => {
+    if (v == null) return undefined;
+    if (typeof v === "object") {
+      const hasValue = Object.values(v as Record<string, unknown>).some(
+        (x) => x !== "" && x != null,
+      );
+      if (!hasValue) return undefined;
+    }
+    return v;
+  }, schema.optional());
+
+const optionalText = (max = 200) =>
+  blankable(z.string().trim().max(max, `Máximo de ${max} caracteres.`));
+
+/** Email that is optional but, when present, must be valid (blank → undefined). */
+const optionalEmail = blankable(z.string().trim().email("E-mail inválido."));
+
+/** Wrap a numeric schema so "" / null become undefined and numeric strings become numbers. */
+const numberFromInput = (schema: z.ZodNumber) =>
+  z.preprocess((v) => {
+    if (v === "" || v === null || v === undefined) return undefined;
+    if (typeof v === "string") {
+      const n = Number(v);
+      return Number.isNaN(n) ? v : n;
+    }
+    return v;
+  }, schema.optional());
 
 // ---------------------------------------------------------------------------
 // Primitive building blocks
 // ---------------------------------------------------------------------------
-
-const trimmedString = (max: number) => z.string().trim().max(max);
 
 const nameSchema = z
   .string()
   .trim()
   .min(1, "Informe o nome.")
   .max(200, "O nome deve ter no máximo 200 caracteres.");
-
-const optionalText = (max = 200) => trimmedString(max).optional();
-
-/** Email that is optional but, when present, must be valid (empty string → undefined). */
-const optionalEmail = z
-  .string()
-  .trim()
-  .email("E-mail inválido.")
-  .optional()
-  .or(z.literal("").transform(() => undefined));
 
 /** CNPJ — basic format check only (R7): 14 digits after stripping punctuation. */
 export const cnpjSchema = z
@@ -39,10 +68,13 @@ export const cnpjSchema = z
   .transform((s) => s.replace(/\D/g, ""))
   .pipe(z.string().length(14, "CNPJ deve ter 14 dígitos."));
 
+const optionalCnpj = blankable(cnpjSchema);
+
 /** BR/Mercosul plate (R11): normalized to uppercase, hyphen/space stripped. */
 export const plateSchema = z
   .string()
   .trim()
+  .min(1, "Informe a placa.")
   .transform((s) => s.toUpperCase().replace(/[\s-]/g, ""))
   .pipe(
     z
@@ -51,11 +83,15 @@ export const plateSchema = z
   );
 
 /** Brazilian state (UF) — closed 2-letter set. */
-export const UF_VALUES = [
-  "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG",
-  "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
-] as const;
-export const ufSchema = z.enum(UF_VALUES, { errorMap: () => ({ message: "UF inválida." }) });
+export const ufSchema = z.enum(
+  [
+    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG",
+    "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+  ],
+  { errorMap: () => ({ message: "UF inválida." }) },
+);
+export const UF_VALUES = ufSchema.options;
+const optionalUf = blankable(ufSchema);
 
 /** Non-negative integer amount of centavos (BRL, R7). */
 export const moneyCentsSchema = z
@@ -67,9 +103,13 @@ export const moneyCentsSchema = z
 export const dateStringSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida (use AAAA-MM-DD).");
+const optionalDate = blankable(dateStringSchema);
 
-export const latitudeSchema = z.number().min(-90).max(90);
-export const longitudeSchema = z.number().min(-180).max(180);
+export const latitudeSchema = z.number().min(-90, "Latitude inválida.").max(90, "Latitude inválida.");
+export const longitudeSchema = z
+  .number()
+  .min(-180, "Longitude inválida.")
+  .max(180, "Longitude inválida.");
 
 /** A contact entry (R8 — stored as jsonb, validated here). */
 export const contactSchema = z.object({
@@ -91,65 +131,53 @@ export const billingContactSchema = z.object({
 // Enum schemas (mirror the Postgres enums in packages/db/schema/enums.ts)
 // ---------------------------------------------------------------------------
 
-export const RESOURCE_STATUS_VALUES = [
-  "active",
-  "inactive",
-  "unavailable",
-  "maintenance",
-  "blocked",
-] as const;
-export const resourceStatusSchema = z.enum(RESOURCE_STATUS_VALUES, {
-  errorMap: () => ({ message: "Status inválido." }),
-});
+export const resourceStatusSchema = z.enum(
+  ["active", "inactive", "unavailable", "maintenance", "blocked"],
+  { errorMap: () => ({ message: "Status inválido." }) },
+);
+export const RESOURCE_STATUS_VALUES = resourceStatusSchema.options;
 export type ResourceStatus = z.infer<typeof resourceStatusSchema>;
 
-export const OWNERSHIP_TYPE_VALUES = ["owned", "subcontracted"] as const;
-export const ownershipTypeSchema = z.enum(OWNERSHIP_TYPE_VALUES, {
+export const ownershipTypeSchema = z.enum(["owned", "subcontracted"], {
   errorMap: () => ({ message: "Tipo de propriedade inválido." }),
 });
+export const OWNERSHIP_TYPE_VALUES = ownershipTypeSchema.options;
 export type OwnershipType = z.infer<typeof ownershipTypeSchema>;
 
-export const VEHICLE_TYPE_VALUES = [
-  "van",
-  "vuc",
-  "tres_quartos",
-  "toco",
-  "truck",
-  "bitruck",
-  "carreta",
-  "carreta_ls",
-  "bitrem",
-  "rodotrem",
-] as const;
-export const vehicleTypeSchema = z.enum(VEHICLE_TYPE_VALUES, {
-  errorMap: () => ({ message: "Tipo de veículo inválido." }),
-});
+export const vehicleTypeSchema = z.enum(
+  [
+    "van",
+    "vuc",
+    "tres_quartos",
+    "toco",
+    "truck",
+    "bitruck",
+    "carreta",
+    "carreta_ls",
+    "bitrem",
+    "rodotrem",
+  ],
+  { errorMap: () => ({ message: "Tipo de veículo inválido." }) },
+);
+export const VEHICLE_TYPE_VALUES = vehicleTypeSchema.options;
 export type VehicleType = z.infer<typeof vehicleTypeSchema>;
 
-export const TRAILER_TYPE_VALUES = [
-  "sider",
-  "bau",
-  "graneleiro",
-  "tanque",
-  "frigorifico",
-  "prancha",
-  "cacamba",
-  "porta_container",
-] as const;
-export const trailerTypeSchema = z.enum(TRAILER_TYPE_VALUES, {
-  errorMap: () => ({ message: "Tipo de reboque inválido." }),
-});
+export const trailerTypeSchema = z.enum(
+  ["sider", "bau", "graneleiro", "tanque", "frigorifico", "prancha", "cacamba", "porta_container"],
+  { errorMap: () => ({ message: "Tipo de reboque inválido." }) },
+);
+export const TRAILER_TYPE_VALUES = trailerTypeSchema.options;
 export type TrailerType = z.infer<typeof trailerTypeSchema>;
 
-export const CARRIER_CONTRACT_STATUS_VALUES = ["active", "suspended", "expired"] as const;
-export const carrierContractStatusSchema = z.enum(CARRIER_CONTRACT_STATUS_VALUES, {
+export const carrierContractStatusSchema = z.enum(["active", "suspended", "expired"], {
   errorMap: () => ({ message: "Status de contrato inválido." }),
 });
+export const CARRIER_CONTRACT_STATUS_VALUES = carrierContractStatusSchema.options;
 
-export const CARRIER_DOCUMENTATION_STATUS_VALUES = ["pending", "complete", "expired"] as const;
-export const carrierDocumentationStatusSchema = z.enum(CARRIER_DOCUMENTATION_STATUS_VALUES, {
+export const carrierDocumentationStatusSchema = z.enum(["pending", "complete", "expired"], {
   errorMap: () => ({ message: "Status de documentação inválido." }),
 });
+export const CARRIER_DOCUMENTATION_STATUS_VALUES = carrierDocumentationStatusSchema.options;
 
 // ---------------------------------------------------------------------------
 // Ownership/carrier invariant (mirror of the DB CHECK — FR-022/FR-023)
@@ -175,7 +203,7 @@ const OWNERSHIP_CARRIER_REFINE = {
 export const ownershipCarrierRefine = <T extends z.ZodTypeAny>(schema: T) =>
   schema.refine(isOwnershipCarrierValid, OWNERSHIP_CARRIER_REFINE);
 
-const carrierIdField = z.string().uuid("Transportadora inválida.").nullish();
+const carrierIdField = blankable(z.string().uuid("Transportadora inválida."));
 
 // ---------------------------------------------------------------------------
 // 1. Customer (US1)
@@ -189,9 +217,9 @@ const customerBase = z.object({
     .trim()
     .min(1, "Informe o código do cliente.")
     .max(60, "Código muito longo."),
-  taxId: cnpjSchema.optional(),
+  taxId: optionalCnpj,
   contacts: z.array(contactSchema).optional().default([]),
-  billingContact: billingContactSchema.nullish(),
+  billingContact: optionalObject(billingContactSchema),
 });
 
 export const createCustomerSchema = customerBase;
@@ -210,10 +238,10 @@ const locationBase = z.object({
   name: nameSchema,
   address: optionalText(300),
   city: optionalText(120),
-  state: ufSchema.optional(),
+  state: optionalUf,
   country: z.string().trim().length(2, "País inválido.").default("BR"),
-  latitude: latitudeSchema.optional(),
-  longitude: longitudeSchema.optional(),
+  latitude: numberFromInput(latitudeSchema),
+  longitude: numberFromInput(longitudeSchema),
   gateInstructions: optionalText(1000),
 });
 
@@ -231,11 +259,11 @@ const laneBase = z.object({
   customerId: z.string().uuid("Cliente inválido."),
   originLocationId: z.string().uuid("Origem inválida."),
   destinationLocationId: z.string().uuid("Destino inválido."),
-  expectedTransitMinutes: z.number().int().nonnegative().optional(),
-  defaultVehicleType: vehicleTypeSchema.optional(),
-  standardRateCents: moneyCentsSchema.optional(),
-  tollEstimateCents: moneyCentsSchema.optional(),
-  standardDistanceKm: z.number().nonnegative("A distância não pode ser negativa.").optional(),
+  expectedTransitMinutes: numberFromInput(z.number().int().nonnegative()),
+  defaultVehicleType: blankable(vehicleTypeSchema),
+  standardRateCents: numberFromInput(moneyCentsSchema),
+  tollEstimateCents: numberFromInput(moneyCentsSchema),
+  standardDistanceKm: numberFromInput(z.number().nonnegative("A distância não pode ser negativa.")),
 });
 
 /** origin ≠ destination (degenerate-lane guard, mirrors the DB CHECK). */
@@ -268,7 +296,7 @@ const driverBase = z.object({
   email: optionalEmail,
   licenseNumber: optionalText(40),
   licenseCategory: optionalText(8),
-  licenseExpiry: dateStringSchema.optional(),
+  licenseExpiry: optionalDate,
   ownershipType: ownershipTypeSchema,
   carrierId: carrierIdField,
   employer: optionalText(200),
@@ -289,13 +317,13 @@ export type UpdateDriverInput = z.infer<typeof updateDriverSchema>;
 const vehicleBase = z.object({
   plate: plateSchema,
   vehicleType: vehicleTypeSchema,
-  capacityKg: z.number().int().nonnegative().optional(),
+  capacityKg: numberFromInput(z.number().int().nonnegative()),
   ownershipType: ownershipTypeSchema,
   carrierId: carrierIdField,
   owner: optionalText(200),
   trackerProvider: optionalText(120),
   trackerId: optionalText(120),
-  documentExpiry: dateStringSchema.optional(),
+  documentExpiry: optionalDate,
   status: resourceStatusSchema.optional(),
   notes: optionalText(2000),
 });
@@ -313,11 +341,11 @@ export type UpdateVehicleInput = z.infer<typeof updateVehicleSchema>;
 const trailerBase = z.object({
   plate: plateSchema,
   trailerType: trailerTypeSchema,
-  capacityKg: z.number().int().nonnegative().optional(),
+  capacityKg: numberFromInput(z.number().int().nonnegative()),
   ownershipType: ownershipTypeSchema,
   carrierId: carrierIdField,
   owner: optionalText(200),
-  documentExpiry: dateStringSchema.optional(),
+  documentExpiry: optionalDate,
   status: resourceStatusSchema.optional(),
   notes: optionalText(2000),
 });
@@ -342,8 +370,8 @@ const carrierContactSchema = z.object({
 const carrierBase = z.object({
   name: nameSchema,
   legalName: optionalText(200),
-  taxId: cnpjSchema.optional(),
-  contact: carrierContactSchema.nullish(),
+  taxId: optionalCnpj,
+  contact: optionalObject(carrierContactSchema),
   contractStatus: carrierContractStatusSchema.optional(),
   documentationStatus: carrierDocumentationStatusSchema.optional(),
 });

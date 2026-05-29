@@ -19,4 +19,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: "home", href: "/", icon: "LayoutDashboard" },
   { key: "adminUsers", href: "/admin/users", icon: "Users", permission: "manage_users" },
   { key: "adminAudit", href: "/admin/audit", icon: "ScrollText", permission: "view_audit_log" },
+  // 002 — commercial master data (manage_commercial_data: Admin, Ops Manager).
+  { key: "customers", href: "/admin/customers", icon: "Building2", permission: "manage_commercial_data" },
+  { key: "locations", href: "/admin/locations", icon: "MapPin", permission: "manage_commercial_data" },
+  { key: "lanes", href: "/admin/lanes", icon: "Route", permission: "manage_commercial_data" },
+  // 002 — fleet master data (manage_fleet_data: Admin, Ops Manager, Fleet Coordinator).
+  { key: "drivers", href: "/resources/drivers", icon: "UserRound", permission: "manage_fleet_data" },
+  { key: "vehicles", href: "/resources/vehicles", icon: "Truck", permission: "manage_fleet_data" },
+  { key: "trailers", href: "/resources/trailers", icon: "Container", permission: "manage_fleet_data" },
+  { key: "carriers", href: "/resources/carriers", icon: "Factory", permission: "manage_fleet_data" },
 ];

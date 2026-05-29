@@ -3,7 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { LayoutDashboard, ScrollText, Users, type LucideIcon } from "lucide-react";
+import {
+  Building2,
+  Container,
+  Factory,
+  LayoutDashboard,
+  MapPin,
+  Route,
+  ScrollText,
+  Truck,
+  UserRound,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { can, type Role } from "@brazil-tms/shared";
 import { NAV_ITEMS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
@@ -12,6 +24,13 @@ const ICONS: Record<string, LucideIcon> = {
   LayoutDashboard,
   Users,
   ScrollText,
+  Building2,
+  MapPin,
+  Route,
+  UserRound,
+  Truck,
+  Container,
+  Factory,
 };
 
 /**
