@@ -1,47 +1,55 @@
 import "server-only";
 import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
-import { customers, db } from "@brazil-tms/db";
-import type { Contact, CreateCustomerInput, UpdateCustomerInput } from "@brazil-tms/shared";
+import { carriers, db } from "@brazil-tms/db";
+import type { CreateCarrierInput, UpdateCarrierInput } from "@brazil-tms/shared";
 import { writeAudit } from "@/lib/audit/write-audit";
 import { Conflict } from "@/lib/api/respond";
 
-/** API response shape for a customer (contract: bff-endpoints.md §Customers; timestamps ISO). */
-export interface CustomerDto {
+/** Carrier contact (data-model §7; R8) — distinct from the customer `Contact` (has `address`, no `role`). */
+export interface CarrierContact {
+  name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+}
+
+/** API response shape for a carrier (contract: bff-endpoints.md §Carriers; timestamps ISO). */
+export interface CarrierDto {
   id: string;
   name: string;
   legalName: string | null;
-  customerCode: string;
   taxId: string | null;
-  contacts: Contact[];
-  billingContact: Contact | null;
+  contact: CarrierContact | null;
+  contractStatus: string;
+  documentationStatus: string;
   archived: boolean;
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-interface CustomerRow {
+interface CarrierRow {
   id: string;
   name: string;
   legalName: string | null;
-  customerCode: string;
   taxId: string | null;
-  contacts: unknown;
-  billingContact: unknown;
+  contact: unknown;
+  contractStatus: string;
+  documentationStatus: string;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-function toDto(row: CustomerRow): CustomerDto {
+function toDto(row: CarrierRow): CarrierDto {
   return {
     id: row.id,
     name: row.name,
     legalName: row.legalName,
-    customerCode: row.customerCode,
     taxId: row.taxId,
-    contacts: (row.contacts as Contact[] | null) ?? [],
-    billingContact: (row.billingContact as Contact | null) ?? null,
+    contact: (row.contact as CarrierContact | null) ?? null,
+    contractStatus: row.contractStatus,
+    documentationStatus: row.documentationStatus,
     archived: row.archivedAt !== null,
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
@@ -52,9 +60,9 @@ function toDto(row: CustomerRow): CustomerDto {
 /** Postgres unique-violation SQLSTATE (duplicate natural key → 409). */
 const PG_UNIQUE_VIOLATION = "23505";
 /**
- * Detect a Postgres unique-violation. Drizzle wraps the driver error in a `DrizzleQueryError`
- * and carries the original `pg` error (with `code: '23505'`) on `.cause`, so we walk the cause
- * chain rather than only inspecting the top-level error.
+ * Detect a unique-violation. Drizzle wraps the driver error in a `DrizzleQueryError` and puts the
+ * original `pg` error (carrying `code: '23505'`) on `.cause`, so we walk the cause chain rather than
+ * only inspecting the top-level error.
  */
 function isUniqueViolation(error: unknown): boolean {
   let current: unknown = error;
@@ -75,66 +83,62 @@ function isUniqueViolation(error: unknown): boolean {
   return false;
 }
 
-const DUPLICATE = new Conflict("DUPLICATE_CUSTOMER_CODE", "Já existe um cliente com esse código.");
+const DUPLICATE = new Conflict("DUPLICATE_TAX_ID", "Já existe uma transportadora com esse CNPJ.");
 
-export interface ListCustomersOptions {
+export interface ListCarriersOptions {
   q?: string;
+  contractStatus?: string;
   includeArchived?: boolean;
 }
 
-export async function listCustomers(opts: ListCustomersOptions = {}): Promise<CustomerDto[]> {
+export async function listCarriers(opts: ListCarriersOptions = {}): Promise<CarrierDto[]> {
   const filters = [];
-  if (!opts.includeArchived) filters.push(isNull(customers.archivedAt));
+  if (!opts.includeArchived) filters.push(isNull(carriers.archivedAt));
+  if (opts.contractStatus) filters.push(eq(carriers.contractStatus, opts.contractStatus));
   if (opts.q && opts.q.trim().length > 0) {
     const term = `%${opts.q.trim()}%`;
-    filters.push(
-      or(
-        ilike(customers.name, term),
-        ilike(customers.customerCode, term),
-        ilike(customers.taxId, term),
-      ),
-    );
+    filters.push(or(ilike(carriers.name, term), ilike(carriers.taxId, term)));
   }
   const rows = await db
     .select()
-    .from(customers)
+    .from(carriers)
     .where(filters.length > 0 ? and(...filters) : undefined)
-    .orderBy(desc(customers.createdAt));
+    .orderBy(desc(carriers.createdAt));
   return rows.map(toDto);
 }
 
-export async function getCustomer(id: string): Promise<CustomerDto> {
-  const rows = await db.select().from(customers).where(eq(customers.id, id)).limit(1);
+export async function getCarrier(id: string): Promise<CarrierDto> {
+  const rows = await db.select().from(carriers).where(eq(carriers.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new Conflict("NOT_FOUND", "Cliente não encontrado.");
+  if (!row) throw new Conflict("NOT_FOUND", "Transportadora não encontrada.");
   return toDto(row);
 }
 
-export async function createCustomer(
-  input: CreateCustomerInput,
+export async function createCarrier(
+  input: CreateCarrierInput,
   actorUserId: string,
-): Promise<CustomerDto> {
+): Promise<CarrierDto> {
   try {
     return await db.transaction(async (tx) => {
       const inserted = await tx
-        .insert(customers)
+        .insert(carriers)
         .values({
           name: input.name,
           legalName: input.legalName ?? null,
-          customerCode: input.customerCode,
           taxId: input.taxId ?? null,
-          contacts: input.contacts ?? [],
-          billingContact: input.billingContact ?? null,
+          contact: input.contact ?? null,
+          contractStatus: input.contractStatus ?? "active",
+          documentationStatus: input.documentationStatus ?? "pending",
         })
         .returning();
       const row = inserted[0];
-      if (!row) throw new Error("Inserção de cliente não retornou linha.");
+      if (!row) throw new Error("Inserção de transportadora não retornou linha.");
       await writeAudit(tx, {
-        entityType: "customer",
+        entityType: "carrier",
         entityId: row.id,
-        action: "customer.create",
+        action: "carrier.create",
         previousValue: null,
-        newValue: { name: input.name, customerCode: input.customerCode },
+        newValue: { name: input.name, taxId: input.taxId ?? null },
         actorUserId,
       });
       return toDto(row);
@@ -145,26 +149,26 @@ export async function createCustomer(
   }
 }
 
-export async function updateCustomer(
+export async function updateCarrier(
   id: string,
-  input: UpdateCustomerInput,
+  input: UpdateCarrierInput,
   actorUserId: string,
-): Promise<CustomerDto> {
-  const currentRows = await db.select().from(customers).where(eq(customers.id, id)).limit(1);
+): Promise<CarrierDto> {
+  const currentRows = await db.select().from(carriers).where(eq(carriers.id, id)).limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Cliente não encontrado.");
+  if (!current) throw new Conflict("NOT_FOUND", "Transportadora não encontrada.");
 
   // Build the partial update + before/after snapshots from only the provided fields.
   const set: Record<string, unknown> = { updatedAt: new Date() };
   const previousValue: Record<string, unknown> = {};
   const newValue: Record<string, unknown> = {};
-  const fields: (keyof UpdateCustomerInput)[] = [
+  const fields: (keyof UpdateCarrierInput)[] = [
     "name",
     "legalName",
-    "customerCode",
     "taxId",
-    "contacts",
-    "billingContact",
+    "contact",
+    "contractStatus",
+    "documentationStatus",
   ];
   for (const field of fields) {
     if (input[field] === undefined) continue;
@@ -176,16 +180,16 @@ export async function updateCustomer(
   try {
     return await db.transaction(async (tx) => {
       const updated = await tx
-        .update(customers)
+        .update(carriers)
         .set(set)
-        .where(eq(customers.id, id))
+        .where(eq(carriers.id, id))
         .returning();
       const row = updated[0];
-      if (!row) throw new Conflict("NOT_FOUND", "Cliente não encontrado.");
+      if (!row) throw new Conflict("NOT_FOUND", "Transportadora não encontrada.");
       await writeAudit(tx, {
-        entityType: "customer",
+        entityType: "carrier",
         entityId: id,
-        action: "customer.update",
+        action: "carrier.update",
         previousValue,
         newValue,
         actorUserId,
@@ -199,25 +203,25 @@ export async function updateCustomer(
 }
 
 /** Archive (soft-delete) — sets archived_at; never hard-deletes (FR-026). Idempotent. */
-export async function archiveCustomer(id: string, actorUserId: string): Promise<CustomerDto> {
-  const currentRows = await db.select().from(customers).where(eq(customers.id, id)).limit(1);
+export async function archiveCarrier(id: string, actorUserId: string): Promise<CarrierDto> {
+  const currentRows = await db.select().from(carriers).where(eq(carriers.id, id)).limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Cliente não encontrado.");
+  if (!current) throw new Conflict("NOT_FOUND", "Transportadora não encontrada.");
   if (current.archivedAt) return toDto(current); // already archived — idempotent, no new audit
 
   return db.transaction(async (tx) => {
     const now = new Date();
     const updated = await tx
-      .update(customers)
+      .update(carriers)
       .set({ archivedAt: now, updatedAt: now })
-      .where(eq(customers.id, id))
+      .where(eq(carriers.id, id))
       .returning();
     const row = updated[0];
-    if (!row) throw new Conflict("NOT_FOUND", "Cliente não encontrado.");
+    if (!row) throw new Conflict("NOT_FOUND", "Transportadora não encontrada.");
     await writeAudit(tx, {
-      entityType: "customer",
+      entityType: "carrier",
       entityId: id,
-      action: "customer.archive",
+      action: "carrier.archive",
       previousValue: { archivedAt: null },
       newValue: { archivedAt: now.toISOString() },
       actorUserId,

@@ -2,6 +2,7 @@ import { fileURLToPath } from "node:url";
 import { defineWorkspace } from "vitest/config";
 
 const emptyModule = fileURLToPath(new URL("./apps/web/test/empty.ts", import.meta.url));
+const webRoot = fileURLToPath(new URL("./apps/web", import.meta.url));
 
 export default defineWorkspace([
   {
@@ -18,6 +19,9 @@ export default defineWorkspace([
       alias: {
         "server-only": emptyModule,
         "client-only": emptyModule,
+        // tsconfig `@/*` path alias (apps/web). Vitest has no tsconfig-paths plugin, so the
+        // master-data integration tests' `@/lib/...` imports need it spelled out here.
+        "@/": `${webRoot}/`,
       },
     },
     test: {
