@@ -25,6 +25,11 @@ export const testAccounts = {
     email: env("E2E_NONADMIN_EMAIL", "finance@braziltransports.com.br"),
     password: env("E2E_NONADMIN_PASSWORD", "ChangeMe!Finance123"),
   },
+  /** A dedicated account with must_change_password=true, for the forced-change flow (FR-013a). */
+  tempPassword: {
+    email: env("E2E_TEMPPW_EMAIL", "temppw@braziltransports.com.br"),
+    password: env("E2E_TEMPPW_PASSWORD", "ChangeMe!Temp123"),
+  },
 } as const;
 
 export const routes = {

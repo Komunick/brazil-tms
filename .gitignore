@@ -39,3 +39,10 @@ Thumbs.db
 
 # Misc
 *.local
+
+# Local-only compose overrides
+**/docker-compose.override.yml
+
+# Playwright artifacts
+test-results/
+playwright-report/

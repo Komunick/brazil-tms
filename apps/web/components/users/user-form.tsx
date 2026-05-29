@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
@@ -23,6 +24,10 @@ import { DialogFooter } from "@/components/ui/dialog";
 
 type OnboardingMethod = "invite" | "temp_password";
 
+// Least-privilege default: a new user is read-only until the admin deliberately elevates them.
+// (ASSIGNABLE_ROLES[0] is "admin" — defaulting new users to Admin would be unsafe.)
+const DEFAULT_NEW_USER_ROLE: Role = "executive_viewer";
+
 export interface UserFormProps {
   onSubmit: (input: CreateUserInput) => Promise<void> | void;
   onCancel: () => void;
@@ -44,30 +49,37 @@ export function UserForm({ onSubmit, onCancel, submitting, errorMessage }: UserF
     register,
     handleSubmit,
     setValue,
-    watch,
     formState: { errors },
   } = useForm<CreateUserInput>({
     resolver: zodResolver(createUserSchema),
     defaultValues: {
       name: "",
       email: "",
-      role: ASSIGNABLE_ROLES[0],
+      role: DEFAULT_NEW_USER_ROLE,
       onboarding: { method: "invite" },
     },
   });
 
-  const role = watch("role");
-  const method = watch("onboarding.method");
+  // The two Selects are driven by local state (guaranteed re-render) and synced into RHF — relying
+  // on watch() of a nested path while setValue replaces the parent object can miss re-renders.
+  const [role, setRole] = useState<Role>(DEFAULT_NEW_USER_ROLE);
+  const [method, setMethod] = useState<OnboardingMethod>("invite");
   const onboardingErrors = errors.onboarding as
     | { tempPassword?: { message?: string } }
     | undefined;
 
-  function setMethod(value: OnboardingMethod): void {
-    if (value === "temp_password") {
-      setValue("onboarding", { method: "temp_password", tempPassword: "" });
-    } else {
-      setValue("onboarding", { method: "invite" });
-    }
+  function changeRole(value: Role): void {
+    setRole(value);
+    setValue("role", value, { shouldValidate: true });
+  }
+
+  function changeMethod(value: OnboardingMethod): void {
+    setMethod(value);
+    setValue(
+      "onboarding",
+      value === "temp_password" ? { method: "temp_password", tempPassword: "" } : { method: "invite" },
+      { shouldValidate: false },
+    );
   }
 
   return (
@@ -86,7 +98,7 @@ export function UserForm({ onSubmit, onCancel, submitting, errorMessage }: UserF
 
       <div className="space-y-2">
         <Label htmlFor="role">{t("role")}</Label>
-        <Select value={role} onValueChange={(v) => setValue("role", v as Role)}>
+        <Select value={role} onValueChange={(v) => changeRole(v as Role)}>
           <SelectTrigger id="role">
             <SelectValue />
           </SelectTrigger>
@@ -103,7 +115,7 @@ export function UserForm({ onSubmit, onCancel, submitting, errorMessage }: UserF
 
       <div className="space-y-2">
         <Label htmlFor="method">{t("onboarding")}</Label>
-        <Select value={method} onValueChange={(v) => setMethod(v as OnboardingMethod)}>
+        <Select value={method} onValueChange={(v) => changeMethod(v as OnboardingMethod)}>
           <SelectTrigger id="method">
             <SelectValue />
           </SelectTrigger>

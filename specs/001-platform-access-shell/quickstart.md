@@ -49,11 +49,18 @@ SEED_ADMIN_PASSWORD=<strong temp password>
 
 ```powershell
 pnpm install
-docker compose -f infra/supabase/docker-compose.yml up -d   # Postgres + GoTrue + Storage
-pnpm --filter @brazil-tms/db drizzle:migrate                 # apply migrations (users, audit_logs, app_role)
+docker compose -f infra/supabase/docker-compose.yml up -d   # Postgres + GoTrue + gateway + Mailpit
+# Wait for GoTrue to be healthy (it runs its migrations on first boot):
+#   curl http://localhost:8000/auth/v1/health   # -> 200
+pnpm --filter @brazil-tms/db db:migrate                      # apply migrations (users, audit_logs, app_role)
 pnpm --filter @brazil-tms/db db:seed                         # bootstrap the first Admin (idempotent)
 pnpm --filter @brazil-tms/web dev                            # Next.js on http://localhost:3000
 ```
+
+> Verified locally (stack up + `pnpm test:e2e` green, 27/27). Notes: if host port 5432 is taken, set
+> `SUPABASE_DB_PORT=5433` in `infra/supabase/.env` and point `DATABASE_URL` at it. Invite/recovery
+> emails are caught by Mailpit (UI at http://localhost:8025). GoTrue is pinned to v2.151.0 — see the
+> compose header for the migration-compatibility rationale ([VERIFY AT SETUP] on upgrade).
 
 First login: sign in as the seeded admin → forced password change (`must_change_password=true`) → land
 on the app shell. From **Administração → Usuários e Perfis**, create the remaining users.

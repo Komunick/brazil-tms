@@ -14,10 +14,8 @@
 		reverse_proxy auth:9999
 	}
 
-	# Storage — provisioned for later features; unused by 001.
-	handle_path /storage/v1/* {
-		reverse_proxy storage:5000
-	}
+	# Storage is added by the first feature that needs proof/document upload (not 001); when it is,
+	# reintroduce a `handle_path /storage/v1/*` route here.
 
 	# PostgREST is intentionally absent. Do NOT add a /rest/v1 route (STACK §5.1/§5.2):
 	# all app-schema access goes through the BFF over a direct, server-only Postgres connection.

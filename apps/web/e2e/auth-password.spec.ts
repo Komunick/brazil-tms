@@ -32,10 +32,10 @@ test.describe("auth · password flows", () => {
   });
 
   test("forced password change on first sign-in lands on /auth/set-password", async ({ page }) => {
-    // The seeded admin starts with must_change_password=true (see quickstart.md).
+    // A dedicated temp-password account (must_change_password=true) — see test-config / quickstart.
     await page.goto(routes.login);
-    await page.getByLabel(/E-mail/i).fill(testAccounts.admin.email);
-    await page.getByLabel("Senha", { exact: true }).fill(testAccounts.admin.password);
+    await page.getByLabel(/E-mail/i).fill(testAccounts.tempPassword.email);
+    await page.getByLabel("Senha", { exact: true }).fill(testAccounts.tempPassword.password);
     await page.getByRole("button", { name: "Entrar" }).click();
 
     await expect(page).toHaveURL(new RegExp(`${routes.setPassword}`));

@@ -36,9 +36,9 @@ async function login(page: Page, email: string, password: string): Promise<void>
   await page.waitForURL((url) => !url.pathname.startsWith("/login"));
 }
 
-/** A unique email so repeated runs never collide. */
+/** A unique email so repeated runs never collide. Avoid '+' (a regex metachar used in row matches). */
 function uniqueEmail(prefix: string): string {
-  return `${prefix}+${Date.now()}@example.com`;
+  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e6)}@example.com`;
 }
 
 /** Open the create dialog, fill the shared fields, and pick the onboarding method. */
@@ -52,13 +52,16 @@ async function fillCreateForm(
   await dialog.getByLabel(PT.name).fill(opts.name);
   await dialog.getByLabel(PT.email).fill(opts.email);
 
-  // Onboarding method select.
-  await dialog.getByLabel(PT.onboarding).click();
+  // Onboarding method (Radix Select): open via the trigger id, pick the option (rendered in a
+  // portal at body level), then wait for the method switch to settle.
+  await dialog.locator("#method").click();
   const label = opts.method === "invite" ? PT.onboardingInvite : PT.onboardingTempPassword;
-  await page.getByRole("option", { name: label }).click();
+  await page.getByRole("option", { name: label, exact: true }).click();
 
   if (opts.method === "temp_password") {
-    await dialog.getByLabel(PT.tempPassword).fill(opts.tempPassword ?? "");
+    const tempField = dialog.getByLabel(PT.tempPassword);
+    await tempField.waitFor({ state: "visible" });
+    await tempField.fill(opts.tempPassword ?? "");
   }
 }
 
