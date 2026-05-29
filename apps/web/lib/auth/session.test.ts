@@ -75,4 +75,20 @@ describe("decideAccess — must_change_password gating (FR-013a)", () => {
   it("normal authenticated user → allow", () => {
     expect(decideAccess(authed(false))).toBe("allow");
   });
+
+  it("pending user (invite not yet completed) on a normal route → redirect_set_password", () => {
+    const pending: SessionResult = {
+      authenticated: true,
+      user: { ...baseProfile, status: "pending", mustChangePassword: false },
+    };
+    expect(decideAccess(pending)).toBe("redirect_set_password");
+  });
+
+  it("pending user on the password-flow route → allow", () => {
+    const pending: SessionResult = {
+      authenticated: true,
+      user: { ...baseProfile, status: "pending", mustChangePassword: false },
+    };
+    expect(decideAccess(pending, { isPasswordFlowRoute: true })).toBe("allow");
+  });
 });

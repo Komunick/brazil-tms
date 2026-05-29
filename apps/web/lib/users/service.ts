@@ -1,5 +1,5 @@
 import "server-only";
-import { and, count, desc, eq, ilike, ne, or } from "drizzle-orm";
+import { and, desc, eq, ilike, ne, or } from "drizzle-orm";
 import { db, users } from "@brazil-tms/db";
 import type { CreateUserInput, Role, UpdateUserInput } from "@brazil-tms/shared";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -207,13 +207,14 @@ export async function updateUser(
 
   const profile = await db.transaction(async (tx) => {
     if (removesAdmin) {
-      const guardRows = await tx
-        .select({ n: count() })
+      // Lock the OTHER active-admin rows and count them in code. Postgres rejects FOR UPDATE on an
+      // aggregate query, so we must select rows (not count()) here.
+      const otherActiveAdmins = await tx
+        .select({ id: users.id })
         .from(users)
         .where(and(eq(users.role, "admin"), eq(users.status, "active"), ne(users.id, id)))
         .for("update");
-      const remaining = guardRows[0];
-      if (!remaining || Number(remaining.n) === 0) {
+      if (otherActiveAdmins.length === 0) {
         throw new Conflict(
           "LAST_ADMIN_GUARD",
           "Não é possível desativar ou rebaixar o último administrador ativo.",

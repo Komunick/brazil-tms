@@ -5,7 +5,7 @@ import { db, users } from "@brazil-tms/db";
 import { requireAuth } from "@/lib/auth/require-auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { handleRouteError } from "@/lib/api/respond";
+import { apiError, handleRouteError } from "@/lib/api/respond";
 
 export const dynamic = "force-dynamic";
 
@@ -21,11 +21,22 @@ export async function POST(request: Request): Promise<NextResponse> {
     const { newPassword } = changePasswordSchema.parse(body);
 
     const supabase = await createSupabaseServerClient();
-    await supabase.auth.updateUser({ password: newPassword });
+    // updateUser reports failures via `{ error }` (it does NOT throw). If the password was not
+    // actually changed, do NOT release the user — keep the forced-change flag intact.
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+    if (updateError) {
+      return apiError(400, "PASSWORD_UPDATE_FAILED", "Não foi possível alterar a senha.");
+    }
 
+    // Clear the forced-change flag. For an invite user completing onboarding, also activate them
+    // (pending → active) — invite acceptance via the email link bypasses /api/auth/sign-in.
     await db
       .update(users)
-      .set({ mustChangePassword: false, updatedAt: new Date() })
+      .set({
+        mustChangePassword: false,
+        ...(ctx.status === "pending" ? { status: "active" as const, lastLoginAt: new Date() } : {}),
+        updatedAt: new Date(),
+      })
       .where(eq(users.id, ctx.userId));
 
     try {

@@ -61,15 +61,17 @@ export function evaluateProfile(
 export type AccessDecision = "allow" | "redirect_login" | "redirect_set_password";
 
 /**
- * Where an authenticated-area request should go. A `must_change_password` user is restricted to
- * the password flow until they change it (FR-013a).
+ * Where an authenticated-area request should go. A user who must change their password OR who is
+ * still `pending` (invited but not yet onboarded) is restricted to the password flow until they
+ * complete it (FR-013a; data-model: "pending cannot use the app except the set-password flow").
  */
 export function decideAccess(
   session: SessionResult,
   opts: { isPasswordFlowRoute?: boolean } = {},
 ): AccessDecision {
   if (!session.authenticated) return "redirect_login";
-  if (session.user.mustChangePassword && !opts.isPasswordFlowRoute) {
+  const mustComplete = session.user.mustChangePassword || session.user.status === "pending";
+  if (mustComplete && !opts.isPasswordFlowRoute) {
     return "redirect_set_password";
   }
   return "allow";
