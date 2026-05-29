@@ -40,7 +40,17 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+Confirm this plan complies with `.specify/memory/constitution.md`:
+
+- [ ] **Simplicity (I)**: simplest approach that meets scope; no new abstraction without ≥3 real repetitions; no new package/service without justification.
+- [ ] **Scope (II)**: within MVP scope and non-goals; features gated on PRD Section 29 inputs are labeled, not marked complete.
+- [ ] **System-of-record (III)**: Postgres owns durable state; plan vs executed kept separate; explicit status transitions; auditable history (soft-delete only).
+- [ ] **Authz & secrets (IV)**: access via the BFF; service role key server-only; Supabase gateway not publicly exposed; sensitive actions audited.
+- [ ] **Config over code (V)**: customer variation via configuration (templates/SLA/docs/reason codes); single import engine, no per-customer code.
+- [ ] **Tech constraints**: self-hosted Supabase (Postgres/Auth/Storage), Postgres-backed queue + worker, polling-only. NO Realtime, NO Edge Functions, NO Redis/BullMQ, NO microservices, NO route optimizer.
+- [ ] **Workflow**: feature branch → PR to `dev`; CI gates (lint/typecheck/build/tests) green; PR template used.
+
+Any violation MUST be recorded in Complexity Tracking below with justification and the rejected simpler alternative.
 
 ## Project Structure
 
