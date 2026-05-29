@@ -1,9 +1,10 @@
 # Self-hosted Supabase for Brazil Transports TMS — Postgres + GoTrue (Auth) ONLY for feature 001.
 #
 # Validated working config (stood up + e2e-verified locally). Notes:
-#  - Plain Postgres + an initdb script (initdb/00-auth-init.sql) that creates the `auth` schema,
-#    required extensions, and the `supabase_auth_admin` role (search_path=auth). The supabase/postgres
-#    image pre-bakes a partial auth schema that conflicts with GoTrue's migrations.
+#  - Plain Postgres + an initdb script (initdb/00-auth-init.sh) that creates the `auth` schema,
+#    required extensions, and the `supabase_auth_admin` role (search_path=auth, password tracks
+#    POSTGRES_PASSWORD). The supabase/postgres image pre-bakes a partial auth schema that conflicts
+#    with GoTrue's migrations.
 #  - GoTrue is pinned to v2.151.0: a later MFA "phone" migration aborts GoTrue's whole migration
 #    batch on a from-scratch Postgres. [VERIFY AT SETUP] when upgrading GoTrue.
 #  - GoTrue connects as supabase_auth_admin (search_path=auth) so its UNQUALIFIED queries resolve to
