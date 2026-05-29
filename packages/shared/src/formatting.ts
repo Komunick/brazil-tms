@@ -53,3 +53,33 @@ export function formatBRL(centavos: number): string {
     currency: "BRL",
   }).format(centavos / 100);
 }
+
+/**
+ * Default documentation-expiry warning window, in days (feature 002, Clarification Q5 / R9).
+ * This is the SINGLE configuration source for the window — call sites must not hard-code a literal.
+ */
+export const DOCUMENT_EXPIRY_WARNING_DAYS = 30;
+
+/** Derived documentation-expiry state for a resource (drivers/vehicles/trailers). */
+export type DocumentExpiryState = "ok" | "expiring" | "expired";
+
+/**
+ * Pure helper deriving the documentation-expiry state from a date (R9). Never stored — recomputed on
+ * read so it can never drift. `expired` = the expiry is on/before `now` (date-only, America/Sao_Paulo);
+ * `expiring` = within `windowDays`; `ok` otherwise or when there is no expiry. Day-granular: only the
+ * calendar date matters, so "today" counts as expired.
+ */
+export function documentExpiryState(
+  expiry: string | Date | null | undefined,
+  now: string | Date,
+  windowDays: number = DOCUMENT_EXPIRY_WARNING_DAYS,
+): DocumentExpiryState {
+  if (expiry == null) return "ok";
+  const expiryDate = toDateTime(expiry).setZone(APP_TIME_ZONE).startOf("day");
+  if (!expiryDate.isValid) return "ok";
+  const today = toDateTime(now).setZone(APP_TIME_ZONE).startOf("day");
+  const days = expiryDate.diff(today, "days").days;
+  if (days <= 0) return "expired";
+  if (days <= windowDays) return "expiring";
+  return "ok";
+}

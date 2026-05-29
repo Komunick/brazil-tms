@@ -35,8 +35,8 @@ locations, lanes (`manage_commercial_data`); fleet entities = drivers, vehicles,
 
 **Purpose**: Confirm the running stack and create this feature's source folders.
 
-- [ ] T001 Verify the dev stack runs per quickstart.md (`pnpm install`; `docker compose -f infra/supabase/docker-compose.yml up -d`; `pnpm --filter @brazil-tms/db db:migrate`; `pnpm --filter @brazil-tms/db db:seed`; `pnpm --filter @brazil-tms/web dev` boots at :3000)
-- [ ] T002 [P] Create feature source folders: `apps/web/lib/master-data/`, `apps/web/components/master-data/`, `apps/web/app/api/master-data/`, `apps/web/app/(shell)/admin/`, `apps/web/app/(shell)/resources/`
+- [X] T001 Verify the dev stack runs per quickstart.md (`pnpm install`; `docker compose -f infra/supabase/docker-compose.yml up -d`; `pnpm --filter @brazil-tms/db db:migrate`; `pnpm --filter @brazil-tms/db db:seed`; `pnpm --filter @brazil-tms/web dev` boots at :3000)
+- [X] T002 [P] Create feature source folders: `apps/web/lib/master-data/`, `apps/web/components/master-data/`, `apps/web/app/api/master-data/`, `apps/web/app/(shell)/admin/`, `apps/web/app/(shell)/resources/`
 
 ---
 
@@ -50,33 +50,33 @@ ALL user stories depend on. The seven tables ship in one atomic migration becaus
 
 ### Database (packages/db)
 
-- [ ] T003 Extend `packages/db/schema/enums.ts` with pgEnums `resource_status`, `ownership_type`, `vehicle_type`, `trailer_type` (value sets per data-model.md R3/R4/R6)
-- [ ] T004 [P] Create `packages/db/schema/customers.ts` (`customers` table per data-model §1; `customer_code` UNIQUE, `contacts`/`billing_contact` jsonb, `archived_at`)
-- [ ] T005 [P] Create `packages/db/schema/carriers.ts` (`carriers` table per data-model §7; `tax_id` UNIQUE, `contract_status`/`documentation_status` text + CHECK, `archived_at`)
-- [ ] T006 Create `packages/db/schema/locations.ts` (`locations` per data-model §2; `customer_id` FK NOT NULL, `UNIQUE(customer_id, code)`) — depends on T004
-- [ ] T007 [P] Create `packages/db/schema/drivers.ts` (`drivers` per data-model §4; `ownership_type`, nullable `carrier_id` FK, `status`, `license_expiry`, ownership/carrier CHECK) — depends on T003, T005
-- [ ] T008 [P] Create `packages/db/schema/vehicles.ts` (`vehicles` per data-model §5; `vehicle_type`, `ownership_type`+`carrier_id` CHECK, tracker fields, `document_expiry`, `plate` UNIQUE) — depends on T003, T005
-- [ ] T009 [P] Create `packages/db/schema/trailers.ts` (`trailers` per data-model §6; `trailer_type`, ownership CHECK, `document_expiry`, `plate` UNIQUE) — depends on T003, T005
-- [ ] T010 Create `packages/db/schema/lanes.ts` (`lanes` per data-model §3; FKs to customers + two locations, `default_vehicle_type`, `*_cents` money, `CHECK origin <> destination`) — depends on T003, T004, T006
-- [ ] T011 Export all new tables from `packages/db/schema/index.ts` — depends on T004–T010
-- [ ] T012 Generate the migration: `pnpm --filter @brazil-tms/db db:generate`; review the SQL in `packages/db/migrations/` (public schema only; auth.* untouched; confirm enums, FKs, CHECKs, UNIQUE indexes) — depends on T011
-- [ ] T013 Apply the migration: `pnpm --filter @brazil-tms/db db:migrate`; verify tables/enums exist — depends on T012
+- [X] T003 Extend `packages/db/schema/enums.ts` with pgEnums `resource_status`, `ownership_type`, `vehicle_type`, `trailer_type` (value sets per data-model.md R3/R4/R6)
+- [X] T004 [P] Create `packages/db/schema/customers.ts` (`customers` table per data-model §1; `customer_code` UNIQUE, `contacts`/`billing_contact` jsonb, `archived_at`)
+- [X] T005 [P] Create `packages/db/schema/carriers.ts` (`carriers` table per data-model §7; `tax_id` UNIQUE, `contract_status`/`documentation_status` text + CHECK, `archived_at`)
+- [X] T006 Create `packages/db/schema/locations.ts` (`locations` per data-model §2; `customer_id` FK NOT NULL, `UNIQUE(customer_id, code)`) — depends on T004
+- [X] T007 [P] Create `packages/db/schema/drivers.ts` (`drivers` per data-model §4; `ownership_type`, nullable `carrier_id` FK, `status`, `license_expiry`, ownership/carrier CHECK) — depends on T003, T005
+- [X] T008 [P] Create `packages/db/schema/vehicles.ts` (`vehicles` per data-model §5; `vehicle_type`, `ownership_type`+`carrier_id` CHECK, tracker fields, `document_expiry`, `plate` UNIQUE) — depends on T003, T005
+- [X] T009 [P] Create `packages/db/schema/trailers.ts` (`trailers` per data-model §6; `trailer_type`, ownership CHECK, `document_expiry`, `plate` UNIQUE) — depends on T003, T005
+- [X] T010 Create `packages/db/schema/lanes.ts` (`lanes` per data-model §3; FKs to customers + two locations, `default_vehicle_type`, `*_cents` money, `CHECK origin <> destination`) — depends on T003, T004, T006
+- [X] T011 Export all new tables from `packages/db/schema/index.ts` — depends on T004–T010
+- [X] T012 Generate the migration: `pnpm --filter @brazil-tms/db db:generate`; review the SQL in `packages/db/migrations/` (public schema only; auth.* untouched; confirm enums, FKs, CHECKs, UNIQUE indexes) — depends on T011
+- [X] T013 Apply the migration: `pnpm --filter @brazil-tms/db db:migrate`; verify tables/enums exist — depends on T012
 
 ### Shared (packages/shared)
 
-- [ ] T014 [P] Extend the permission catalog in `packages/shared/src/auth/permissions.ts`: add `manage_commercial_data` and `manage_fleet_data` to `PermissionKey` + `ALL_PERMISSIONS`; grant `manage_commercial_data` and `manage_fleet_data` to `operations_manager`, and `manage_fleet_data` to `fleet_coordinator` in `ROLE_PERMISSIONS` (Admin inherits via `ADMIN_PERMISSIONS`) — per contracts/permission-matrix.md
-- [ ] T015 [P] Add permission-catalog invariants to `packages/shared/src/auth/permissions.test.ts` (Fleet Coord has `manage_fleet_data` but NOT `manage_commercial_data`; only admin+ops have commercial; `delete_archive` admin-only; Admin superset) — depends on T014
-- [ ] T016 [P] Extend the `AuditAction` union in `packages/shared/src/audit/actions.ts` with the ~24 master-data actions (`<entity>.create|update|archive` for all 7; `+ .status_change` for driver/vehicle/trailer) per data-model.md
-- [ ] T017 [P] Add exported constant `DOCUMENT_EXPIRY_WARNING_DAYS = 30` and pure helper `documentExpiryState(expiry, now, windowDays = DOCUMENT_EXPIRY_WARNING_DAYS): 'ok'|'expiring'|'expired'` to `packages/shared/src/formatting.ts` (the window's single config source — not hard-coded at call sites) and export both (R9)
-- [ ] T018 [P] Add Vitest for `documentExpiryState` in `packages/shared/src/formatting.test.ts` (past → expired; within 30d → expiring; beyond → ok; null → ok) — depends on T017
-- [ ] T019 Create `packages/shared/src/schemas/master-data.ts` with shared Zod building blocks reused by every entity: `contactSchema`, `cnpjSchema` (tax_id), `plateSchema` (BR/Mercosul), `ufSchema` (2-letter), `moneyCentsSchema` (non-neg int), `coordSchema`, `resourceStatusSchema`, `ownershipTypeSchema`, `vehicleTypeSchema`, `trailerTypeSchema`, and an `ownershipCarrierRefine` helper — pt-BR messages; export from `packages/shared/src/index.ts`
+- [X] T014 [P] Extend the permission catalog in `packages/shared/src/auth/permissions.ts`: add `manage_commercial_data` and `manage_fleet_data` to `PermissionKey` + `ALL_PERMISSIONS`; grant `manage_commercial_data` and `manage_fleet_data` to `operations_manager`, and `manage_fleet_data` to `fleet_coordinator` in `ROLE_PERMISSIONS` (Admin inherits via `ADMIN_PERMISSIONS`) — per contracts/permission-matrix.md
+- [X] T015 [P] Add permission-catalog invariants to `packages/shared/src/auth/permissions.test.ts` (Fleet Coord has `manage_fleet_data` but NOT `manage_commercial_data`; only admin+ops have commercial; `delete_archive` admin-only; Admin superset) — depends on T014
+- [X] T016 [P] Extend the `AuditAction` union in `packages/shared/src/audit/actions.ts` with the ~24 master-data actions (`<entity>.create|update|archive` for all 7; `+ .status_change` for driver/vehicle/trailer) per data-model.md
+- [X] T017 [P] Add exported constant `DOCUMENT_EXPIRY_WARNING_DAYS = 30` and pure helper `documentExpiryState(expiry, now, windowDays = DOCUMENT_EXPIRY_WARNING_DAYS): 'ok'|'expiring'|'expired'` to `packages/shared/src/formatting.ts` (the window's single config source — not hard-coded at call sites) and export both (R9)
+- [X] T018 [P] Add Vitest for `documentExpiryState` in `packages/shared/src/formatting.test.ts` (past → expired; within 30d → expiring; beyond → ok; null → ok) — depends on T017
+- [X] T019 Create `packages/shared/src/schemas/master-data.ts` with shared Zod building blocks reused by every entity: `contactSchema`, `cnpjSchema` (tax_id), `plateSchema` (BR/Mercosul), `ufSchema` (2-letter), `moneyCentsSchema` (non-neg int), `coordSchema`, `resourceStatusSchema`, `ownershipTypeSchema`, `vehicleTypeSchema`, `trailerTypeSchema`, and an `ownershipCarrierRefine` helper — pt-BR messages; export from `packages/shared/src/index.ts`
 
 ### Shared client + UI (apps/web)
 
-- [ ] T020 [P] Add `apps/web/lib/master-data/client.ts`: TanStack Query hooks + fetch wrappers (`staleTime ≈ 30s`, no Realtime) and the `{ items: T[] }` list-response types/error mapping reused by all master-data screens
-- [ ] T021 [P] Add reusable `apps/web/components/master-data/master-data-table.tsx` (TanStack Table list: search, `includeArchived` toggle, archived badge, row → detail, archive action gated by `delete_archive`) — justified by 7 immediate consumers (Constitution I, ≥3 rule)
-- [ ] T022 [P] Add reusable `apps/web/components/master-data/entity-form.tsx` (shadcn/ui + react-hook-form + zod resolver shell, field components, 400/409 error surfacing in pt-BR) — depends on T020
-- [ ] T023 [P] Scaffold i18n namespaces in `apps/web/messages/pt-BR.json` (`MasterData`, `Resources`, `Common` — shared labels: status values, ownership, archive/active, validation)
+- [X] T020 [P] Add `apps/web/lib/master-data/client.ts`: TanStack Query hooks + fetch wrappers (`staleTime ≈ 30s`, no Realtime) and the `{ items: T[] }` list-response types/error mapping reused by all master-data screens
+- [X] T021 [P] Add reusable `apps/web/components/master-data/master-data-table.tsx` (TanStack Table list: search, `includeArchived` toggle, archived badge, row → detail, archive action gated by `delete_archive`) — justified by 7 immediate consumers (Constitution I, ≥3 rule)
+- [X] T022 [P] Add reusable `apps/web/components/master-data/entity-form.tsx` (shadcn/ui + react-hook-form + zod resolver shell, field components, 400/409 error surfacing in pt-BR) — depends on T020
+- [X] T023 [P] Scaffold i18n namespaces in `apps/web/messages/pt-BR.json` (`MasterData`, `Resources`, `Common` — shared labels: status values, ownership, archive/active, validation)
 
 **Checkpoint**: Schema migrated, permissions/audit/validation/UI primitives ready — stories can begin.
 
