@@ -116,6 +116,27 @@ describe.skipIf(!hasDb)("lanes-service (integration)", () => {
     expect(audits).toHaveLength(1);
   });
 
+  it("accepts a blank/cleared standardDistanceKm as SQL NULL, not the string 'null' (P1)", async () => {
+    // A blank optional distance coerces to null; it must reach the numeric column as SQL NULL.
+    const dto = await createLane(
+      {
+        customerId: customerAId,
+        originLocationId: originAId,
+        destinationLocationId: destAId,
+        standardDistanceKm: null,
+      },
+      actorId,
+    );
+    createdLaneIds.push(dto.id);
+    expect(dto.standardDistanceKm).toBeNull();
+
+    // Set a distance, then clear it on edit — the clear must persist as NULL (not reject).
+    const withDist = await updateLane(dto.id, { standardDistanceKm: 430 }, actorId);
+    expect(withDist.standardDistanceKm).not.toBeNull();
+    const cleared = await updateLane(dto.id, { standardDistanceKm: null }, actorId);
+    expect(cleared.standardDistanceKm).toBeNull();
+  });
+
   it("rejects a lane whose destination belongs to another customer (INVALID_LANE_REFERENCE)", async () => {
     await expect(
       createLane(

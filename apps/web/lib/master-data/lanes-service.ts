@@ -147,7 +147,7 @@ export async function createLane(input: CreateLaneInput, actorUserId: string): P
         standardRateCents: input.standardRateCents ?? null,
         tollEstimateCents: input.tollEstimateCents ?? null,
         standardDistanceKm:
-          input.standardDistanceKm === undefined ? null : String(input.standardDistanceKm),
+          input.standardDistanceKm == null ? null : String(input.standardDistanceKm),
       })
       .returning();
     const row = inserted[0];
@@ -200,8 +200,12 @@ export async function updateLane(
   ];
   for (const field of fields) {
     if (input[field] === undefined) continue;
-    // `numeric` column expects a string value at the driver boundary.
-    set[field] = field === "standardDistanceKm" ? String(input[field]) : input[field];
+    // `numeric` column expects a string at the driver boundary — but only for a real value;
+    // a cleared distance must stay SQL NULL, not the string "null".
+    set[field] =
+      field === "standardDistanceKm" && input[field] != null
+        ? String(input[field])
+        : input[field];
     previousValue[field] = (current as Record<string, unknown>)[field] ?? null;
     newValue[field] = input[field];
   }
