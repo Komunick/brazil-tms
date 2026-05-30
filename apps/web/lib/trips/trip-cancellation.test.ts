@@ -159,6 +159,36 @@ describe.skipIf(!hasDb)("trip-cancellation (integration)", () => {
     expect(events).toHaveLength(1);
     expect(events[0]!.statusBefore).toBe("in_transit");
     expect(events[0]!.statusAfter).toBe("cancelled");
+
+    // The effective cancellation time (defaulted to now()) is captured on the trip, the event, and
+    // the audit — never null, and the audit records all five inputs incl. cancelledAt (data-model).
+    expect(events[0]!.eventTimestamp).not.toBeNull();
+    expect(events[0]!.eventTimestamp!.toISOString()).toBe(detail.cancelledAt);
+    expect((audits[0]!.newValue as Record<string, unknown>).cancelledAt).toBe(detail.cancelledAt);
+    expect((audits[0]!.newValue as Record<string, unknown>).cancellationReasonCode).toBe(reasonCode);
+  });
+
+  it("records a provided cancellationTimestamp on the trip, its event, and the audit", async () => {
+    const tripId = await insertTrip("in_transit");
+    const when = new Date("2026-03-01T12:00:00.000Z");
+    const detail = await cancelTrip(
+      tripId,
+      { ...validInput(), cancellationTimestamp: when },
+      actorId,
+    );
+    expect(detail.cancelledAt).toBe(when.toISOString());
+
+    const events = await db
+      .select()
+      .from(tripEvents)
+      .where(and(eq(tripEvents.tripId, tripId), eq(tripEvents.eventType, "status_change")));
+    expect(events[0]!.eventTimestamp!.toISOString()).toBe(when.toISOString());
+
+    const audits = await db
+      .select()
+      .from(auditLogs)
+      .where(and(eq(auditLogs.entityId, tripId), eq(auditLogs.action, "trip.cancel")));
+    expect((audits[0]!.newValue as Record<string, unknown>).cancelledAt).toBe(when.toISOString());
   });
 
   it("rejects a missing responsibleParty with a ZodError (five-input rule)", async () => {

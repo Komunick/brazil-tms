@@ -151,6 +151,29 @@ describe.skipIf(!hasDb)("trip-plan updateTripPlan (integration)", () => {
     expect(updated.plannedVehicleType).toBe("van");
   });
 
+  it("serializes concurrent same-field updates so audit previous-values are never stale (P2)", async () => {
+    const tripId = await makeTrip(); // plannedVehicleType starts "truck"
+
+    // Two updates to the SAME critical field, fired together. The per-row lock forces them to
+    // serialize, so the second reads the first's committed value — the audit previous-values form a
+    // proper chain (distinct), not two stale reads of the original "truck" (the pre-fix race).
+    await Promise.all([
+      updateTripPlan(tripId, { plannedVehicleType: "carreta" }, {}, actorId),
+      updateTripPlan(tripId, { plannedVehicleType: "van" }, {}, actorId),
+    ]);
+
+    const audits = await db
+      .select()
+      .from(auditLogs)
+      .where(and(eq(auditLogs.entityId, tripId), eq(auditLogs.action, "trip.plan_update")));
+    expect(audits).toHaveLength(2);
+    const prevs = audits.map(
+      (a) => (a.previousValue as Record<string, unknown>).plannedVehicleType,
+    );
+    expect(new Set(prevs).size).toBe(2);
+    expect(prevs).toContain("truck");
+  });
+
   it("update of a missing trip throws NOT_FOUND", async () => {
     await expect(
       updateTripPlan(

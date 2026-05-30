@@ -84,7 +84,9 @@ export async function cancelTrip(
       eventType: "status_change",
       statusBefore: row.currentStatus,
       statusAfter: "cancelled",
-      eventTimestamp: parsed.cancellationTimestamp ?? null,
+      // The milestone always carries the effective cancellation time (the caller's, or now() per R8),
+      // never null — so a cancellation event is never timestamp-less.
+      eventTimestamp: cancelledAt,
       source: "operator_manual",
       actorUserId,
     });
@@ -94,11 +96,14 @@ export async function cancelTrip(
       entityId: tripId,
       action: "trip.cancel",
       previousValue: { currentStatus: row.currentStatus },
+      // Capture ALL of the cancellation inputs, incl. cancelledAt (data-model.md → Audit actions:
+      // "trip.cancel = reason_code, responsible_party, billing_impact, cancelled_at").
       newValue: {
         currentStatus: "cancelled",
         cancellationReasonCode: parsed.reasonCode,
         cancellationResponsibleParty: parsed.responsibleParty,
         cancellationBillingImpact: parsed.billingImpact,
+        cancelledAt: cancelledAt.toISOString(),
       },
       actorUserId,
     });

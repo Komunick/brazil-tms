@@ -42,39 +42,51 @@ export async function updateTripPlan(
   args: { authorizedReview?: boolean },
   actorUserId: string,
 ): Promise<TripDetail> {
-  const currentRows = await db.select().from(trips).where(eq(trips.id, tripId)).limit(1);
-  const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
-
-  // Post-confirmed review gate (FR-005): once the trip is past `confirmed` in lifecycle order, an
-  // edit requires an explicit authorized review.
-  const pastConfirmed =
-    TRIP_STATUSES.indexOf(current.currentStatus) > TRIP_STATUSES.indexOf("confirmed");
-  if (pastConfirmed && !args.authorizedReview) {
-    throw new Conflict("REVIEW_REQUIRED", "Edições após a confirmação exigem revisão autorizada.");
-  }
-
-  // Provided fields = the planned keys explicitly present (undefined = untouched; null = clear).
-  const provided = PLAN_FIELDS.filter((field) => changes[field] !== undefined);
-
-  const set: Record<string, unknown> = { updatedAt: new Date() };
-  const previousValue: Record<string, unknown> = {};
-  const newValue: Record<string, unknown> = {};
-  const currentRow = current as Record<string, unknown>;
-
-  for (const field of provided) {
-    const next = changes[field] ?? null;
-    set[field] = next;
-    // A critical change = a provided critical field whose new value differs from the stored one.
-    if (CRITICAL.has(field) && !sameValue(currentRow[field], next)) {
-      previousValue[field] = currentRow[field] ?? null;
-      newValue[field] = next;
-    }
-  }
-
-  const criticalChanged = Object.keys(newValue).length > 0;
-
   return db.transaction(async (tx) => {
+    // Lock the row for the transaction (R7): the review-gate check, the per-field diff, and the write
+    // all evaluate against ONE consistent snapshot. A concurrent transition cannot move the trip past
+    // `confirmed` — nor change a field under us — between the read and the update, so the post-confirmed
+    // gate can't be bypassed and the audit's previous values can't be stale. (A row lock by PK is
+    // chosen over an `updated_at` equality guard, which is fragile against timestamptz sub-ms precision.)
+    const currentRows = await tx
+      .select()
+      .from(trips)
+      .where(eq(trips.id, tripId))
+      .for("update")
+      .limit(1);
+    const current = currentRows[0];
+    if (!current) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+
+    // Post-confirmed review gate (FR-005), re-checked against the LOCKED status.
+    const pastConfirmed =
+      TRIP_STATUSES.indexOf(current.currentStatus) > TRIP_STATUSES.indexOf("confirmed");
+    if (pastConfirmed && !args.authorizedReview) {
+      throw new Conflict(
+        "REVIEW_REQUIRED",
+        "Edições após a confirmação exigem revisão autorizada.",
+      );
+    }
+
+    // Provided fields = the planned keys explicitly present (undefined = untouched; null = clear).
+    const provided = PLAN_FIELDS.filter((field) => changes[field] !== undefined);
+
+    const set: Record<string, unknown> = { updatedAt: new Date() };
+    const previousValue: Record<string, unknown> = {};
+    const newValue: Record<string, unknown> = {};
+    const currentRow = current as Record<string, unknown>;
+
+    for (const field of provided) {
+      const next = changes[field] ?? null;
+      set[field] = next;
+      // A critical change = a provided critical field whose new value differs from the locked one.
+      if (CRITICAL.has(field) && !sameValue(currentRow[field], next)) {
+        previousValue[field] = currentRow[field] ?? null;
+        newValue[field] = next;
+      }
+    }
+
+    const criticalChanged = Object.keys(newValue).length > 0;
+
     await tx.update(trips).set(set).where(eq(trips.id, tripId));
 
     if (criticalChanged) {
