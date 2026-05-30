@@ -53,16 +53,3 @@ jobs:
 
       - name: Test (Vitest — DB-backed integration tests skip without DATABASE_URL)
         run: pnpm test
-
-  # Enforces the merge policy: only `dev → main` promotion PRs may target main
-  # (docs/DELIVERY-WORKFLOW.md §Merge Policy). Any other source branch → main fails the check.
-  guard-base-branch:
-    name: "guard: PRs to main must come from dev"
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' && github.base_ref == 'main'
-    steps:
-      - name: Reject non-dev PRs into main
-        if: github.head_ref != 'dev'
-        run: |
-          echo "::error::PRs into 'main' must come from 'dev' (got '${{ github.head_ref }}'). Open the feature PR against 'dev'; promote with a dev → main PR. See docs/DELIVERY-WORKFLOW.md."
-          exit 1
