@@ -197,4 +197,27 @@ describe.skipIf(!hasDb)("parse job (integration)", () => {
     expect(batchRows[0]!.status).toBe("failed");
     expect(batchRows[0]!.errorMessage).toContain("modelo");
   });
+
+  it("re-running parse is idempotent (retry-safe): no duplicate-key error, same row count", async () => {
+    const csv = [
+      "trip_id,origin,destination,pickup_start,vehicle",
+      "RE-1,ORIG,DEST,2026-06-01 08:00,Truck",
+      "RE-2,ORIG,DEST,2026-06-02 09:30,Carreta",
+    ].join("\n");
+    const batchId = await seedBatch();
+    await putOriginal(batchId, Buffer.from(csv, "utf-8"), "text/csv");
+
+    await runParse({ batchId, storageKey: originalStorageKey(batchId) });
+    // A pg-boss retry re-invokes parse on the same batch; the (import_batch_id, row_number) unique
+    // index must NOT break it. Prior staging is cleared + re-inserted, so the re-run resolves cleanly.
+    await expect(
+      runParse({ batchId, storageKey: originalStorageKey(batchId) }),
+    ).resolves.toBeUndefined();
+
+    const rows = await db
+      .select()
+      .from(importRows)
+      .where(eq(importRows.importBatchId, batchId));
+    expect(rows).toHaveLength(2);
+  });
 });

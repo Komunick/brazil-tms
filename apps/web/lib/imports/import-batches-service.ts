@@ -6,6 +6,7 @@ import {
   db,
   importBatchStatus,
   importBatches,
+  importTemplates,
   writeAudit,
 } from "@brazil-tms/db";
 import { IMPORT_JOBS, uploadMetaSchema } from "@brazil-tms/shared";
@@ -123,6 +124,36 @@ export async function createBatch(
     .limit(1);
   if (!customerRows[0]) {
     throw new Conflict("INVALID_CUSTOMER", "Cliente inválido ou arquivado.");
+  }
+
+  // Validate the selected template up-front (don't let a stale/cross-customer/wrong-type template
+  // reach the worker and fail the batch after we've already returned 202). The template must belong
+  // to this customer, be active + not archived, and parse the uploaded file type.
+  if (templateId) {
+    const tpl = (
+      await db
+        .select({
+          customerId: importTemplates.customerId,
+          active: importTemplates.active,
+          archivedAt: importTemplates.archivedAt,
+          fileType: importTemplates.fileType,
+        })
+        .from(importTemplates)
+        .where(eq(importTemplates.id, templateId))
+        .limit(1)
+    )[0];
+    if (
+      !tpl ||
+      tpl.customerId !== customerId ||
+      !tpl.active ||
+      tpl.archivedAt !== null ||
+      tpl.fileType !== fileType
+    ) {
+      throw new Conflict(
+        "INVALID_TEMPLATE",
+        "Modelo de importação inválido para este cliente/arquivo (inexistente, inativo, arquivado, de outro cliente ou de outro tipo de arquivo).",
+      );
+    }
   }
 
   const id = crypto.randomUUID();

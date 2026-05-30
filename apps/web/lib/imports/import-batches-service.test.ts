@@ -1,6 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { Conflict, auditLogs, customers, db, importBatches, users } from "@brazil-tms/db";
+import {
+  Conflict,
+  auditLogs,
+  customers,
+  db,
+  importBatches,
+  importTemplates,
+  users,
+} from "@brazil-tms/db";
 import { confirmBatch, createBatch, getBatch } from "./import-batches-service";
 
 /**
@@ -56,7 +64,10 @@ describe.skipIf(!hasDb)("import-batches-service (integration)", () => {
       await db.delete(auditLogs).where(eq(auditLogs.entityId, id));
       await db.delete(importBatches).where(eq(importBatches.id, id));
     }
-    if (customerId) await db.delete(customers).where(eq(customers.id, customerId));
+    if (customerId) {
+      await db.delete(importTemplates).where(eq(importTemplates.customerId, customerId));
+      await db.delete(customers).where(eq(customers.id, customerId));
+    }
   });
 
   /** Seed an import_batches row directly with a chosen status (bypasses Storage). */
@@ -140,6 +151,36 @@ describe.skipIf(!hasDb)("import-batches-service (integration)", () => {
         uploaderId,
       ),
     ).rejects.toMatchObject({ code: "INVALID_CUSTOMER" });
+  });
+
+  it("createBatch rejects a template whose file type does not match the upload (INVALID_TEMPLATE)", async () => {
+    // An active XLSX template for this customer; uploading a CSV against it must be rejected up-front
+    // (before any Storage write), not deferred to a failed batch in the worker.
+    const tpl = await db
+      .insert(importTemplates)
+      .values({
+        customerId,
+        name: `Tpl Mismatch ${Date.now()}`,
+        version: 1,
+        fileType: "xlsx",
+        columnMappings: [{ source: "a", target: "externalTripId" }],
+        parsingRules: {},
+        requiredOverrides: [],
+      })
+      .returning({ id: importTemplates.id });
+
+    await expect(
+      createBatch(
+        {
+          customerId,
+          templateId: tpl[0]!.id,
+          fileName: "trips.csv",
+          fileType: "csv",
+          fileBytes: Buffer.from("a\n1\n", "utf8"),
+        },
+        uploaderId,
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_TEMPLATE" });
   });
 
   it("getBatch returns the status + four outcome counts", async () => {

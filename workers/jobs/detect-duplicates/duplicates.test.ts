@@ -356,6 +356,17 @@ describe.skipIf(!hasDb)("detect-duplicates job — full pipeline (integration)",
     expect(reviewRow.appliedAt).toBeNull(); // reported, NOT applied
     expect(reviewRow.targetTripId).toBeNull();
     expect(reasonCodes(reviewRow.reasons)).toContain("REVIEW_REQUIRED");
+    // SURFACED, not hidden behind a "completed" batch: the unapplied row is marked error so it is
+    // counted in error_count (and would appear in the regenerated error report) — never silently lost.
+    expect(reviewRow.outcome).toBe("error");
+    const batchAfter = (
+      await db
+        .select({ errorCount: importBatches.errorCount, status: importBatches.status })
+        .from(importBatches)
+        .where(eq(importBatches.id, batch2))
+        .limit(1)
+    )[0]!;
+    expect(batchAfter.errorCount).toBeGreaterThanOrEqual(1);
 
     // The trip's live plan was NOT silently changed.
     const stillTrip = (await db.select().from(trips).where(eq(trips.id, trip.id)).limit(1))[0]!;

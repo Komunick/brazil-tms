@@ -8,6 +8,7 @@ import {
   importTemplates,
   locationAliases,
   locations,
+  statusMappings,
 } from "@brazil-tms/db";
 import {
   VEHICLE_TYPE_VALUES,
@@ -93,6 +94,7 @@ async function validateRow(
   customerId: string,
   rawMapped: Record<string, unknown> | null,
   requiredOverrides: string[],
+  knownStatusLabels: Set<string>,
 ): Promise<ValidationResult> {
   if (rawMapped == null) {
     return {
@@ -202,6 +204,19 @@ async function validateRow(
       // Drop the unmappable value so the trip insert (enum column) does not fail on confirm.
       mapped.plannedVehicleType = null;
     }
+  }
+
+  // status label: the file's status is RECORDED/VALIDATED only — import never transitions from it
+  // (R10; trips land in `received`). An unknown customer label is flagged as a WARNING (never guessed,
+  // never blocks): the customer's status vocabulary is config (`status_mappings`), BLOCKED on real
+  // files (PRD §29), so an unmapped label is surfaced for an operator to map rather than silently kept.
+  const statusLabel = mapped.statusLabel;
+  if (!isBlank(statusLabel) && !knownStatusLabels.has(String(statusLabel).trim().toLowerCase())) {
+    reasons.push({
+      code: "UNMAPPED_STATUS",
+      field: "statusLabel",
+      message: `Status do cliente sem mapeamento: ${String(statusLabel)}.`,
+    });
   }
 
   // required fields (template.requiredOverrides) must be non-null in mapped.
@@ -317,6 +332,9 @@ export async function runValidate(payload: ValidatePayload): Promise<void> {
   // Template overrides for required fields (the batch may have no template — then none).
   const requiredOverrides = await loadRequiredOverrides(batch.templateId);
 
+  // The customer's configured status vocabulary (active mappings) — used to flag unmapped labels (R10).
+  const knownStatusLabels = await loadStatusLabels(batch.customerId);
+
   const rows = await db
     .select()
     .from(importRows)
@@ -341,6 +359,7 @@ export async function runValidate(payload: ValidatePayload): Promise<void> {
       batch.customerId,
       row.mapped as Record<string, unknown> | null,
       requiredOverrides,
+      knownStatusLabels,
     );
 
     await db
@@ -352,6 +371,21 @@ export async function runValidate(payload: ValidatePayload): Promise<void> {
       })
       .where(eq(importRows.id, row.id));
   }
+}
+
+/** Active status-label vocabulary for the customer, normalized (trim/lowercase) for matching (R10). */
+async function loadStatusLabels(customerId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ label: statusMappings.customerLabel })
+    .from(statusMappings)
+    .where(
+      and(
+        eq(statusMappings.customerId, customerId),
+        eq(statusMappings.active, true),
+        isNull(statusMappings.archivedAt),
+      ),
+    );
+  return new Set(rows.map((r) => r.label.trim().toLowerCase()));
 }
 
 /** Read the template's `requiredOverrides` (string[]) for the batch, or [] when none. */

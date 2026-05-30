@@ -174,6 +174,11 @@ export async function runParse(payload: ParsePayload): Promise<void> {
     return;
   }
 
+  // Idempotent re-parse (STACK §3.11): a crash/retry after partial staging must not collide with the
+  // `(import_batch_id, row_number)` unique index. Clear any rows staged by a prior attempt first, so a
+  // pg-boss retry re-stages this batch cleanly instead of failing on duplicate keys.
+  await db.delete(importRows).where(eq(importRows.importBatchId, batchId));
+
   // Stage each row. A per-row mapping throw is recorded (not fatal): mapped null + MAPPING_ERROR.
   for (const { rowNumber, raw } of records) {
     let mapped: unknown = null;

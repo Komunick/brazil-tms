@@ -17,6 +17,7 @@ import {
 } from "@brazil-tms/shared";
 import { setBatchCounts, setBatchStatus } from "../../lib/batch-progress";
 import { JOB, work } from "../../lib/queue";
+import { runGenerateErrorReport } from "../generate-error-report";
 
 /**
  * T033 — `import.confirm` job (data-model R8; contract §C/§A). Per row best-effort + idempotent: for
@@ -182,8 +183,10 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
         .set({ targetTripId, appliedAt: new Date() })
         .where(eq(importRows.id, row.id));
     } catch (err) {
-      // Per-row failure: record and continue (don't abort batch). `applied_at`/`target_trip_id` stay
-      // NULL, so the row is reported (and re-tryable) but NOT counted as applied (idempotency guard).
+      // Per-row failure: record and continue (don't abort the batch). The row is marked `error` so it
+      // is SURFACED — counted in error_count, shown in the preview, and included in the (regenerated)
+      // error report (FR-024: needs-review/apply failures are reported, never silently dropped). Its
+      // `applied_at`/`target_trip_id` stay NULL, so it is never counted as applied.
       const isReviewRequired = err instanceof Conflict && err.code === "REVIEW_REQUIRED";
       const code = err instanceof Conflict ? err.code : "APPLY_FAILED";
       const message = isReviewRequired
@@ -194,7 +197,7 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
         : [];
       await db
         .update(importRows)
-        .set({ reasons: [...existingReasons, { code, message }] })
+        .set({ outcome: "error", reasons: [...existingReasons, { code, message }] })
         .where(eq(importRows.id, row.id));
     }
   }
@@ -220,6 +223,9 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
   const errorCount = errorRows.length;
 
   await setBatchCounts(batchId, { createdCount, updatedCount, errorCount });
+  // Confirm may have newly marked rows `error` (REVIEW_REQUIRED / apply failure). Regenerate the
+  // downloadable error report so it reflects post-confirm failures too (idempotent — overwrites the key).
+  if (errorCount > 0) await runGenerateErrorReport({ batchId });
   await setBatchStatus(batchId, "completed");
 
   // Audit the confirm at the batch level. `db` satisfies the writeAudit `Inserter` (Pick<DB,"insert">).

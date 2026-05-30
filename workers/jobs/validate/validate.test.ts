@@ -8,6 +8,7 @@ import {
   importRows,
   importTemplates,
   locations,
+  statusMappings,
   trips,
   users,
 } from "@brazil-tms/db";
@@ -129,6 +130,7 @@ describe.skipIf(!hasDb)("validate job (integration)", () => {
     }
     for (const cid of createdCustomerIds) {
       await db.delete(importTemplates).where(eq(importTemplates.customerId, cid));
+      await db.delete(statusMappings).where(eq(statusMappings.customerId, cid));
       await db.delete(locations).where(eq(locations.customerId, cid));
       await db.delete(auditLogs).where(eq(auditLogs.entityId, cid));
       await db.delete(customers).where(eq(customers.id, cid));
@@ -261,5 +263,53 @@ describe.skipIf(!hasDb)("validate job (integration)", () => {
     const created = await db.select().from(trips).where(eq(trips.importBatchId, batchId));
     for (const t of created) createdTripIds.push(t.id);
     expect(created).toHaveLength(1);
+  });
+
+  it("flags an unmapped customer status label as a warning; a mapped label passes (R10)", async () => {
+    // A template that also maps the file's `status` column → statusLabel.
+    const tplWithStatus = await db
+      .insert(importTemplates)
+      .values({
+        customerId,
+        name: uniq("Template Status"),
+        version: 1,
+        fileType: "csv",
+        columnMappings: [
+          { source: "trip_id", target: "externalTripId" },
+          { source: "origin", target: "originCode" },
+          { source: "destination", target: "destinationCode" },
+          { source: "status", target: "statusLabel" },
+        ],
+        parsingRules: {
+          dateFormats: [],
+          timezone: "America/Sao_Paulo",
+          decimalSeparator: ",",
+          thousandSeparator: ".",
+        },
+        requiredOverrides: [],
+      })
+      .returning();
+    const tplId = tplWithStatus[0]!.id;
+
+    // The customer's configured status vocabulary: "Planejada" → received (record/validate only).
+    await db
+      .insert(statusMappings)
+      .values({ customerId, customerLabel: "Planejada", internalStatus: "received" });
+
+    const csv = [
+      "trip_id,origin,destination,status",
+      `${uniq("SH-ST-OK")},ORIG,DEST,Planejada`,
+      `${uniq("SH-ST-UNK")},ORIG,DEST,Desconhecido`,
+    ].join("\n");
+    const batchId = await seedBatchWithCsv(csv, customerId, tplId);
+    await runParse({ batchId, storageKey: originalStorageKey(batchId) });
+    await runValidate({ batchId });
+
+    const rows = await rowsOf(batchId);
+    expect(rows).toHaveLength(2);
+    // A mapped label is silent; an unknown label is a WARNING (recorded, never blocks — R10).
+    expect(reasonCodes(rows[0]!.reasons)).not.toContain("UNMAPPED_STATUS");
+    expect(reasonCodes(rows[1]!.reasons)).toContain("UNMAPPED_STATUS");
+    expect(rows[1]!.outcome).toBe("warning");
   });
 });
