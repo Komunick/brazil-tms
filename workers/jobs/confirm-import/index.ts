@@ -28,6 +28,13 @@ import { JOB, work } from "../../lib/queue";
  * so re-running creates 0 new trips. The trips partial unique index `(customer_id, external_trip_id)`
  * is the race backstop: a `new` row that loses the race to a 23505 is RE-RESOLVED as update.
  *
+ * US3 (T046): a `potential_duplicate` row is a `warning` that IS applied — it had no external-id match,
+ * so it creates a NEW trip (treated exactly like `new`), carrying its already-recorded POTENTIAL_DUPLICATE
+ * reason on the import row (FR-022; it is NOT skipped). An `update` to a trip moved PAST `confirmed`
+ * surfaces `Conflict('REVIEW_REQUIRED')` from `updateTripPlan`: that row is marked NEEDS-REVIEW (reason
+ * appended, `applied_at`/`target_trip_id` left NULL — reported, not dropped, not silently applied,
+ * FR-024) and the batch continues.
+ *
  * A per-row failure is recorded (reason appended) and does NOT abort the batch.
  */
 
@@ -134,7 +141,9 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
       const planChanges = planChangesFrom(input);
       const externalTripId = input.externalTripId ?? "";
 
-      if (row.matchDecision === "new") {
+      if (row.matchDecision === "new" || row.matchDecision === "potential_duplicate") {
+        // A potential_duplicate had NO external-id match → it creates a NEW trip, exactly like `new`.
+        // Its POTENTIAL_DUPLICATE reason already lives on the import row; we do not drop or skip it.
         try {
           const trip = await createTrip(input, actorUserId);
           targetTripId = trip.id;
@@ -173,19 +182,19 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
         .set({ targetTripId, appliedAt: new Date() })
         .where(eq(importRows.id, row.id));
     } catch (err) {
-      // Per-row failure: record (e.g. REVIEW_REQUIRED → needs-review) and continue (don't abort batch).
+      // Per-row failure: record and continue (don't abort batch). `applied_at`/`target_trip_id` stay
+      // NULL, so the row is reported (and re-tryable) but NOT counted as applied (idempotency guard).
+      const isReviewRequired = err instanceof Conflict && err.code === "REVIEW_REQUIRED";
       const code = err instanceof Conflict ? err.code : "APPLY_FAILED";
+      const message = isReviewRequired
+        ? "A viagem já passou da confirmação; a atualização exige revisão autorizada (não aplicada)."
+        : `Falha ao aplicar a linha: ${(err as Error).message}`;
       const existingReasons = Array.isArray(row.reasons)
         ? (row.reasons as { code: string; field?: string; message: string }[])
         : [];
       await db
         .update(importRows)
-        .set({
-          reasons: [
-            ...existingReasons,
-            { code, message: `Falha ao aplicar a linha: ${(err as Error).message}` },
-          ],
-        })
+        .set({ reasons: [...existingReasons, { code, message }] })
         .where(eq(importRows.id, row.id));
     }
   }
@@ -199,7 +208,10 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
     .where(and(eq(importRows.importBatchId, batchId), isNotNull(importRows.appliedAt)))
     .orderBy(asc(importRows.rowNumber));
 
-  const createdCount = applied.filter((r) => r.matchDecision === "new").length;
+  // A `potential_duplicate` row that applied also created a NEW trip, so it counts toward created.
+  const createdCount = applied.filter(
+    (r) => r.matchDecision === "new" || r.matchDecision === "potential_duplicate",
+  ).length;
   const updatedCount = applied.filter((r) => r.matchDecision === "update").length;
   const errorRows = await db
     .select({ id: importRows.id })

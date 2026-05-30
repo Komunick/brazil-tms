@@ -25,6 +25,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: "lanes", href: "/admin/lanes", icon: "Route", permission: "manage_commercial_data" },
   // 004 — trip import (import_trips: Admin, Ops Manager, Dispatcher).
   { key: "imports", href: "/imports", icon: "Upload", permission: "import_trips" },
+  { key: "importHistory", href: "/imports/history", icon: "History", permission: "import_trips" },
   // 002 — fleet master data (manage_fleet_data: Admin, Ops Manager, Fleet Coordinator).
   { key: "drivers", href: "/resources/drivers", icon: "UserRound", permission: "manage_fleet_data" },
   { key: "vehicles", href: "/resources/vehicles", icon: "Truck", permission: "manage_fleet_data" },

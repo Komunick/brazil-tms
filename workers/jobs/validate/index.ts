@@ -6,6 +6,7 @@ import {
   importBatches,
   importRows,
   importTemplates,
+  locationAliases,
   locations,
 } from "@brazil-tms/db";
 import {
@@ -19,9 +20,11 @@ import { JOB, enqueue, work } from "../../lib/queue";
 /**
  * T031 — `import.validate` job (data-model "Validation rules"; contract §C; spec FR-012). Per row,
  * compute `outcome` ∈ {valid, warning, error} + structured pt-BR `reasons`, and ENRICH `mapped` with
- * resolved location ids so the confirm stage can build a trip without re-resolving. US1 resolves
- * locations only by the `(customer_id, code)` master-data key; `location_aliases` (US4) is a later
- * slice. Duplicate/match detection is the NEXT stage (this job never sets `match_decision`).
+ * resolved location ids so the confirm stage can build a trip without re-resolving. Locations resolve
+ * by the `(customer_id, code)` master-data key first, then (US4/T048) fall back to a remembered
+ * `location_aliases` row keyed on `(customer_id, file_value)` so a previously-mapped unknown location
+ * auto-resolves. Import NEVER creates master-data locations (slice 002 owns that — R11).
+ * Duplicate/match detection is the NEXT stage (this job never sets `match_decision`).
  *
  * DOCUMENTED-DEFAULT bounds: the distance/transit plausibility check is a WARNING-only heuristic with
  * scaffolded bounds (PRD §29 — BLOCKED). It is never an error gate; loosen/tighten once Ops confirms.
@@ -257,7 +260,11 @@ function checkWindow(
   }
 }
 
-/** Resolve a location by (customer_id, code) among active (non-archived) master-data sites. */
+/**
+ * Resolve a location for a customer (R11). First the `(customer_id, code)` master-data key among active
+ * (non-archived) sites; on a miss, a remembered `location_aliases` row keyed on `(customer_id,
+ * file_value)` that points at a STILL-ACTIVE location (T048). Returns null = `unknown_location`.
+ */
 async function resolveLocation(customerId: string, code: string): Promise<string | null> {
   const rows = await db
     .select({ id: locations.id })
@@ -270,7 +277,22 @@ async function resolveLocation(customerId: string, code: string): Promise<string
       ),
     )
     .limit(1);
-  return rows[0]?.id ?? null;
+  if (rows[0]) return rows[0].id;
+
+  // Alias fallback: a previously-mapped file value → an active location for this customer.
+  const aliasRows = await db
+    .select({ locationId: locationAliases.locationId })
+    .from(locationAliases)
+    .innerJoin(locations, eq(locations.id, locationAliases.locationId))
+    .where(
+      and(
+        eq(locationAliases.customerId, customerId),
+        eq(locationAliases.fileValue, code),
+        isNull(locations.archivedAt),
+      ),
+    )
+    .limit(1);
+  return aliasRows[0]?.locationId ?? null;
 }
 
 export async function runValidate(payload: ValidatePayload): Promise<void> {

@@ -2,6 +2,7 @@ import type { PgBoss } from "pg-boss";
 import { registerParse } from "./parse";
 import { registerValidate } from "./validate";
 import { registerDetectDuplicates } from "./detect-duplicates";
+import { registerGenerateErrorReport } from "./generate-error-report";
 import { registerConfirm } from "./confirm-import";
 
 /**
@@ -23,5 +24,5 @@ export async function registerJobHandlers(boss: PgBoss): Promise<void> {
   await registerDetectDuplicates(boss);
   await registerConfirm(boss);
   // US2 (T041):
-  //   await registerGenerateErrorReport(boss);
+  await registerGenerateErrorReport(boss);
 }

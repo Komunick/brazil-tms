@@ -145,10 +145,10 @@ on confirm; correct + re-import clears them. (§11.2; INT-006; FR-011..FR-016.)
 **Independent Test**: Upload a file with bad rows → each classified with a localized reason; export the error report;
 confirm applies only Valid+Warning; fix + re-import → previously failed rows pass.
 
-- [ ] T041 [US2] Implement `workers/jobs/generate-error-report/index.ts` (`import.generate-error-report`: write the failed rows + `reasons` + original `row_number` to a CSV/XLSX via `exceljs`; `storage.putErrorReport`; set `import_batches.error_report_storage_key`); **register the handler in `workers/index.ts`** and **wire `workers/jobs/detect-duplicates/index.ts` to `enqueue('import.generate-error-report')` when `error_count>0`** — depends on T031, T032, T022
-- [ ] T042 [US2] Implement `errorReportUrl` in `apps/web/lib/imports/import-batches-service.ts` (signed URL via Storage helper) + `apps/web/app/api/imports/[id]/error-report/route.ts` GET (`200 {url}` / `404` when none) — depends on T028, T041
-- [ ] T043 [US2] Extend the Trip Import screen `apps/web/app/(shell)/imports/page.tsx` to render validation results + duplicate warnings per row, an **error-export** button, and a resolve/re-import affordance (pt-BR) — depends on T036, T042
-- [ ] T044 [US2] Vitest integration (workers) `workers/jobs/validate/validate.test.ts` (rows classified `valid`/`warning`/`error` with localized `reasons` for: missing required field, inactive customer, invalid/unordered windows, unmappable vehicle type; **error rows excluded on confirm**; error report generated + downloadable; a corrected re-import clears the error) — depends on T031, T041, T033
+- [X] T041 [US2] Implement `workers/jobs/generate-error-report/index.ts` (`import.generate-error-report`: write the failed rows + `reasons` + original `row_number` to a CSV/XLSX via `exceljs`; `storage.putErrorReport`; set `import_batches.error_report_storage_key`); **register the handler in `workers/index.ts`** and **wire `workers/jobs/detect-duplicates/index.ts` to `enqueue('import.generate-error-report')` when `error_count>0`** — depends on T031, T032, T022
+- [X] T042 [US2] Implement `errorReportUrl` in `apps/web/lib/imports/import-batches-service.ts` (signed URL via Storage helper) + `apps/web/app/api/imports/[id]/error-report/route.ts` GET (`200 {url}` / `404` when none) — depends on T028, T041
+- [X] T043 [US2] Extend the Trip Import screen `apps/web/app/(shell)/imports/page.tsx` to render validation results + duplicate warnings per row, an **error-export** button, and a resolve/re-import affordance (pt-BR) — depends on T036, T042
+- [X] T044 [US2] Vitest integration (workers) `workers/jobs/validate/validate.test.ts` (rows classified `valid`/`warning`/`error` with localized `reasons` for: missing required field, inactive customer, invalid/unordered windows, unmappable vehicle type; **error rows excluded on confirm**; error report generated + downloadable; a corrected re-import clears the error) — depends on T031, T041, T033
 
 **Checkpoint**: The validation + error-resolution loop works end-to-end on top of US1.
 
@@ -163,9 +163,9 @@ potential duplicate (recorded reason); same-id-twice-in-a-file → all error. (I
 id → update (original preserved, audited); id-less look-alike → potential_duplicate needing a reason; two same-id rows in
 one file → both error, none created; update past `confirmed` without review → reported needs-review.
 
-- [ ] T045 [US3] Extend `workers/jobs/detect-duplicates/index.ts`: add **fuzzy** matching (`buildFuzzyKey` + a **configurable tolerance with a documented default** — BLOCKED final values) → `potential_duplicate` (`outcome=warning`); `detectInFileCollisions` → all colliding rows `outcome=error` (`reasons: IN_FILE_COLLISION`); tally `duplicate_count` (FR-022, FR-017a, FR-023) — depends on T032, T017
-- [ ] T046 [US3] Extend `workers/jobs/confirm-import/index.ts`: a `potential_duplicate` row is created only with a **recorded reason**; an `update` to a trip **past `confirmed`** without `authorizedReview` → `REVIEW_REQUIRED` → mark the row **needs-review** (reported, not dropped — FR-024) — depends on T033, T045
-- [ ] T047 [US3] Vitest integration (workers) `workers/jobs/detect-duplicates/duplicates.test.ts` (identical re-import → all `no_op`, **0 new** (SC-002); changed plan field on known external id → `update`, `original_plan` preserved + `trip.plan_update` audit; id-less look-alike → `potential_duplicate` (created only with recorded reason, SC-006); two same-id rows in one file → both `error`, none created (FR-017a); repeat external id is **never** a blocking duplicate; update past `confirmed` w/o review → needs-review) — depends on T045, T046
+- [X] T045 [US3] Extend `workers/jobs/detect-duplicates/index.ts`: add **fuzzy** matching (`buildFuzzyKey` + a **configurable tolerance with a documented default** — BLOCKED final values) → `potential_duplicate` (`outcome=warning`); `detectInFileCollisions` → all colliding rows `outcome=error` (`reasons: IN_FILE_COLLISION`); tally `duplicate_count` (FR-022, FR-017a, FR-023) — depends on T032, T017
+- [X] T046 [US3] Extend `workers/jobs/confirm-import/index.ts`: a `potential_duplicate` row is created only with a **recorded reason**; an `update` to a trip **past `confirmed`** without `authorizedReview` → `REVIEW_REQUIRED` → mark the row **needs-review** (reported, not dropped — FR-024) — depends on T033, T045
+- [X] T047 [US3] Vitest integration (workers) `workers/jobs/detect-duplicates/duplicates.test.ts` (identical re-import → all `no_op`, **0 new** (SC-002); changed plan field on known external id → `update`, `original_plan` preserved + `trip.plan_update` audit; id-less look-alike → `potential_duplicate` (created only with recorded reason, SC-006); two same-id rows in one file → both `error`, none created (FR-017a); repeat external id is **never** a blocking duplicate; update past `confirmed` w/o review → needs-review) — depends on T045, T046
 
 **Checkpoint**: Idempotent matching with update/no-op + fuzzy flag + in-file collision verified.
 
@@ -180,10 +180,10 @@ one file → both error, none created; update past `confirmed` without review �
 location → re-validate → row resolves; next import auto-resolves via the alias; mapping to an archived/other-customer
 location → `INVALID_LOCATION_REFERENCE`.
 
-- [ ] T048 [US4] Extend `workers/jobs/validate/index.ts` location resolution to also consult `location_aliases` (`(customer_id, file_value)`) before flagging `unknown_location`; on alias hit, resolve to the mapped `location_id` — depends on T031, T013
-- [ ] T049 [US4] Implement `apps/web/lib/imports/location-aliases-service.ts` (`resolveLocation(batchId, {fileValue, locationId})`: assert the location is active and same-customer via 002's reference check else `Conflict('INVALID_LOCATION_REFERENCE')`; insert `location_aliases`; audit `location_alias.create`; `enqueue('import.validate')` to re-validate affected rows) + `apps/web/app/api/imports/[id]/locations/route.ts` POST — depends on T013, T020, T048
-- [ ] T050 [US4] Extend the Trip Import screen `apps/web/app/(shell)/imports/page.tsx` with the unknown-location flag + a map-to-existing-location affordance (pt-BR) — depends on T043, T049
-- [ ] T051 [US4] Vitest integration (web/workers) `apps/web/lib/imports/location-aliases-service.test.ts` (unknown origin → `unknown_location`, **never** auto-created or dropped, SC-005; resolve to existing → re-validate → row resolves; alias remembered → subsequent import auto-resolves; map to archived/other-customer location → `INVALID_LOCATION_REFERENCE`) — depends on T048, T049
+- [X] T048 [US4] Extend `workers/jobs/validate/index.ts` location resolution to also consult `location_aliases` (`(customer_id, file_value)`) before flagging `unknown_location`; on alias hit, resolve to the mapped `location_id` — depends on T031, T013
+- [X] T049 [US4] Implement `apps/web/lib/imports/location-aliases-service.ts` (`resolveLocation(batchId, {fileValue, locationId})`: assert the location is active and same-customer via 002's reference check else `Conflict('INVALID_LOCATION_REFERENCE')`; insert `location_aliases`; audit `location_alias.create`; `enqueue('import.validate')` to re-validate affected rows) + `apps/web/app/api/imports/[id]/locations/route.ts` POST — depends on T013, T020, T048
+- [X] T050 [US4] Extend the Trip Import screen `apps/web/app/(shell)/imports/page.tsx` with the unknown-location flag + a map-to-existing-location affordance (pt-BR) — depends on T043, T049
+- [X] T051 [US4] Vitest integration (web/workers) `apps/web/lib/imports/location-aliases-service.test.ts` (unknown origin → `unknown_location`, **never** auto-created or dropped, SC-005; resolve to existing → re-validate → row resolves; alias remembered → subsequent import auto-resolves; map to archived/other-customer location → `INVALID_LOCATION_REFERENCE`) — depends on T048, T049
 
 **Checkpoint**: Unknown-location flag-and-map loop works, with remembered aliases.
 
@@ -197,8 +197,8 @@ file. (INT-004; FR-031.)
 **Independent Test**: Run several imports → each appears in history with correct metadata + counts; original file +
 per-row `raw` + error report retrievable.
 
-- [ ] T052 [US5] Implement `apps/web/app/api/imports/route.ts` GET list (batch history; `?customerId`/`?status`/`?limit`; newest first) reusing `listBatches` — depends on T028
-- [ ] T053 [US5] Build the import-batch-history screen `apps/web/app/(shell)/imports/history/page.tsx` (TanStack Table: file, user, time, customer, counts, status; error-report download link) (pt-BR) — depends on T052, T042
+- [X] T052 [US5] Implement `apps/web/app/api/imports/route.ts` GET list (batch history; `?customerId`/`?status`/`?limit`; newest first) reusing `listBatches` — depends on T028
+- [X] T053 [US5] Build the import-batch-history screen `apps/web/app/(shell)/imports/history/page.tsx` (TanStack Table: file, user, time, customer, counts, status; error-report download link) (pt-BR) — depends on T052, T042
 - [ ] T054 [US5] Vitest/e2e `apps/web/e2e/import-history.spec.ts` (after imports, history lists each batch with metadata + the four counts + status; original file + per-row `raw` retrievable; SC-001, SC-007) — depends on T052, T053
 
 **Checkpoint**: Batch history + traceability verified.
@@ -213,8 +213,8 @@ match/update/no-op semantics if an external id is supplied. (INT-007.)
 **Independent Test**: Manual create with required fields → trip in **Received** + audit, `import_batch_id` null; manual
 create with an existing external id → update/no-op semantics apply.
 
-- [ ] T055 [US6] Implement the manual-create surface `apps/web/app/api/trips/route.ts` POST (`requirePermission(ctx,'import_trips')`; validate `createTripSchema`; call promoted `createTrip` with `importBatchId=null`; on an existing `(customer, external_trip_id)` apply the same match → `updateTripPlan`/no-op as the import path) + a minimal manual-entry form on `apps/web/app/(shell)/imports/page.tsx` (pt-BR) — depends on T014, T032
-- [ ] T056 [US6] Vitest/e2e `apps/web/lib/imports/manual-create.test.ts` (manual create → `received` + `trip.create` audit, `import_batch_id` null; manual create with an existing external id → update/no-op, never a duplicate) — depends on T055
+- [X] T055 [US6] Implement the manual-create surface `apps/web/app/api/trips/route.ts` POST (`requirePermission(ctx,'import_trips')`; validate `createTripSchema`; call promoted `createTrip` with `importBatchId=null`; on an existing `(customer, external_trip_id)` apply the same match → `updateTripPlan`/no-op as the import path) + a minimal manual-entry form on `apps/web/app/(shell)/imports/page.tsx` (pt-BR) — depends on T014, T032
+- [X] T056 [US6] Vitest/e2e `apps/web/lib/imports/manual-create.test.ts` (manual create → `received` + `trip.create` audit, `import_batch_id` null; manual create with an existing external id → update/no-op, never a duplicate) — depends on T055
 
 **Checkpoint**: The manual exception path reuses the same domain + match semantics.
 
@@ -222,7 +222,7 @@ create with an existing external id → update/no-op semantics apply.
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T057 [P] Add seed `packages/db/seed/import-sample.ts` (a labeled **scaffolding** default template + status-mapping rows + a fuzzy-tolerance documented default; sample CSV/XLSX fixtures) and a `db:seed:import` script in `packages/db/package.json` (quickstart.md; Constitution II — reasons/tolerance are documented defaults, not final)
+- [X] T057 [P] Add seed `packages/db/seed/import-sample.ts` (a labeled **scaffolding** default template + status-mapping rows + a fuzzy-tolerance documented default; sample CSV/XLSX fixtures) and a `db:seed:import` script in `packages/db/package.json` (quickstart.md; Constitution II — reasons/tolerance are documented defaults, not final)
 - [ ] T058 [P] Infra: add the `worker` service to `infra/.../docker-compose.yml` (runs `pnpm --filter @brazil-tms/workers start`) and raise the Caddy request-body limit for `POST /api/imports` (App Router has no per-route body-size knob — R4)
 - [ ] T059 Run quickstart.md validation end-to-end (US1–US6 walkthrough) and confirm Success Criteria SC-001…SC-010, including a **SC-004 timing check** (a 1,000-row fixture is parsed → validated → ready-to-confirm within 5 minutes; if it is not asserted in CI, record the measured time in the PR notes)
 - [ ] T060 Quality gate: `pnpm lint` · `pnpm typecheck` · `pnpm build` · `pnpm test` (with `DATABASE_URL`) · `pnpm exec vitest run --project workers` · feature e2e `trip-import.spec.ts`. Run e2e against a **production build** (`next start` + `PLAYWRIGHT_BASE_URL`, `--workers=1`), not `next dev`; the pre-existing 001/002 admin-UI e2e failures are environment-only (MEMORY: reset with `db:seed:e2e`)

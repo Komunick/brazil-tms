@@ -7,6 +7,7 @@ import {
   Building2,
   Container,
   Factory,
+  History,
   LayoutDashboard,
   MapPin,
   Route,
@@ -33,6 +34,7 @@ const ICONS: Record<string, LucideIcon> = {
   Container,
   Factory,
   Upload,
+  History,
 };
 
 /**
