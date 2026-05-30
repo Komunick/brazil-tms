@@ -29,6 +29,7 @@ const EXPECTED: Record<RoleType, PermissionKey[]> = {
     "verify_documents",
     "manage_commercial_data",
     "manage_fleet_data",
+    "manage_trips",
   ],
   dispatcher: [
     "view_all_trips",
@@ -143,5 +144,28 @@ describe("002 master-data permission invariants (contracts/permission-matrix.md)
     for (const role of ALL_ROLES) {
       expect(can(role, "delete_archive")).toBe(role === Role.Admin);
     }
+  });
+});
+
+describe("003 trip-domain permission invariants (contracts/permission-matrix.md)", () => {
+  it("Admin and Operations Manager hold manage_trips", () => {
+    expect(can(Role.Admin, "manage_trips")).toBe(true);
+    expect(can(Role.OperationsManager, "manage_trips")).toBe(true);
+  });
+
+  it("Dispatcher and Finance do NOT hold manage_trips (their trip keys arrive in later slices)", () => {
+    expect(can(Role.Dispatcher, "manage_trips")).toBe(false);
+    expect(can(Role.Finance, "manage_trips")).toBe(false);
+  });
+
+  it("no other role holds manage_trips", () => {
+    for (const role of ALL_ROLES) {
+      const expected = role === Role.Admin || role === Role.OperationsManager;
+      expect(can(role, "manage_trips")).toBe(expected);
+    }
+  });
+
+  it("customer_viewer (reserved, non-assignable) does not hold manage_trips", () => {
+    expect(can("customer_viewer" as RoleType, "manage_trips")).toBe(false);
   });
 });

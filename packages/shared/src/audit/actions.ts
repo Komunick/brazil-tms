@@ -32,7 +32,13 @@ export type AuditAction =
   | "trailer.create"
   | "trailer.update"
   | "trailer.archive"
-  | "trailer.status_change";
+  | "trailer.status_change"
+  // feature 003 — trip domain (data-model.md §Audit actions). Every critical-field change and
+  // lifecycle action writes exactly one immutable audit row (SC-003).
+  | "trip.create" // newValue = original_plan summary + initial status
+  | "trip.plan_update" // accepted customer update to live planned_* fields (per-field prev/new)
+  | "trip.status_change" // prev/new current_status (also recorded as a trip_event)
+  | "trip.cancel"; // reason_code, responsible_party, billing_impact, cancelled_at
 
 /** The four actions audited by feature 001 (useful for tests / iteration). */
 export const AUDIT_ACTIONS_001: readonly AuditAction[] = [
