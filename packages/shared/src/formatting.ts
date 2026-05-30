@@ -7,7 +7,13 @@ export const APP_LOCALE = "pt-BR";
 const EMPTY = "—";
 
 function toDateTime(value: string | Date): DateTime {
-  return value instanceof Date ? DateTime.fromJSDate(value) : DateTime.fromISO(value);
+  // Parse ISO strings IN the app zone so a date-only value ("YYYY-MM-DD") is anchored to São Paulo
+  // midnight rather than the server's default zone. Without this, a UTC-default server shifts
+  // date-only DB values back a day (e.g. 2026-05-29 → 28/05) and skews the expiry window. Strings
+  // carrying an explicit offset/Z keep their instant and are converted to the app zone.
+  return value instanceof Date
+    ? DateTime.fromJSDate(value)
+    : DateTime.fromISO(value, { zone: APP_TIME_ZONE });
 }
 
 /** Parse a UTC value and shift it into the app timezone (America/Sao_Paulo). */
@@ -52,4 +58,34 @@ export function formatBRL(centavos: number): string {
     style: "currency",
     currency: "BRL",
   }).format(centavos / 100);
+}
+
+/**
+ * Default documentation-expiry warning window, in days (feature 002, Clarification Q5 / R9).
+ * This is the SINGLE configuration source for the window — call sites must not hard-code a literal.
+ */
+export const DOCUMENT_EXPIRY_WARNING_DAYS = 30;
+
+/** Derived documentation-expiry state for a resource (drivers/vehicles/trailers). */
+export type DocumentExpiryState = "ok" | "expiring" | "expired";
+
+/**
+ * Pure helper deriving the documentation-expiry state from a date (R9). Never stored — recomputed on
+ * read so it can never drift. `expired` = the expiry is on/before `now` (date-only, America/Sao_Paulo);
+ * `expiring` = within `windowDays`; `ok` otherwise or when there is no expiry. Day-granular: only the
+ * calendar date matters, so "today" counts as expired.
+ */
+export function documentExpiryState(
+  expiry: string | Date | null | undefined,
+  now: string | Date,
+  windowDays: number = DOCUMENT_EXPIRY_WARNING_DAYS,
+): DocumentExpiryState {
+  if (expiry == null) return "ok";
+  const expiryDate = toDateTime(expiry).setZone(APP_TIME_ZONE).startOf("day");
+  if (!expiryDate.isValid) return "ok";
+  const today = toDateTime(now).setZone(APP_TIME_ZONE).startOf("day");
+  const days = expiryDate.diff(today, "days").days;
+  if (days <= 0) return "expired";
+  if (days <= windowDays) return "expiring";
+  return "ok";
 }

@@ -41,7 +41,10 @@ export type PermissionKey =
   | "upload_documents"
   | "verify_documents"
   | "edit_rates"
-  | "export_billing";
+  | "export_billing"
+  // added by 002 (master data): create/edit/read commercial vs fleet entities (permission-matrix.md):
+  | "manage_commercial_data"
+  | "manage_fleet_data";
 
 export const ALL_PERMISSIONS: readonly PermissionKey[] = [
   "manage_users",
@@ -62,6 +65,8 @@ export const ALL_PERMISSIONS: readonly PermissionKey[] = [
   "verify_documents",
   "edit_rates",
   "export_billing",
+  "manage_commercial_data",
+  "manage_fleet_data",
 ];
 
 // Admin is a superset of every permission (matrix invariant).
@@ -83,6 +88,8 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlySet<PermissionKey>> = {
     "resolve_exceptions",
     "upload_documents",
     "verify_documents",
+    "manage_commercial_data",
+    "manage_fleet_data",
   ]),
   dispatcher: new Set<PermissionKey>([
     "view_all_trips",
@@ -109,6 +116,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlySet<PermissionKey>> = {
     "create_exceptions",
     "resolve_exceptions",
     "upload_documents",
+    "manage_fleet_data",
   ]),
   finance: new Set<PermissionKey>([
     "view_all_trips",

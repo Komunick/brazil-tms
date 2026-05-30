@@ -28,6 +28,11 @@ const ACCOUNTS: readonly SeedAccount[] = [
   { email: "finance@braziltransports.com.br", password: "ChangeMe!Finance123", name: "Financeiro Teste", role: "finance", status: "active", mustChange: false },
   { email: "temppw@braziltransports.com.br", password: "ChangeMe!Temp123", name: "Temp Teste", role: "dispatcher", status: "active", mustChange: true },
   { email: "disabled@braziltransports.com.br", password: "ChangeMe!Disabled123", name: "Desativado Teste", role: "dispatcher", status: "disabled", mustChange: false },
+  // 002 master-data authorization (US5): a clean active Dispatcher (no master-data access), an
+  // Operations Manager (commercial + fleet), and a Fleet Coordinator (fleet only, NOT commercial).
+  { email: "dispatcher@braziltransports.com.br", password: "ChangeMe!Dispatcher123", name: "Despachante Teste", role: "dispatcher", status: "active", mustChange: false },
+  { email: "opsmanager@braziltransports.com.br", password: "ChangeMe!Ops123", name: "Gerente Ops Teste", role: "operations_manager", status: "active", mustChange: false },
+  { email: "fleetcoord@braziltransports.com.br", password: "ChangeMe!Fleet123", name: "Coord Frota Teste", role: "fleet_coordinator", status: "active", mustChange: false },
 ];
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;

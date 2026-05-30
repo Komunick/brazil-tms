@@ -5,3 +5,4 @@ export * from "./auth/permissions";
 export * from "./audit/actions";
 export * from "./schemas/auth";
 export * from "./schemas/admin-user";
+export * from "./schemas/master-data";

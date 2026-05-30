@@ -30,6 +30,20 @@ export const testAccounts = {
     email: env("E2E_TEMPPW_EMAIL", "temppw@braziltransports.com.br"),
     password: env("E2E_TEMPPW_PASSWORD", "ChangeMe!Temp123"),
   },
+  /** 002 master-data authorization (US5). Dispatcher = no master-data; Ops Mgr = commercial+fleet;
+   *  Fleet Coord = fleet only (NOT commercial). */
+  dispatcher: {
+    email: env("E2E_DISPATCHER_EMAIL", "dispatcher@braziltransports.com.br"),
+    password: env("E2E_DISPATCHER_PASSWORD", "ChangeMe!Dispatcher123"),
+  },
+  opsManager: {
+    email: env("E2E_OPSMGR_EMAIL", "opsmanager@braziltransports.com.br"),
+    password: env("E2E_OPSMGR_PASSWORD", "ChangeMe!Ops123"),
+  },
+  fleetCoord: {
+    email: env("E2E_FLEETCOORD_EMAIL", "fleetcoord@braziltransports.com.br"),
+    password: env("E2E_FLEETCOORD_PASSWORD", "ChangeMe!Fleet123"),
+  },
 } as const;
 
 export const routes = {

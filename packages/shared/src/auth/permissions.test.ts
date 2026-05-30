@@ -27,6 +27,8 @@ const EXPECTED: Record<RoleType, PermissionKey[]> = {
     "resolve_exceptions",
     "upload_documents",
     "verify_documents",
+    "manage_commercial_data",
+    "manage_fleet_data",
   ],
   dispatcher: [
     "view_all_trips",
@@ -53,6 +55,7 @@ const EXPECTED: Record<RoleType, PermissionKey[]> = {
     "create_exceptions",
     "resolve_exceptions",
     "upload_documents",
+    "manage_fleet_data",
   ],
   finance: [
     "view_all_trips",
@@ -107,5 +110,38 @@ describe("invariants", () => {
 
   it("can() returns false for an unknown role", () => {
     expect(can("customer_viewer" as RoleType, "view_all_trips")).toBe(false);
+  });
+});
+
+describe("002 master-data permission invariants (contracts/permission-matrix.md)", () => {
+  it("Admin and Ops Manager hold both manage_commercial_data and manage_fleet_data", () => {
+    for (const role of [Role.Admin, Role.OperationsManager] as const) {
+      expect(can(role, "manage_commercial_data")).toBe(true);
+      expect(can(role, "manage_fleet_data")).toBe(true);
+    }
+  });
+
+  it("Fleet Coordinator manages fleet but NOT commercial data", () => {
+    expect(can(Role.FleetCoordinator, "manage_fleet_data")).toBe(true);
+    expect(can(Role.FleetCoordinator, "manage_commercial_data")).toBe(false);
+  });
+
+  it("manage_commercial_data and manage_fleet_data are granted to no other role", () => {
+    const otherRoles = [
+      Role.Dispatcher,
+      Role.ControlTower,
+      Role.Finance,
+      Role.ExecutiveViewer,
+    ] as const;
+    for (const role of otherRoles) {
+      expect(can(role, "manage_commercial_data")).toBe(false);
+      expect(can(role, "manage_fleet_data")).toBe(false);
+    }
+  });
+
+  it("archive of master data uses the Admin-only delete_archive key", () => {
+    for (const role of ALL_ROLES) {
+      expect(can(role, "delete_archive")).toBe(role === Role.Admin);
+    }
   });
 });
