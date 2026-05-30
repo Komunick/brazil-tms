@@ -6,10 +6,13 @@ import { errorReportUrl } from "@/lib/imports/import-batches-service";
 export const dynamic = "force-dynamic";
 
 /**
- * GET /api/imports/:id/error-report — issues a short-lived signed download URL for a batch's
- * generated error report (US2, FR-014). Server-mediated only (no public object URL, R12). Requires
- * `import_trips`; `404` when the batch has no error report (a missing report is not a business
- * conflict, so it does not flow through Conflict).
+ * GET /api/imports/:id/error-report — server-mediated download of a batch's generated error report
+ * (US2, FR-014). Mints a short-lived signed URL (service-role; no public object URL, R12) and
+ * **302-redirects** to it, so the client can use a plain link/navigation. This deliberately avoids the
+ * old `{ url }` + client `window.open` pattern, which browsers silently popup-block when the open
+ * happens after an `await`. The signed URL never reaches client JS and is freshly minted per request.
+ * Requires `import_trips`; `404` when the batch has no error report (not a business conflict, so it
+ * does not flow through Conflict).
  */
 export async function GET(
   _request: Request,
@@ -26,7 +29,7 @@ export async function GET(
         { status: 404 },
       );
     }
-    return NextResponse.json({ url });
+    return NextResponse.redirect(url, 302);
   } catch (error) {
     return handleRouteError(error);
   }

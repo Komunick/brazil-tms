@@ -50,6 +50,7 @@ interface ImportBatchSummary {
   errorCount: number;
   uploadedBy: string;
   createdAt: string; // ISO UTC
+  hasErrorReport: boolean;
 }
 
 interface CustomerOption {
@@ -73,14 +74,6 @@ function statusBadgeVariant(
   if (status === "failed") return "destructive";
   if (status === "validated") return "secondary";
   return "outline";
-}
-
-/** Server-mediated signed error-report URL → open in a new tab (US2/US5). */
-async function openErrorReport(batchId: string): Promise<void> {
-  const res = await fetch(`/api/imports/${batchId}/error-report`);
-  if (!res.ok) return;
-  const { url } = (await res.json()) as { url: string };
-  if (url) window.open(url, "_blank");
 }
 
 // `pt-BR`/`America/Sao_Paulo` display of a UTC ISO timestamp (stored UTC, shown local — CLAUDE.md).
@@ -169,15 +162,19 @@ export function ImportHistoryClient() {
     {
       id: "_actions",
       header: () => t("historyErrors"),
+      // Show the download only when a report actually exists in Storage (hasErrorReport), not merely
+      // when errorCount > 0 — otherwise the link would 404. It is a plain navigation to the endpoint
+      // (which 302-redirects to a fresh signed URL), so no fetch + window.open (popup-block safe).
       cell: ({ row }) =>
-        row.original.errorCount > 0 ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => void openErrorReport(row.original.id)}
-          >
-            {t("historyDownloadErrors")}
+        row.original.hasErrorReport ? (
+          <Button asChild size="sm" variant="outline">
+            <a
+              href={`/api/imports/${row.original.id}/error-report`}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {t("historyDownloadErrors")}
+            </a>
           </Button>
         ) : (
           <span className="text-muted-foreground">—</span>

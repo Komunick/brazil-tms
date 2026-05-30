@@ -14,10 +14,38 @@ import {
   users,
 } from "@brazil-tms/db";
 import { originalStorageKey, putOriginal } from "@brazil-tms/db/storage";
+import type { PgBoss } from "pg-boss";
+import { IMPORT_JOBS } from "@brazil-tms/shared";
 import { runParse } from "../parse";
 import { runValidate } from "../validate";
-import { runDetectDuplicates } from "./index";
+import { registerDetectDuplicates, runDetectDuplicates } from "./index";
 import { runConfirm } from "../confirm-import";
+
+/**
+ * A minimal fake pg-boss that captures the handler registered via `work(...)` and records every
+ * `send(...)`. Lets us exercise the detect-duplicates REGISTER WRAPPER (which decides whether to
+ * enqueue generate-error-report) without booting a real queue — the gap that let a stale worker ship
+ * batches with errors but no report.
+ */
+function makeFakeBoss() {
+  const sends: { name: string; data: unknown }[] = [];
+  let captured: ((jobs: { data: unknown }[]) => Promise<unknown>) | null = null;
+  const boss = {
+    work: async (_name: string, handler: (jobs: { data: unknown }[]) => Promise<unknown>) => {
+      captured = handler;
+      return "work-id";
+    },
+    send: async (name: string, data: unknown) => {
+      sends.push({ name, data });
+      return "job-id";
+    },
+  };
+  return {
+    boss: boss as unknown as PgBoss,
+    sends,
+    invoke: (data: unknown) => captured?.([{ data }]),
+  };
+}
 
 /**
  * T047 — detect-duplicates integration test (US3) via the run* pipeline against the live dev DB +
@@ -373,5 +401,72 @@ describe.skipIf(!hasDb)("detect-duplicates job — full pipeline (integration)",
     expect(stillTrip.plannedPickupWindowStart!.getTime()).toBe(
       trip.plannedPickupWindowStart!.getTime(),
     );
+  });
+
+  it("the register wrapper ENQUEUES generate-error-report when the batch has errors (pg-boss chain)", async () => {
+    const batch = await db
+      .insert(importBatches)
+      .values({
+        customerId,
+        templateId,
+        fileName: "wiring-err.csv",
+        storageKey: "n/a",
+        uploadedBy: actorId,
+        status: "validating",
+      })
+      .returning();
+    const batchId = batch[0]!.id;
+    createdBatchIds.push(batchId);
+    // One already-error row → runDetectDuplicates tallies error_count = 1.
+    await db.insert(importRows).values({
+      importBatchId: batchId,
+      rowNumber: 1,
+      raw: {},
+      mapped: { externalTripId: "ERR-1" },
+      outcome: "error",
+      reasons: [{ code: "UNKNOWN_LOCATION", message: "x" }],
+    });
+
+    const fake = makeFakeBoss();
+    await registerDetectDuplicates(fake.boss);
+    await fake.invoke({ batchId });
+
+    expect(
+      fake.sends.some(
+        (s) =>
+          s.name === IMPORT_JOBS.generateErrorReport &&
+          (s.data as { batchId?: string }).batchId === batchId,
+      ),
+    ).toBe(true);
+  });
+
+  it("the register wrapper does NOT enqueue generate-error-report when the batch has no errors", async () => {
+    const batch = await db
+      .insert(importBatches)
+      .values({
+        customerId,
+        templateId,
+        fileName: "wiring-ok.csv",
+        storageKey: "n/a",
+        uploadedBy: actorId,
+        status: "validating",
+      })
+      .returning();
+    const batchId = batch[0]!.id;
+    createdBatchIds.push(batchId);
+    // One clean valid row with a unique external id → matches nothing → `new`, error_count = 0.
+    await db.insert(importRows).values({
+      importBatchId: batchId,
+      rowNumber: 1,
+      raw: {},
+      mapped: { externalTripId: uniq("OK") },
+      outcome: "valid",
+    });
+
+    const fake = makeFakeBoss();
+    await registerDetectDuplicates(fake.boss);
+    await fake.invoke({ batchId });
+
+    expect(fake.sends.some((s) => s.name === IMPORT_JOBS.generateErrorReport)).toBe(false);
   });
 });

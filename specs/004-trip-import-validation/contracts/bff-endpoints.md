@@ -64,9 +64,11 @@ worker (R3/R4). Batch progress is read by **TanStack Query polling** of the batc
 ### `GET /api/imports/{id}/error-report`
 
 - **Permission**: `import_trips`.
-- **Behavior**: issues a short-lived **signed download URL** for the generated error report (server-mediated; no public
-  object URL).
-- **Responses**: `200 { url }`; `401`; `403`; `404` (no error report for this batch).
+- **Behavior**: mints a short-lived **signed URL** for the generated error report (server-mediated; no public object URL)
+  and **`302`-redirects** to it, so the client uses a plain link/navigation (no `{ url }` + client `window.open`, which
+  browsers popup-block after an `await`). The signed URL never reaches client JS and is freshly minted per request. The
+  UI shows the download only when the batch's `hasErrorReport` is true.
+- **Responses**: `302` → signed URL (`Location`); `401`; `403`; `404` (no error report for this batch).
 - Traceability: US2, FR-014; SC-003.
 
 ### `POST /api/imports/{id}/locations`
@@ -116,10 +118,11 @@ type ImportBatchSummary = {
   id: string; customerId: string; fileName: string; status: ImportBatchStatus;
   totalRows: number; createdCount: number; updatedCount: number; duplicateCount: number; errorCount: number;
   uploadedBy: string; createdAt: string;                       // ISO UTC
+  hasErrorReport: boolean;                                     // report exists in Storage (drives the download UI)
 };
 
 type ImportBatchDetail = ImportBatchSummary & {
-  templateId: string | null; hasErrorReport: boolean; errorMessage: string | null; updatedAt: string;
+  templateId: string | null; errorMessage: string | null; updatedAt: string;
 };
 
 type ImportRow = {

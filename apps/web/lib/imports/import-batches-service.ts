@@ -54,12 +54,13 @@ export interface ImportBatchSummary {
   errorCount: number;
   uploadedBy: string;
   createdAt: string;
+  /** True once the error report exists in Storage (downloadable) — drives the "Baixar erros" affordance. */
+  hasErrorReport: boolean;
 }
 
 /** Polled progress shape (contract: bff-endpoints.md `ImportBatchDetail`). */
 export interface ImportBatchDetail extends ImportBatchSummary {
   templateId: string | null;
-  hasErrorReport: boolean;
   errorMessage: string | null;
   updatedAt: string;
 }
@@ -77,6 +78,9 @@ function toSummary(row: ImportBatchRow): ImportBatchSummary {
     errorCount: row.errorCount,
     uploadedBy: row.uploadedBy,
     createdAt: row.createdAt.toISOString(),
+    // A report only exists after generate-error-report has run; gate the download UI on this, not on
+    // error_count (which is set earlier, while the report may still be generating or absent).
+    hasErrorReport: row.errorReportStorageKey !== null,
   };
 }
 
@@ -84,7 +88,6 @@ function toDetail(row: ImportBatchRow): ImportBatchDetail {
   return {
     ...toSummary(row),
     templateId: row.templateId,
-    hasErrorReport: row.errorReportStorageKey !== null,
     errorMessage: row.errorMessage,
     updatedAt: row.updatedAt.toISOString(),
   };

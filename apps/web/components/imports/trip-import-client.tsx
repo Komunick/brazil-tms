@@ -159,14 +159,6 @@ function unknownLocationFileValue(
   return "";
 }
 
-/** Open a batch's error report in a new tab via the server-mediated signed URL (US2, T043). */
-async function openErrorReport(batchId: string): Promise<void> {
-  const res = await fetch(`/api/imports/${batchId}/error-report`);
-  if (!res.ok) return;
-  const { url } = (await res.json()) as { url: string };
-  if (url) window.open(url, "_blank");
-}
-
 export function TripImportClient() {
   const t = useTranslations("Imports");
   const tVehicle = useTranslations("VehicleTypes");
@@ -208,8 +200,13 @@ export function TripImportClient() {
       ).then((b) => b.item),
     enabled: Boolean(batchId),
     refetchInterval: (query) => {
-      const status = query.state.data?.status;
+      const data = query.state.data;
+      const status = data?.status;
       if (!status) return 2500;
+      // Keep polling while the error report is still being generated (errors exist but no report yet),
+      // so the "Exportar erros" link appears without a manual refresh. generate-error-report runs right
+      // after detect-duplicates on the same worker, so this resolves within ~1s.
+      if (status === "validated" && data.errorCount > 0 && !data.hasErrorReport) return 2500;
       // Stop polling once the batch reaches a terminal/awaiting-user state (validated → preview is
       // ready; completed/failed → done). Confirm resumes polling via query invalidation.
       if (TERMINAL_STATUSES.has(status)) return false;
@@ -521,17 +518,23 @@ export function TripImportClient() {
               </div>
             ) : null}
 
-            {/* Error report + reimport hint (US2, T043). */}
-            {batch && (batch.hasErrorReport || batch.errorCount > 0) ? (
+            {/* Error report + reimport hint (US2, T043). The box shows whenever there are errors; the
+                download link appears only once the report exists in Storage (hasErrorReport) and is a
+                plain navigation to the endpoint (302 → fresh signed URL), so it's popup-block safe. */}
+            {batch && batch.errorCount > 0 ? (
               <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
                 <div className="flex flex-wrap items-center gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => void openErrorReport(batch.id)}
-                  >
-                    {t("exportErrors")}
-                  </Button>
+                  {batch.hasErrorReport ? (
+                    <Button asChild variant="outline">
+                      <a
+                        href={`/api/imports/${batch.id}/error-report`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {t("exportErrors")}
+                      </a>
+                    </Button>
+                  ) : null}
                   <span className="text-sm text-amber-800">{t("reimportHint")}</span>
                 </div>
               </div>
