@@ -1,6 +1,6 @@
 import "server-only";
 import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
-import { db, locations } from "@brazil-tms/db";
+import { customers, db, locations } from "@brazil-tms/db";
 import type { CreateLocationInput, UpdateLocationInput } from "@brazil-tms/shared";
 import { writeAudit } from "@/lib/audit/write-audit";
 import { Conflict } from "@/lib/api/respond";
@@ -93,6 +93,22 @@ const DUPLICATE = new Conflict(
   "Já existe um local com esse código para o cliente.",
 );
 
+/**
+ * A location must reference an ACTIVE customer. Archived parents are excluded from *new* links
+ * (data-model.md §Relationships); the UI filters its picker, but the BFF is the authoritative gate.
+ */
+async function assertActiveCustomer(customerId: string): Promise<void> {
+  const rows = await db
+    .select({ archivedAt: customers.archivedAt })
+    .from(customers)
+    .where(eq(customers.id, customerId))
+    .limit(1);
+  const row = rows[0];
+  if (!row || row.archivedAt !== null) {
+    throw new Conflict("INACTIVE_CUSTOMER", "O cliente selecionado não está ativo.");
+  }
+}
+
 export interface ListLocationsOptions {
   customerId?: string;
   q?: string;
@@ -126,6 +142,7 @@ export async function createLocation(
   input: CreateLocationInput,
   actorUserId: string,
 ): Promise<LocationDto> {
+  await assertActiveCustomer(input.customerId);
   try {
     return await db.transaction(async (tx) => {
       const inserted = await tx
@@ -169,6 +186,9 @@ export async function updateLocation(
   const currentRows = await db.select().from(locations).where(eq(locations.id, id)).limit(1);
   const current = currentRows[0];
   if (!current) throw new Conflict("NOT_FOUND", "Local não encontrado.");
+
+  // Re-pointing a location to a different customer must target an ACTIVE customer.
+  if (input.customerId !== undefined) await assertActiveCustomer(input.customerId);
 
   // Build the partial update + before/after snapshots from only the provided fields.
   const set: Record<string, unknown> = { updatedAt: new Date() };

@@ -17,22 +17,28 @@ import { z } from "zod";
 // Coercion helpers
 // ---------------------------------------------------------------------------
 
-/** Treat blank ("" / null) form inputs as "absent" (undefined) for any optional schema. */
+/**
+ * Optional field that distinguishes "absent" from "cleared". A blank input ("" or null) becomes
+ * explicit `null` (so an edit can CLEAR the column, and switching a resource to `owned` with a blank
+ * carrier nulls `carrier_id`); a missing key stays `undefined` (so the partial-update services skip
+ * it and leave the column unchanged).
+ */
 const blankable = <T extends z.ZodTypeAny>(schema: T) =>
-  z.preprocess((v) => (v === "" || v === null ? undefined : v), schema.optional());
+  z.preprocess((v) => (v === "" || v === null ? null : v), schema.nullable().optional());
 
-/** Optional nested object: an all-blank object (every field empty/null) collapses to undefined. */
+/** Optional nested object: an all-blank object collapses to `null` (cleared); absent stays undefined. */
 const optionalObject = <T extends z.ZodTypeAny>(schema: T) =>
   z.preprocess((v) => {
-    if (v == null) return undefined;
+    if (v === undefined) return undefined;
+    if (v === null) return null;
     if (typeof v === "object") {
       const hasValue = Object.values(v as Record<string, unknown>).some(
         (x) => x !== "" && x != null,
       );
-      if (!hasValue) return undefined;
+      if (!hasValue) return null;
     }
     return v;
-  }, schema.optional());
+  }, schema.nullable().optional());
 
 const optionalText = (max = 200) =>
   blankable(z.string().trim().max(max, `Máximo de ${max} caracteres.`));
@@ -43,13 +49,14 @@ const optionalEmail = blankable(z.string().trim().email("E-mail inválido."));
 /** Wrap a numeric schema so "" / null become undefined and numeric strings become numbers. */
 const numberFromInput = (schema: z.ZodNumber) =>
   z.preprocess((v) => {
-    if (v === "" || v === null || v === undefined) return undefined;
+    if (v === undefined) return undefined;
+    if (v === "" || v === null) return null;
     if (typeof v === "string") {
       const n = Number(v);
       return Number.isNaN(n) ? v : n;
     }
     return v;
-  }, schema.optional());
+  }, schema.nullable().optional());
 
 // ---------------------------------------------------------------------------
 // Primitive building blocks

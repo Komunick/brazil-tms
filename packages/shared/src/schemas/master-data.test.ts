@@ -11,6 +11,8 @@ import {
   isOwnershipCarrierValid,
   plateSchema,
   ufSchema,
+  updateCustomerSchema,
+  updateDriverSchema,
 } from "./master-data";
 
 const UUID_A = "11111111-1111-1111-1111-111111111111";
@@ -171,6 +173,29 @@ describe("ownership/carrier invariant (US3/US4)", () => {
         ownershipType: "owned",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("update schemas — clear vs absent (P2/P1 fixes)", () => {
+  it("a blank optional field CLEARS (→ null); an absent field is omitted (unchanged)", () => {
+    const cleared = updateCustomerSchema.parse({
+      legalName: "",
+      taxId: null,
+      billingContact: { name: "", email: "", phone: "" },
+    });
+    expect(cleared.legalName).toBeNull();
+    expect(cleared.taxId).toBeNull();
+    expect(cleared.billingContact).toBeNull();
+
+    const absent = updateCustomerSchema.parse({ name: "Novo Nome" });
+    expect("legalName" in absent).toBe(false);
+    expect("taxId" in absent).toBe(false);
+  });
+
+  it("switching a resource to owned with a blank carrier nulls the carrier (valid)", () => {
+    const res = updateDriverSchema.safeParse({ ownershipType: "owned", carrierId: "" });
+    expect(res.success).toBe(true);
+    if (res.success) expect(res.data.carrierId).toBeNull();
   });
 });
 

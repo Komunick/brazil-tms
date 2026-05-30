@@ -125,6 +125,40 @@ describe.skipIf(!hasDb)("resources-service (integration)", () => {
     expect(dto.carrierId).toBe(carrierId);
   });
 
+  it("flips a subcontracted resource back to owned, clearing the carrier (P1)", async () => {
+    const carrier = (
+      await db.insert(carriers).values({ name: `Flip Carrier ${Date.now()}` }).returning()
+    )[0]!;
+    carrierIds.push(carrier.id);
+    const dto = await createDriver(
+      { name: "Flip", ownershipType: "subcontracted", carrierId: carrier.id },
+      actorId,
+    );
+    driverIds.push(dto.id);
+    expect(dto.carrierId).toBe(carrier.id);
+
+    // Switch to owned WITHOUT sending carrierId — the service must null it so the DB CHECK passes.
+    const owned = await updateDriver(dto.id, { ownershipType: "owned" }, actorId);
+    expect(owned.ownershipType).toBe("owned");
+    expect(owned.carrierId).toBeNull();
+  });
+
+  it("rejects linking a subcontracted resource to an ARCHIVED carrier (P1)", async () => {
+    const carrier = (
+      await db
+        .insert(carriers)
+        .values({ name: `Arch Carrier ${Date.now()}`, archivedAt: new Date() })
+        .returning()
+    )[0]!;
+    carrierIds.push(carrier.id);
+    await expect(
+      createDriver(
+        { name: "Bad Link", ownershipType: "subcontracted", carrierId: carrier.id },
+        actorId,
+      ),
+    ).rejects.toMatchObject({ code: "INACTIVE_CARRIER" });
+  });
+
   it("rejects a duplicate vehicle plate with Conflict DUPLICATE_PLATE", async () => {
     const p = plate();
     const first = await createVehicle(

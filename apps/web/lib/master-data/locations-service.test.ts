@@ -120,6 +120,24 @@ describe.skipIf(!hasDb)("locations-service (integration)", () => {
     expect(auditsAfter).toHaveLength(1);
   });
 
+  it("rejects creating a location under an ARCHIVED customer (P1)", async () => {
+    const archived = (
+      await db
+        .insert(customers)
+        .values({
+          name: "Cliente Arquivado",
+          customerCode: code("CUST-ARCH"),
+          archivedAt: new Date(),
+        })
+        .returning()
+    )[0]!;
+    createdCustomerIds.push(archived.id);
+
+    await expect(
+      createLocation({ customerId: archived.id, code: code(), name: "X", country: "BR" }, actorId),
+    ).rejects.toMatchObject({ code: "INACTIVE_CUSTOMER" });
+  });
+
   it("update of a missing location throws NOT_FOUND", async () => {
     await expect(
       updateLocation("00000000-0000-0000-0000-000000000000", { name: "X" }, actorId),

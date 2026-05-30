@@ -3,6 +3,7 @@ import {
   DOCUMENT_EXPIRY_WARNING_DAYS,
   documentExpiryState,
   formatBRL,
+  formatDate,
 } from "./formatting";
 
 describe("documentExpiryState (R9)", () => {
@@ -39,6 +40,19 @@ describe("documentExpiryState (R9)", () => {
 
   it("exposes the default window as the single config source", () => {
     expect(DOCUMENT_EXPIRY_WARNING_DAYS).toBe(30);
+  });
+});
+
+describe("formatDate — date-only values are zone-stable (P2 fix)", () => {
+  it("renders a date-only string as the same calendar date regardless of server zone", () => {
+    // Without anchoring the parse to America/Sao_Paulo, a UTC-default server would render 28/05/2026.
+    expect(formatDate("2026-05-29")).toBe("29/05/2026");
+    expect(formatDate("2026-01-01")).toBe("01/01/2026");
+  });
+
+  it("still converts a UTC timestamp into the app zone", () => {
+    // 2026-05-29T02:00Z is 28/05 23:00 in America/Sao_Paulo (-03:00).
+    expect(formatDate("2026-05-29T02:00:00.000Z")).toBe("28/05/2026");
   });
 });
 

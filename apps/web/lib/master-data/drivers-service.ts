@@ -1,6 +1,6 @@
 import "server-only";
 import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
-import { db, drivers } from "@brazil-tms/db";
+import { carriers, db, drivers } from "@brazil-tms/db";
 import {
   documentExpiryState,
   type CreateDriverInput,
@@ -102,6 +102,19 @@ const MISMATCH = new Conflict(
   "Recurso subcontratado exige uma transportadora; recurso próprio não pode ter transportadora.",
 );
 
+/** A subcontracted resource must link to an ACTIVE carrier (archived carriers excluded from new links). */
+async function assertActiveCarrier(carrierId: string): Promise<void> {
+  const rows = await db
+    .select({ archivedAt: carriers.archivedAt })
+    .from(carriers)
+    .where(eq(carriers.id, carrierId))
+    .limit(1);
+  const row = rows[0];
+  if (!row || row.archivedAt !== null) {
+    throw new Conflict("INACTIVE_CARRIER", "A transportadora selecionada não está ativa.");
+  }
+}
+
 export interface ListDriversOptions {
   q?: string;
   status?: ResourceStatus;
@@ -143,6 +156,7 @@ export async function createDriver(
   input: CreateDriverInput,
   actorUserId: string,
 ): Promise<DriverDto> {
+  if (input.carrierId) await assertActiveCarrier(input.carrierId);
   try {
     return await db.transaction(async (tx) => {
       const inserted = await tx
@@ -213,6 +227,16 @@ export async function updateDriver(
     previousValue[field] = (current as Record<string, unknown>)[field] ?? null;
     newValue[field] = data[field];
   }
+
+  // Ownership/carrier coupling (P1): switching to "owned" clears any existing carrier so the DB
+  // CHECK is satisfied even when the client omits carrierId.
+  if (input.ownershipType === "owned" && current.carrierId !== null) {
+    set.carrierId = null;
+    previousValue.carrierId = current.carrierId;
+    newValue.carrierId = null;
+  }
+  // A (re)assigned carrier must reference an ACTIVE carrier (unchanged links are not re-checked).
+  if ("carrierId" in set && set.carrierId) await assertActiveCarrier(set.carrierId as string);
 
   // A status transition is independently audited as a status_change (RES-007, contract §Drivers).
   const statusChanged = input.status !== undefined && input.status !== current.status;

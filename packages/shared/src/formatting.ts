@@ -7,7 +7,13 @@ export const APP_LOCALE = "pt-BR";
 const EMPTY = "—";
 
 function toDateTime(value: string | Date): DateTime {
-  return value instanceof Date ? DateTime.fromJSDate(value) : DateTime.fromISO(value);
+  // Parse ISO strings IN the app zone so a date-only value ("YYYY-MM-DD") is anchored to São Paulo
+  // midnight rather than the server's default zone. Without this, a UTC-default server shifts
+  // date-only DB values back a day (e.g. 2026-05-29 → 28/05) and skews the expiry window. Strings
+  // carrying an explicit offset/Z keep their instant and are converted to the app zone.
+  return value instanceof Date
+    ? DateTime.fromJSDate(value)
+    : DateTime.fromISO(value, { zone: APP_TIME_ZONE });
 }
 
 /** Parse a UTC value and shift it into the app timezone (America/Sao_Paulo). */

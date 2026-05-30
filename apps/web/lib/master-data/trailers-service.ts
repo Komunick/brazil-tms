@@ -1,6 +1,6 @@
 import "server-only";
 import { and, desc, eq, ilike, isNull } from "drizzle-orm";
-import { db, trailers } from "@brazil-tms/db";
+import { carriers, db, trailers } from "@brazil-tms/db";
 import {
   documentExpiryState,
   type CreateTrailerInput,
@@ -95,6 +95,19 @@ const MISMATCH = new Conflict(
   "Recurso subcontratado exige uma transportadora; recurso próprio não pode ter transportadora.",
 );
 
+/** A subcontracted resource must link to an ACTIVE carrier (archived carriers excluded from new links). */
+async function assertActiveCarrier(carrierId: string): Promise<void> {
+  const rows = await db
+    .select({ archivedAt: carriers.archivedAt })
+    .from(carriers)
+    .where(eq(carriers.id, carrierId))
+    .limit(1);
+  const row = rows[0];
+  if (!row || row.archivedAt !== null) {
+    throw new Conflict("INACTIVE_CARRIER", "A transportadora selecionada não está ativa.");
+  }
+}
+
 /** Map a Postgres driver error to the right BFF Conflict, or rethrow if unrelated. */
 function mapWriteError(error: unknown): never {
   const code = pgCode(error);
@@ -144,6 +157,7 @@ export async function createTrailer(
   input: CreateTrailerInput,
   actorUserId: string,
 ): Promise<TrailerDto> {
+  if (input.carrierId) await assertActiveCarrier(input.carrierId);
   try {
     return await db.transaction(async (tx) => {
       const inserted = await tx
@@ -209,6 +223,16 @@ export async function updateTrailer(
     previousValue[field] = (current as Record<string, unknown>)[field] ?? null;
     newValue[field] = data[field];
   }
+
+  // Ownership/carrier coupling (P1): switching to "owned" clears any existing carrier so the DB
+  // CHECK is satisfied even when the client omits carrierId.
+  if (input.ownershipType === "owned" && current.carrierId !== null) {
+    set.carrierId = null;
+    previousValue.carrierId = current.carrierId;
+    newValue.carrierId = null;
+  }
+  // A (re)assigned carrier must reference an ACTIVE carrier (unchanged links are not re-checked).
+  if ("carrierId" in set && set.carrierId) await assertActiveCarrier(set.carrierId as string);
 
   const statusChanged = input.status !== undefined && input.status !== current.status;
 
