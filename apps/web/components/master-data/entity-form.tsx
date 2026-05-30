@@ -28,10 +28,14 @@ export interface FieldProps {
 export function Field({ label, htmlFor, error, required, hint, children }: FieldProps) {
   return (
     <div className="space-y-2">
-      <Label htmlFor={htmlFor}>
-        {label}
-        {required ? <span className="ml-0.5 text-destructive">*</span> : null}
-      </Label>
+      <div className="flex items-center gap-0.5">
+        <Label htmlFor={htmlFor}>{label}</Label>
+        {required ? (
+          <span aria-hidden="true" className="text-destructive">
+            *
+          </span>
+        ) : null}
+      </div>
       {children}
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
