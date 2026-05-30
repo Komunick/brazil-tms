@@ -17,7 +17,8 @@
     "drizzle:migrate": "drizzle-kit migrate",
     "db:seed": "tsx ./seed/001-admin.ts",
     "db:seed:e2e": "tsx ./seed/e2e-accounts.ts",
-    "db:seed:master-data": "tsx ./seed/master-data-sample.ts"
+    "db:seed:master-data": "tsx ./seed/master-data-sample.ts",
+    "db:seed:trip-domain": "tsx ./seed/trip-domain-sample.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

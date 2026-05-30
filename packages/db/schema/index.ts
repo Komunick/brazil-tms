@@ -9,3 +9,7 @@ export * from "./carriers";
 export * from "./drivers";
 export * from "./vehicles";
 export * from "./trailers";
+// Feature 003 — trip domain (durable trip + append-only events + cancellation config).
+export * from "./trips";
+export * from "./trip-events";
+export * from "./cancellation-options";

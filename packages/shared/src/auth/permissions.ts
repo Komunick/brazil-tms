@@ -44,7 +44,9 @@ export type PermissionKey =
   | "export_billing"
   // added by 002 (master data): create/edit/read commercial vs fleet entities (permission-matrix.md):
   | "manage_commercial_data"
-  | "manage_fleet_data";
+  | "manage_fleet_data"
+  // added by 003 (trip domain): create/transition/plan-update/cancel trips + read trip inspector:
+  | "manage_trips";
 
 export const ALL_PERMISSIONS: readonly PermissionKey[] = [
   "manage_users",
@@ -67,6 +69,7 @@ export const ALL_PERMISSIONS: readonly PermissionKey[] = [
   "export_billing",
   "manage_commercial_data",
   "manage_fleet_data",
+  "manage_trips",
 ];
 
 // Admin is a superset of every permission (matrix invariant).
@@ -90,6 +93,7 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlySet<PermissionKey>> = {
     "verify_documents",
     "manage_commercial_data",
     "manage_fleet_data",
+    "manage_trips",
   ]),
   dispatcher: new Set<PermissionKey>([
     "view_all_trips",
