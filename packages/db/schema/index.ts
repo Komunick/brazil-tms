@@ -13,3 +13,9 @@ export * from "./trailers";
 export * from "./trips";
 export * from "./trip-events";
 export * from "./cancellation-options";
+// Feature 004 — trip import (templates, batches, staging rows, status/location config).
+export * from "./import-templates";
+export * from "./import-batches";
+export * from "./import-rows";
+export * from "./status-mappings";
+export * from "./location-aliases";

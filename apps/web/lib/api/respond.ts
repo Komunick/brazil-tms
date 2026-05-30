@@ -1,18 +1,9 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
+import { Conflict } from "@brazil-tms/db";
 import { Forbidden, OnboardingRequired, Unauthorized } from "../auth/require-auth";
 
-/** Business-rule conflicts (last-admin guard, duplicate email) → HTTP 409. */
-export class Conflict extends Error {
-  readonly status = 409;
-  constructor(
-    readonly code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = "Conflict";
-  }
-}
+export { Conflict };
 
 export function apiError(status: number, code: string, message: string): NextResponse {
   return NextResponse.json({ error: { code, message } }, { status });

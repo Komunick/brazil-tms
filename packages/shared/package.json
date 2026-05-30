@@ -11,6 +11,8 @@
     "./formatting": "./src/formatting.ts",
     "./schemas/auth": "./src/schemas/auth.ts",
     "./schemas/admin-user": "./src/schemas/admin-user.ts",
+    "./schemas/import": "./src/schemas/import.ts",
+    "./import": "./src/import/index.ts",
     "./audit/actions": "./src/audit/actions.ts"
   },
   "scripts": {

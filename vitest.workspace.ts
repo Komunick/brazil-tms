@@ -31,4 +31,34 @@ export default defineWorkspace([
       include: ["lib/**/*.test.ts"],
     },
   },
+  {
+    // Promoted trip-write services + any future @brazil-tms/db unit/integration tests (004 R2).
+    resolve: {
+      alias: {
+        "server-only": emptyModule,
+        "client-only": emptyModule,
+      },
+    },
+    test: {
+      name: "db",
+      root: "./packages/db",
+      environment: "node",
+      include: ["src/**/*.test.ts"],
+    },
+  },
+  {
+    // Feature 004 — the activated worker (pg-boss jobs: parse/validate/detect-duplicates/confirm).
+    resolve: {
+      alias: {
+        "server-only": emptyModule,
+        "client-only": emptyModule,
+      },
+    },
+    test: {
+      name: "workers",
+      root: "./workers",
+      environment: "node",
+      include: ["**/*.test.ts"],
+    },
+  },
 ]);

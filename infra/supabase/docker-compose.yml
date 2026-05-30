@@ -75,6 +75,36 @@ services:
     expose:
       - "9999" # reachable only inside the compose network; public access is via the gateway
 
+  storage:
+    # Supabase Storage (feature 004 — first feature to need object upload: import original file +
+    # generated error report). File backend (no S3) for self-hosting; image transforms disabled (no
+    # imgproxy needed). Connects to Postgres as the superuser so it can install its roles + the
+    # `storage` schema on first boot (DB_INSTALL_ROLES). Private buckets only; access is server-mediated
+    # via signed URLs issued by the BFF (Constitution IV — the gateway never exposes public object URLs).
+    image: supabase/storage-api:v1.11.13
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      ANON_KEY: ${ANON_KEY}
+      SERVICE_KEY: ${SERVICE_ROLE_KEY}
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}
+      DB_INSTALL_ROLES: "true"
+      PGOPTIONS: "-c search_path=storage,public"
+      FILE_SIZE_LIMIT: "52428800"
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      TENANT_ID: stub
+      REGION: stub
+      GLOBAL_S3_BUCKET: stub
+      ENABLE_IMAGE_TRANSFORMATION: "false"
+    volumes:
+      - storage-data:/var/lib/storage
+    expose:
+      - "5000" # reachable only inside the compose network; public access is via the gateway
+
   mailpit:
     # Dev mail catcher so invite/recovery emails don't hard-fail without real SMTP. UI: :8025.
     image: axllent/mailpit:latest
@@ -83,10 +113,11 @@ services:
       - "8025:8025"
 
   gateway:
-    # Single public Supabase API surface: /auth/v1 only (no /rest/v1, no /storage/v1 in 001).
+    # Public Supabase API surface: /auth/v1 (GoTrue) + /storage/v1 (Storage, feature 004). No /rest/v1.
     image: caddy:2.8-alpine
     depends_on:
       - auth
+      - storage
     restart: unless-stopped
     ports:
       - "8000:8000" # NEXT_PUBLIC_SUPABASE_URL=http://localhost:8000 (quickstart.md)
@@ -95,3 +126,4 @@ services:
 
 volumes:
   db-data:
+  storage-data:
