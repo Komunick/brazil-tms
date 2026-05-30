@@ -1,5 +1,5 @@
 import type { PgBoss } from "pg-boss";
-import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import {
   Conflict,
   createTrip,
@@ -183,21 +183,29 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
         .set({ targetTripId, appliedAt: new Date() })
         .where(eq(importRows.id, row.id));
     } catch (err) {
-      // Per-row failure: record and continue (don't abort the batch). The row is marked `error` so it
-      // is SURFACED — counted in error_count, shown in the preview, and included in the (regenerated)
-      // error report (FR-024: needs-review/apply failures are reported, never silently dropped). Its
-      // `applied_at`/`target_trip_id` stay NULL, so it is never counted as applied.
+      // Per-row failure: record + continue (never abort the batch). Two distinct kinds:
+      //  - REVIEW_REQUIRED (the trip is past `confirmed`): TERMINAL for import — a re-run hits the same
+      //    gate (import never passes `authorizedReview`), so retrying is futile. Mark it `error` so it
+      //    is counted, shown, and included in the regenerated report (FR-024), and NOT retried.
+      //  - any other (unexpected/transient) failure: keep the row's `outcome` (valid/warning) and leave
+      //    `applied_at` NULL so a RE-CONFIRM retries it (R8 idempotency). The reason is recorded for
+      //    visibility, and the batch is held at `validated` (below) so the operator can retry.
       const isReviewRequired = err instanceof Conflict && err.code === "REVIEW_REQUIRED";
       const code = err instanceof Conflict ? err.code : "APPLY_FAILED";
       const message = isReviewRequired
         ? "A viagem já passou da confirmação; a atualização exige revisão autorizada (não aplicada)."
-        : `Falha ao aplicar a linha: ${(err as Error).message}`;
+        : `Falha ao aplicar a linha (será re-tentada em nova confirmação): ${(err as Error).message}`;
       const existingReasons = Array.isArray(row.reasons)
         ? (row.reasons as { code: string; field?: string; message: string }[])
         : [];
       await db
         .update(importRows)
-        .set({ outcome: "error", reasons: [...existingReasons, { code, message }] })
+        .set({
+          reasons: [...existingReasons, { code, message }],
+          // Only REVIEW_REQUIRED is terminal → mark `error`. Transient failures keep their outcome so
+          // they remain in the confirm `pending` set (valid/warning + applied_at NULL) for a re-run.
+          ...(isReviewRequired ? { outcome: "error" as const } : {}),
+        })
         .where(eq(importRows.id, row.id));
     }
   }
@@ -223,10 +231,26 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
   const errorCount = errorRows.length;
 
   await setBatchCounts(batchId, { createdCount, updatedCount, errorCount });
-  // Confirm may have newly marked rows `error` (REVIEW_REQUIRED / apply failure). Regenerate the
-  // downloadable error report so it reflects post-confirm failures too (idempotent — overwrites the key).
+  // Confirm may have newly marked rows `error` (REVIEW_REQUIRED). Regenerate the downloadable error
+  // report so it reflects post-confirm failures too (idempotent — overwrites the key).
   if (errorCount > 0) await runGenerateErrorReport({ batchId });
-  await setBatchStatus(batchId, "completed");
+
+  // A row still `valid`/`warning` with `applied_at IS NULL` is RETRYABLE — it was either never reached
+  // (a crash/interruption mid-confirm) or hit a transient apply failure. Hold the batch at `validated`
+  // so the UI re-enables Confirm and a re-run applies exactly those rows (R8: re-run skips applied rows,
+  // retries the rest, never duplicates). Only when nothing retryable remains is the batch `completed`.
+  const retryable = await db
+    .select({ id: importRows.id })
+    .from(importRows)
+    .where(
+      and(
+        eq(importRows.importBatchId, batchId),
+        inArray(importRows.outcome, ["valid", "warning"]),
+        isNull(importRows.appliedAt),
+      ),
+    )
+    .limit(1);
+  await setBatchStatus(batchId, retryable.length > 0 ? "validated" : "completed");
 
   // Audit the confirm at the batch level. `db` satisfies the writeAudit `Inserter` (Pick<DB,"insert">).
   await writeAudit(db, {

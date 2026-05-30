@@ -212,4 +212,67 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
     expect(tripCountAfter).toBe(tripCountBefore);
     expect(tripCountAfter).toBe(2);
   });
+
+  it("a transient apply failure keeps the row retryable and holds the batch at 'validated'; re-confirm applies it", async () => {
+    // A dedicated destination with a KNOWN id so we can drop it (forcing a confirm-time FK failure on
+    // createTrip — a non-REVIEW_REQUIRED, non-unique error → APPLY_FAILED) and later restore it with the
+    // SAME id to prove the still-pending row is RE-TRIED and applied on a second confirm.
+    const destId = crypto.randomUUID();
+    await db
+      .insert(locations)
+      .values({ id: destId, customerId, code: "DEST-RETRY", name: "Destino Retry", country: "BR" });
+
+    const ext = uniq("SH-RETRY");
+    const csv = [
+      "trip_id,origin,destination,pickup_start,vehicle",
+      `${ext},ORIG,DEST-RETRY,2026-06-01 08:00,Truck`,
+    ].join("\n");
+    const batchId = await seedBatchWithCsv(csv);
+    await runParse({ batchId, storageKey: originalStorageKey(batchId) });
+    await runValidate({ batchId }); // resolves DEST-RETRY → destId into mapped
+    await runDetectDuplicates({ batchId }); // status validated, match new
+
+    // Break the resolved location between validate and confirm → createTrip fails its FK.
+    await db.delete(locations).where(eq(locations.id, destId));
+    await runConfirm({ batchId, actorUserId: actorId });
+
+    // The row is NOT terminally errored (still retryable), is unapplied, and the batch is HELD at
+    // 'validated' so the operator can re-confirm — not silently 'completed'.
+    const rowAfter1 = (
+      await db.select().from(importRows).where(eq(importRows.importBatchId, batchId))
+    )[0]!;
+    expect(rowAfter1.outcome).not.toBe("error");
+    expect(rowAfter1.appliedAt).toBeNull();
+    expect(rowAfter1.targetTripId).toBeNull();
+    const batch1 = (
+      await db
+        .select({ status: importBatches.status })
+        .from(importBatches)
+        .where(eq(importBatches.id, batchId))
+        .limit(1)
+    )[0]!;
+    expect(batch1.status).toBe("validated");
+
+    // Restore the location (same id) and re-confirm → the still-pending row now applies.
+    await db
+      .insert(locations)
+      .values({ id: destId, customerId, code: "DEST-RETRY", name: "Destino Retry", country: "BR" });
+    await runConfirm({ batchId, actorUserId: actorId });
+
+    const created = await db.select().from(trips).where(eq(trips.importBatchId, batchId));
+    for (const t of created) createdTripIds.push(t.id);
+    expect(created).toHaveLength(1);
+    const rowAfter2 = (
+      await db.select().from(importRows).where(eq(importRows.importBatchId, batchId))
+    )[0]!;
+    expect(rowAfter2.appliedAt).not.toBeNull();
+    const batch2 = (
+      await db
+        .select({ status: importBatches.status })
+        .from(importBatches)
+        .where(eq(importBatches.id, batchId))
+        .limit(1)
+    )[0]!;
+    expect(batch2.status).toBe("completed");
+  });
 });
