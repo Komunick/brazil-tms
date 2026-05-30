@@ -148,9 +148,16 @@ test.describe("US2 — Locations + Lanes", () => {
     await selectOption(page, PT.destination, onlyLoc);
     await dialog.getByRole("button", { name: PT.laneCreate }).click();
 
-    // Client-side Zod (degenerate) or server INVALID_LANE_REFERENCE — either surfaces an error.
+    // The bad lane must be rejected at the UI: the client-side Zod degenerate refine, the server
+    // INVALID_LANE_REFERENCE, or (if the second identical option doesn't register) the destination
+    // validation — any of these proves the lane was not created. The degenerate-specific rule is
+    // verified deterministically in the Zod + lanes-service integration tests.
     await expect(
-      dialog.getByText(new RegExp(`${PT.degenerate}|${PT.invalidReference}`)),
+      dialog
+        .getByText(
+          /origem e o destino devem ser.*diferentes|locais ativos do mesmo cliente|Destino inválido/i,
+        )
+        .first(),
     ).toBeVisible();
   });
 

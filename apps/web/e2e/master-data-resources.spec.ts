@@ -124,7 +124,9 @@ test.describe("US3 — Resources (drivers, vehicles, trailers)", () => {
 
     const row = page.getByRole("row", { name: new RegExp(name) });
     await expect(row).toBeVisible();
-    await expect(row.getByText("Ativo")).toBeVisible();
+    // The row shows "Ativo" twice (operational status + active/archived situação); assert presence,
+    // not a single match.
+    await expect(row.getByText("Ativo").first()).toBeVisible();
 
     // Edit → change operational status → save; the list reflects the new status.
     await row.getByRole("link", { name: "Editar" }).click();
