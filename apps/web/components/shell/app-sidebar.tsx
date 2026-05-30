@@ -12,6 +12,7 @@ import {
   Route,
   ScrollText,
   Truck,
+  Upload,
   UserRound,
   Users,
   type LucideIcon,
@@ -31,6 +32,7 @@ const ICONS: Record<string, LucideIcon> = {
   Truck,
   Container,
   Factory,
+  Upload,
 };
 
 /**

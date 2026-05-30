@@ -1,48 +1,20 @@
 import { PgBoss, type Job } from "pg-boss";
+import {
+  IMPORT_JOBS as JOB,
+  type ImportJobName as JobName,
+  type ImportJobPayloads as JobPayloads,
+} from "@brazil-tms/shared";
 
 /**
  * pg-boss queue surface for the import worker (feature 004, research R1/R3). One Node worker, one
- * Postgres-backed queue (no Redis/broker — STACK §3.11). Job names + typed payloads live here so the
- * BFF (`apps/web/lib/imports/*`) and the worker share one contract. The pipeline jobs chain on
- * success: parse → validate → detect-duplicates (→ generate-error-report when there are errors);
- * confirm-import is enqueued by the user's confirm action.
+ * Postgres-backed queue (no Redis/broker — STACK §3.11). Job names + typed payloads are the shared
+ * contract in `@brazil-tms/shared` (so the BFF can enqueue with the same types); this module adds the
+ * worker-side pg-boss plumbing. The pipeline jobs chain on success: parse → validate →
+ * detect-duplicates (→ generate-error-report when there are errors); confirm is enqueued by the user.
  */
 
-export const JOB = {
-  parse: "import.parse",
-  validate: "import.validate",
-  detectDuplicates: "import.detect-duplicates",
-  generateErrorReport: "import.generate-error-report",
-  confirm: "import.confirm",
-} as const;
-
-export type JobName = (typeof JOB)[keyof typeof JOB];
-
-export interface ParsePayload {
-  batchId: string;
-  storageKey: string;
-}
-export interface ValidatePayload {
-  batchId: string;
-}
-export interface DetectDuplicatesPayload {
-  batchId: string;
-}
-export interface GenerateErrorReportPayload {
-  batchId: string;
-}
-export interface ConfirmPayload {
-  batchId: string;
-  actorUserId: string;
-}
-
-export interface JobPayloads {
-  "import.parse": ParsePayload;
-  "import.validate": ValidatePayload;
-  "import.detect-duplicates": DetectDuplicatesPayload;
-  "import.generate-error-report": GenerateErrorReportPayload;
-  "import.confirm": ConfirmPayload;
-}
+export { JOB };
+export type { JobName, JobPayloads };
 
 /** Construct the pg-boss instance against the worker's DATABASE_URL (server/worker-only). */
 export function createBoss(): PgBoss {

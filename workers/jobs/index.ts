@@ -1,4 +1,8 @@
 import type { PgBoss } from "pg-boss";
+import { registerParse } from "./parse";
+import { registerValidate } from "./validate";
+import { registerDetectDuplicates } from "./detect-duplicates";
+import { registerConfirm } from "./confirm-import";
 
 /**
  * Registry of import job handlers (feature 004, research R3). The bootstrap (`workers/index.ts`)
@@ -8,14 +12,16 @@ import type { PgBoss } from "pg-boss";
  *   - US2: generate-error-report (enqueued by detect-duplicates when error_count > 0)
  *
  * Keeping registration in this one module means the story slices add a job by editing their own
- * `jobs/<name>/index.ts` plus one line here — never the pg-boss bootstrap.
+ * `jobs/<name>/index.ts` plus one line here — never the pg-boss bootstrap. Each `register*` wires the
+ * handler via the queue `work()` helper AND enqueues the next pipeline stage on success (the chaining
+ * lives in the register wrapper, never in the pure `run*` core).
  */
-export async function registerJobHandlers(_boss: PgBoss): Promise<void> {
+export async function registerJobHandlers(boss: PgBoss): Promise<void> {
   // US1 (T030–T033):
-  //   await registerParse(_boss);
-  //   await registerValidate(_boss);
-  //   await registerDetectDuplicates(_boss);
-  //   await registerConfirm(_boss);
+  await registerParse(boss);
+  await registerValidate(boss);
+  await registerDetectDuplicates(boss);
+  await registerConfirm(boss);
   // US2 (T041):
-  //   await registerGenerateErrorReport(_boss);
+  //   await registerGenerateErrorReport(boss);
 }
