@@ -105,6 +105,30 @@ services:
     expose:
       - "5000" # reachable only inside the compose network; public access is via the gateway
 
+  worker:
+    # Feature 004 — the activated import worker (pg-boss). The sanctioned one-app-one-worker process:
+    # heavy parse/validate/dedup/confirm runs here, never in BFF request handlers (STACK §2/§6.3).
+    # Reaches Postgres directly and Supabase Storage via the gateway. (The Next `web` app container is
+    # a separate deployment artifact; in dev the app runs via `pnpm dev` and the worker via
+    # `pnpm --filter @brazil-tms/workers start`.) Disabled-by-default in dev: start with
+    # `docker compose up worker` once the image is built.
+    build:
+      context: ../..
+      dockerfile: infra/worker.Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      storage:
+        condition: service_started
+      gateway:
+        condition: service_started
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://postgres:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-postgres}
+      SUPABASE_URL: http://gateway:8000
+      SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
+      IMPORT_BUCKET: imports
+
   mailpit:
     # Dev mail catcher so invite/recovery emails don't hard-fail without real SMTP. UI: :8025.
     image: axllent/mailpit:latest

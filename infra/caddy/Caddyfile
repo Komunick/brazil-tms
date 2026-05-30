@@ -19,6 +19,17 @@
 
 	# PostgREST is intentionally NOT proxied — see STACK §5.1/§5.2. The BFF owns all data access.
 
+	# Trip import upload (feature 004, R4): CSV/XLSX up to the Storage limit. App Router has no
+	# per-route bodySizeLimit, so the cap is raised here at the proxy for the import endpoints; the
+	# upload route streams the original file straight to Supabase Storage.
+	@imports path /api/imports /api/imports/*
+	handle @imports {
+		request_body {
+			max_size 50MB
+		}
+		reverse_proxy web:3000
+	}
+
 	# Everything else → the Next.js app container.
 	handle {
 		reverse_proxy web:3000

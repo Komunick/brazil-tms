@@ -130,7 +130,7 @@ creates **0** duplicate trips (idempotent).
 - [X] T037 [P] [US1] Vitest integration (web) `apps/web/lib/imports/import-batches-service.test.ts` (upload → batch row inserted `received` + `import.create` audit + a `parse` job enqueued; `getBatch` returns counts; `confirmBatch` rejects when not confirmable) — depends on T028, T034
 - [X] T038 [P] [US1] Vitest integration (workers) `workers/jobs/parse/parse.test.ts` (a CSV and an XLSX fixture each parse to `import_rows` with **preserved 1-based `row_number`** and mapped fields; `total_rows` set; an **empty/header-only** file → `total_rows=0`, nothing created; a **corrupt/wrong-type** file → batch `failed` with `error_message`, original file retained — spec §Edge Cases) — depends on T030
 - [X] T039 [US1] Vitest integration (workers) `workers/jobs/confirm-import/confirm.test.ts` (clean file → trips created in **`received`** linked to `import_batch_id`; **re-run confirm → 0 new trips** (idempotent, SC-002/SC-010); created/updated counts correct) — depends on T033
-- [ ] T040 [US1] Playwright e2e `apps/web/e2e/trip-import.spec.ts` (select customer + template → upload clean fixture → preview/validation appears → confirm → trips created; **no session → 401**, non-`import_trips` role → **403** on the import endpoints) — depends on T029, T034, T036
+- [X] T040 [US1] Playwright e2e `apps/web/e2e/trip-import.spec.ts` (select customer + template → upload clean fixture → preview/validation appears → confirm → trips created; **no session → 401**, non-`import_trips` role → **403** on the import endpoints) — depends on T029, T034, T036
 
 **Checkpoint**: A customer file can be uploaded, mapped, validated, previewed, and confirmed into Received trips with a
 durable batch — the MVP, independently testable.
@@ -199,7 +199,7 @@ per-row `raw` + error report retrievable.
 
 - [X] T052 [US5] Implement `apps/web/app/api/imports/route.ts` GET list (batch history; `?customerId`/`?status`/`?limit`; newest first) reusing `listBatches` — depends on T028
 - [X] T053 [US5] Build the import-batch-history screen `apps/web/app/(shell)/imports/history/page.tsx` (TanStack Table: file, user, time, customer, counts, status; error-report download link) (pt-BR) — depends on T052, T042
-- [ ] T054 [US5] Vitest/e2e `apps/web/e2e/import-history.spec.ts` (after imports, history lists each batch with metadata + the four counts + status; original file + per-row `raw` retrievable; SC-001, SC-007) — depends on T052, T053
+- [X] T054 [US5] Vitest/e2e `apps/web/e2e/import-history.spec.ts` (after imports, history lists each batch with metadata + the four counts + status; original file + per-row `raw` retrievable; SC-001, SC-007) — depends on T052, T053
 
 **Checkpoint**: Batch history + traceability verified.
 
@@ -223,9 +223,9 @@ create with an existing external id → update/no-op semantics apply.
 ## Phase 9: Polish & Cross-Cutting Concerns
 
 - [X] T057 [P] Add seed `packages/db/seed/import-sample.ts` (a labeled **scaffolding** default template + status-mapping rows + a fuzzy-tolerance documented default; sample CSV/XLSX fixtures) and a `db:seed:import` script in `packages/db/package.json` (quickstart.md; Constitution II — reasons/tolerance are documented defaults, not final)
-- [ ] T058 [P] Infra: add the `worker` service to `infra/.../docker-compose.yml` (runs `pnpm --filter @brazil-tms/workers start`) and raise the Caddy request-body limit for `POST /api/imports` (App Router has no per-route body-size knob — R4)
-- [ ] T059 Run quickstart.md validation end-to-end (US1–US6 walkthrough) and confirm Success Criteria SC-001…SC-010, including a **SC-004 timing check** (a 1,000-row fixture is parsed → validated → ready-to-confirm within 5 minutes; if it is not asserted in CI, record the measured time in the PR notes)
-- [ ] T060 Quality gate: `pnpm lint` · `pnpm typecheck` · `pnpm build` · `pnpm test` (with `DATABASE_URL`) · `pnpm exec vitest run --project workers` · feature e2e `trip-import.spec.ts`. Run e2e against a **production build** (`next start` + `PLAYWRIGHT_BASE_URL`, `--workers=1`), not `next dev`; the pre-existing 001/002 admin-UI e2e failures are environment-only (MEMORY: reset with `db:seed:e2e`)
+- [X] T058 [P] Infra: add the `worker` service to `infra/.../docker-compose.yml` (runs `pnpm --filter @brazil-tms/workers start`) and raise the Caddy request-body limit for `POST /api/imports` (App Router has no per-route body-size knob — R4)
+- [X] T059 Run quickstart.md validation end-to-end (US1–US6 walkthrough) and confirm Success Criteria SC-001…SC-010, including a **SC-004 timing check** (a 1,000-row fixture is parsed → validated → ready-to-confirm within 5 minutes; if it is not asserted in CI, record the measured time in the PR notes)
+- [X] T060 Quality gate: `pnpm lint` · `pnpm typecheck` · `pnpm build` · `pnpm test` (with `DATABASE_URL`) · `pnpm exec vitest run --project workers` · feature e2e `trip-import.spec.ts`. Run e2e against a **production build** (`next start` + `PLAYWRIGHT_BASE_URL`, `--workers=1`), not `next dev`; the pre-existing 001/002 admin-UI e2e failures are environment-only (MEMORY: reset with `db:seed:e2e`)
 - [ ] T061 [P] Update PR notes/migration docs per the DELIVERY-WORKFLOW PR template (5 new tables + 3 enums + the `trips.import_batch_id` FK; new env `IMPORT_BUCKET` + a private Storage bucket; **new worker service** added to docker-compose; Caddy upload limit; the R2 trip-write promotion into `@brazil-tms/db`; reuse of `import_trips` — no new key; flag the **four business-blocked inputs**); open the PR against **`dev`**
 
 ---
