@@ -1,0 +1,59 @@
+import { PgBoss, type Job } from "pg-boss";
+import {
+  IMPORT_JOBS as JOB,
+  type ImportJobName as JobName,
+  type ImportJobPayloads as JobPayloads,
+} from "@brazil-tms/shared";
+
+/**
+ * pg-boss queue surface for the import worker (feature 004, research R1/R3). One Node worker, one
+ * Postgres-backed queue (no Redis/broker — STACK §3.11). Job names + typed payloads are the shared
+ * contract in `@brazil-tms/shared` (so the BFF can enqueue with the same types); this module adds the
+ * worker-side pg-boss plumbing. The pipeline jobs chain on success: parse → validate →
+ * detect-duplicates (→ generate-error-report when there are errors); confirm is enqueued by the user.
+ */
+
+export { JOB };
+export type { JobName, JobPayloads };
+
+/** Construct the pg-boss instance against the worker's DATABASE_URL (server/worker-only). */
+export function createBoss(): PgBoss {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is required for the import worker (pg-boss).");
+  }
+  return new PgBoss({ connectionString });
+}
+
+/** Create every import queue (idempotent). Must run after `boss.start()` and before send/work. */
+export async function setupQueues(boss: PgBoss): Promise<void> {
+  for (const name of Object.values(JOB)) {
+    await boss.createQueue(name);
+  }
+}
+
+/** Typed enqueue helper — the only way the BFF/worker should publish a job. */
+export async function enqueue<K extends JobName>(
+  boss: PgBoss,
+  name: K,
+  data: JobPayloads[K],
+): Promise<string | null> {
+  return boss.send(name, data as object);
+}
+
+/**
+ * Typed worker registration. pg-boss delivers a batch array; we unwrap and run the handler per job
+ * so each import stage stays a simple `(payload) => Promise<void>`. A throw makes pg-boss retry the
+ * job (handlers are idempotent — STACK §3.11).
+ */
+export async function work<K extends JobName>(
+  boss: PgBoss,
+  name: K,
+  handler: (data: JobPayloads[K]) => Promise<void>,
+): Promise<void> {
+  await boss.work<JobPayloads[K]>(name, async (jobs: Job<JobPayloads[K]>[]) => {
+    for (const job of jobs) {
+      await handler(job.data);
+    }
+  });
+}

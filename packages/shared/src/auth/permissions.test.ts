@@ -169,3 +169,28 @@ describe("003 trip-domain permission invariants (contracts/permission-matrix.md)
     expect(can("customer_viewer" as RoleType, "manage_trips")).toBe(false);
   });
 });
+
+describe("004 trip-import permission invariants (contracts/permission-matrix.md — import_trips, no new key)", () => {
+  it("Admin and Operations Manager hold import_trips", () => {
+    expect(can(Role.Admin, "import_trips")).toBe(true);
+    expect(can(Role.OperationsManager, "import_trips")).toBe(true);
+  });
+
+  it("Dispatcher, Control Tower, Finance, Executive Viewer do NOT hold import_trips", () => {
+    expect(can(Role.Dispatcher, "import_trips")).toBe(false);
+    expect(can(Role.ControlTower, "import_trips")).toBe(false);
+    expect(can(Role.Finance, "import_trips")).toBe(false);
+    expect(can(Role.ExecutiveViewer, "import_trips")).toBe(false);
+  });
+
+  it("import_trips is granted to exactly Admin + Operations Manager", () => {
+    for (const role of ALL_ROLES) {
+      const expected = role === Role.Admin || role === Role.OperationsManager;
+      expect(can(role, "import_trips")).toBe(expected);
+    }
+  });
+
+  it("customer_viewer (reserved, non-assignable) does not hold import_trips", () => {
+    expect(can("customer_viewer" as RoleType, "import_trips")).toBe(false);
+  });
+});

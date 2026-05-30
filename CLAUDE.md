@@ -67,12 +67,20 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/003-trip-domain-lifecycle/plan.md` (Trip Domain, Status Machine, and Audit Semantics).
+Active feature plan: `specs/004-trip-import-validation/plan.md` (Trip Import, Templates, Validation, and Duplicate Handling).
 For technologies, project structure, BFF/auth patterns, data model, contracts, and setup/test commands,
 read that plan and its `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`.
-It builds on `specs/001-platform-access-shell/` (auth, audit, i18n, app shell) and
-`specs/002-master-data-config/` (customers, locations, lanes, fleet — the entities a Trip references), which
-remain the reference for the reused platform and master-data primitives. The trip status machine, billing-
-status projection, and audit semantics defined here are the single shared model later slices (004 import,
-005 control tower, 006 dispatch, 007 execution/SLA, 008 documents/billing, 009 reporting) MUST reuse.
+This is the first slice to **activate the worker**: heavy parse/validate/duplicate-detection/confirm runs as
+`pg-boss` jobs in `workers/` (never request handlers); the BFF only uploads the original file to Supabase Storage,
+records an import batch, and enqueues; freshness is polling. One config-driven import engine (Zod templates/status
+mappings/location aliases in `@brazil-tms/shared`), no per-customer code. Matching is keyed on (customer + external
+trip ID): a repeat is update/no-op, never a blocking duplicate; ID-less look-alikes are flagged. Confirm CALLS 003's
+trip-write services (promoted to `@brazil-tms/db` so the worker can import them) — it does NOT redefine the status
+machine, billing projection, or audit. Reuses the existing `import_trips` permission (no new key).
+It builds on `specs/001-platform-access-shell/` (auth, audit, i18n, app shell), `specs/002-master-data-config/`
+(customers/locations/lanes the import resolves against), and `specs/003-trip-domain-lifecycle/` (the shared trip
+domain, status machine, and audit semantics it reuses). Later slices (005 control tower, 006 dispatch, 007
+execution/SLA, 008 documents/billing, 009 reporting) consume this same model. Four PRD §29 business inputs (real
+Shopee/DHL/ML files, status vocabularies, fuzzy-duplicate tolerance, required-field overrides) remain BLOCKED —
+scaffolded as labeled documented defaults, not invented.
 <!-- SPECKIT END -->

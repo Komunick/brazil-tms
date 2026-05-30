@@ -38,7 +38,16 @@ export type AuditAction =
   | "trip.create" // newValue = original_plan summary + initial status
   | "trip.plan_update" // accepted customer update to live planned_* fields (per-field prev/new)
   | "trip.status_change" // prev/new current_status (also recorded as a trip_event)
-  | "trip.cancel"; // reason_code, responsible_party, billing_impact, cancelled_at
+  | "trip.cancel" // reason_code, responsible_party, billing_impact, cancelled_at
+  // feature 004 — trip import (data-model.md §Audit actions). Batch upload + confirm, plus the
+  // config surfaces (templates, status mappings, location aliases). Per-trip `trip.create` /
+  // `trip.plan_update` (003) also fire during confirm, with `reason` referencing the batch id.
+  | "import.create" // batch uploaded (entityType 'import_batch')
+  | "import.confirm" // batch confirmed (entityType 'import_batch')
+  | "import_template.create"
+  | "import_template.update"
+  | "status_mapping.upsert"
+  | "location_alias.create";
 
 /** The four actions audited by feature 001 (useful for tests / iteration). */
 export const AUDIT_ACTIONS_001: readonly AuditAction[] = [

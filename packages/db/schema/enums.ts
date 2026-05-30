@@ -116,3 +116,38 @@ export const cancellationResponsibleParty = pgEnum("cancellation_responsible_par
   "carrier_caused",
   "unknown",
 ]);
+
+/**
+ * Trip-import enums (feature 004, data-model.md §Enums).
+ *
+ * `import_batch_status` is the import pipeline lifecycle (R3): an upload moves
+ * `received → parsing → validating → validated` (the chained parse/validate/detect-duplicates
+ * jobs), then `confirming → completed` on the user's confirm action; any unrecoverable failure
+ * sets `failed` (with `error_message`, original file retained).
+ *
+ * `import_row_outcome` is the per-row validation verdict (§11.2, FR-012). `import_row_match` is the
+ * duplicate decision keyed on `(customer_id, external_trip_id)` (R7, FR-017..FR-024): a repeat is
+ * `update`/`no_op` (never a blocking duplicate), an id-less look-alike is `potential_duplicate`,
+ * and anything blocked (unknown location, in-file collision, validation error) is `unresolved`.
+ * The fuzzy-duplicate tolerance and per-customer status/required-field config are DB config with
+ * documented defaults (Constitution II) — not enum values.
+ */
+export const importBatchStatus = pgEnum("import_batch_status", [
+  "received",
+  "parsing",
+  "validating",
+  "validated",
+  "confirming",
+  "completed",
+  "failed",
+]);
+
+export const importRowOutcome = pgEnum("import_row_outcome", ["valid", "warning", "error"]);
+
+export const importRowMatch = pgEnum("import_row_match", [
+  "new",
+  "update",
+  "no_op",
+  "potential_duplicate",
+  "unresolved",
+]);
