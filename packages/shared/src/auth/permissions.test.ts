@@ -213,3 +213,38 @@ describe("005 control-tower permission invariants (contracts/permission-matrix.m
     expect(can(Role.ExecutiveViewer, "manage_trips")).toBe(false);
   });
 });
+
+describe("006 dispatch-assignment permission invariants (contracts/permission-matrix.md — first enforcement of assign_resources)", () => {
+  it("assign_resources is granted to Admin, Operations Manager, Dispatcher, and Fleet Coordinator", () => {
+    for (const role of [
+      Role.Admin,
+      Role.OperationsManager,
+      Role.Dispatcher,
+      Role.FleetCoordinator,
+    ] as const) {
+      expect(can(role, "assign_resources")).toBe(true);
+    }
+  });
+
+  it("assign_resources is denied to Control Tower, Finance, and Executive Viewer", () => {
+    for (const role of [Role.ControlTower, Role.Finance, Role.ExecutiveViewer] as const) {
+      expect(can(role, "assign_resources")).toBe(false);
+    }
+  });
+
+  it("assign_resources is granted to exactly those four roles", () => {
+    for (const role of ALL_ROLES) {
+      const expected =
+        role === Role.Admin ||
+        role === Role.OperationsManager ||
+        role === Role.Dispatcher ||
+        role === Role.FleetCoordinator;
+      expect(can(role, "assign_resources")).toBe(expected);
+    }
+  });
+
+  it("a Dispatcher holding assign_resources does NOT hold manage_fleet_data (the resource-options gap 006 fills)", () => {
+    expect(can(Role.Dispatcher, "assign_resources")).toBe(true);
+    expect(can(Role.Dispatcher, "manage_fleet_data")).toBe(false);
+  });
+});

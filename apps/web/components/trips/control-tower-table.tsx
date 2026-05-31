@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, X } from "lucide-react";
 import {
   flexRender,
   getCoreRowModel,
@@ -25,8 +26,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { TripFilters } from "@/components/trips/trip-filters";
+import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
 import { useTripBoard, useTripBoardFilters } from "@/lib/trips/client";
 
 /** Board `sort` values that map to a column header (R2 whitelist). */
@@ -40,11 +48,25 @@ type SortKey = TripBoardQuery["sort"];
  * later-slice dimensions (assignment → 006, SLA risk → 007, documents/billing detail → 008) are not
  * rendered as filterable/sortable columns here.
  */
-export function ControlTowerTable({ filterOptions }: { filterOptions: TripFilterOptions }) {
+/** Statuses where a quick-assign / reassign action makes sense (mirrors the panel's gate). */
+const ASSIGNABLE_STATUSES = new Set(["validated", "assigned", "confirmed"]);
+
+export function ControlTowerTable({
+  filterOptions,
+  canAssign = false,
+}: {
+  filterOptions: TripFilterOptions;
+  /** 006 — additively reveal the per-row quick-assign action for `assign_resources` holders. */
+  canAssign?: boolean;
+}) {
   const t = useTranslations("Trips");
   const tCommon = useTranslations("Common");
   const tVehicle = useTranslations("VehicleTypes");
+  const tDispatch = useTranslations("Dispatch");
   const { query, search, setFilters, reset } = useTripBoardFilters();
+
+  // The row whose quick-assign dialog is open (006, T063). One dialog instance, fed the row in scope.
+  const [assignRow, setAssignRow] = useState<TripBoardRow | null>(null);
 
   /** Label a (possibly unknown) vehicle-type string via the `VehicleTypes` namespace; "—" if absent. */
   function vehicleLabel(vt: string | null): string {
@@ -125,6 +147,12 @@ export function ControlTowerTable({ filterOptions }: { filterOptions: TripFilter
       cell: ({ row }) => <TripStatusBadge status={row.original.currentStatus} />,
     },
     {
+      // 006 — assignment row indicator + assigned resources (fills 005 FR-007).
+      id: "assignment",
+      header: () => t("board.colAssignment"),
+      cell: ({ row }) => <AssignmentCell row={row.original} />,
+    },
+    {
       id: "billing",
       header: () => t("board.colBilling"),
       cell: ({ row }) => t(`billingStatus.${row.original.billingStatus ?? "none"}`),
@@ -149,6 +177,27 @@ export function ControlTowerTable({ filterOptions }: { filterOptions: TripFilter
       header: () => <SortableHeader label={t("board.colUpdatedAt")} sortKey="updatedAt" />,
       cell: ({ row }) => formatDateTime(row.original.updatedAt),
     },
+    // 006 — per-row quick-assign action (FR-022 third entry point); only for `assign_resources`
+    // holders on an assignable trip. Opens the shared AssignmentForm in a dialog.
+    ...(canAssign
+      ? [
+          {
+            id: "actions",
+            header: () => tCommon("actions"),
+            cell: ({ row }: { row: { original: TripBoardRow } }) =>
+              ASSIGNABLE_STATUSES.has(row.original.currentStatus) ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setAssignRow(row.original)}
+                >
+                  {tDispatch("assignAction")}
+                </Button>
+              ) : null,
+          } as ColumnDef<TripBoardRow>,
+        ]
+      : []),
   ];
 
   const table = useReactTable({
@@ -244,6 +293,51 @@ export function ControlTowerTable({ filterOptions }: { filterOptions: TripFilter
           </Button>
         </div>
       </div>
+
+      {/* Quick-assign dialog (006, T063) — the shared AssignmentForm for the row in scope. The board
+          row carries no full assignment DTO, so the form opens with empty pickers and routes by the
+          row's status (assign vs reassign); the rich edit surface is the Trip-Detail panel. */}
+      <Dialog open={assignRow != null} onOpenChange={(open) => !open && setAssignRow(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {tDispatch("openAssign")}
+              {assignRow?.externalTripId ? ` — ${assignRow.externalTripId}` : ""}
+            </DialogTitle>
+          </DialogHeader>
+          {assignRow ? (
+            <AssignmentForm
+              tripId={assignRow.id}
+              currentStatus={assignRow.currentStatus}
+              currentAssignment={null}
+              resourceOptions={filterOptions}
+              onDone={() => setAssignRow(null)}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+/** The assignment row indicator: an assigned/unassigned icon + the assigned resource names (006). */
+function AssignmentCell({ row }: { row: TripBoardRow }) {
+  const t = useTranslations("Trips");
+  if (!row.isAssigned) {
+    return (
+      <span className="inline-flex items-center gap-1 text-muted-foreground">
+        <X className="h-3.5 w-3.5" aria-hidden />
+        {t("board.assignedNo")}
+      </span>
+    );
+  }
+  const parts = [row.assignedDriverName, row.assignedVehiclePlate, row.assignedCarrierName].filter(
+    (p): p is string => Boolean(p),
+  );
+  return (
+    <span className="inline-flex items-center gap-1" title={parts.join(" · ")}>
+      <Check className="h-3.5 w-3.5 text-green-600" aria-hidden />
+      <span className="text-sm">{parts.length > 0 ? parts.join(" · ") : t("board.assignedYes")}</span>
+    </span>
   );
 }

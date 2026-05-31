@@ -14,10 +14,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 /**
  * Home daily dashboard widgets (US4, §15.2). Read-first: data comes from `useDashboardSummary`
  * (60s polling via TanStack Query — NO Realtime). Renders the eight §15.2 widgets as a responsive
- * grid of Cards. The two COMPUTED widgets (trips-today-by-status, billing-pending) deep-link into
- * the filtered Control Tower board; the six later-slice metrics (SLA risk → 007, assignment → 006,
- * exceptions/on-time → 007, missing docs → 008) arrive as `null` from the read model and render a
- * labelled placeholder — numbers are NEVER invented here.
+ * grid of Cards. The COMPUTED widgets (trips-today-by-status, billing-pending, and — since 006 — the
+ * unassigned-trips count) deep-link into the filtered Control Tower board; the remaining later-slice
+ * metrics (SLA risk → 007, exceptions/on-time → 007, missing docs → 008) arrive as `null` from the
+ * read model and render a labelled placeholder — numbers are NEVER invented here.
  */
 
 type MetricCardProps = {
@@ -137,24 +137,29 @@ export function DashboardWidgets() {
 
   /**
    * A later-slice metric: a number → value + deep-link into the board; `null` → labelled placeholder
-   * (never invented). The dimension-specific board filters (SLA risk → 007, assignment → 006,
-   * exceptions/on-time → 007, missing docs → 008) are NOT yet in the board query schema, so the
-   * deep-link uses the broad `scope=all` board — the affordance, not a fabricated filter contract.
+   * (never invented). The dimension-specific board filters (SLA risk → 007, exceptions/on-time → 007,
+   * missing docs → 008) are NOT yet in the board query schema, so those deep-link to the broad
+   * `scope=all` board. The 006 `assigned` filter DOES exist, so `unassignedTrips` passes its precise
+   * deep-link (the "Unassigned" view) via `href`.
    */
   function metric(
     titleKey: string,
     value: number | null,
     format: (n: number) => ReactNode = (n) => n,
+    href = "/trips?scope=all",
   ): MetricCardProps {
     if (value === null) return { titleKey, placeholder: true };
-    return { titleKey, value: format(value), href: "/trips?scope=all" };
+    return { titleKey, value: format(value), href };
   }
 
   const pct = (n: number) => `${n}%`;
 
+  // 006 — the "Unassigned" view deep-link (matches the DEFAULT_TRIP_VIEWS "unassigned" preset).
+  const unassignedHref = "/trips?assigned=false&scope=active&sort=pickupStart";
+
   const metrics: MetricCardProps[] = [
     metric("tripsAtRisk", summary.tripsAtRisk),
-    metric("unassignedTrips", summary.unassignedTrips),
+    metric("unassignedTrips", summary.unassignedTrips, (n) => n, unassignedHref),
     metric("activeExceptions", summary.activeExceptions),
     metric("onTimePickup", summary.onTimePickupPct, pct),
     metric("onTimeArrival", summary.onTimeArrivalPct, pct),

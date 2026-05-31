@@ -119,6 +119,20 @@ describe("disputed round-trip (FR-011)", () => {
   });
 });
 
+describe("006 assignment transitions (canTransition reuses the single table)", () => {
+  it("validated → assigned is legal (assign)", () => {
+    expect(canTransition("validated", "assigned")).toBe(true);
+  });
+
+  it("assigned → confirmed is legal (confirm)", () => {
+    expect(canTransition("assigned", "confirmed")).toBe(true);
+  });
+
+  it("assigned → validated is legal (unassign)", () => {
+    expect(canTransition("assigned", "validated")).toBe(true);
+  });
+});
+
 describe("TRIP_CRITICAL_FIELDS (R9, FR-016)", () => {
   it("includes the planned windows, vehicle type, status, billing projection, and cancellation reason", () => {
     for (const field of [
@@ -130,6 +144,17 @@ describe("TRIP_CRITICAL_FIELDS (R9, FR-016)", () => {
       "currentStatus",
       "billingStatus",
       "cancellationReasonCode",
+    ]) {
+      expect(TRIP_CRITICAL_FIELDS as readonly string[]).toContain(field);
+    }
+  });
+
+  it("includes the feature 006 assignment reference fields", () => {
+    for (const field of [
+      "assignedDriverId",
+      "assignedVehicleId",
+      "assignedTrailerId",
+      "assignedCarrierId",
     ]) {
       expect(TRIP_CRITICAL_FIELDS as readonly string[]).toContain(field);
     }

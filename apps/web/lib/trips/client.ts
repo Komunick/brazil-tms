@@ -8,6 +8,10 @@ import {
   tripBoardQueryFromParams,
   type TripBoardQuery,
   type UpdateTripPlanInput,
+  type AssignTripInput,
+  type ConfirmAssignmentInput,
+  type CheckAssignmentInput,
+  type Finding,
 } from "@brazil-tms/shared";
 import type { TripBoardRow, TripDetailView, DashboardSummary } from "@brazil-tms/db";
 
@@ -38,28 +42,43 @@ export interface ApiErrorBody {
   issues?: { formErrors?: string[]; fieldErrors?: Record<string, string[]> };
 }
 
-/** Read a `{ error: { code, message, issues? } }` body; null if absent/unparseable. */
-export async function readApiError(res: Response): Promise<ApiErrorBody | null> {
+/**
+ * The error 409s for assignment writes (006) carry the offending `Finding[]` at the TOP LEVEL of the
+ * body (`{ error, findings }`), not inside `error` — so `readApiError` returns both halves.
+ */
+export interface ParsedApiError {
+  error: ApiErrorBody | null;
+  findings?: Finding[];
+}
+
+/** Read a `{ error: { code, message, issues? }, findings? }` body; `{ error: null }` if unparseable. */
+export async function readApiError(res: Response): Promise<ParsedApiError> {
   try {
-    const body = (await res.json()) as { error?: ApiErrorBody };
-    return body.error ?? null;
+    const body = (await res.json()) as { error?: ApiErrorBody; findings?: Finding[] };
+    return { error: body.error ?? null, findings: body.findings };
   } catch {
-    return null;
+    return { error: null };
   }
 }
 
-/** A thrown error carrying the API error code, so mutation onError can map it to a pt-BR message. */
+/**
+ * A thrown error carrying the API error code, so mutation onError can map it to a pt-BR message.
+ * For assignment 409s it also carries the `findings` that fired (OVERRIDE_REQUIRED/ASSIGNMENT_BLOCKED),
+ * so the UI can show exactly which checks blocked or warned.
+ */
 export class TripsError extends Error {
-  constructor(readonly code: string) {
+  readonly findings?: Finding[];
+  constructor(readonly code: string, findings?: Finding[]) {
     super(code);
     this.name = "TripsError";
+    this.findings = findings;
   }
 }
 
 async function asJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const err = await readApiError(res);
-    throw new TripsError(err?.code ?? "REQUEST_FAILED");
+    const { error, findings } = await readApiError(res);
+    throw new TripsError(error?.code ?? "REQUEST_FAILED", findings);
   }
   return (await res.json()) as T;
 }
@@ -140,6 +159,118 @@ export function useUpdateTripPlan(id: string) {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+// --- Assignment write hooks (006; reuse the @brazil-tms/db assignment services via the BFF) --------
+//
+// All POST/DELETE under `/api/trips/:id/assignment*`; every `onSuccess` invalidates the `["trips"]`
+// root so the board, detail, and dashboard all refresh. A 409 throws a `TripsError` carrying the
+// `findings` (OVERRIDE_REQUIRED / ASSIGNMENT_BLOCKED) so the caller can show which checks fired; the
+// success body's `findings` are the overridden WARNs (assign/reassign only).
+
+/** Shared response shape for assign/reassign: the updated trip + any overridden WARN findings. */
+interface AssignmentResult {
+  item: TripDetailView;
+  findings: Finding[];
+}
+
+/**
+ * Assign resources to a `validated` trip (POST). Error codes: INCOMPLETE_ASSIGNMENT,
+ * OVERRIDE_REQUIRED, ASSIGNMENT_BLOCKED, STALE_TRANSITION, ILLEGAL_TRANSITION, NOT_FOUND, VALIDATION.
+ */
+export function useAssignTrip(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: AssignTripInput) => {
+      const res = await fetch(`/api/trips/${id}/assignment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<AssignmentResult>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/**
+ * Reassign (substitute) the resources on an `assigned`/`confirmed` trip — same POST endpoint as
+ * assign; the BFF branches on `expectedFromStatus`. No status change. Same error codes as assign.
+ */
+export function useReassignTrip(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: AssignTripInput) => {
+      const res = await fetch(`/api/trips/${id}/assignment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<AssignmentResult>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/** Unassign (DELETE) — supersedes the current assignment and reverts `assigned → validated`. */
+export function useUnassignTrip(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ConfirmAssignmentInput) => {
+      const res = await fetch(`/api/trips/${id}/assignment`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/**
+ * Confirm the current assignment (POST). Re-runs the evaluator server-side; a remaining BLOCK throws
+ * `TripsError("ASSIGNMENT_BLOCKED")` carrying the `findings`. Transitions `assigned → confirmed`.
+ */
+export function useConfirmAssignment(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: ConfirmAssignmentInput) => {
+      const res = await fetch(`/api/trips/${id}/assignment/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/**
+ * Read-only dry-run eligibility check (POST). Writes nothing, so it invalidates nothing — it just
+ * returns the `Finding[]` for the candidate resources (powers inline warnings in the panel/board).
+ */
+export function useAssignmentCheck(id: string) {
+  return useMutation({
+    mutationFn: async (input: CheckAssignmentInput) => {
+      const res = await fetch(`/api/trips/${id}/assignment/check`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      const { findings } = await asJson<{ findings: Finding[] }>(res);
+      return findings;
     },
   });
 }

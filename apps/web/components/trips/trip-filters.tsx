@@ -34,8 +34,9 @@ type FilterValue = string | string[] | undefined;
  * (customers/locations/lanes) are loaded server-side by the board page under the `view_all_trips`
  * guard and passed in as `options` — NOT fetched from the `manage_commercial_data`-gated master-data
  * APIs, so the read-only roles 005 serves get populated filters. Lanes carry no display label, so
- * their option label is derived `O → D` from the locations code map. NO controls for assigned
- * driver/vehicle/carrier or SLA risk — those belong to later slices (006/007).
+ * their option label is derived `O → D` from the locations code map. Feature 006 adds the assignment
+ * filters (assigned tri-state + assigned driver/vehicle/carrier), sourced from the same server-loaded
+ * `options` (now carrying the active fleet lists). SLA risk remains a later slice (007).
  */
 export function TripFilters({
   query,
@@ -112,6 +113,30 @@ export function TripFilters({
                   onClick={() => setFilters({ scope })}
                 >
                   {scope === "active" ? t("board.scopeActive") : t("board.scopeAll")}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {/* 006 — assigned tri-state (all / assigned / unassigned → ?assigned unset/true/false) */}
+          <div className="space-y-1.5">
+            <Label>{t("board.filterAssigned")}</Label>
+            <div className="flex gap-1">
+              {(
+                [
+                  { value: undefined, labelKey: "assignedAll" },
+                  { value: "true", labelKey: "assignedYes" },
+                  { value: "false", labelKey: "assignedNo" },
+                ] as const
+              ).map((opt) => (
+                <Button
+                  key={opt.labelKey}
+                  type="button"
+                  size="sm"
+                  variant={(query.assigned ?? undefined) === opt.value ? "default" : "outline"}
+                  onClick={() => setFilters({ assigned: opt.value })}
+                >
+                  {t(`board.${opt.labelKey}`)}
                 </Button>
               ))}
             </div>
@@ -257,6 +282,67 @@ export function TripFilters({
                   <SelectItem key={lane.id} value={lane.id}>
                     {(codeOf.get(lane.originLocationId) ?? "?")} →{" "}
                     {codeOf.get(lane.destinationLocationId) ?? "?"}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* 006 — assigned-resource filters (sourced from the server-loaded active fleet lists) */}
+          <div className="space-y-1.5">
+            <Label>{t("board.filterDriver")}</Label>
+            <Select
+              value={query.driverId ?? ""}
+              onValueChange={(v) => setFilters({ driverId: v === "__all__" ? undefined : v })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={t("board.all")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">{t("board.all")}</SelectItem>
+                {options.drivers.map((d) => (
+                  <SelectItem key={d.id} value={d.id}>
+                    {d.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>{t("board.filterVehicle")}</Label>
+            <Select
+              value={query.vehicleId ?? ""}
+              onValueChange={(v) => setFilters({ vehicleId: v === "__all__" ? undefined : v })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={t("board.all")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">{t("board.all")}</SelectItem>
+                {options.vehicles.map((v) => (
+                  <SelectItem key={v.id} value={v.id}>
+                    {v.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>{t("board.filterCarrier")}</Label>
+            <Select
+              value={query.carrierId ?? ""}
+              onValueChange={(v) => setFilters({ carrierId: v === "__all__" ? undefined : v })}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={t("board.all")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">{t("board.all")}</SelectItem>
+                {options.carriers.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.label}
                   </SelectItem>
                 ))}
               </SelectContent>

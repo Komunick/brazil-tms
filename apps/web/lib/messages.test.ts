@@ -30,6 +30,20 @@ describe("pt-BR messages", () => {
     expect((auditActions.trip as Record<string, string>).plan_update).toBe("Plano atualizado");
   });
 
+  it("has nested + flat labels for the 006 dispatch-assignment trip actions", () => {
+    const trip = (messages as { Trips: { auditActions: { trip: Record<string, string> } } }).Trips
+      .auditActions.trip;
+    const flat = (messages as { AuditActions: Record<string, string> }).AuditActions;
+    for (const action of ["assign", "reassign", "unassign", "confirm"] as const) {
+      // nested resolution (next-intl dot-path) ...
+      expect(typeof trip[action]).toBe("string");
+      expect(trip[action]).not.toBe("");
+      // ... and the flat `AuditActions` label the global audit screen looks up via `_`.
+      expect(typeof flat[`trip_${action}`]).toBe("string");
+      expect(flat[`trip_${action}`]).not.toBe("");
+    }
+  });
+
   it("has an AuditActions label for EVERY audit action (global screen uses action.replaceAll('.','_'))", () => {
     const labels = (messages as { AuditActions: Record<string, string> }).AuditActions;
     const missing = ALL_AUDIT_ACTIONS.filter((action) => {

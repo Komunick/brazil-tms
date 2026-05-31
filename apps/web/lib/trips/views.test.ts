@@ -53,4 +53,29 @@ describe("DEFAULT_TRIP_VIEWS — presets clear mutually-exclusive status/billing
       expect(p.billingStatus).toBeUndefined();
     }
   });
+
+  // 006 — the "Unassigned" preset (the Dispatch Board's primary lens): active trips with no current
+  // assignment, sorted by pickup. It must clear the mutually-exclusive status/billingStatus keys.
+  it("'Unassigned' sets assigned=false / scope=active / sort=pickupStart and clears status + billingStatus", () => {
+    const p = view("unassigned").params();
+    expect(p.assigned).toBe("false");
+    expect(p.scope).toBe("active");
+    expect(p.sort).toBe("pickupStart");
+    // Clears the mutually-exclusive status constraints (empty string ⇒ "clear this key").
+    expect(p.status).toBe("");
+    expect(p.billingStatus).toBe("");
+  });
+
+  it("'Unassigned' applied over lingering status/billingStatus clears both, keeps assigned/scope/sort", () => {
+    const result = applyView(
+      "status=in_transit&billingStatus=billing_pending&customerId=abc",
+      view("unassigned").params(),
+    );
+    expect(result.get("assigned")).toBe("false");
+    expect(result.get("scope")).toBe("active");
+    expect(result.get("sort")).toBe("pickupStart");
+    expect(result.getAll("status")).toEqual([]); // cleared
+    expect(result.get("billingStatus")).toBeNull(); // cleared
+    expect(result.get("customerId")).toBe("abc"); // orthogonal filter preserved
+  });
 });

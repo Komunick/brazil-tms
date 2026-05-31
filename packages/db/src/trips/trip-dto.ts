@@ -1,5 +1,15 @@
+import { alias } from "drizzle-orm/pg-core";
 import { and, desc, eq } from "drizzle-orm";
-import { auditLogs, tripEvents, trips } from "../../schema";
+import {
+  auditLogs,
+  carriers,
+  drivers,
+  tripAssignments,
+  tripEvents,
+  trailers,
+  trips,
+  vehicles,
+} from "../../schema";
 import type { DB } from "../client";
 import {
   billingStatus,
@@ -64,6 +74,33 @@ export interface AuditEntryDto {
   createdAt: string;
 }
 
+/**
+ * A trip-assignment row projected for the detail view (data-model.md §1, §5). Joins the resource name
+ * tables so the client renders driver/vehicle/trailer/carrier labels without a second lookup. The SAME
+ * shape carries both the single `currentAssignment` (the `is_current` row) and each entry of
+ * `assignmentHistory` (superseded rows). All timestamps are ISO strings (UTC).
+ */
+export interface TripAssignmentDto {
+  id: string;
+  driverId: string | null;
+  driverName: string | null;
+  vehicleId: string | null;
+  vehiclePlate: string | null;
+  trailerId: string | null;
+  trailerLabel: string | null;
+  carrierId: string | null;
+  carrierName: string | null;
+  notes: string | null;
+  overrideReason: string | null;
+  isCurrent: boolean;
+  assignedByUserId: string;
+  assignedAt: string;
+  confirmedByUserId: string | null;
+  confirmedAt: string | null;
+  supersededByAssignmentId: string | null;
+  supersededAt: string | null;
+}
+
 export interface TripDetail extends TripSummary {
   originalPlan: unknown;
   plannedPickupWindowStart: string | null;
@@ -83,6 +120,10 @@ export interface TripDetail extends TripSummary {
   disputedFromStatus: TripStatus | null;
   events: TripEventDto[];
   audit: AuditEntryDto[];
+  /** The single current (`is_current`) assignment for this trip, or null when none (006). */
+  currentAssignment: TripAssignmentDto | null;
+  /** Superseded assignment rows (`is_current=false`), newest-first — retained history (006). */
+  assignmentHistory: TripAssignmentDto[];
 }
 
 /** The Drizzle row type for `trips` (camelCase columns; timestamps are Date). */
@@ -107,8 +148,13 @@ export function toTripSummary(row: TripRow): TripSummary {
   };
 }
 
-/** Map a `trips` row to the full detail shape (without events/audit, which are loaded separately). */
-function toTripBase(row: TripRow): Omit<TripDetail, "events" | "audit"> {
+/**
+ * Map a `trips` row to the full detail shape (without events/audit and the assignment projection,
+ * which are loaded separately in `loadTripDetail`).
+ */
+function toTripBase(
+  row: TripRow,
+): Omit<TripDetail, "events" | "audit" | "currentAssignment" | "assignmentHistory"> {
   return {
     ...toTripSummary(row),
     originalPlan: row.originalPlan,
@@ -130,10 +176,87 @@ function toTripBase(row: TripRow): Omit<TripDetail, "events" | "audit"> {
   };
 }
 
+// Drivers/vehicles/trailers/carriers each join the assignment once for display names. Aliasing keeps
+// the join explicit and avoids any clash if the same tables are joined elsewhere in a wider query.
+const asgDriver = alias(drivers, "asg_driver");
+const asgVehicle = alias(vehicles, "asg_vehicle");
+const asgTrailer = alias(trailers, "asg_trailer");
+const asgCarrier = alias(carriers, "asg_carrier");
+
+/** The assignment-row + joined-name select shape (shared by current + history loads). */
+const assignmentColumns = {
+  id: tripAssignments.id,
+  driverId: tripAssignments.driverId,
+  driverName: asgDriver.name,
+  vehicleId: tripAssignments.vehicleId,
+  vehiclePlate: asgVehicle.plate,
+  trailerId: tripAssignments.trailerId,
+  trailerLabel: asgTrailer.plate,
+  carrierId: tripAssignments.carrierId,
+  carrierName: asgCarrier.name,
+  notes: tripAssignments.notes,
+  overrideReason: tripAssignments.overrideReason,
+  isCurrent: tripAssignments.isCurrent,
+  assignedByUserId: tripAssignments.assignedByUserId,
+  assignedAt: tripAssignments.assignedAt,
+  confirmedByUserId: tripAssignments.confirmedByUserId,
+  confirmedAt: tripAssignments.confirmedAt,
+  supersededByAssignmentId: tripAssignments.supersededByAssignmentId,
+  supersededAt: tripAssignments.supersededAt,
+};
+
+type AssignmentRow = {
+  id: string;
+  driverId: string | null;
+  driverName: string | null;
+  vehicleId: string | null;
+  vehiclePlate: string | null;
+  trailerId: string | null;
+  trailerLabel: string | null;
+  carrierId: string | null;
+  carrierName: string | null;
+  notes: string | null;
+  overrideReason: string | null;
+  isCurrent: boolean;
+  assignedByUserId: string;
+  assignedAt: Date;
+  confirmedByUserId: string | null;
+  confirmedAt: Date | null;
+  supersededByAssignmentId: string | null;
+  supersededAt: Date | null;
+};
+
+/** Map a joined `trip_assignments` row to the public DTO (timestamps → ISO). */
+function toAssignmentDto(row: AssignmentRow): TripAssignmentDto {
+  return {
+    id: row.id,
+    driverId: row.driverId,
+    driverName: row.driverName,
+    vehicleId: row.vehicleId,
+    vehiclePlate: row.vehiclePlate,
+    trailerId: row.trailerId,
+    trailerLabel: row.trailerLabel,
+    carrierId: row.carrierId,
+    carrierName: row.carrierName,
+    notes: row.notes,
+    overrideReason: row.overrideReason,
+    isCurrent: row.isCurrent,
+    assignedByUserId: row.assignedByUserId,
+    assignedAt: row.assignedAt.toISOString(),
+    confirmedByUserId: row.confirmedByUserId,
+    confirmedAt: iso(row.confirmedAt),
+    supersededByAssignmentId: row.supersededByAssignmentId,
+    supersededAt: iso(row.supersededAt),
+  };
+}
+
 /**
  * Assemble a trip's full detail: the row + the latest 50 `trip_events` (newest first) + the latest
- * 50 `audit_logs` for `entity_type='trip', entity_id=:id` (newest first). Returns `null` when the
- * trip does not exist (callers map that to a 404 / NOT_FOUND).
+ * 50 `audit_logs` for `entity_type='trip', entity_id=:id` (newest first) + the assignment state
+ * (006): the single `is_current` row (`currentAssignment`) and the superseded rows newest-first
+ * (`assignmentHistory`). Returns `null` when the trip does not exist (callers map that to a 404 /
+ * NOT_FOUND). This is the SINGLE source of current/history assignment loading — both mutating
+ * services and `getTripDetailView` get it here, so trips-read never re-queries assignments.
  */
 export async function loadTripDetail(
   executor: Querier,
@@ -156,6 +279,20 @@ export async function loadTripDetail(
     .where(and(eq(auditLogs.entityType, "trip"), eq(auditLogs.entityId, tripId)))
     .orderBy(desc(auditLogs.createdAt))
     .limit(50);
+
+  // All assignment rows for this trip; the partial-unique index guarantees at most one is_current.
+  const assignmentRows: AssignmentRow[] = await executor
+    .select(assignmentColumns)
+    .from(tripAssignments)
+    .leftJoin(asgDriver, eq(tripAssignments.driverId, asgDriver.id))
+    .leftJoin(asgVehicle, eq(tripAssignments.vehicleId, asgVehicle.id))
+    .leftJoin(asgTrailer, eq(tripAssignments.trailerId, asgTrailer.id))
+    .leftJoin(asgCarrier, eq(tripAssignments.carrierId, asgCarrier.id))
+    .where(eq(tripAssignments.tripId, tripId))
+    .orderBy(desc(tripAssignments.assignedAt));
+
+  const current = assignmentRows.find((a) => a.isCurrent);
+  const history = assignmentRows.filter((a) => !a.isCurrent);
 
   return {
     ...toTripBase(row),
@@ -180,5 +317,7 @@ export async function loadTripDetail(
       reason: a.reason,
       createdAt: a.createdAt.toISOString(),
     })),
+    currentAssignment: current ? toAssignmentDto(current) : null,
+    assignmentHistory: history.map(toAssignmentDto),
   };
 }

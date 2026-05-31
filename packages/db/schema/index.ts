@@ -19,3 +19,5 @@ export * from "./import-batches";
 export * from "./import-rows";
 export * from "./status-mappings";
 export * from "./location-aliases";
+// Feature 006 — dispatch assignment (driver/vehicle/trailer/carrier ↔ trip; at-most-one-current).
+export * from "./trip-assignments";

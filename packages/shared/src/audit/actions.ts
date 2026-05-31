@@ -47,7 +47,14 @@ export type AuditAction =
   | "import_template.create"
   | "import_template.update"
   | "status_mapping.upsert"
-  | "location_alias.create";
+  | "location_alias.create"
+  // feature 006 — dispatch assignment (data-model.md §3.5 / research §8). Each assignment mutation
+  // writes exactly one audit row with the resource-rich prev/new snapshot; `reason` carries the
+  // override reason when a WARN was overridden.
+  | "trip.assign"
+  | "trip.reassign"
+  | "trip.unassign"
+  | "trip.confirm";
 
 /** The four actions audited by feature 001 (useful for tests / iteration). */
 export const AUDIT_ACTIONS_001: readonly AuditAction[] = [
@@ -101,6 +108,10 @@ export const ALL_AUDIT_ACTIONS = [
   "import_template.update",
   "status_mapping.upsert",
   "location_alias.create",
+  "trip.assign",
+  "trip.reassign",
+  "trip.unassign",
+  "trip.confirm",
 ] as const satisfies readonly AuditAction[];
 
 /**

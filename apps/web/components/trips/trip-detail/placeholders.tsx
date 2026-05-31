@@ -2,20 +2,17 @@ import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 /**
- * Trip Detail placeholder sections (005 spec, option B): assignment (→ 006), exceptions/SLA (→ 007),
- * documents + billing detail (→ 008) are NOT built in this slice. Each renders a labelled card whose
- * body documents that the feature is available in a future step. Presentational (no `"use client"`).
+ * Trip Detail placeholder sections: exceptions/SLA (→ 007), documents + billing detail (→ 008) are
+ * NOT built in this slice. Each renders a labelled card whose body documents that the feature is
+ * available in a future step. Presentational (no `"use client"`). The assignment section is now the
+ * live `AssignmentPanel` (006) — no longer a placeholder.
  */
 function PlaceholderCard({
   titleKey,
   bodyKey,
 }: {
-  titleKey: "sectionAssignment" | "sectionExceptions" | "sectionDocuments" | "sectionBilling";
-  bodyKey:
-    | "placeholderAssignment"
-    | "placeholderExceptions"
-    | "placeholderDocuments"
-    | "placeholderBilling";
+  titleKey: "sectionExceptions" | "sectionDocuments" | "sectionBilling";
+  bodyKey: "placeholderExceptions" | "placeholderDocuments" | "placeholderBilling";
 }) {
   const t = useTranslations("Trips.detail");
   return (
@@ -28,10 +25,6 @@ function PlaceholderCard({
       </CardContent>
     </Card>
   );
-}
-
-export function AssignmentPlaceholder() {
-  return <PlaceholderCard titleKey="sectionAssignment" bodyKey="placeholderAssignment" />;
 }
 
 export function ExceptionsPlaceholder() {

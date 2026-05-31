@@ -89,6 +89,47 @@ describe("tripBoardQueryFromParams — URL search params", () => {
   });
 });
 
+describe("tripBoardQuerySchema — 006 assignment filters", () => {
+  it("accepts assigned true/false and driver/vehicle/carrier ids", () => {
+    const q = tripBoardQuerySchema.parse({
+      assigned: "false",
+      driverId: UUID_A,
+      vehicleId: UUID_B,
+      carrierId: UUID_A,
+    });
+    expect(q.assigned).toBe("false");
+    expect(q.driverId).toBe(UUID_A);
+    expect(q.vehicleId).toBe(UUID_B);
+    expect(q.carrierId).toBe(UUID_A);
+  });
+
+  it("rejects an invalid assigned value or a non-uuid resource filter", () => {
+    expect(tripBoardQuerySchema.safeParse({ assigned: "maybe" }).success).toBe(false);
+    expect(tripBoardQuerySchema.safeParse({ driverId: "not-a-uuid" }).success).toBe(false);
+  });
+
+  it("treats a blank assigned/driverId as absent", () => {
+    const q = tripBoardQuerySchema.parse({ assigned: "", driverId: "" });
+    expect(q.assigned).toBeUndefined();
+    expect(q.driverId).toBeUndefined();
+  });
+});
+
+describe("tripBoardQueryFromParams — 006 assignment filters round-trip via PARAM_KEYS", () => {
+  it("reads assigned / driverId / vehicleId / carrierId from URL search params", () => {
+    const params = new URLSearchParams();
+    params.set("assigned", "true");
+    params.set("driverId", UUID_A);
+    params.set("vehicleId", UUID_B);
+    params.set("carrierId", UUID_A);
+    const q = tripBoardQueryFromParams(params);
+    expect(q.assigned).toBe("true");
+    expect(q.driverId).toBe(UUID_A);
+    expect(q.vehicleId).toBe(UUID_B);
+    expect(q.carrierId).toBe(UUID_A);
+  });
+});
+
 describe("tripExportQuerySchema — no pagination", () => {
   it("parses the same filters but strips limit/offset", () => {
     const q = tripExportQuerySchema.parse({ status: "in_transit", limit: "9999", offset: "5" });

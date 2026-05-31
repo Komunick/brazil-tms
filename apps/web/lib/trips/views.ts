@@ -59,4 +59,11 @@ export const DEFAULT_TRIP_VIEWS: TripBoardView[] = [
     // Clear status: under AND a leftover status would intersect to an empty board with billing_pending.
     params: () => ({ billingStatus: "billing_pending", status: "", scope: "all" }),
   },
+  {
+    // 006 — active trips with no current assignment (the Dispatch Board's primary lens).
+    key: "unassigned",
+    labelKey: "viewUnassigned",
+    // Clear status/billingStatus: under AND a leftover value would intersect to an empty board.
+    params: () => ({ assigned: "false", scope: "active", sort: "pickupStart", status: "", billingStatus: "" }),
+  },
 ];
