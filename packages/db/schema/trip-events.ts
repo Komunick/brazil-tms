@@ -1,5 +1,6 @@
 import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { trips } from "./trips";
+import { exceptions } from "./exceptions";
 import { users } from "./users";
 import { locations } from "./locations";
 import { tripEventSource, tripEventType, tripStatus } from "./enums";
@@ -32,7 +33,8 @@ export const tripEvents = pgTable(
     actorUserId: uuid("actor_user_id").references(() => users.id),
     locationId: uuid("location_id").references(() => locations.id),
     notes: text("notes"),
-    exceptionId: uuid("exception_id"),
+    // feature 007 — wires the 003 forward-hook FK (the column already existed; 007 owns `exceptions`).
+    exceptionId: uuid("exception_id").references(() => exceptions.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

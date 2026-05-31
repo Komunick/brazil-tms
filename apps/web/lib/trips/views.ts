@@ -78,4 +78,18 @@ export const DEFAULT_TRIP_VIEWS: TripBoardView[] = [
       carrierId: "",
     }),
   },
+  {
+    // 007 — active trips at SLA risk (at_risk|late|breached). `atRisk=true` is the union shorthand;
+    // clear status/billingStatus/slaStatus so a leftover filter cannot intersect to an empty board.
+    key: "atRisk",
+    labelKey: "viewAtRisk",
+    params: () => ({
+      atRisk: "true",
+      scope: "active",
+      sort: "pickupStart",
+      status: "",
+      billingStatus: "",
+      slaStatus: "",
+    }),
+  },
 ];

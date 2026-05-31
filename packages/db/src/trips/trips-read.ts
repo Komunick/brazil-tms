@@ -10,6 +10,7 @@ import {
   isNotNull,
   isNull,
   lt,
+  lte,
   or,
   sql,
   type SQL,
@@ -18,14 +19,19 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "../client";
 import {
+  alerts,
   carriers,
   customers,
+  customerSlaRules,
   drivers,
+  exceptions,
   lanes,
   locations,
+  reasonCodes,
   trailers,
   tripAssignments,
   trips,
+  users,
   vehicles,
 } from "../../schema";
 import {
@@ -35,6 +41,7 @@ import {
   billingStatusToStatuses,
   dayRangeSaoPaulo,
   type BillingStatus,
+  type ExceptionFilter,
   type TripBoardQuery,
   type TripExportQuery,
   type TripStatus,
@@ -73,6 +80,7 @@ export interface TripBoardRow {
   currentStatus: TripStatus;
   billingStatus: BillingStatus;
   slaStatus: string | null;
+  slaReasons: string[] | null;
   plannedPickupWindowStart: string | null;
   plannedPickupWindowEnd: string | null;
   plannedDeliveryWindowStart: string | null;
@@ -114,6 +122,60 @@ export interface DashboardSummary {
 }
 
 // ---------------------------------------------------------------------------
+// Feature 007 — Exception Management / reason-code / SLA-rule read shapes
+// ---------------------------------------------------------------------------
+
+export interface ExceptionListItem {
+  id: string;
+  tripId: string;
+  externalTripId: string | null;
+  customerId: string;
+  customerName: string | null;
+  laneLabel: string | null;
+  reasonCodeId: string;
+  reasonCode: string;
+  category: string;
+  reasonLabelPt: string;
+  severity: string;
+  status: string;
+  responsibleParty: string;
+  ownerUserId: string;
+  ownerName: string | null;
+  description: string;
+  openedAt: string;
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
+export interface ReasonCodeOption {
+  id: string;
+  code: string;
+  category: string;
+  labelPt: string;
+  defaultSeverity: string;
+  defaultResponsibleParty: string;
+  sortOrder: number;
+}
+
+export interface CustomerSlaRuleItem {
+  id: string;
+  customerId: string;
+  customerName: string | null;
+  laneId: string | null;
+  laneLabel: string | null;
+  vehicleType: string | null;
+  pickupToleranceMinutes: number;
+  deliveryToleranceMinutes: number;
+  confirmationCutoffMinutes: number;
+  atRiskWarningMinutes: number;
+  effectiveStart: string | null;
+  effectiveEnd: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---------------------------------------------------------------------------
 // Shared joins / filters / sort (board + export use the SAME builder — DRY)
 // ---------------------------------------------------------------------------
 
@@ -141,6 +203,7 @@ const boardColumns = {
   laneId: trips.laneId,
   currentStatus: trips.currentStatus,
   slaStatus: trips.slaStatus,
+  slaReasons: trips.slaReasons,
   plannedPickupWindowStart: trips.plannedPickupWindowStart,
   plannedPickupWindowEnd: trips.plannedPickupWindowEnd,
   plannedDeliveryWindowStart: trips.plannedDeliveryWindowStart,
@@ -165,6 +228,7 @@ type BoardRow = {
   laneId: string | null;
   currentStatus: TripStatus;
   slaStatus: string | null;
+  slaReasons: string[] | null;
   plannedPickupWindowStart: Date | null;
   plannedPickupWindowEnd: Date | null;
   plannedDeliveryWindowStart: Date | null;
@@ -194,6 +258,7 @@ function toBoardRow(row: BoardRow): TripBoardRow {
     currentStatus: row.currentStatus,
     billingStatus: billingStatus(row.currentStatus),
     slaStatus: row.slaStatus,
+    slaReasons: row.slaReasons,
     plannedPickupWindowStart: iso(row.plannedPickupWindowStart),
     plannedPickupWindowEnd: iso(row.plannedPickupWindowEnd),
     plannedDeliveryWindowStart: iso(row.plannedDeliveryWindowStart),
@@ -239,6 +304,15 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
   if (query.laneId) conditions.push(eq(trips.laneId, query.laneId));
   if (query.vehicleType) {
     conditions.push(eq(trips.plannedVehicleType, query.vehicleType));
+  }
+
+  // Feature 007 — SLA-risk filters (data-model §12). `slaStatus` narrows to specific risk states;
+  // `atRisk=true` is the union (at_risk|late|breached) backing the "At risk" view.
+  if (query.slaStatus?.length) {
+    conditions.push(inArray(trips.slaStatus, query.slaStatus));
+  }
+  if (query.atRisk === "true") {
+    conditions.push(inArray(trips.slaStatus, ["at_risk", "late", "breached"]));
   }
 
   // Feature 006 — assignment filters (data-model.md §5). These reference the LEFT-joined current
@@ -407,41 +481,99 @@ export async function getTripDetailView(id: string): Promise<TripDetailView | nu
 export async function queryDashboardMetrics(): Promise<DashboardSummary> {
   const { from, to } = dayRangeSaoPaulo(new Date());
 
-  const [byStatus, billingPending, unassigned] = await Promise.all([
-    db
-      .select({ status: trips.currentStatus, value: count() })
-      .from(trips)
-      .where(
-        and(
-          gte(trips.plannedPickupWindowStart, new Date(from)),
-          lt(trips.plannedPickupWindowStart, new Date(to)),
+  const [byStatus, billingPending, unassigned, atRisk, activeExc, pickupPct, arrivalPct] =
+    await Promise.all([
+      db
+        .select({ status: trips.currentStatus, value: count() })
+        .from(trips)
+        .where(
+          and(
+            gte(trips.plannedPickupWindowStart, new Date(from)),
+            lt(trips.plannedPickupWindowStart, new Date(to)),
+          ),
+        )
+        .groupBy(trips.currentStatus),
+      db.select({ value: count() }).from(trips).where(eq(trips.currentStatus, "billing_pending")),
+      // Active trips with NO current assignment (006 — fills the "unassigned trips" widget).
+      db
+        .select({ value: count() })
+        .from(trips)
+        .where(
+          and(
+            inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
+            sql`NOT EXISTS (
+              SELECT 1 FROM ${tripAssignments}
+              WHERE ${tripAssignments.tripId} = ${trips.id} AND ${tripAssignments.isCurrent}
+            )`,
+          ),
         ),
-      )
-      .groupBy(trips.currentStatus),
-    db.select({ value: count() }).from(trips).where(eq(trips.currentStatus, "billing_pending")),
-    // Active trips with NO current assignment (006 — fills the "unassigned trips" widget).
-    db
-      .select({ value: count() })
-      .from(trips)
-      .where(
-        and(
-          inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
-          sql`NOT EXISTS (
-            SELECT 1 FROM ${tripAssignments}
-            WHERE ${tripAssignments.tripId} = ${trips.id} AND ${tripAssignments.isCurrent}
-          )`,
+      // Feature 007 — active trips at SLA risk (at_risk|late|breached); terminal stale values excluded.
+      db
+        .select({ value: count() })
+        .from(trips)
+        .where(
+          and(
+            inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
+            inArray(trips.slaStatus, ["at_risk", "late", "breached"]),
+          ),
         ),
-      ),
-  ]);
+      // Feature 007 — open/monitoring exceptions across all trips.
+      db
+        .select({ value: count() })
+        .from(exceptions)
+        .where(inArray(exceptions.status, ["open", "monitoring"])),
+      // Feature 007 — on-time pickup %: trips (planned pickup in the last 30 days, window known) that
+      // recorded an origin arrival within the planned pickup window. NULL when no denominator yet.
+      db.execute(sql`
+        WITH arrivals AS (
+          SELECT
+            t.planned_pickup_window_end AS win_end,
+            (SELECT min(coalesce(e.event_timestamp, e.created_at))
+               FROM trip_events e
+               WHERE e.trip_id = t.id AND e.status_after = 'at_origin') AS arrived_at
+          FROM trips t
+          WHERE t.planned_pickup_window_end IS NOT NULL
+            AND t.planned_pickup_window_start >= now() - interval '30 days'
+        )
+        SELECT
+          count(*) FILTER (WHERE arrived_at IS NOT NULL)::int AS denom,
+          count(*) FILTER (WHERE arrived_at IS NOT NULL AND arrived_at <= win_end)::int AS num
+        FROM arrivals
+      `),
+      // Feature 007 — on-time arrival %: same, for destination arrival vs the planned delivery window.
+      db.execute(sql`
+        WITH arrivals AS (
+          SELECT
+            t.planned_delivery_window_end AS win_end,
+            (SELECT min(coalesce(e.event_timestamp, e.created_at))
+               FROM trip_events e
+               WHERE e.trip_id = t.id AND e.status_after = 'at_destination') AS arrived_at
+          FROM trips t
+          WHERE t.planned_delivery_window_end IS NOT NULL
+            AND t.planned_pickup_window_start >= now() - interval '30 days'
+        )
+        SELECT
+          count(*) FILTER (WHERE arrived_at IS NOT NULL)::int AS denom,
+          count(*) FILTER (WHERE arrived_at IS NOT NULL AND arrived_at <= win_end)::int AS num
+        FROM arrivals
+      `),
+    ]);
+
+  const pct = (rows: Array<Record<string, unknown>>): number | null => {
+    const r = rows[0];
+    const denom = Number(r?.denom ?? 0);
+    const num = Number(r?.num ?? 0);
+    return denom > 0 ? Math.round((num / denom) * 100) : null;
+  };
 
   return {
     tripsTodayByStatus: byStatus.map((r) => ({ status: r.status, count: r.value })),
     billingPendingCount: billingPending[0]?.value ?? 0,
-    tripsAtRisk: null,
+    tripsAtRisk: atRisk[0]?.value ?? 0,
     unassignedTrips: unassigned[0]?.value ?? 0,
-    activeExceptions: null,
-    onTimePickupPct: null,
-    onTimeArrivalPct: null,
+    activeExceptions: activeExc[0]?.value ?? 0,
+    onTimePickupPct: pct(pickupPct as unknown as Array<Record<string, unknown>>),
+    onTimeArrivalPct: pct(arrivalPct as unknown as Array<Record<string, unknown>>),
     completedMissingDocuments: null,
   };
 }
@@ -492,6 +624,9 @@ export interface TripFilterOptions {
   vehicles: ResourceOption[];
   trailers: ResourceOption[];
   carriers: ResourceOption[];
+  // Feature 007 — option sources for the Exception Management filters (reason codes + exception owners).
+  reasonCodes: { id: string; code: string; category: string; labelPt: string }[];
+  owners: ResourceOption[];
 }
 
 /**
@@ -504,47 +639,72 @@ export interface TripFilterOptions {
  * resource that will only WARN). Minimal projections only.
  */
 export async function getTripFilterOptions(): Promise<TripFilterOptions> {
-  const [customerRows, locationRows, laneRows, driverRows, vehicleRows, trailerRows, carrierRows] =
-    await Promise.all([
-      db
-        .select({ id: customers.id, name: customers.name })
-        .from(customers)
-        .where(isNull(customers.archivedAt))
-        .orderBy(asc(customers.name)),
-      db
-        .select({ id: locations.id, code: locations.code, name: locations.name })
-        .from(locations)
-        .where(isNull(locations.archivedAt))
-        .orderBy(asc(locations.code)),
-      db
-        .select({
-          id: lanes.id,
-          originLocationId: lanes.originLocationId,
-          destinationLocationId: lanes.destinationLocationId,
-        })
-        .from(lanes)
-        .where(isNull(lanes.archivedAt)),
-      db
-        .select({ id: drivers.id, label: drivers.name })
-        .from(drivers)
-        .where(isNull(drivers.archivedAt))
-        .orderBy(asc(drivers.name)),
-      db
-        .select({ id: vehicles.id, label: vehicles.plate })
-        .from(vehicles)
-        .where(isNull(vehicles.archivedAt))
-        .orderBy(asc(vehicles.plate)),
-      db
-        .select({ id: trailers.id, label: trailers.plate })
-        .from(trailers)
-        .where(isNull(trailers.archivedAt))
-        .orderBy(asc(trailers.plate)),
-      db
-        .select({ id: carriers.id, label: carriers.name })
-        .from(carriers)
-        .where(isNull(carriers.archivedAt))
-        .orderBy(asc(carriers.name)),
-    ]);
+  const [
+    customerRows,
+    locationRows,
+    laneRows,
+    driverRows,
+    vehicleRows,
+    trailerRows,
+    carrierRows,
+    reasonCodeRows,
+    ownerRows,
+  ] = await Promise.all([
+    db
+      .select({ id: customers.id, name: customers.name })
+      .from(customers)
+      .where(isNull(customers.archivedAt))
+      .orderBy(asc(customers.name)),
+    db
+      .select({ id: locations.id, code: locations.code, name: locations.name })
+      .from(locations)
+      .where(isNull(locations.archivedAt))
+      .orderBy(asc(locations.code)),
+    db
+      .select({
+        id: lanes.id,
+        originLocationId: lanes.originLocationId,
+        destinationLocationId: lanes.destinationLocationId,
+      })
+      .from(lanes)
+      .where(isNull(lanes.archivedAt)),
+    db
+      .select({ id: drivers.id, label: drivers.name })
+      .from(drivers)
+      .where(isNull(drivers.archivedAt))
+      .orderBy(asc(drivers.name)),
+    db
+      .select({ id: vehicles.id, label: vehicles.plate })
+      .from(vehicles)
+      .where(isNull(vehicles.archivedAt))
+      .orderBy(asc(vehicles.plate)),
+    db
+      .select({ id: trailers.id, label: trailers.plate })
+      .from(trailers)
+      .where(isNull(trailers.archivedAt))
+      .orderBy(asc(trailers.plate)),
+    db
+      .select({ id: carriers.id, label: carriers.name })
+      .from(carriers)
+      .where(isNull(carriers.archivedAt))
+      .orderBy(asc(carriers.name)),
+    // Feature 007 — active reason codes + every user who owns an exception (for the queue filters).
+    db
+      .select({
+        id: reasonCodes.id,
+        code: reasonCodes.code,
+        category: reasonCodes.category,
+        labelPt: reasonCodes.labelPt,
+      })
+      .from(reasonCodes)
+      .where(eq(reasonCodes.active, true))
+      .orderBy(asc(reasonCodes.sortOrder)),
+    db
+      .selectDistinct({ id: users.id, label: users.name })
+      .from(users)
+      .innerJoin(exceptions, eq(exceptions.ownerUserId, users.id))
+      .orderBy(asc(users.name)),
+  ]);
 
   return {
     customers: customerRows,
@@ -554,5 +714,160 @@ export async function getTripFilterOptions(): Promise<TripFilterOptions> {
     vehicles: vehicleRows,
     trailers: trailerRows,
     carriers: carrierRows,
+    reasonCodes: reasonCodeRows,
+    owners: ownerRows,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Feature 007 — Exception Management list / reason codes / SLA rules
+// ---------------------------------------------------------------------------
+
+// Origin/destination aliases for the exception list's lane label (reuse the board pattern).
+const excOriginLoc = alias(locations, "exc_origin_loc");
+const excDestLoc = alias(locations, "exc_dest_loc");
+const excOwnerUser = alias(users, "exc_owner_user");
+
+/**
+ * The Exception Management list (FR-013): filter by severity / status / customer (via trip) / lane
+ * (via trip) / reason code / owner / minimum age (since `opened_at`). The category is DERIVED via the
+ * `reason_codes` join (never stored on the exception). Newest-first by `opened_at`, paginated.
+ */
+export async function queryExceptions(filters: ExceptionFilter): Promise<ExceptionListItem[]> {
+  const conditions: SQL[] = [];
+  if (filters.severity) conditions.push(eq(exceptions.severity, filters.severity));
+  if (filters.status) conditions.push(eq(exceptions.status, filters.status));
+  if (filters.customerId) conditions.push(eq(trips.customerId, filters.customerId));
+  if (filters.laneId) conditions.push(eq(trips.laneId, filters.laneId));
+  if (filters.reasonCodeId) conditions.push(eq(exceptions.reasonCodeId, filters.reasonCodeId));
+  if (filters.ownerUserId) conditions.push(eq(exceptions.ownerUserId, filters.ownerUserId));
+  if (filters.minAgeHours != null) {
+    conditions.push(lte(exceptions.openedAt, new Date(Date.now() - filters.minAgeHours * 3_600_000)));
+  }
+
+  const rows = await db
+    .select({
+      id: exceptions.id,
+      tripId: exceptions.tripId,
+      externalTripId: trips.externalTripId,
+      customerId: trips.customerId,
+      customerName: customers.name,
+      laneId: trips.laneId,
+      originCode: excOriginLoc.code,
+      destinationCode: excDestLoc.code,
+      reasonCodeId: exceptions.reasonCodeId,
+      reasonCode: reasonCodes.code,
+      category: reasonCodes.category,
+      reasonLabelPt: reasonCodes.labelPt,
+      severity: exceptions.severity,
+      status: exceptions.status,
+      responsibleParty: exceptions.responsibleParty,
+      ownerUserId: exceptions.ownerUserId,
+      ownerName: excOwnerUser.name,
+      description: exceptions.description,
+      openedAt: exceptions.openedAt,
+      resolvedAt: exceptions.resolvedAt,
+      createdAt: exceptions.createdAt,
+    })
+    .from(exceptions)
+    .innerJoin(trips, eq(exceptions.tripId, trips.id))
+    .innerJoin(reasonCodes, eq(exceptions.reasonCodeId, reasonCodes.id))
+    .leftJoin(customers, eq(trips.customerId, customers.id))
+    .leftJoin(excOriginLoc, eq(trips.originLocationId, excOriginLoc.id))
+    .leftJoin(excDestLoc, eq(trips.destinationLocationId, excDestLoc.id))
+    .leftJoin(excOwnerUser, eq(exceptions.ownerUserId, excOwnerUser.id))
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(desc(exceptions.openedAt))
+    .limit(filters.limit)
+    .offset(filters.offset);
+
+  return rows.map((r) => ({
+    id: r.id,
+    tripId: r.tripId,
+    externalTripId: r.externalTripId,
+    customerId: r.customerId,
+    customerName: r.customerName,
+    laneLabel: r.laneId ? `${r.originCode ?? ""} → ${r.destinationCode ?? ""}` : null,
+    reasonCodeId: r.reasonCodeId,
+    reasonCode: r.reasonCode,
+    category: r.category,
+    reasonLabelPt: r.reasonLabelPt,
+    severity: r.severity,
+    status: r.status,
+    responsibleParty: r.responsibleParty,
+    ownerUserId: r.ownerUserId,
+    ownerName: r.ownerName,
+    description: r.description,
+    openedAt: r.openedAt.toISOString(),
+    resolvedAt: r.resolvedAt ? r.resolvedAt.toISOString() : null,
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
+/** Active reason codes for the create-exception form, ordered by `sort_order` (FR-010). */
+export async function queryReasonCodes(): Promise<ReasonCodeOption[]> {
+  const rows = await db
+    .select({
+      id: reasonCodes.id,
+      code: reasonCodes.code,
+      category: reasonCodes.category,
+      labelPt: reasonCodes.labelPt,
+      defaultSeverity: reasonCodes.defaultSeverity,
+      defaultResponsibleParty: reasonCodes.defaultResponsibleParty,
+      sortOrder: reasonCodes.sortOrder,
+    })
+    .from(reasonCodes)
+    .where(eq(reasonCodes.active, true))
+    .orderBy(asc(reasonCodes.sortOrder));
+  return rows;
+}
+
+const ruleOriginLoc = alias(locations, "rule_origin_loc");
+const ruleDestLoc = alias(locations, "rule_dest_loc");
+
+/** All per-customer SLA rules with customer name + derived lane label (US5 admin list). */
+export async function queryCustomerSlaRules(): Promise<CustomerSlaRuleItem[]> {
+  const rows = await db
+    .select({
+      id: customerSlaRules.id,
+      customerId: customerSlaRules.customerId,
+      customerName: customers.name,
+      laneId: customerSlaRules.laneId,
+      originCode: ruleOriginLoc.code,
+      destinationCode: ruleDestLoc.code,
+      vehicleType: customerSlaRules.vehicleType,
+      pickupToleranceMinutes: customerSlaRules.pickupToleranceMinutes,
+      deliveryToleranceMinutes: customerSlaRules.deliveryToleranceMinutes,
+      confirmationCutoffMinutes: customerSlaRules.confirmationCutoffMinutes,
+      atRiskWarningMinutes: customerSlaRules.atRiskWarningMinutes,
+      effectiveStart: customerSlaRules.effectiveStart,
+      effectiveEnd: customerSlaRules.effectiveEnd,
+      active: customerSlaRules.active,
+      createdAt: customerSlaRules.createdAt,
+      updatedAt: customerSlaRules.updatedAt,
+    })
+    .from(customerSlaRules)
+    .leftJoin(customers, eq(customerSlaRules.customerId, customers.id))
+    .leftJoin(lanes, eq(customerSlaRules.laneId, lanes.id))
+    .leftJoin(ruleOriginLoc, eq(lanes.originLocationId, ruleOriginLoc.id))
+    .leftJoin(ruleDestLoc, eq(lanes.destinationLocationId, ruleDestLoc.id))
+    .orderBy(asc(customers.name), desc(customerSlaRules.effectiveStart));
+
+  return rows.map((r) => ({
+    id: r.id,
+    customerId: r.customerId,
+    customerName: r.customerName,
+    laneId: r.laneId,
+    laneLabel: r.laneId ? `${r.originCode ?? ""} → ${r.destinationCode ?? ""}` : null,
+    vehicleType: r.vehicleType,
+    pickupToleranceMinutes: r.pickupToleranceMinutes,
+    deliveryToleranceMinutes: r.deliveryToleranceMinutes,
+    confirmationCutoffMinutes: r.confirmationCutoffMinutes,
+    atRiskWarningMinutes: r.atRiskWarningMinutes,
+    effectiveStart: r.effectiveStart ? r.effectiveStart.toISOString() : null,
+    effectiveEnd: r.effectiveEnd ? r.effectiveEnd.toISOString() : null,
+    active: r.active,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  }));
 }

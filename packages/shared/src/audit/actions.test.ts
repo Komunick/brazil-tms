@@ -19,6 +19,20 @@ describe("ALL_AUDIT_ACTIONS", () => {
     }
   });
 
+  it("contains the seven feature 007 execution/exception/SLA-rule actions", () => {
+    for (const action of [
+      "exception.create",
+      "exception.update",
+      "exception.resolve",
+      "exception.cancel",
+      "trip.note",
+      "sla_rule.create",
+      "sla_rule.update",
+    ] as const) {
+      expect(ALL_AUDIT_ACTIONS).toContain<AuditAction>(action);
+    }
+  });
+
   it("has no duplicate entries", () => {
     expect(new Set(ALL_AUDIT_ACTIONS).size).toBe(ALL_AUDIT_ACTIONS.length);
   });

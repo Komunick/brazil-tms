@@ -69,7 +69,9 @@
     "drivers": "Motoristas",
     "vehicles": "Veículos",
     "trailers": "Reboques",
-    "carriers": "Transportadoras"
+    "carriers": "Transportadoras",
+    "exceptions": "Exceções",
+    "slaRules": "Regras de SLA"
   },
   "Roles": {
     "admin": "Administrador",
@@ -172,7 +174,14 @@
     "import_template_create": "Modelo de importação criado",
     "import_template_update": "Modelo de importação atualizado",
     "status_mapping_upsert": "Mapeamento de status salvo",
-    "location_alias_create": "Apelido de local criado"
+    "location_alias_create": "Apelido de local criado",
+    "exception_create": "Exceção criada",
+    "exception_update": "Exceção atualizada",
+    "exception_resolve": "Exceção resolvida",
+    "exception_cancel": "Exceção cancelada",
+    "trip_note": "Nota adicionada",
+    "sla_rule_create": "Regra de SLA criada",
+    "sla_rule_update": "Regra de SLA atualizada"
   },
   "MasterData": {
     "statusColumn": "Situação",
@@ -523,6 +532,8 @@
       "viewInTransit": "Em trânsito",
       "viewBillingPending": "Faturamento pendente",
       "viewUnassigned": "Não atribuídas",
+      "viewAtRisk": "Em risco",
+      "filterSlaStatus": "Risco de SLA",
       "filterCustomer": "Cliente",
       "filterStatus": "Status",
       "filterBillingStatus": "Faturamento",
@@ -615,7 +626,18 @@
         "assign": "Viagem atribuída",
         "reassign": "Atribuição substituída",
         "unassign": "Atribuição removida",
-        "confirm": "Atribuição confirmada"
+        "confirm": "Atribuição confirmada",
+        "note": "Nota adicionada"
+      },
+      "exception": {
+        "create": "Exceção criada",
+        "update": "Exceção atualizada",
+        "resolve": "Exceção resolvida",
+        "cancel": "Exceção cancelada"
+      },
+      "sla_rule": {
+        "create": "Regra de SLA criada",
+        "update": "Regra de SLA atualizada"
       }
     },
     "edit": {
@@ -661,6 +683,170 @@
       "empty": "Nenhuma viagem com coleta hoje.",
       "loadError": "Não foi possível carregar o painel.",
       "trips": "{count} viagens"
+    }
+  },
+  "Sla": {
+    "indicatorTitle": "Risco de SLA",
+    "status": {
+      "on_track": "No prazo",
+      "at_risk": "Em risco",
+      "late": "Atrasada",
+      "breached": "Violada",
+      "none": "—"
+    },
+    "reason": {
+      "missing_assignment": "Sem atribuição dentro da janela",
+      "missed_confirmation": "Confirmação fora do prazo",
+      "delayed_origin_arrival": "Atraso na chegada à origem",
+      "delayed_loading": "Atraso no carregamento",
+      "delayed_departure": "Atraso na partida",
+      "delayed_destination_arrival": "Atraso na chegada ao destino",
+      "open_high_severity_exception": "Exceção de alta severidade em aberto"
+    },
+    "noReasons": "Sem fatores de risco.",
+    "rules": {
+      "title": "Regras de SLA por cliente",
+      "subtitle": "Tolerâncias, prazo de confirmação e janela de alerta por cliente (com escopo opcional de rota/veículo).",
+      "create": "Nova regra",
+      "edit": "Editar regra",
+      "customer": "Cliente",
+      "lane": "Rota (opcional)",
+      "vehicleType": "Tipo de veículo (opcional)",
+      "pickupTolerance": "Tolerância de coleta (min)",
+      "deliveryTolerance": "Tolerância de entrega (min)",
+      "confirmationCutoff": "Prazo de confirmação (min)",
+      "atRiskWarning": "Janela de alerta (min)",
+      "effectiveStart": "Início da vigência",
+      "effectiveEnd": "Fim da vigência",
+      "active": "Ativa",
+      "anyLane": "Todas as rotas",
+      "anyVehicle": "Todos os veículos",
+      "blockedSignOff": "Sem regra — usando padrões da empresa (aprovação de SLA pendente).",
+      "empty": "Nenhuma regra de SLA configurada.",
+      "loadError": "Não foi possível carregar as regras de SLA.",
+      "saveSuccess": "Regra de SLA salva.",
+      "save": "Salvar regra",
+      "saving": "Salvando..."
+    },
+    "errors": {
+      "NOT_FOUND": "Registro não encontrado.",
+      "VALIDATION": "Verifique os campos destacados.",
+      "FORBIDDEN": "Você não tem permissão para esta ação.",
+      "REQUEST_FAILED": "Não foi possível concluir a operação. Tente novamente."
+    }
+  },
+  "Exceptions": {
+    "title": "Gestão de exceções",
+    "subtitle": "Exceções operacionais abertas, em monitoramento e resolvidas.",
+    "panelTitle": "Exceções",
+    "create": "Registrar exceção",
+    "creating": "Registrando...",
+    "newException": "Nova exceção",
+    "reasonCode": "Código de motivo",
+    "selectReasonCode": "Selecione o motivo",
+    "category": "Categoria",
+    "severity": "Severidade",
+    "responsibleParty": "Parte responsável",
+    "owner": "Responsável",
+    "selectOwner": "Selecione o responsável",
+    "description": "Descrição",
+    "descriptionPlaceholder": "Descreva a exceção",
+    "openedAt": "Aberta em",
+    "resolvedAt": "Resolvida em",
+    "closureNotes": "Notas de encerramento",
+    "closureNotesPlaceholder": "Descreva como a exceção foi resolvida",
+    "status": "Status",
+    "trip": "Viagem",
+    "actions": "Ações",
+    "monitor": "Monitorar",
+    "reopen": "Reabrir",
+    "resolve": "Resolver",
+    "cancelException": "Cancelar exceção",
+    "noExceptions": "Nenhuma exceção registrada nesta viagem.",
+    "empty": "Nenhuma exceção encontrada.",
+    "loadError": "Não foi possível carregar as exceções.",
+    "createSuccess": "Exceção registrada.",
+    "updateSuccess": "Exceção atualizada.",
+    "transitionSuccess": "Exceção atualizada.",
+    "filters": {
+      "severity": "Severidade",
+      "status": "Status",
+      "customer": "Cliente",
+      "lane": "Rota",
+      "reasonCode": "Motivo",
+      "owner": "Responsável",
+      "minAgeHours": "Idade mínima (h)",
+      "all": "Todos"
+    },
+    "severityValue": {
+      "low": "Baixa",
+      "medium": "Média",
+      "high": "Alta"
+    },
+    "statusValue": {
+      "open": "Aberta",
+      "monitoring": "Monitorando",
+      "resolved": "Resolvida",
+      "cancelled": "Cancelada"
+    },
+    "responsiblePartyValue": {
+      "customer_caused": "Causada pelo cliente",
+      "brazil_transports_caused": "Causada pela Brazil Transports",
+      "carrier_caused": "Causada pela transportadora",
+      "force_majeure": "Força maior",
+      "unknown": "Desconhecida"
+    },
+    "categoryValue": {
+      "delay": "Atraso",
+      "no_show": "Não comparecimento",
+      "breakdown": "Pane mecânica",
+      "driver_issue": "Problema com motorista",
+      "customer_delay": "Atraso do cliente",
+      "loading_delay": "Atraso no carregamento",
+      "unloading_delay": "Atraso no descarregamento",
+      "documentation": "Documentação",
+      "accident": "Acidente",
+      "route_deviation": "Desvio de rota",
+      "cancellation": "Cancelamento",
+      "other": "Outro"
+    },
+    "errors": {
+      "INVALID_REASON_CODE": "Código de motivo inválido ou inativo.",
+      "ILLEGAL_EXCEPTION_TRANSITION": "Transição de exceção não permitida.",
+      "STALE_EXCEPTION": "A exceção foi alterada por outra pessoa. Recarregue e tente novamente.",
+      "NOT_FOUND": "Exceção não encontrada.",
+      "VALIDATION": "Verifique os campos destacados.",
+      "FORBIDDEN": "Você não tem permissão para esta ação.",
+      "REQUEST_FAILED": "Não foi possível concluir a operação. Tente novamente."
+    }
+  },
+  "Alerts": {
+    "title": "Alertas",
+    "surfaceTitle": "Alertas ativos",
+    "acknowledge": "Reconhecer",
+    "acknowledged": "Reconhecido",
+    "acknowledgedBy": "Reconhecido por",
+    "empty": "Nenhum alerta ativo.",
+    "loadError": "Não foi possível carregar os alertas.",
+    "trip": "Viagem",
+    "case": "Tipo",
+    "severity": "Severidade",
+    "createdAt": "Criado em",
+    "acknowledgeSuccess": "Alerta reconhecido.",
+    "caseValue": {
+      "unassigned_within_window": "Sem atribuição na janela",
+      "unconfirmed_within_window": "Sem confirmação na janela",
+      "missed_origin_arrival": "Chegada à origem perdida",
+      "missed_departure": "Partida perdida",
+      "missed_destination_arrival": "Chegada ao destino perdida",
+      "high_severity_exception": "Exceção de alta severidade",
+      "completed_missing_documents": "Concluída sem documentos",
+      "billing_blocked_missing_proof": "Faturamento bloqueado (sem comprovante)"
+    },
+    "errors": {
+      "STALE_ALERT": "O alerta já foi resolvido.",
+      "FORBIDDEN": "Você não tem permissão para esta ação.",
+      "REQUEST_FAILED": "Não foi possível concluir a operação. Tente novamente."
     }
   },
   "Dispatch": {

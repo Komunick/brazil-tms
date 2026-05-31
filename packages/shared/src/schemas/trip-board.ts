@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { BILLING_PHASE_STATUSES, TRIP_STATUSES } from "../domain/trip-status";
+import { SLA_STATUSES } from "../domain/sla-risk";
 import { dateStringSchema, vehicleTypeSchema } from "./master-data";
 
 /**
@@ -68,6 +69,10 @@ export const tripBoardQuerySchema = z.object({
   carrierId: uuidParam("Transportadora"),
   pickupFrom: optParam(dateStringSchema),
   pickupTo: optParam(dateStringSchema),
+  // feature 007 — SLA-risk board filter + the "At risk" view shorthand (data-model §10). `slaStatus`
+  // narrows to specific risk states; `atRisk=true` is the union (at_risk|late|breached) for the view.
+  slaStatus: oneOrMany(z.enum(SLA_STATUSES)),
+  atRisk: optParam(z.enum(["true", "false"])),
   q: z.preprocess(
     (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
     z.string().trim().min(1).max(200).optional(),
@@ -108,6 +113,7 @@ const PARAM_KEYS = [
   "carrierId",
   "pickupFrom",
   "pickupTo",
+  "atRisk",
   "q",
   "scope",
   "sort",
@@ -122,6 +128,8 @@ function rawFromParams(params: URLSearchParams): Record<string, unknown> {
   }
   const status = params.getAll("status");
   if (status.length > 0) raw.status = status;
+  const slaStatus = params.getAll("slaStatus");
+  if (slaStatus.length > 0) raw.slaStatus = slaStatus;
   const limit = params.get("limit");
   if (limit !== null) raw.limit = limit;
   const offset = params.get("offset");

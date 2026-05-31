@@ -67,33 +67,47 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/006-dispatch-assignment/plan.md` (Dispatch Assignment and Conflict Warnings).
+Active feature plan: `specs/007-execution-events-exceptions/plan.md` (Execution Events, Exceptions, SLA Risk, and In-App Alerts).
 For technologies, project structure, BFF/auth patterns, data model, contracts, and setup/test commands,
 read that plan and its `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`.
-This is the **dispatch/assignment write surface** over the trip domain: assign driver/vehicle/trailer/carrier to a trip
-with **server-authoritative conflict & eligibility warnings** (§19.2 — schedule overlap, resource status, vehicle-type
-match, carrier eligibility, doc expired/missing), **override** of WARN findings with a reason (BLOCK is absolute),
-**reassignment** that supersedes + retains history (at most one current assignment), and **confirmation** that re-checks
-for BLOCK drift. It adds the new **Dispatch Board** (§15.6) and fills slice 005's reserved shell — the Trip-Detail
-assignment panel, the assigned-driver/vehicle/carrier filters, the "Unassigned" view, the assignment row indicator, and
-the dashboard "unassigned trips" count. Freshness is **polling** (no Realtime). It adds **ONE new table**
-(`trip_assignments`, the PRD §14.1 entity) and **NO new enum, permission key, package, or worker**: authorization reuses
-the pre-declared **`assign_resources`** (granted to Admin/Ops-Manager/Dispatcher/Fleet-Coordinator but never enforced),
-which 006 **enforces for the first time** (reads stay on `view_all_trips`) — mirroring 004/`import_trips` and
-005/`view_all_trips`. Conflict authority is **server-side** (a pure eligibility evaluator + confirmed company-default
-block/warn config in `@brazil-tms/shared`); assignment **services** in `@brazil-tms/db` mirror 003's
-`transitionTripStatus`/`cancelTrip` transaction pattern to drive the existing `validated→assigned` /
-`assigned→confirmed` / `assigned→validated` transitions (the status machine, master data, and audit are reused, NOT
-redefined; superseded rows retained, never hard-deleted; assignment changes audited as `trip.assign`/`reassign`/
-`unassign`/`confirm`). New work: `trip_assignments` + indexes, the eligibility evaluator + `trip-assignment` Zod, the
-assignment services + board/detail/dashboard read-model extensions, ~5 BFF endpoints (assign/reassign · unassign ·
-confirm · dry-run check · extended reads), and the Dispatch Board + 005-shell fills. It builds on
-`specs/001-platform-access-shell/` (auth, audit, i18n, permission catalog incl. `assign_resources`),
-`specs/002-master-data-config/` (drivers/vehicles/trailers/carriers + status/type/ownership/doc-expiry semantics),
-`specs/003-trip-domain-lifecycle/` (trip model, status machine, transition service, audit), and
-`specs/005-control-tower/` (board/detail/dashboard read models + the UI framework it fills). Open items are
-**configurable defaults / deferred policy, not blockers and not invented** (Constitution II): carrier
-approved-for-customer/lane (OUT of MVP scope — no approval storage), per-customer block/warn overrides (config seam, no
-storage), broader owned-vs-subcontracted policy (§29 Input #6), vehicle-type substitution matrix (exact-match default),
-schedule-overlap turnaround buffer (0-min default).
+This is the **execution-tracking write surface and SLA/alert engine** over the trip domain: record execution
+**milestones** (At Origin → [Loading] → Loaded → In Transit → At Destination → [Unloading] → Unloaded → Completed) and
+free-form **notes** on the now-interactive Trip-Detail timeline; log/monitor/resolve **exceptions**
+(Open↔Monitoring → Resolved/Cancelled, terminal) with configurable **reason codes**; compute a **server-authoritative
+SLA-risk state** (On Track/At Risk/Late/Breached + reasons) on the board, the **"At risk"** view, Trip Detail, and the
+dashboard; generate the six in-scope **in-app §17 alerts**; and configure **per-customer SLA rules**. Freshness is
+**polling** (no Realtime). It adds **FOUR new tables** (`exceptions`, `reason_codes`, `customer_sla_rules` — PRD §14.1
+entities — and the clarified in-app `alerts` store) and **THREE new enums** (`exception_status`/`exception_severity`/
+`exception_responsible_party`, the five-value set adding `force_majeure`); `alert_case`/`alert_state`/
+`reason_codes.category` are **CHECK text**, and **`trips.sla_status` stays `text`+CHECK (NO new enum)** with a new
+sibling **`sla_reasons text[]`** (clarification D4). The `trip_events.exception_id` forward-hook FK is wired and the
+**single** event-vocabulary extension is **`note`** (D5 — Loading/Unloading are `status_change`, not a new member). It
+adds **NO new permission key, package, or worker process**: authorization **first-enforces** the pre-declared
+`update_trip_status` (milestones/notes — Admin/Ops/Dispatcher/Control-Tower), `create_exceptions` and
+`resolve_exceptions` (those + Fleet-Coordinator), and **reuses** `manage_commercial_data` for SLA-rule admin (reads +
+alert acknowledgement stay on `view_all_trips`) — mirroring 004/`import_trips`, 005/`view_all_trips`,
+006/`assign_resources`. SLA authority is **server-side**: a pure `evaluateSlaRisk` evaluator in `@brazil-tms/shared`
+(D1 trigger→state map: window-miss⇒Late, else⇒At Risk, Breached unreachable in MVP; D2 worst-state-wins) + a
+labeled-configurable `DEFAULT_SLA_POLICY` (warning 60m / tolerance 0m / confirm-cutoff 120m / time-in-status 120m); a
+single `recomputeTripSla` writes `sla_status`/`sla_reasons` **synchronously in the mutation tx** (immediate UI truth)
+**and** via the **first-ever scheduled worker job** (a ~5-min `pg-boss` cron sweep on the existing 004 worker —
+per-trip fault-isolated, `SELECT … FOR UPDATE`, idempotent alert gen/auto-resolve via `ON CONFLICT DO NOTHING` on the
+`(trip_id, alert_case) WHERE state IN ('active','acknowledged')` partial-unique). Exception/note/SLA-rule **services** in
+`@brazil-tms/db` mirror 003's `transitionTripStatus`/`cancelTrip` transaction pattern; **milestones reuse
+`transitionTripStatus`** (the status machine, `trip_events`, master data, 006 assignment/confirmed-at state, and 005
+read models are reused, NOT redefined; `trip_events` stays append-only; exceptions/alerts retained, never hard-deleted;
+audited as `exception.create`/`update`/`resolve`/`cancel`, `trip.note`, `sla_rule.create`/`update`; milestones reuse
+`trip.status_change`). New work: the 4 tables + indexes + `trips`/`trip_events` ALTERs (migration `0006`), the SLA
+evaluator + exception-lifecycle modules + `sla/jobs` + ~4 Zod files, ~5 `db` services + read-model fills (4 dashboard
+metrics, exception/alert arrays, "At risk" filter), ~12 BFF endpoints, the `sla-sweep` worker job, and the 005-shell
+fills (interactive timeline, exception panel, SLA indicator, alerts surface) + Exception Management & SLA-rule admin
+screens. It builds on `specs/001-platform-access-shell/` (auth, audit, i18n, permission catalog),
+`specs/002-master-data-config/` (customers/lanes; `manage_commercial_data`), `specs/003-trip-domain-lifecycle/` (trip
+model, status machine, `transitionTripStatus`, append-only `trip_events` + its `exception_id` hook, `trips.sla_status`
+placeholder), `specs/005-control-tower/` (board/detail/dashboard read models + the UI shell it fills), and
+`specs/006-dispatch-assignment/` (assignment/confirmed-at state read for missing-assignment/missed-confirmation risk).
+Open items are **configurable defaults / deferred slice inputs, not blockers and not invented** (Constitution II):
+per-customer SLA rules (§29 Input #2 — company defaults + per-customer SLA sign-off **blocked** until supplied),
+per-milestone planned times (time-in-status 120-min default), §17 alert cases 7–8 (deferred to 008/009), and
+exception/event attachments (deferred to 008).
 <!-- SPECKIT END -->

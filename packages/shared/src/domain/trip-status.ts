@@ -38,7 +38,7 @@ export const TRIP_STATUSES = [
 
 export type TripStatus = (typeof TRIP_STATUSES)[number];
 
-/** Trip event vocabulary (foundation set; 007 extends via migration). Mirrors `trip_event_type`. */
+/** Trip event vocabulary (foundation set; 007 added `note`). Mirrors `trip_event_type`. */
 export const TRIP_EVENT_TYPES = [
   "status_change",
   "origin_arrived",
@@ -47,6 +47,9 @@ export const TRIP_EVENT_TYPES = [
   "destination_arrived",
   "unloaded",
   "completed",
+  // feature 007 — the single event-vocabulary extension (D5/R6): free-form notes. Loading/Unloading
+  // are recorded as `status_change`, NOT new members.
+  "note",
 ] as const;
 
 export type TripEventType = (typeof TRIP_EVENT_TYPES)[number];

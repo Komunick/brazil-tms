@@ -128,6 +128,8 @@ services:
       SUPABASE_URL: http://gateway:8000
       SUPABASE_SERVICE_ROLE_KEY: ${SERVICE_ROLE_KEY}
       IMPORT_BUCKET: imports
+      # Feature 007 — SLA sweep cron (every 5 min by default). The first scheduled worker job.
+      SLA_SWEEP_CRON: ${SLA_SWEEP_CRON:-*/5 * * * *}
 
   mailpit:
     # Dev mail catcher so invite/recovery emails don't hard-fail without real SMTP. UI: :8025.

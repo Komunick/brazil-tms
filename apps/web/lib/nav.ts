@@ -21,6 +21,10 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: "trips", href: "/trips", icon: "Truck", permission: "view_all_trips" },
   // 006 — Dispatch Board (assign_resources: Admin, Ops Manager, Dispatcher, Fleet Coordinator).
   { key: "dispatch", href: "/dispatch", icon: "ClipboardCheck", permission: "assign_resources" },
+  // 007 — Exception Management queue (view_all_trips: all 7 internal roles read) + per-customer SLA
+  // rules admin (manage_commercial_data: Admin, Ops Manager).
+  { key: "exceptions", href: "/exceptions", icon: "TriangleAlert", permission: "view_all_trips" },
+  { key: "slaRules", href: "/sla-rules", icon: "Gauge", permission: "manage_commercial_data" },
   { key: "adminUsers", href: "/admin/users", icon: "Users", permission: "manage_users" },
   { key: "adminAudit", href: "/admin/audit", icon: "ScrollText", permission: "view_audit_log" },
   // 002 — commercial master data (manage_commercial_data: Admin, Ops Manager).

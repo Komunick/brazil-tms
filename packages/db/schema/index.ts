@@ -21,3 +21,8 @@ export * from "./status-mappings";
 export * from "./location-aliases";
 // Feature 006 — dispatch assignment (driver/vehicle/trailer/carrier ↔ trip; at-most-one-current).
 export * from "./trip-assignments";
+// Feature 007 — execution events, exceptions, SLA rules & in-app alerts.
+export * from "./reason-codes";
+export * from "./exceptions";
+export * from "./customer-sla-rules";
+export * from "./alerts";
