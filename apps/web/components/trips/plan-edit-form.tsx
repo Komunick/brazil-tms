@@ -58,6 +58,7 @@ const ERROR_CODES = [
   "EDIT_NOT_ALLOWED",
   "REVIEW_REQUIRED",
   "STALE_TRANSITION",
+  "INVALID_PLAN_WINDOW",
   "NOT_FOUND",
   "VALIDATION",
 ] as const;
@@ -137,6 +138,8 @@ export function PlanEditForm({ trip }: { trip: TripDetailView }) {
         return t("errorREVIEW_REQUIRED");
       case "STALE_TRANSITION":
         return t("errorSTALE_TRANSITION");
+      case "INVALID_PLAN_WINDOW":
+        return t("errorINVALID_PLAN_WINDOW");
       case "NOT_FOUND":
         return t("errorNOT_FOUND");
       case "VALIDATION":

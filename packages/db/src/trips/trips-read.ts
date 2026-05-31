@@ -7,6 +7,7 @@ import {
   gte,
   ilike,
   inArray,
+  isNull,
   lt,
   or,
   type SQL,
@@ -14,7 +15,7 @@ import {
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "../client";
-import { customers, locations, trips } from "../../schema";
+import { customers, lanes, locations, trips } from "../../schema";
 import {
   ACTIVE_TRIP_STATUSES,
   EXPORT_ROW_CAP,
@@ -179,12 +180,16 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
 
   if (query.customerId) conditions.push(eq(trips.customerId, query.customerId));
 
-  // Status scope: explicit filters win; the active-scope default applies only when neither is set.
+  // Filters compose with AND: an explicit `status` list and a `billingStatus` projection BOTH
+  // constrain current_status (their intersection — a contradictory pair yields no rows). The
+  // active-scope default applies ONLY when neither explicit status filter is present.
   if (query.status?.length) {
     conditions.push(inArray(trips.currentStatus, query.status));
-  } else if (query.billingStatus) {
+  }
+  if (query.billingStatus) {
     conditions.push(inArray(trips.currentStatus, [...billingStatusToStatuses(query.billingStatus)]));
-  } else if (query.scope === "active") {
+  }
+  if (!query.status?.length && !query.billingStatus && query.scope === "active") {
     conditions.push(inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]));
   }
 
@@ -397,4 +402,45 @@ export async function exportTripRows(
 
   const rows = await boardSelect().where(where).orderBy(buildOrderBy(query));
   return rows.map(toBoardRow);
+}
+
+// ---------------------------------------------------------------------------
+// Filter option lookups (board dropdowns)
+// ---------------------------------------------------------------------------
+
+export interface TripFilterOptions {
+  customers: { id: string; name: string }[];
+  locations: { id: string; code: string; name: string }[];
+  lanes: { id: string; originLocationId: string; destinationLocationId: string }[];
+}
+
+/**
+ * The data-backed dropdown options for the Control Tower filters (customers / locations / lanes),
+ * active (non-archived) only. Fetched server-side by the board page (already guarded on
+ * `view_all_trips`) and passed down as props, so the read-only roles the board now serves do NOT
+ * call the `manage_commercial_data`-gated master-data list APIs. Minimal projections only.
+ */
+export async function getTripFilterOptions(): Promise<TripFilterOptions> {
+  const [customerRows, locationRows, laneRows] = await Promise.all([
+    db
+      .select({ id: customers.id, name: customers.name })
+      .from(customers)
+      .where(isNull(customers.archivedAt))
+      .orderBy(asc(customers.name)),
+    db
+      .select({ id: locations.id, code: locations.code, name: locations.name })
+      .from(locations)
+      .where(isNull(locations.archivedAt))
+      .orderBy(asc(locations.code)),
+    db
+      .select({
+        id: lanes.id,
+        originLocationId: lanes.originLocationId,
+        destinationLocationId: lanes.destinationLocationId,
+      })
+      .from(lanes)
+      .where(isNull(lanes.archivedAt)),
+  ]);
+
+  return { customers: customerRows, locations: locationRows, lanes: laneRows };
 }

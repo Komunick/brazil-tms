@@ -20,36 +20,35 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import type { TripFilterOptions } from "@brazil-tms/db";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { exportHref } from "@/lib/trips/client";
 import { DEFAULT_TRIP_VIEWS } from "@/lib/trips/views";
-import { useEntityList } from "@/lib/master-data/client";
-import type { CustomerDto } from "@/lib/master-data/customers-service";
-import type { LocationDto } from "@/lib/master-data/locations-service";
-import type { LaneDto } from "@/lib/master-data/lanes-service";
 import { cn } from "@/lib/utils";
 
 type FilterValue = string | string[] | undefined;
 
 /**
  * Control Tower board filters (feature 005, US1 + US5 export). All filters compose with AND in the
- * read model; each change calls `setFilters`, which resets pagination. Read-first — the dropdowns
- * reuse the 002 master-data list hooks (customers/locations/lanes). Locations are listed globally
- * (the list endpoint's `customerId` is optional), so origin/destination are independent of the
- * customer filter. Lanes carry no display label, so their option label is derived `O → D` from the
- * locations code map. NO controls for assigned driver/vehicle/carrier or SLA risk — those dimensions
- * belong to later slices (006/007); only TRIP-002's 005-owned dimensions are built here.
+ * read model; each change calls `setFilters`, which resets pagination. The dropdown options
+ * (customers/locations/lanes) are loaded server-side by the board page under the `view_all_trips`
+ * guard and passed in as `options` — NOT fetched from the `manage_commercial_data`-gated master-data
+ * APIs, so the read-only roles 005 serves get populated filters. Lanes carry no display label, so
+ * their option label is derived `O → D` from the locations code map. NO controls for assigned
+ * driver/vehicle/carrier or SLA risk — those belong to later slices (006/007).
  */
 export function TripFilters({
   query,
   setFilters,
   reset,
   search,
+  options,
 }: {
   query: TripBoardQuery;
   setFilters: (next: Partial<Record<string, FilterValue>>) => void;
   reset: () => void;
   search: string;
+  options: TripFilterOptions;
 }) {
   const t = useTranslations("Trips");
   const tCommon = useTranslations("Common");
@@ -61,11 +60,7 @@ export function TripFilters({
     setQ(query.q ?? "");
   }, [query.q]);
 
-  const customers = useEntityList<CustomerDto>("customers");
-  const locations = useEntityList<LocationDto>("locations");
-  const lanes = useEntityList<LaneDto>("lanes");
-
-  const locationList = locations.data ?? [];
+  const locationList = options.locations;
   const codeOf = new Map(locationList.map((l) => [l.id, l.code]));
 
   const statusSet = new Set<TripStatus>(query.status ?? []);
@@ -154,7 +149,7 @@ export function TripFilters({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">{t("board.all")}</SelectItem>
-                {(customers.data ?? []).map((c) => (
+                {options.customers.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.name}
                   </SelectItem>
@@ -258,7 +253,7 @@ export function TripFilters({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">{t("board.all")}</SelectItem>
-                {(lanes.data ?? []).map((lane) => (
+                {options.lanes.map((lane) => (
                   <SelectItem key={lane.id} value={lane.id}>
                     {(codeOf.get(lane.originLocationId) ?? "?")} →{" "}
                     {codeOf.get(lane.destinationLocationId) ?? "?"}

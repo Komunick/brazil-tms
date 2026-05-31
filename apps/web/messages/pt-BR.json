@@ -612,6 +612,7 @@
       "errorEDIT_NOT_ALLOWED": "Edição não permitida após a conclusão da viagem.",
       "errorREVIEW_REQUIRED": "Edições após a confirmação exigem revisão autorizada. Marque a opção e tente novamente.",
       "errorSTALE_TRANSITION": "A viagem foi alterada por outra pessoa. Recarregue a página e tente novamente.",
+      "errorINVALID_PLAN_WINDOW": "Janela planejada inválida: o início deve ser anterior ou igual ao fim.",
       "errorNOT_FOUND": "Viagem não encontrada.",
       "errorVALIDATION": "Verifique os campos destacados.",
       "errorREQUEST_FAILED": "Não foi possível salvar. Tente novamente."

@@ -85,6 +85,32 @@ export async function updateTripPlan(
       }
     }
 
+    // Validate the MERGED plan window ordering: a partial edit must not leave the live plan with
+    // start > end. The Zod boundary schema only rejects the case where BOTH bounds are in one
+    // request; here each window's effective value (the provided value, else the locked current value)
+    // is checked — so e.g. moving only the pickup END before the existing START is rejected. Done
+    // under the row lock so a concurrent edit to the other bound can't slip a bad state through.
+    const effectiveWindow = (field: keyof TripPlanFields): Date | null => {
+      const value = changes[field] !== undefined ? changes[field] : currentRow[field];
+      return value instanceof Date ? value : null;
+    };
+    const pickupStart = effectiveWindow("plannedPickupWindowStart");
+    const pickupEnd = effectiveWindow("plannedPickupWindowEnd");
+    if (pickupStart && pickupEnd && pickupStart.getTime() > pickupEnd.getTime()) {
+      throw new Conflict(
+        "INVALID_PLAN_WINDOW",
+        "A janela de coleta é inválida: o início deve ser anterior ou igual ao fim.",
+      );
+    }
+    const deliveryStart = effectiveWindow("plannedDeliveryWindowStart");
+    const deliveryEnd = effectiveWindow("plannedDeliveryWindowEnd");
+    if (deliveryStart && deliveryEnd && deliveryStart.getTime() > deliveryEnd.getTime()) {
+      throw new Conflict(
+        "INVALID_PLAN_WINDOW",
+        "A janela de entrega é inválida: o início deve ser anterior ou igual ao fim.",
+      );
+    }
+
     const criticalChanged = Object.keys(newValue).length > 0;
 
     await tx.update(trips).set(set).where(eq(trips.id, tripId));

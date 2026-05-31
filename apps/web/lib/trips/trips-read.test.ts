@@ -5,6 +5,7 @@ import { dayRangeSaoPaulo } from "@brazil-tms/shared";
 import {
   exportTripRows,
   getTripDetailView,
+  getTripFilterOptions,
   queryDashboardMetrics,
   queryTripBoard,
 } from "./trips-read";
@@ -178,6 +179,32 @@ describe.skipIf(!hasDb)("trips-read (integration)", () => {
     const { rows } = await queryTripBoard(boardQuery({ status: ["validated"] }));
     expect(rows.every((r) => r.customerId === customerId)).toBe(true);
     expect(rows.map((r) => r.id)).toEqual([validatedId]);
+  });
+
+  it("status + billingStatus compose with AND (intersection), not else-if", async () => {
+    // Contradictory pair → empty: a trip cannot be both in_transit AND billing_pending.
+    const contradictory = await queryTripBoard(
+      boardQuery({ status: ["in_transit"], billingStatus: "billing_pending" }),
+    );
+    expect(contradictory.rows).toHaveLength(0);
+
+    // Consistent pair → the intersection (the billing_pending trip).
+    const consistent = await queryTripBoard(
+      boardQuery({ status: ["billing_pending"], billingStatus: "billing_pending" }),
+    );
+    expect(consistent.rows.map((r) => r.id)).toEqual([billingPendingId]);
+  });
+
+  it("getTripFilterOptions returns the active customers / locations / lanes for dropdowns", async () => {
+    const options = await getTripFilterOptions();
+    expect(options.customers.some((c) => c.id === customerId)).toBe(true);
+    expect(options.locations.some((l) => l.id === originId && l.code !== "")).toBe(true);
+    expect(options.locations.some((l) => l.id === destId)).toBe(true);
+    expect(
+      options.lanes.some(
+        (l) => l.id === laneId && l.originLocationId === originId && l.destinationLocationId === destId,
+      ),
+    ).toBe(true);
   });
 
   it("q matches the external trip id and enriches names + laneLabel", async () => {

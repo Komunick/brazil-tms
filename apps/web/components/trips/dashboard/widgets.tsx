@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { DateTime } from "luxon";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
+import { APP_TIME_ZONE } from "@brazil-tms/shared";
 import type { DashboardSummary } from "@brazil-tms/db";
 import { useDashboardSummary } from "@/lib/trips/client";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
@@ -61,6 +63,9 @@ function MetricCard({ titleKey, value, href, placeholder }: MetricCardProps) {
 /** Computed widget #1: trips today, broken down by status, each row deep-linking into the board. */
 function TripsTodayCard({ byStatus }: { byStatus: DashboardSummary["tripsTodayByStatus"] }) {
   const t = useTranslations("Trips.dashboard");
+  // The count is over today's São Paulo pickup window, so the deep-link must carry the SAME BRT day
+  // (pickupFrom=pickupTo=today) — otherwise it would show all trips of that status, not today's.
+  const today = DateTime.now().setZone(APP_TIME_ZONE).toISODate() ?? "";
 
   return (
     <Card>
@@ -75,7 +80,7 @@ function TripsTodayCard({ byStatus }: { byStatus: DashboardSummary["tripsTodayBy
             {byStatus.map(({ status, count }) => (
               <li key={status}>
                 <Link
-                  href={`/trips?status=${status}&scope=all`}
+                  href={`/trips?status=${status}&pickupFrom=${today}&pickupTo=${today}&scope=all`}
                   className="flex items-center justify-between rounded-md px-1 py-0.5 hover:bg-muted"
                 >
                   <TripStatusBadge status={status} />

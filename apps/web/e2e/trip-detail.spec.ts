@@ -221,4 +221,28 @@ test.describe("US3 — inline operational-field edit before completion", () => {
     const res = await ctx.patch(`/api/trips/${validatedId}/plan`, { data: {} });
     expect(res.status()).toBe(400);
   });
+
+  test("partial edit inverting the MERGED pickup window → 409 INVALID_PLAN_WINDOW", async ({
+    request,
+  }) => {
+    const ctx = await apiLogin(request, testAccounts.opsManager);
+
+    // Establish a valid pickup window first.
+    const seed = await ctx.patch(`/api/trips/${validatedId}/plan`, {
+      data: {
+        plannedPickupWindowStart: "2026-06-01T12:00:00.000Z",
+        plannedPickupWindowEnd: "2026-06-01T15:00:00.000Z",
+      },
+    });
+    expect(seed.status()).toBe(200);
+
+    // Now send ONLY the end, earlier than the stored start → the merged window is invalid. The Zod
+    // both-present check can't catch this; the locked-service guard must (no silent bad write).
+    const res = await ctx.patch(`/api/trips/${validatedId}/plan`, {
+      data: { plannedPickupWindowEnd: "2026-06-01T08:00:00.000Z" },
+    });
+    expect(res.status()).toBe(409);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("INVALID_PLAN_WINDOW");
+  });
 });

@@ -15,7 +15,7 @@ import {
   type TripBoardQuery,
   type VehicleType,
 } from "@brazil-tms/shared";
-import type { TripBoardRow } from "@brazil-tms/db";
+import type { TripBoardRow, TripFilterOptions } from "@brazil-tms/db";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -40,7 +40,7 @@ type SortKey = TripBoardQuery["sort"];
  * later-slice dimensions (assignment → 006, SLA risk → 007, documents/billing detail → 008) are not
  * rendered as filterable/sortable columns here.
  */
-export function ControlTowerTable() {
+export function ControlTowerTable({ filterOptions }: { filterOptions: TripFilterOptions }) {
   const t = useTranslations("Trips");
   const tCommon = useTranslations("Common");
   const tVehicle = useTranslations("VehicleTypes");
@@ -165,7 +165,13 @@ export function ControlTowerTable() {
 
   return (
     <div className="space-y-4">
-      <TripFilters query={query} setFilters={setFilters} reset={reset} search={search} />
+      <TripFilters
+        query={query}
+        setFilters={setFilters}
+        reset={reset}
+        search={search}
+        options={filterOptions}
+      />
 
       <div className="rounded-md border">
         <Table>
