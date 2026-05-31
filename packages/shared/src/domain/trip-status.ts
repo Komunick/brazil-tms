@@ -158,6 +158,12 @@ export const TRIP_CRITICAL_FIELDS = [
   "currentStatus",
   "billingStatus",
   "cancellationReasonCode",
+  // feature 006 — assignment reference fields (data-model.md §3.4); assignment changes are audited
+  // by the dispatch services, so these complete the critical-field set.
+  "assignedDriverId",
+  "assignedVehicleId",
+  "assignedTrailerId",
+  "assignedCarrierId",
 ] as const;
 
 // ---------------------------------------------------------------------------

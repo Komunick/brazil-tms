@@ -7,15 +7,27 @@ import {
   gte,
   ilike,
   inArray,
+  isNotNull,
   isNull,
   lt,
   or,
+  sql,
   type SQL,
   type SQLWrapper,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "../client";
-import { customers, lanes, locations, trips } from "../../schema";
+import {
+  carriers,
+  customers,
+  drivers,
+  lanes,
+  locations,
+  trailers,
+  tripAssignments,
+  trips,
+  vehicles,
+} from "../../schema";
 import {
   ACTIVE_TRIP_STATUSES,
   EXPORT_ROW_CAP,
@@ -67,6 +79,12 @@ export interface TripBoardRow {
   plannedDeliveryWindowEnd: string | null;
   plannedVehicleType: string | null;
   updatedAt: string;
+  // Feature 006 — current-assignment projection (data-model.md §5). `isAssigned` mirrors the
+  // "Unassigned" view / row indicator; the names render the assigned-resource columns.
+  isAssigned: boolean;
+  assignedDriverName: string | null;
+  assignedVehiclePlate: string | null;
+  assignedCarrierName: string | null;
 }
 
 export interface TripBoardResult {
@@ -102,6 +120,13 @@ export interface DashboardSummary {
 // Origin and destination both reference `locations`, so each end joins an aliased copy.
 const originLoc = alias(locations, "origin_loc");
 const destLoc = alias(locations, "dest_loc");
+// Feature 006 — the current assignment (`is_current`) + its resource-name tables, LEFT-joined so
+// unassigned trips still return a row (`isAssigned=false`). Aliased to avoid clashing with any other
+// driver/vehicle/carrier join in a wider query.
+const boardAsg = alias(tripAssignments, "board_asg");
+const boardDriver = alias(drivers, "board_asg_driver");
+const boardVehicle = alias(vehicles, "board_asg_vehicle");
+const boardCarrier = alias(carriers, "board_asg_carrier");
 
 /** The select shape that backs `TripBoardRow` (plus `laneId`, used to derive `laneLabel`). */
 const boardColumns = {
@@ -122,6 +147,10 @@ const boardColumns = {
   plannedDeliveryWindowEnd: trips.plannedDeliveryWindowEnd,
   plannedVehicleType: trips.plannedVehicleType,
   updatedAt: trips.updatedAt,
+  assignmentId: boardAsg.id,
+  assignedDriverName: boardDriver.name,
+  assignedVehiclePlate: boardVehicle.plate,
+  assignedCarrierName: boardCarrier.name,
 };
 
 type BoardRow = {
@@ -142,6 +171,10 @@ type BoardRow = {
   plannedDeliveryWindowEnd: Date | null;
   plannedVehicleType: string | null;
   updatedAt: Date;
+  assignmentId: string | null;
+  assignedDriverName: string | null;
+  assignedVehiclePlate: string | null;
+  assignedCarrierName: string | null;
 };
 
 const iso = (d: Date | null): string | null => (d ? d.toISOString() : null);
@@ -167,6 +200,10 @@ function toBoardRow(row: BoardRow): TripBoardRow {
     plannedDeliveryWindowEnd: iso(row.plannedDeliveryWindowEnd),
     plannedVehicleType: row.plannedVehicleType,
     updatedAt: row.updatedAt.toISOString(),
+    isAssigned: row.assignmentId != null,
+    assignedDriverName: row.assignedDriverName,
+    assignedVehiclePlate: row.assignedVehiclePlate,
+    assignedCarrierName: row.assignedCarrierName,
   };
 }
 
@@ -187,7 +224,9 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
     conditions.push(inArray(trips.currentStatus, query.status));
   }
   if (query.billingStatus) {
-    conditions.push(inArray(trips.currentStatus, [...billingStatusToStatuses(query.billingStatus)]));
+    conditions.push(
+      inArray(trips.currentStatus, [...billingStatusToStatuses(query.billingStatus)]),
+    );
   }
   if (!query.status?.length && !query.billingStatus && query.scope === "active") {
     conditions.push(inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]));
@@ -201,6 +240,14 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
   if (query.vehicleType) {
     conditions.push(eq(trips.plannedVehicleType, query.vehicleType));
   }
+
+  // Feature 006 — assignment filters (data-model.md §5). These reference the LEFT-joined current
+  // assignment (`boardAsg`), so the join is present in BOTH `boardSelect()` and `boardCount()`.
+  if (query.assigned === "true") conditions.push(isNotNull(boardAsg.id));
+  if (query.assigned === "false") conditions.push(isNull(boardAsg.id));
+  if (query.driverId) conditions.push(eq(boardAsg.driverId, query.driverId));
+  if (query.vehicleId) conditions.push(eq(boardAsg.vehicleId, query.vehicleId));
+  if (query.carrierId) conditions.push(eq(boardAsg.carrierId, query.carrierId));
 
   // Pickup date range (R6) — São Paulo day boundaries mapped to UTC instants.
   if (query.pickupFrom) {
@@ -243,17 +290,26 @@ function buildOrderBy(query: TripBoardQuery | TripExportQuery): SQL {
   return query.dir === "desc" ? desc(col) : asc(col);
 }
 
-/** A board/export base select with the customer + aliased origin/destination joins applied. */
+/**
+ * A board/export base select with the customer + aliased origin/destination joins, plus the 006
+ * current-assignment join (`is_current`) and its driver/vehicle/carrier name tables. The assignment
+ * join is `ON board_asg.trip_id = trips.id AND board_asg.is_current` so unassigned trips still return
+ * a row (LEFT JOIN); the partial-unique index guarantees at most one current row per trip.
+ */
 function boardSelect() {
   return db
     .select(boardColumns)
     .from(trips)
     .leftJoin(customers, eq(trips.customerId, customers.id))
     .leftJoin(originLoc, eq(trips.originLocationId, originLoc.id))
-    .leftJoin(destLoc, eq(trips.destinationLocationId, destLoc.id));
+    .leftJoin(destLoc, eq(trips.destinationLocationId, destLoc.id))
+    .leftJoin(boardAsg, and(eq(boardAsg.tripId, trips.id), eq(boardAsg.isCurrent, true)))
+    .leftJoin(boardDriver, eq(boardAsg.driverId, boardDriver.id))
+    .leftJoin(boardVehicle, eq(boardAsg.vehicleId, boardVehicle.id))
+    .leftJoin(boardCarrier, eq(boardAsg.carrierId, boardCarrier.id));
 }
 
-/** A `count()` over the same joins (the where/q references the joined customer + location names). */
+/** A `count()` over the same joins (the where/q references the joined names + current assignment). */
 function boardCount(where: SQL | undefined) {
   return db
     .select({ value: count() })
@@ -261,6 +317,10 @@ function boardCount(where: SQL | undefined) {
     .leftJoin(customers, eq(trips.customerId, customers.id))
     .leftJoin(originLoc, eq(trips.originLocationId, originLoc.id))
     .leftJoin(destLoc, eq(trips.destinationLocationId, destLoc.id))
+    .leftJoin(boardAsg, and(eq(boardAsg.tripId, trips.id), eq(boardAsg.isCurrent, true)))
+    .leftJoin(boardDriver, eq(boardAsg.driverId, boardDriver.id))
+    .leftJoin(boardVehicle, eq(boardAsg.vehicleId, boardVehicle.id))
+    .leftJoin(boardCarrier, eq(boardAsg.carrierId, boardCarrier.id))
     .where(where);
 }
 
@@ -278,11 +338,7 @@ export async function queryTripBoard(query: TripBoardQuery): Promise<TripBoardRe
   const orderBy = buildOrderBy(query);
 
   const [rows, totalRows] = await Promise.all([
-    boardSelect()
-      .where(where)
-      .orderBy(orderBy)
-      .limit(query.limit)
-      .offset(query.offset),
+    boardSelect().where(where).orderBy(orderBy).limit(query.limit).offset(query.offset),
     boardCount(where),
   ]);
 
@@ -343,14 +399,15 @@ export async function getTripDetailView(id: string): Promise<TripDetailView | nu
 
 /**
  * The Home daily-dashboard counts (R7). `tripsTodayByStatus` groups trips whose planned pickup falls
- * inside the current São Paulo day; `billingPendingCount` is the live `billing_pending` count. Every
- * later-slice metric (SLA risk → 007, assignment → 006, exceptions/on-time → 007, missing docs →
- * 008) is returned as `null` — scaffolded, not invented.
+ * inside the current São Paulo day; `billingPendingCount` is the live `billing_pending` count;
+ * `unassignedTrips` (006) counts ACTIVE trips with no current assignment. Every later-slice metric
+ * (SLA risk → 007, exceptions/on-time → 007, missing docs → 008) is returned as `null` — scaffolded,
+ * not invented.
  */
 export async function queryDashboardMetrics(): Promise<DashboardSummary> {
   const { from, to } = dayRangeSaoPaulo(new Date());
 
-  const [byStatus, billingPending] = await Promise.all([
+  const [byStatus, billingPending, unassigned] = await Promise.all([
     db
       .select({ status: trips.currentStatus, value: count() })
       .from(trips)
@@ -361,17 +418,27 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
         ),
       )
       .groupBy(trips.currentStatus),
+    db.select({ value: count() }).from(trips).where(eq(trips.currentStatus, "billing_pending")),
+    // Active trips with NO current assignment (006 — fills the "unassigned trips" widget).
     db
       .select({ value: count() })
       .from(trips)
-      .where(eq(trips.currentStatus, "billing_pending")),
+      .where(
+        and(
+          inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
+          sql`NOT EXISTS (
+            SELECT 1 FROM ${tripAssignments}
+            WHERE ${tripAssignments.tripId} = ${trips.id} AND ${tripAssignments.isCurrent}
+          )`,
+        ),
+      ),
   ]);
 
   return {
     tripsTodayByStatus: byStatus.map((r) => ({ status: r.status, count: r.value })),
     billingPendingCount: billingPending[0]?.value ?? 0,
     tripsAtRisk: null,
-    unassignedTrips: null,
+    unassignedTrips: unassigned[0]?.value ?? 0,
     activeExceptions: null,
     onTimePickupPct: null,
     onTimeArrivalPct: null,
@@ -408,39 +475,84 @@ export async function exportTripRows(
 // Filter option lookups (board dropdowns)
 // ---------------------------------------------------------------------------
 
+/** A minimal resource option for the assignment pickers / dispatch filters (006). */
+export interface ResourceOption {
+  id: string;
+  label: string;
+}
+
 export interface TripFilterOptions {
   customers: { id: string; name: string }[];
   locations: { id: string; code: string; name: string }[];
   lanes: { id: string; originLocationId: string; destinationLocationId: string }[];
+  // Feature 006 — the active fleet lists the assignment pickers / dispatch filters select from
+  // (data-model.md §5). NON-ARCHIVED only — NOT filtered by status, so a dispatcher can still pick a
+  // resource that will only WARN. `label` = driver name / vehicle plate / trailer plate / carrier name.
+  drivers: ResourceOption[];
+  vehicles: ResourceOption[];
+  trailers: ResourceOption[];
+  carriers: ResourceOption[];
 }
 
 /**
- * The data-backed dropdown options for the Control Tower filters (customers / locations / lanes),
- * active (non-archived) only. Fetched server-side by the board page (already guarded on
- * `view_all_trips`) and passed down as props, so the read-only roles the board now serves do NOT
- * call the `manage_commercial_data`-gated master-data list APIs. Minimal projections only.
+ * The data-backed dropdown options for the Control Tower filters (customers / locations / lanes) and
+ * the 006 dispatch pickers (active drivers / vehicles / trailers / carriers), active (non-archived)
+ * only. Fetched server-side by the board/detail page loaders (already guarded on `view_all_trips`)
+ * and passed down as props, so the dispatch roles do NOT call the `manage_fleet_data`-gated
+ * master-data list APIs (the `assign_resources` Dispatcher role lacks `manage_fleet_data` → 403).
+ * The fleet lists are non-archived but NOT status-filtered (a dispatcher must be able to pick a
+ * resource that will only WARN). Minimal projections only.
  */
 export async function getTripFilterOptions(): Promise<TripFilterOptions> {
-  const [customerRows, locationRows, laneRows] = await Promise.all([
-    db
-      .select({ id: customers.id, name: customers.name })
-      .from(customers)
-      .where(isNull(customers.archivedAt))
-      .orderBy(asc(customers.name)),
-    db
-      .select({ id: locations.id, code: locations.code, name: locations.name })
-      .from(locations)
-      .where(isNull(locations.archivedAt))
-      .orderBy(asc(locations.code)),
-    db
-      .select({
-        id: lanes.id,
-        originLocationId: lanes.originLocationId,
-        destinationLocationId: lanes.destinationLocationId,
-      })
-      .from(lanes)
-      .where(isNull(lanes.archivedAt)),
-  ]);
+  const [customerRows, locationRows, laneRows, driverRows, vehicleRows, trailerRows, carrierRows] =
+    await Promise.all([
+      db
+        .select({ id: customers.id, name: customers.name })
+        .from(customers)
+        .where(isNull(customers.archivedAt))
+        .orderBy(asc(customers.name)),
+      db
+        .select({ id: locations.id, code: locations.code, name: locations.name })
+        .from(locations)
+        .where(isNull(locations.archivedAt))
+        .orderBy(asc(locations.code)),
+      db
+        .select({
+          id: lanes.id,
+          originLocationId: lanes.originLocationId,
+          destinationLocationId: lanes.destinationLocationId,
+        })
+        .from(lanes)
+        .where(isNull(lanes.archivedAt)),
+      db
+        .select({ id: drivers.id, label: drivers.name })
+        .from(drivers)
+        .where(isNull(drivers.archivedAt))
+        .orderBy(asc(drivers.name)),
+      db
+        .select({ id: vehicles.id, label: vehicles.plate })
+        .from(vehicles)
+        .where(isNull(vehicles.archivedAt))
+        .orderBy(asc(vehicles.plate)),
+      db
+        .select({ id: trailers.id, label: trailers.plate })
+        .from(trailers)
+        .where(isNull(trailers.archivedAt))
+        .orderBy(asc(trailers.plate)),
+      db
+        .select({ id: carriers.id, label: carriers.name })
+        .from(carriers)
+        .where(isNull(carriers.archivedAt))
+        .orderBy(asc(carriers.name)),
+    ]);
 
-  return { customers: customerRows, locations: locationRows, lanes: laneRows };
+  return {
+    customers: customerRows,
+    locations: locationRows,
+    lanes: laneRows,
+    drivers: driverRows,
+    vehicles: vehicleRows,
+    trailers: trailerRows,
+    carriers: carrierRows,
+  };
 }

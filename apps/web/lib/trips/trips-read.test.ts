@@ -1,6 +1,18 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
-import { auditLogs, customers, db, lanes, locations, tripEvents, trips } from "@brazil-tms/db";
+import {
+  auditLogs,
+  customers,
+  db,
+  drivers,
+  lanes,
+  locations,
+  tripAssignments,
+  tripEvents,
+  trips,
+  users,
+  vehicles,
+} from "@brazil-tms/db";
 import { dayRangeSaoPaulo } from "@brazil-tms/shared";
 import {
   exportTripRows,
@@ -41,6 +53,14 @@ describe.skipIf(!hasDb)("trips-read (integration)", () => {
   const createdLaneIds: string[] = [];
   const createdLocationIds: string[] = [];
   const createdCustomerIds: string[] = [];
+
+  // Feature 006 — a fleet fixture + an assignment on `validatedId` so the board assignment filters,
+  // the dashboard unassigned count, and the extended getTripFilterOptions have data to assert against.
+  let actorId = "";
+  let asgDriverId = "";
+  let asgVehicleId = "";
+  const createdDriverIds: string[] = [];
+  const createdVehicleIds: string[] = [];
 
   // Unique external id token to scope the board `q`/customer queries to THIS test's seed only.
   const seedToken = `RT${Date.now()}${Math.floor(Math.random() * 1e6)}`;
@@ -115,14 +135,53 @@ describe.skipIf(!hasDb)("trips-read (integration)", () => {
     billingPendingId = await seedTrip("billing_pending", new Date("2026-06-04T08:00:00.000Z"));
     todayPickupId = await seedTrip("in_transit", todayMidday);
     extSearchId = inTransitId;
+
+    // 006 fleet + a current assignment on the validated trip (so board/dashboard/options have data).
+    const admin = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, "admin@braziltransports.com.br"))
+      .limit(1);
+    actorId = admin[0]?.id ?? "";
+
+    const driver = await db
+      .insert(drivers)
+      .values({ name: `Motorista ${seedToken}`, ownershipType: "owned", status: "active" })
+      .returning({ id: drivers.id });
+    asgDriverId = driver[0]!.id;
+    createdDriverIds.push(asgDriverId);
+
+    const vehicle = await db
+      .insert(vehicles)
+      .values({ plate: `RT${seedToken}`.slice(0, 12), vehicleType: "truck", ownershipType: "owned", status: "active" })
+      .returning({ id: vehicles.id });
+    asgVehicleId = vehicle[0]!.id;
+    createdVehicleIds.push(asgVehicleId);
+
+    // Bind the fleet to `validatedId` as the single current assignment (direct insert — the read
+    // models only care about the `is_current` join, not the write-path transitions).
+    await db.insert(tripAssignments).values({
+      tripId: validatedId,
+      driverId: asgDriverId,
+      vehicleId: asgVehicleId,
+      assignedByUserId: actorId,
+      isCurrent: true,
+    });
   });
 
   afterAll(async () => {
-    // FK-safe order: trip_events + audit (for trips) → trips → lanes → locations → customers.
+    // FK-safe order: assignments → trip_events + audit (for trips) → trips → fleet → lanes → locations → customers.
     if (createdTripIds.length) {
+      await db.delete(tripAssignments).where(inArray(tripAssignments.tripId, createdTripIds));
       await db.delete(tripEvents).where(inArray(tripEvents.tripId, createdTripIds));
       await db.delete(auditLogs).where(inArray(auditLogs.entityId, createdTripIds));
       await db.delete(trips).where(inArray(trips.id, createdTripIds));
+    }
+    if (createdDriverIds.length) {
+      await db.delete(drivers).where(inArray(drivers.id, createdDriverIds));
+    }
+    if (createdVehicleIds.length) {
+      await db.delete(vehicles).where(inArray(vehicles.id, createdVehicleIds));
     }
     if (createdLaneIds.length) {
       await db.delete(lanes).where(inArray(lanes.id, createdLaneIds));
@@ -268,12 +327,70 @@ describe.skipIf(!hasDb)("trips-read (integration)", () => {
 
     expect(metrics.billingPendingCount).toBeGreaterThanOrEqual(1);
 
+    // 006 — unassignedTrips is now a COUNT (active trips with no current assignment), no longer null.
+    // This seed has active+unassigned trips (in_transit + today), so the count is ≥ 2; the assigned
+    // `validatedId` is excluded.
+    expect(metrics.unassignedTrips).not.toBeNull();
+    expect(metrics.unassignedTrips!).toBeGreaterThanOrEqual(2);
+
+    // The remaining later-slice metrics stay null (scaffolded, not invented).
     expect(metrics.tripsAtRisk).toBeNull();
-    expect(metrics.unassignedTrips).toBeNull();
     expect(metrics.activeExceptions).toBeNull();
     expect(metrics.onTimePickupPct).toBeNull();
     expect(metrics.onTimeArrivalPct).toBeNull();
     expect(metrics.completedMissingDocuments).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // Feature 006 — board assignment filters, dashboard unassigned count, fleet options (T067)
+  // -------------------------------------------------------------------------
+
+  it("board assigned=true returns only assigned trips with the joined driver/vehicle names", async () => {
+    const { rows } = await queryTripBoard(boardQuery({ scope: "all", assigned: "true" }));
+    const ids = rows.map((r) => r.id);
+    expect(ids).toContain(validatedId); // the only assigned trip in this seed.
+    expect(ids).not.toContain(inTransitId);
+    expect(rows.every((r) => r.isAssigned)).toBe(true);
+
+    const assignedRow = rows.find((r) => r.id === validatedId)!;
+    expect(assignedRow.assignedDriverName).toContain(seedToken);
+    expect(assignedRow.assignedVehiclePlate).not.toBeNull();
+  });
+
+  it("board assigned=false returns only unassigned trips (isAssigned=false, no resource names)", async () => {
+    const { rows } = await queryTripBoard(boardQuery({ scope: "all", assigned: "false" }));
+    const ids = rows.map((r) => r.id);
+    expect(ids).toContain(inTransitId);
+    expect(ids).toContain(completedId);
+    expect(ids).not.toContain(validatedId); // assigned → excluded.
+    expect(rows.every((r) => !r.isAssigned)).toBe(true);
+    expect(rows.every((r) => r.assignedDriverName === null)).toBe(true);
+  });
+
+  it("queryDashboardMetrics counts active trips with no current assignment", async () => {
+    const metrics = await queryDashboardMetrics();
+    expect(metrics.unassignedTrips).not.toBeNull();
+    // The active+unassigned trips in this seed (in_transit + today pickup) are counted; the ASSIGNED
+    // validated trip is excluded and completed/billing_pending are not active. This is a GLOBAL count
+    // over the shared dev DB (concurrent suites mutate the total), so assert a floor — the two
+    // active+unassigned trips this seed owns — never an exact value.
+    expect(metrics.unassignedTrips!).toBeGreaterThanOrEqual(2);
+
+    // The assigned validated trip must NOT be in the count: the board's assigned=false lens (the same
+    // "no current assignment" predicate the dashboard uses) excludes it.
+    const unassignedBoard = await queryTripBoard(boardQuery({ scope: "active", assigned: "false" }));
+    expect(unassignedBoard.rows.map((r) => r.id)).not.toContain(validatedId);
+  });
+
+  it("getTripFilterOptions returns the active (non-archived) fleet lists", async () => {
+    const options = await getTripFilterOptions();
+    expect(options.drivers.some((d) => d.id === asgDriverId && d.label.includes(seedToken))).toBe(
+      true,
+    );
+    expect(options.vehicles.some((v) => v.id === asgVehicleId && v.label !== "")).toBe(true);
+    // The fleet facets are present (arrays), per the extended TripFilterOptions shape.
+    expect(Array.isArray(options.trailers)).toBe(true);
+    expect(Array.isArray(options.carriers)).toBe(true);
   });
 
   it("exportTripRows returns the filtered rows without pagination", async () => {

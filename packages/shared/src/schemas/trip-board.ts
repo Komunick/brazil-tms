@@ -60,6 +60,12 @@ export const tripBoardQuerySchema = z.object({
   destinationLocationId: uuidParam("Local de destino"),
   laneId: uuidParam("Rota"),
   vehicleType: optParam(vehicleTypeSchema),
+  // feature 006 — assignment filters (data-model.md §5): `assigned` scopes to trips with/without a
+  // current assignment; driver/vehicle/carrier narrow to a specific assigned resource.
+  assigned: optParam(z.enum(["true", "false"])),
+  driverId: uuidParam("Motorista"),
+  vehicleId: uuidParam("Veículo"),
+  carrierId: uuidParam("Transportadora"),
   pickupFrom: optParam(dateStringSchema),
   pickupTo: optParam(dateStringSchema),
   q: z.preprocess(
@@ -96,6 +102,10 @@ const PARAM_KEYS = [
   "destinationLocationId",
   "laneId",
   "vehicleType",
+  "assigned",
+  "driverId",
+  "vehicleId",
+  "carrierId",
   "pickupFrom",
   "pickupTo",
   "q",

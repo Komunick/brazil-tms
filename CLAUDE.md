@@ -67,26 +67,33 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/005-control-tower/plan.md` (Control Tower, Trip List, Trip Detail, and Daily Dashboard).
+Active feature plan: `specs/006-dispatch-assignment/plan.md` (Dispatch Assignment and Conflict Warnings).
 For technologies, project structure, BFF/auth patterns, data model, contracts, and setup/test commands,
 read that plan and its `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`.
-This is the **read/operating surface** over the trip domain: a dense Trip Control Tower list (server-side
-search/filter/sort/paginate, default = active/open trips), a Trip Detail page, a Home daily dashboard, a synchronous
-capped CSV export, and inline editing of live planned fields before completion. It is read-first — freshness is
-**polling via TanStack Query** (no Realtime) — and adds **NO new table, enum, package, worker, or permission key**:
-authorization reuses the pre-declared `view_all_trips` (granted to all 7 internal roles in 001 but never enforced),
-which 005 **enforces for the first time**, re-gating the trip read endpoints from `manage_trips` → `view_all_trips`
-(edits keep `manage_trips`). The one write — operational-field edits — **reuses 003's `updateTripPlan`** (immutable
-plan, post-`confirmed` REVIEW_REQUIRED gate, `trip.plan_update` audit) plus a thin BFF "before completion" guard; it
-does NOT redefine the status machine, billing projection, or audit. New work is read models in `@brazil-tms/db`
-(board/detail/dashboard/export), one index (`trips_pickup_start_idx`), a trip-board Zod schema + active-status helper
-in `@brazil-tms/shared`, ~5 BFF endpoints, and the three screens. Per the clarified spec (option B), the four
-TRIP-002 dimensions owned by later slices (assigned driver/vehicle/carrier → 006; SLA risk → 007) are NOT built —
-006/007 add their own filters/indicators; Trip Detail shows labelled placeholder sections for assignment/exceptions
-(006/007) and documents/billing (008). It builds on `specs/001-platform-access-shell/` (auth, audit, i18n, app shell,
-permission catalog), `specs/002-master-data-config/` (customers/locations/lanes used as filters + names), and
-`specs/003-trip-domain-lifecycle/` + `specs/004-trip-import-validation/` (the trip model, status machine, plan-update
-service, and import batches it consumes read-only). Seven items remain BLOCKED on business inputs / upstream slices
-(SLA-risk thresholds → 007/§29#2; assignment dims → 006; billing & document detail → 008/§29#3–5; "Limited" edit
-scope → §18; saved-views-by-role mapping; export-cap value) — scaffolded as labeled documented defaults, not invented.
+This is the **dispatch/assignment write surface** over the trip domain: assign driver/vehicle/trailer/carrier to a trip
+with **server-authoritative conflict & eligibility warnings** (§19.2 — schedule overlap, resource status, vehicle-type
+match, carrier eligibility, doc expired/missing), **override** of WARN findings with a reason (BLOCK is absolute),
+**reassignment** that supersedes + retains history (at most one current assignment), and **confirmation** that re-checks
+for BLOCK drift. It adds the new **Dispatch Board** (§15.6) and fills slice 005's reserved shell — the Trip-Detail
+assignment panel, the assigned-driver/vehicle/carrier filters, the "Unassigned" view, the assignment row indicator, and
+the dashboard "unassigned trips" count. Freshness is **polling** (no Realtime). It adds **ONE new table**
+(`trip_assignments`, the PRD §14.1 entity) and **NO new enum, permission key, package, or worker**: authorization reuses
+the pre-declared **`assign_resources`** (granted to Admin/Ops-Manager/Dispatcher/Fleet-Coordinator but never enforced),
+which 006 **enforces for the first time** (reads stay on `view_all_trips`) — mirroring 004/`import_trips` and
+005/`view_all_trips`. Conflict authority is **server-side** (a pure eligibility evaluator + confirmed company-default
+block/warn config in `@brazil-tms/shared`); assignment **services** in `@brazil-tms/db` mirror 003's
+`transitionTripStatus`/`cancelTrip` transaction pattern to drive the existing `validated→assigned` /
+`assigned→confirmed` / `assigned→validated` transitions (the status machine, master data, and audit are reused, NOT
+redefined; superseded rows retained, never hard-deleted; assignment changes audited as `trip.assign`/`reassign`/
+`unassign`/`confirm`). New work: `trip_assignments` + indexes, the eligibility evaluator + `trip-assignment` Zod, the
+assignment services + board/detail/dashboard read-model extensions, ~5 BFF endpoints (assign/reassign · unassign ·
+confirm · dry-run check · extended reads), and the Dispatch Board + 005-shell fills. It builds on
+`specs/001-platform-access-shell/` (auth, audit, i18n, permission catalog incl. `assign_resources`),
+`specs/002-master-data-config/` (drivers/vehicles/trailers/carriers + status/type/ownership/doc-expiry semantics),
+`specs/003-trip-domain-lifecycle/` (trip model, status machine, transition service, audit), and
+`specs/005-control-tower/` (board/detail/dashboard read models + the UI framework it fills). Open items are
+**configurable defaults / deferred policy, not blockers and not invented** (Constitution II): carrier
+approved-for-customer/lane (OUT of MVP scope — no approval storage), per-customer block/warn overrides (config seam, no
+storage), broader owned-vs-subcontracted policy (§29 Input #6), vehicle-type substitution matrix (exact-match default),
+schedule-overlap turnaround buffer (0-min default).
 <!-- SPECKIT END -->

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
+import type { TripFilterOptions } from "@brazil-tms/db";
 import { useTripDetail } from "@/lib/trips/client";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,11 +12,11 @@ import { TimelineSection } from "@/components/trips/trip-detail/timeline";
 import { NotesSection } from "@/components/trips/trip-detail/notes";
 import { AuditHistorySection } from "@/components/trips/trip-detail/audit-history";
 import {
-  AssignmentPlaceholder,
   BillingPlaceholder,
   DocumentsPlaceholder,
   ExceptionsPlaceholder,
 } from "@/components/trips/trip-detail/placeholders";
+import { AssignmentPanel } from "@/components/trips/trip-detail/assignment-panel";
 import { PlanEditForm } from "@/components/trips/plan-edit-form";
 
 /**
@@ -24,7 +25,13 @@ import { PlanEditForm } from "@/components/trips/plan-edit-form";
  * self-guards on `isNonEditableStatus`, so it is always rendered (it shows a read-only message when
  * the trip is closed/terminal).
  */
-export function TripDetailClient({ id }: { id: string }) {
+export function TripDetailClient({
+  id,
+  resourceOptions,
+}: {
+  id: string;
+  resourceOptions: TripFilterOptions;
+}) {
   const t = useTranslations("Trips.detail");
   const tCommon = useTranslations("Common");
   const { data, isLoading, isError } = useTripDetail(id);
@@ -67,7 +74,7 @@ export function TripDetailClient({ id }: { id: string }) {
       <TripDetailHeader trip={trip} />
       <CustomerPlanSection trip={trip} />
       <PlanEditForm trip={trip} />
-      <AssignmentPlaceholder />
+      <AssignmentPanel trip={trip} resourceOptions={resourceOptions} />
       <TimelineSection events={trip.events} />
       <ExceptionsPlaceholder />
       <DocumentsPlaceholder />
