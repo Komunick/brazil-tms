@@ -1,27 +1,25 @@
 import { NextResponse } from "next/server";
-import { createTripSchema } from "@brazil-tms/shared";
+import { createTripSchema, tripBoardQueryFromParams } from "@brazil-tms/shared";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
 import { handleRouteError } from "@/lib/api/respond";
-import { listTrips } from "@/lib/trips/trips-service";
+import { queryTripBoard } from "@/lib/trips/trips-read";
 import { createOrUpdateTripManually } from "@/lib/imports/manual-create";
 
 export const dynamic = "force-dynamic";
 
-/** GET /api/trips — list trips (US1, read-only inspector). Requires `manage_trips`. */
+/**
+ * GET /api/trips — Trip Control Tower board (005, US1). Server-side search/filter/sort/paginate
+ * with the default active-trips view. Requires `view_all_trips` (re-gated from `manage_trips`).
+ */
 export async function GET(request: Request): Promise<NextResponse> {
   try {
     const ctx = await requireAuth();
-    requirePermission(ctx, "manage_trips");
+    requirePermission(ctx, "view_all_trips");
 
     const url = new URL(request.url);
-    const limitParam = url.searchParams.get("limit");
-    const items = await listTrips({
-      status: url.searchParams.get("status") ?? undefined,
-      customerId: url.searchParams.get("customerId") ?? undefined,
-      q: url.searchParams.get("q") ?? undefined,
-      limit: limitParam ? Number(limitParam) : undefined,
-    });
-    return NextResponse.json({ items });
+    const query = tripBoardQueryFromParams(url.searchParams);
+    const { rows, total } = await queryTripBoard(query);
+    return NextResponse.json({ items: rows, total, limit: query.limit, offset: query.offset });
   } catch (error) {
     return handleRouteError(error);
   }

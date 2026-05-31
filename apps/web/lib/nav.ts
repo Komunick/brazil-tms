@@ -17,6 +17,8 @@ export interface NavItem {
  */
 export const NAV_ITEMS: readonly NavItem[] = [
   { key: "home", href: "/", icon: "LayoutDashboard" },
+  // 005 — Control Tower board (view_all_trips: all 7 internal roles).
+  { key: "trips", href: "/trips", icon: "Truck", permission: "view_all_trips" },
   { key: "adminUsers", href: "/admin/users", icon: "Users", permission: "manage_users" },
   { key: "adminAudit", href: "/admin/audit", icon: "ScrollText", permission: "view_audit_log" },
   // 002 — commercial master data (manage_commercial_data: Admin, Ops Manager).

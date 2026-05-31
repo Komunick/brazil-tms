@@ -1,11 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
+  ACTIVE_TRIP_STATUSES,
   BILLING_PHASE_STATUSES,
+  NON_EDITABLE_TRIP_STATUSES,
   TRANSITIONS,
   TRIP_CRITICAL_FIELDS,
   TRIP_STATUSES,
   billingStatus,
+  billingStatusToStatuses,
   canTransition,
+  isActiveStatus,
+  isNonEditableStatus,
+  type BillingStatus,
   type TripStatus,
 } from "./trip-status";
 
@@ -161,5 +167,76 @@ describe("billingStatus projection (US5, FR-013, SC-005)", () => {
     expect(canTransition("billing_pending", "billing_ready")).toBe(true);
     expect(canTransition("billing_ready", "billed")).toBe(true);
     // and gating predicates are NOT enforced here (deferred to 008) — these are pure data transitions.
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 005 control-tower — active/operating set, edit-window guard, billing-filter mapping
+// ---------------------------------------------------------------------------
+
+describe("ACTIVE_TRIP_STATUSES / isActiveStatus (005 R4)", () => {
+  it("has exactly the 12 non-terminal statuses", () => {
+    expect(ACTIVE_TRIP_STATUSES).toHaveLength(12);
+  });
+
+  it("excludes every closed/terminal status (completed, billing_*, billed, cancelled, disputed)", () => {
+    for (const s of [
+      "completed",
+      "billing_pending",
+      "billing_ready",
+      "billed",
+      "cancelled",
+      "disputed",
+    ] as const) {
+      expect((ACTIVE_TRIP_STATUSES as readonly string[]).includes(s)).toBe(false);
+      expect(isActiveStatus(s)).toBe(false);
+    }
+  });
+
+  it("isActiveStatus is true for each active status and false otherwise (partition of the 18)", () => {
+    const active = new Set<TripStatus>(ACTIVE_TRIP_STATUSES);
+    for (const s of TRIP_STATUSES) {
+      expect(isActiveStatus(s)).toBe(active.has(s));
+    }
+  });
+});
+
+describe("NON_EDITABLE_TRIP_STATUSES / isNonEditableStatus (005 R11)", () => {
+  it("is the exact complement of ACTIVE_TRIP_STATUSES (12 active + 6 non-editable = 18)", () => {
+    expect(NON_EDITABLE_TRIP_STATUSES).toHaveLength(6);
+    const active = new Set<TripStatus>(ACTIVE_TRIP_STATUSES);
+    const nonEditable = new Set<TripStatus>(NON_EDITABLE_TRIP_STATUSES);
+    // disjoint
+    for (const s of nonEditable) expect(active.has(s)).toBe(false);
+    // together they cover all 18
+    expect(active.size + nonEditable.size).toBe(TRIP_STATUSES.length);
+    for (const s of TRIP_STATUSES) expect(active.has(s) || nonEditable.has(s)).toBe(true);
+  });
+
+  it("blocks editing at/after completion (completed + billing phase + cancelled + disputed)", () => {
+    for (const s of NON_EDITABLE_TRIP_STATUSES) {
+      expect(isNonEditableStatus(s)).toBe(true);
+    }
+    expect(isNonEditableStatus("received")).toBe(false);
+    expect(isNonEditableStatus("in_transit")).toBe(false);
+  });
+});
+
+describe("billingStatusToStatuses (005 R3) — billing filter → concrete statuses", () => {
+  it("each billing-phase value maps to exactly itself", () => {
+    for (const s of BILLING_PHASE_STATUSES) {
+      expect(billingStatusToStatuses(s)).toEqual([s]);
+    }
+  });
+
+  it("null maps to the empty set (no rows)", () => {
+    expect(billingStatusToStatuses(null)).toEqual([]);
+  });
+
+  it("round-trips with billingStatus for billing-phase statuses", () => {
+    for (const s of BILLING_PHASE_STATUSES) {
+      const projected: BillingStatus = billingStatus(s);
+      expect(billingStatusToStatuses(projected)).toEqual([s]);
+    }
   });
 });

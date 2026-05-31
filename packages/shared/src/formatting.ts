@@ -49,6 +49,19 @@ export function toUtcIso(value: DateTime | Date): string {
 }
 
 /**
+ * The half-open UTC instant range `[from, to)` covering one calendar day in America/Sao_Paulo (005 R6).
+ * `date` is a date-only string (`YYYY-MM-DD`, anchored to São Paulo midnight) or an instant whose São
+ * Paulo calendar day is used. Used for date-range board filters, the Today / Next-24h views, and the
+ * "trips today by status" dashboard count against UTC-stored `planned_pickup_window_start`. Computing
+ * the boundary in the business timezone avoids the off-by-one-day bug near midnight BRT.
+ */
+export function dayRangeSaoPaulo(date: string | Date): { from: string; to: string } {
+  const start = fromUtc(date).startOf("day");
+  const end = start.plus({ days: 1 });
+  return { from: start.toUTC().toISO() ?? "", to: end.toUTC().toISO() ?? "" };
+}
+
+/**
  * Format an integer amount of centavos as BRL currency (pt-BR).
  * Monetary amounts are stored as integer centavos; no money is displayed in feature 001 —
  * this helper exists for later features (FR-022).

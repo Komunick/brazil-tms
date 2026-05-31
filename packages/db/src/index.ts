@@ -7,3 +7,7 @@ export { createTrip, getTrip, listTrips } from "./trips/trips-service";
 export { updateTripPlan } from "./trips/trip-plan";
 export { transitionTripStatus } from "./trips/trip-transitions";
 export { cancelTrip } from "./trips/trip-cancellation";
+export {
+  queryTripBoard, getTripDetailView, queryDashboardMetrics, exportTripRows,
+} from "./trips/trips-read";
+export type { TripBoardRow, TripBoardResult, TripDetailView, DashboardSummary } from "./trips/trips-read";
