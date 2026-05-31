@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
-import { auditLogs, customers, db, locations, trips } from "@brazil-tms/db";
+import { alerts, auditLogs, customers, db, locations, trips } from "@brazil-tms/db";
 import type { TripStatus } from "@brazil-tms/shared";
 import { runSlaSweep } from "./index";
 
@@ -26,10 +26,7 @@ describe.skipIf(!hasDb)("sla-sweep (integration)", () => {
     return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   }
 
-  async function createTrip(
-    currentStatus: TripStatus,
-    pickupEnd: Date | null,
-  ): Promise<string> {
+  async function createTrip(currentStatus: TripStatus, pickupEnd: Date | null): Promise<string> {
     const inserted = await db
       .insert(trips)
       .values({
@@ -64,7 +61,9 @@ describe.skipIf(!hasDb)("sla-sweep (integration)", () => {
   });
 
   afterAll(async () => {
+    // The sweep generates time-based alerts on Late trips (US4), so clear alerts BEFORE trips (FK).
     for (const id of createdTripIds) {
+      await db.delete(alerts).where(eq(alerts.tripId, id));
       await db.delete(auditLogs).where(eq(auditLogs.entityId, id));
       await db.delete(trips).where(eq(trips.id, id));
     }
@@ -73,22 +72,17 @@ describe.skipIf(!hasDb)("sla-sweep (integration)", () => {
   });
 
   it("recomputes active trips (flipping a passed-cutoff trip to Late) and skips terminal trips", async () => {
-    // An active trip well past its pickup window (no user action) → should become Late.
     const lateTrip = await createTrip("confirmed", PAST);
-    // A terminal trip past its window → must NOT be evaluated (stays null).
     const terminalTrip = await createTrip("completed", PAST);
 
     const summary = await runSlaSweep();
 
-    // Summary shape (the per-sweep observability contract).
     expect(typeof summary.durationMs).toBe("number");
     expect(summary.evaluated).toBeGreaterThanOrEqual(1);
     expect(summary.errors).toBe(0);
     expect(typeof summary.changed).toBe("number");
 
-    // The active trip flipped to a risk state with no user action (the time-based sweep raison d'être).
     expect(await slaOf(lateTrip)).toBe("late");
-    // The terminal trip was never evaluated.
     expect(await slaOf(terminalTrip)).toBeNull();
   });
 

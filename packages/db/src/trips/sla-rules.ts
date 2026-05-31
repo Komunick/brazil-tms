@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../client";
 import { customers, customerSlaRules, lanes } from "../../schema";
 import { type CreateSlaRuleInput, type UpdateSlaRuleInput } from "@brazil-tms/shared";
@@ -9,13 +9,17 @@ import { Conflict } from "../errors";
  * Feature 007 US5 — per-customer SLA-rule admin services (data-model §11, CUST-005). The precedence
  * resolution + default fallback already live in `recomputeTripSla`/`resolveSlaPolicy` (T023); these
  * just CRUD the rows (administered via the reused `manage_commercial_data` key). Each mutation is one
- * transaction + a single audit row; `NOT_FOUND` on a missing customer/lane/rule. Rows are mutable →
- * never hard-deleted (deactivate via `active=false`).
+ * transaction + a single audit row; `NOT_FOUND` on a missing customer/rule, or a lane that does not
+ * belong to the rule's customer. Rows are mutable → never hard-deleted (deactivate via `active=false`).
  */
 
 export type CustomerSlaRuleRow = typeof customerSlaRules.$inferSelect;
 
-/** Create a per-customer SLA rule. Validates the customer (and lane, when scoped) exists. */
+/**
+ * Create a per-customer SLA rule. Validates the customer exists and, when the rule is lane-scoped,
+ * that the lane belongs to THAT customer — a cross-customer lane could never match the customer's
+ * trips (they carry the customer's own lanes), silently leaving them on `DEFAULT_SLA_POLICY`.
+ */
 export async function createCustomerSlaRule(
   input: CreateSlaRuleInput,
   actorUserId: string,
@@ -28,8 +32,12 @@ export async function createCustomerSlaRule(
   if (!cust[0]) throw new Conflict("NOT_FOUND", "Cliente não encontrado.");
 
   if (input.laneId) {
-    const lane = await db.select({ id: lanes.id }).from(lanes).where(eq(lanes.id, input.laneId)).limit(1);
-    if (!lane[0]) throw new Conflict("NOT_FOUND", "Rota não encontrada.");
+    const lane = await db
+      .select({ id: lanes.id })
+      .from(lanes)
+      .where(and(eq(lanes.id, input.laneId), eq(lanes.customerId, input.customerId)))
+      .limit(1);
+    if (!lane[0]) throw new Conflict("NOT_FOUND", "Rota não encontrada para este cliente.");
   }
 
   return db.transaction(async (tx) => {
@@ -60,22 +68,29 @@ export async function createCustomerSlaRule(
   });
 }
 
-/** Update a per-customer SLA rule (partial; incl. `active`). `NOT_FOUND` on a missing rule/lane. */
+/**
+ * Update a per-customer SLA rule (partial; incl. `active`). `NOT_FOUND` on a missing rule, or a
+ * re-scoped lane that does not belong to the rule's customer (customerId is not editable on update).
+ */
 export async function updateCustomerSlaRule(
   ruleId: string,
   input: UpdateSlaRuleInput,
   actorUserId: string,
 ): Promise<CustomerSlaRuleRow> {
   const existing = await db
-    .select({ id: customerSlaRules.id })
+    .select({ id: customerSlaRules.id, customerId: customerSlaRules.customerId })
     .from(customerSlaRules)
     .where(eq(customerSlaRules.id, ruleId))
     .limit(1);
   if (!existing[0]) throw new Conflict("NOT_FOUND", "Regra de SLA não encontrada.");
 
   if (input.laneId) {
-    const lane = await db.select({ id: lanes.id }).from(lanes).where(eq(lanes.id, input.laneId)).limit(1);
-    if (!lane[0]) throw new Conflict("NOT_FOUND", "Rota não encontrada.");
+    const lane = await db
+      .select({ id: lanes.id })
+      .from(lanes)
+      .where(and(eq(lanes.id, input.laneId), eq(lanes.customerId, existing[0].customerId)))
+      .limit(1);
+    if (!lane[0]) throw new Conflict("NOT_FOUND", "Rota não encontrada para este cliente.");
   }
 
   const patch: Partial<typeof customerSlaRules.$inferInsert> = { updatedAt: new Date() };
