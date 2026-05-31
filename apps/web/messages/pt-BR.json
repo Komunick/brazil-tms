@@ -562,6 +562,7 @@
       "colDestination": "Destino",
       "colLane": "Rota",
       "colStatus": "Status",
+      "colSla": "Risco de SLA",
       "colAssignment": "Atribuição",
       "colBilling": "Faturamento",
       "colPickup": "Coleta planejada",

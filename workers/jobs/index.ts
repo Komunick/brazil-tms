@@ -4,6 +4,7 @@ import { registerValidate } from "./validate";
 import { registerDetectDuplicates } from "./detect-duplicates";
 import { registerGenerateErrorReport } from "./generate-error-report";
 import { registerConfirm } from "./confirm-import";
+import { registerSlaSweep } from "./sla-sweep";
 
 /**
  * Registry of import job handlers (feature 004, research R3). The bootstrap (`workers/index.ts`)
@@ -25,4 +26,6 @@ export async function registerJobHandlers(boss: PgBoss): Promise<void> {
   await registerConfirm(boss);
   // US2 (T041):
   await registerGenerateErrorReport(boss);
+  // Feature 007 (T070): the first SCHEDULED job — the ~5-min SLA-risk sweep over active trips.
+  await registerSlaSweep(boss);
 }

@@ -26,6 +26,7 @@ import {
 } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
 import { Conflict } from "../errors";
+import { recomputeTripSla } from "./sla";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
 
 /**
@@ -431,6 +432,10 @@ export async function assignTrip(
       reason: input.overrideReason ?? null,
     });
 
+    // Feature 007 — assignment/confirmation changes clear/fire the missing_assignment /
+    // missed_confirmation SLA reasons immediately (read-only inputs to the evaluator, FR-017/FR-019).
+    await recomputeTripSla(tx, tripId, actorUserId);
+
     const detail = await loadTripDetail(tx, tripId);
     if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
     return { trip: detail, findings: warns };
@@ -579,6 +584,10 @@ export async function reassignTrip(
       reason: input.overrideReason ?? null,
     });
 
+    // Feature 007 — assignment/confirmation changes clear/fire the missing_assignment /
+    // missed_confirmation SLA reasons immediately (read-only inputs to the evaluator, FR-017/FR-019).
+    await recomputeTripSla(tx, tripId, actorUserId);
+
     const detail = await loadTripDetail(tx, tripId);
     if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
     return { trip: detail, findings: warns };
@@ -650,6 +659,10 @@ export async function unassignTrip(
       newValue: { currentStatus: "validated" },
       actorUserId,
     });
+
+    // Feature 007 — assignment/confirmation changes clear/fire the missing_assignment /
+    // missed_confirmation SLA reasons immediately (read-only inputs to the evaluator, FR-017/FR-019).
+    await recomputeTripSla(tx, tripId, actorUserId);
 
     const detail = await loadTripDetail(tx, tripId);
     if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
@@ -752,6 +765,10 @@ export async function confirmTripAssignment(
       newValue: { currentStatus: "confirmed" },
       actorUserId,
     });
+
+    // Feature 007 — assignment/confirmation changes clear/fire the missing_assignment /
+    // missed_confirmation SLA reasons immediately (read-only inputs to the evaluator, FR-017/FR-019).
+    await recomputeTripSla(tx, tripId, actorUserId);
 
     const detail = await loadTripDetail(tx, tripId);
     if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");

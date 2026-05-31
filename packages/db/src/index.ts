@@ -43,6 +43,7 @@ export type {
 // Feature 007 — SLA recompute + alert helpers. `ExceptionDto`/`AlertDto` (+ the extended `TripDetail`)
 // are already re-exported via `export * from "./trips/trip-dto"` above.
 export { recomputeTripSla, resolveSlaPolicy } from "./trips/sla";
+export { createCustomerSlaRule, updateCustomerSlaRule } from "./trips/sla-rules";
 export {
   generateAlert,
   autoResolveAlert,
