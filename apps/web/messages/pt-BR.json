@@ -585,10 +585,12 @@
       "placeholderBilling": "Detalhamento de faturamento — disponível em uma próxima etapa."
     },
     "auditActions": {
-      "trip.create": "Viagem criada",
-      "trip.plan_update": "Plano atualizado",
-      "trip.status_change": "Status alterado",
-      "trip.cancel": "Viagem cancelada"
+      "trip": {
+        "create": "Viagem criada",
+        "plan_update": "Plano atualizado",
+        "status_change": "Status alterado",
+        "cancel": "Viagem cancelada"
+      }
     },
     "edit": {
       "title": "Editar plano operacional",
