@@ -110,6 +110,36 @@ describe("resource_status check — non-active driver/vehicle/trailer", () => {
   });
 });
 
+describe("resource_status check — archived resources (orthogonal to status)", () => {
+  for (const kind of ["driver", "vehicle", "trailer"] as const) {
+    it(`archived ${kind} → ${kind}_archived (block), even when status is active`, () => {
+      const ctx = cleanCtx();
+      if (kind === "driver")
+        ctx.driver = { id: DRIVER, status: "active", licenseExpiry: "2027-01-01", archived: true };
+      if (kind === "vehicle")
+        ctx.vehicle = {
+          id: VEHICLE,
+          status: "active",
+          vehicleType: "truck",
+          documentExpiry: "2027-01-01",
+          archived: true,
+        };
+      if (kind === "trailer")
+        ctx.trailer = { id: TRAILER, status: "active", documentExpiry: "2027-01-01", archived: true };
+      const f = find(evaluateAssignmentEligibility(ctx), `${kind}_archived`);
+      expect(f).toBeDefined();
+      expect(f?.check).toBe("resource_status");
+      expect(f?.resourceKind).toBe(kind);
+      expect(f?.severity).toBe("block"); // a soft-deleted resource is never eligible
+    });
+  }
+
+  it("a non-archived (archived:false / undefined) resource produces no *_archived finding", () => {
+    const findings = evaluateAssignmentEligibility(cleanCtx());
+    expect(findings.some((x) => x.code.endsWith("_archived"))).toBe(false);
+  });
+});
+
 describe("vehicle_type check — exact match vs planned type", () => {
   it("type_mismatch (warn) when the vehicle type differs from the planned type", () => {
     const ctx = cleanCtx();
@@ -279,6 +309,9 @@ describe("DEFAULT_ASSIGNMENT_POLICY (data-model.md §3.2 — verbatim)", () => {
     trailer_inactive: "block",
     trailer_blocked: "block",
     trailer_unavailable: "warn",
+    driver_archived: "block",
+    vehicle_archived: "block",
+    trailer_archived: "block",
     doc_expired: "block",
     doc_missing: "warn",
     doc_expiring: "warn",

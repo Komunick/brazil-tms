@@ -47,14 +47,15 @@ export interface EligibilityContext {
     windowStart: Date | null;
     windowEnd: Date | null;
   };
-  driver?: { id: string; status: ResourceStatus; licenseExpiry: string | null };
+  driver?: { id: string; status: ResourceStatus; licenseExpiry: string | null; archived?: boolean };
   vehicle?: {
     id: string;
     status: ResourceStatus;
     vehicleType: VehicleType;
     documentExpiry: string | null;
+    archived?: boolean;
   };
-  trailer?: { id: string; status: ResourceStatus; documentExpiry: string | null };
+  trailer?: { id: string; status: ResourceStatus; documentExpiry: string | null; archived?: boolean };
   carrier?: { id: string; contractStatus: string; documentationStatus: string; archived: boolean };
   /** Current assignments of the candidate resources whose trip window intersects this trip's window. */
   overlaps: { resourceKind: "driver" | "vehicle" | "trailer"; resourceId: string }[];
@@ -81,13 +82,16 @@ export const DEFAULT_ASSIGNMENT_POLICY: AssignmentPolicy = {
     driver_inactive: "block",
     driver_blocked: "block",
     driver_unavailable: "warn",
+    driver_archived: "block",
     vehicle_inactive: "block",
     vehicle_blocked: "block",
     vehicle_maintenance: "block",
     vehicle_unavailable: "warn",
+    vehicle_archived: "block",
     trailer_inactive: "block",
     trailer_blocked: "block",
     trailer_unavailable: "warn",
+    trailer_archived: "block",
     doc_expired: "block",
     doc_missing: "warn",
     doc_expiring: "warn",
@@ -178,15 +182,28 @@ export function evaluateAssignmentEligibility(
     push("schedule_conflict", overlap.resourceKind, overlap.resourceId, "schedule_overlap");
   }
 
-  // 2. Resource status — any non-`active` driver/vehicle/trailer status (`<kind>_<status>`).
+  // 2. Resource status — any non-`active` driver/vehicle/trailer status (`<kind>_<status>`), plus an
+  //    `<kind>_archived` BLOCK for a soft-deleted (archived) resource. Archived is ORTHOGONAL to
+  //    `status` (an archived resource can still be status `active`), so it fires independently — this
+  //    keeps the server-authoritative surface in step with the UI pickers, which hide archived
+  //    resources (`isNull(archived_at)`). Mirrors the carrier's archived handling below.
   if (ctx.driver && ctx.driver.status !== "active") {
     push("resource_status", "driver", ctx.driver.id, statusCode("driver", ctx.driver.status));
+  }
+  if (ctx.driver?.archived) {
+    push("resource_status", "driver", ctx.driver.id, "driver_archived");
   }
   if (ctx.vehicle && ctx.vehicle.status !== "active") {
     push("resource_status", "vehicle", ctx.vehicle.id, statusCode("vehicle", ctx.vehicle.status));
   }
+  if (ctx.vehicle?.archived) {
+    push("resource_status", "vehicle", ctx.vehicle.id, "vehicle_archived");
+  }
   if (ctx.trailer && ctx.trailer.status !== "active") {
     push("resource_status", "trailer", ctx.trailer.id, statusCode("trailer", ctx.trailer.status));
+  }
+  if (ctx.trailer?.archived) {
+    push("resource_status", "trailer", ctx.trailer.id, "trailer_archived");
   }
 
   // 3. Vehicle-type exact match vs the trip's planned type (skip when the trip has no planned type).

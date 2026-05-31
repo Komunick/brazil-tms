@@ -139,6 +139,7 @@ export async function gatherEligibilityContext(
         status: drivers.status,
         licenseExpiry: drivers.licenseExpiry,
         ownershipType: drivers.ownershipType,
+        archivedAt: drivers.archivedAt,
       })
       .from(drivers)
       .where(eq(drivers.id, candidate.driverId))
@@ -149,6 +150,7 @@ export async function gatherEligibilityContext(
         id: d.id,
         status: d.status as ResourceStatus,
         licenseExpiry: d.licenseExpiry,
+        archived: d.archivedAt != null,
       };
       ownership.driver = d.ownershipType as OwnershipType;
     }
@@ -163,6 +165,7 @@ export async function gatherEligibilityContext(
         vehicleType: vehicles.vehicleType,
         documentExpiry: vehicles.documentExpiry,
         ownershipType: vehicles.ownershipType,
+        archivedAt: vehicles.archivedAt,
       })
       .from(vehicles)
       .where(eq(vehicles.id, candidate.vehicleId))
@@ -174,6 +177,7 @@ export async function gatherEligibilityContext(
         status: v.status as ResourceStatus,
         vehicleType: v.vehicleType as VehicleType,
         documentExpiry: v.documentExpiry,
+        archived: v.archivedAt != null,
       };
       ownership.vehicle = v.ownershipType as OwnershipType;
     }
@@ -186,6 +190,7 @@ export async function gatherEligibilityContext(
         id: trailers.id,
         status: trailers.status,
         documentExpiry: trailers.documentExpiry,
+        archivedAt: trailers.archivedAt,
       })
       .from(trailers)
       .where(eq(trailers.id, candidate.trailerId))
@@ -196,6 +201,7 @@ export async function gatherEligibilityContext(
         id: t.id,
         status: t.status as ResourceStatus,
         documentExpiry: t.documentExpiry,
+        archived: t.archivedAt != null,
       };
     }
   }
@@ -452,6 +458,18 @@ export async function reassignTrip(
   input: AssignTripInput,
   actorUserId: string,
 ): Promise<{ trip: TripDetail; findings: Finding[] }> {
+  // Reassign is legal ONLY while the trip is `assigned` or `confirmed` (data-model §6 / contract §1).
+  // Reject any other expected status up front: the route sends EVERY non-`validated` expectedFromStatus
+  // here, and the in-tx status guard below only verifies the trip is STILL in `expectedFromStatus` —
+  // so without this an in-flight/terminal status (e.g. in_transit) whose expectedFromStatus matched
+  // would slip through. This is the authoritative gate that keeps reassignment off executing trips.
+  if (input.expectedFromStatus !== "assigned" && input.expectedFromStatus !== "confirmed") {
+    throw new Conflict(
+      "ILLEGAL_TRANSITION",
+      "Reatribuição só é permitida em viagem atribuída ou confirmada.",
+    );
+  }
+
   const candidate: Candidate = {
     driverId: input.driverId,
     vehicleId: input.vehicleId,
@@ -488,6 +506,19 @@ export async function reassignTrip(
 
   return db.transaction(async (tx) => {
     const now = new Date();
+
+    // Optimistic status guard (atomic; mirrors assignTrip / confirmTripAssignment): reassign only a
+    // trip STILL in the expected reassignable status — 0 rows ⇒ it moved out (STALE_TRANSITION). This
+    // is a no-op status pin (a reassignment does NOT change current_status — FR-008); it row-locks and
+    // verifies in one statement, closing the TOCTOU race with a concurrent transition/unassign.
+    const pinned = await tx
+      .update(trips)
+      .set({ updatedAt: now })
+      .where(and(eq(trips.id, tripId), eq(trips.currentStatus, input.expectedFromStatus)))
+      .returning({ id: trips.id });
+    if (pinned.length === 0) {
+      throw new Conflict("STALE_TRANSITION", "A viagem já mudou de status.");
+    }
 
     // Supersede the PRIOR current row FIRST (retained, never deleted). The partial-unique
     // `(trip_id) WHERE is_current` index is NON-deferred — it rejects a second is_current row at
@@ -644,6 +675,15 @@ export async function confirmTripAssignment(
   input: ConfirmAssignmentInput,
   actorUserId: string,
 ): Promise<{ trip: TripDetail; findings: Finding[] }> {
+  // The trip must exist before we judge its assignment state — a missing trip is NOT_FOUND (contract
+  // §3), not STALE_TRANSITION.
+  const tripRows = await db
+    .select({ currentStatus: trips.currentStatus })
+    .from(trips)
+    .where(eq(trips.id, tripId))
+    .limit(1);
+  if (!tripRows[0]) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+
   // Load the CURRENT assignment's resources to re-evaluate eligibility (drift check).
   const currentAssignmentRows = await db
     .select({

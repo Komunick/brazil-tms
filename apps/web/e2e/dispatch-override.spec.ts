@@ -2,7 +2,6 @@ import { test, expect, type APIRequestContext } from "@playwright/test";
 import { eq, inArray } from "drizzle-orm";
 import {
   auditLogs,
-  carriers,
   customers,
   db,
   drivers,

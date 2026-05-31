@@ -63,7 +63,19 @@ export const DEFAULT_TRIP_VIEWS: TripBoardView[] = [
     // 006 — active trips with no current assignment (the Dispatch Board's primary lens).
     key: "unassigned",
     labelKey: "viewUnassigned",
-    // Clear status/billingStatus: under AND a leftover value would intersect to an empty board.
-    params: () => ({ assigned: "false", scope: "active", sort: "pickupStart", status: "", billingStatus: "" }),
+    // Clear status/billingStatus AND driverId/vehicleId/carrierId: setFilters MERGES into the current
+    // URL, and `assigned=false` (no current assignment) is mutually exclusive with any resource filter
+    // (`assigned=false` ⇒ the joined assignment id IS NULL, so driverId/vehicleId/carrierId can never
+    // match) — a leftover resource filter would intersect to an empty board.
+    params: () => ({
+      assigned: "false",
+      scope: "active",
+      sort: "pickupStart",
+      status: "",
+      billingStatus: "",
+      driverId: "",
+      vehicleId: "",
+      carrierId: "",
+    }),
   },
 ];

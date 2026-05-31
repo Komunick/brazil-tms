@@ -319,4 +319,16 @@ describe.skipIf(!hasDb)("assignment-check (integration)", () => {
     });
     expect(has(missingFindings, "doc_missing", "warn")).toBe(true);
   });
+
+  it("surfaces *_archived as BLOCK for an archived (soft-deleted) driver/vehicle, independent of status", async () => {
+    // Archived but still status `active` — the UI picker hides it (isNull(archived_at)), but a direct
+    // API caller must be refused server-side (the evaluator owns authority).
+    const driverId = await makeDriver({ archivedAt: new Date() });
+    const vehicleId = await makeVehicle({ archivedAt: new Date() });
+
+    const findings = await checkAssignment(targetTripId, { driverId, vehicleId });
+    expect(has(findings, "driver_archived", "block")).toBe(true);
+    expect(has(findings, "vehicle_archived", "block")).toBe(true);
+    expect(findings.find((f) => f.code === "driver_archived")!.check).toBe("resource_status");
+  });
 });

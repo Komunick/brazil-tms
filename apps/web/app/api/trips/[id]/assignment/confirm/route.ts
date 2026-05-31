@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { confirmAssignmentSchema } from "@brazil-tms/shared";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
-import { handleRouteError } from "@/lib/api/respond";
+import { apiError, Conflict, handleRouteError } from "@/lib/api/respond";
 import { confirmTripAssignment } from "@/lib/trips/trip-assignments";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +26,9 @@ export async function POST(
     const result = await confirmTripAssignment(id, input, ctx.userId);
     return NextResponse.json({ item: result.trip });
   } catch (error) {
+    if (error instanceof Conflict && error.code === "NOT_FOUND") {
+      return apiError(404, "NOT_FOUND", error.message);
+    }
     return handleRouteError(error);
   }
 }

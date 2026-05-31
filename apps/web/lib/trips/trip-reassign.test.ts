@@ -267,4 +267,60 @@ describe.skipIf(!hasDb)("trip-reassign (integration)", () => {
       .where(and(eq(tripAssignments.tripId, tripId), eq(tripAssignments.isCurrent, true)));
     expect(current[0]!.vehicleId).toBe(vehicleAId);
   });
+
+  it("reassign with an illegal expectedFromStatus (not assigned/confirmed) ⇒ ILLEGAL_TRANSITION, no state change", async () => {
+    const tripId = await seedAssignedTrip();
+    let caught: unknown;
+    try {
+      await reassignTrip(tripId, reassignToB({ expectedFromStatus: "in_transit" }), actorId);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(Conflict);
+    expect((caught as Conflict).code).toBe("ILLEGAL_TRANSITION");
+    // Untouched: the original A assignment is still the single current row.
+    const current = await db
+      .select()
+      .from(tripAssignments)
+      .where(and(eq(tripAssignments.tripId, tripId), eq(tripAssignments.isCurrent, true)));
+    expect(current).toHaveLength(1);
+    expect(current[0]!.driverId).toBe(driverAId);
+  });
+
+  it("reassign whose expectedFromStatus ≠ the trip's actual status ⇒ STALE_TRANSITION, no state change", async () => {
+    const tripId = await seedAssignedTrip(); // actually `assigned`
+    let caught: unknown;
+    try {
+      // Caller believes it is `confirmed` (a reassignable status) but it is still `assigned`.
+      await reassignTrip(tripId, reassignToB({ expectedFromStatus: "confirmed" }), actorId);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(Conflict);
+    expect((caught as Conflict).code).toBe("STALE_TRANSITION");
+    const current = await db
+      .select()
+      .from(tripAssignments)
+      .where(and(eq(tripAssignments.tripId, tripId), eq(tripAssignments.isCurrent, true)));
+    expect(current[0]!.driverId).toBe(driverAId); // unchanged
+  });
+
+  it("reassign is legal from `confirmed` (status unchanged; supersede + new current row)", async () => {
+    const tripId = await seedAssignedTrip();
+    // Move to `confirmed` (the current assignment row stays current) to exercise confirmed→reassign.
+    await db.update(trips).set({ currentStatus: "confirmed" }).where(eq(trips.id, tripId));
+
+    const { trip } = await reassignTrip(
+      tripId,
+      reassignToB({ expectedFromStatus: "confirmed" }),
+      actorId,
+    );
+    expect(trip.currentStatus).toBe("confirmed"); // a reassignment never changes status
+    const current = await db
+      .select()
+      .from(tripAssignments)
+      .where(and(eq(tripAssignments.tripId, tripId), eq(tripAssignments.isCurrent, true)));
+    expect(current).toHaveLength(1);
+    expect(current[0]!.driverId).toBe(driverBId);
+  });
 });
