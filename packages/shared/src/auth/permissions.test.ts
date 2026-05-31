@@ -194,3 +194,22 @@ describe("004 trip-import permission invariants (contracts/permission-matrix.md 
     expect(can("customer_viewer" as RoleType, "import_trips")).toBe(false);
   });
 });
+
+describe("005 control-tower permission invariants (contracts/permission-matrix.md — first enforcement of view_all_trips)", () => {
+  it("all 7 internal roles hold view_all_trips (read the Control Tower / detail / dashboard / export)", () => {
+    for (const role of ALL_ROLES) {
+      expect(can(role, "view_all_trips")).toBe(true);
+    }
+    expect(ALL_ROLES).toHaveLength(7);
+  });
+
+  it("editing live planned fields stays manage_trips (Admin + Ops Manager only; the 'Limited' scope is BLOCKED)", () => {
+    expect(can(Role.Admin, "manage_trips")).toBe(true);
+    expect(can(Role.OperationsManager, "manage_trips")).toBe(true);
+    expect(can(Role.Dispatcher, "manage_trips")).toBe(false);
+    expect(can(Role.ControlTower, "manage_trips")).toBe(false);
+    expect(can(Role.FleetCoordinator, "manage_trips")).toBe(false);
+    expect(can(Role.Finance, "manage_trips")).toBe(false);
+    expect(can(Role.ExecutiveViewer, "manage_trips")).toBe(false);
+  });
+});

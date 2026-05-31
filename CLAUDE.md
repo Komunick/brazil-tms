@@ -67,20 +67,26 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/004-trip-import-validation/plan.md` (Trip Import, Templates, Validation, and Duplicate Handling).
+Active feature plan: `specs/005-control-tower/plan.md` (Control Tower, Trip List, Trip Detail, and Daily Dashboard).
 For technologies, project structure, BFF/auth patterns, data model, contracts, and setup/test commands,
 read that plan and its `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`.
-This is the first slice to **activate the worker**: heavy parse/validate/duplicate-detection/confirm runs as
-`pg-boss` jobs in `workers/` (never request handlers); the BFF only uploads the original file to Supabase Storage,
-records an import batch, and enqueues; freshness is polling. One config-driven import engine (Zod templates/status
-mappings/location aliases in `@brazil-tms/shared`), no per-customer code. Matching is keyed on (customer + external
-trip ID): a repeat is update/no-op, never a blocking duplicate; ID-less look-alikes are flagged. Confirm CALLS 003's
-trip-write services (promoted to `@brazil-tms/db` so the worker can import them) — it does NOT redefine the status
-machine, billing projection, or audit. Reuses the existing `import_trips` permission (no new key).
-It builds on `specs/001-platform-access-shell/` (auth, audit, i18n, app shell), `specs/002-master-data-config/`
-(customers/locations/lanes the import resolves against), and `specs/003-trip-domain-lifecycle/` (the shared trip
-domain, status machine, and audit semantics it reuses). Later slices (005 control tower, 006 dispatch, 007
-execution/SLA, 008 documents/billing, 009 reporting) consume this same model. Four PRD §29 business inputs (real
-Shopee/DHL/ML files, status vocabularies, fuzzy-duplicate tolerance, required-field overrides) remain BLOCKED —
-scaffolded as labeled documented defaults, not invented.
+This is the **read/operating surface** over the trip domain: a dense Trip Control Tower list (server-side
+search/filter/sort/paginate, default = active/open trips), a Trip Detail page, a Home daily dashboard, a synchronous
+capped CSV export, and inline editing of live planned fields before completion. It is read-first — freshness is
+**polling via TanStack Query** (no Realtime) — and adds **NO new table, enum, package, worker, or permission key**:
+authorization reuses the pre-declared `view_all_trips` (granted to all 7 internal roles in 001 but never enforced),
+which 005 **enforces for the first time**, re-gating the trip read endpoints from `manage_trips` → `view_all_trips`
+(edits keep `manage_trips`). The one write — operational-field edits — **reuses 003's `updateTripPlan`** (immutable
+plan, post-`confirmed` REVIEW_REQUIRED gate, `trip.plan_update` audit) plus a thin BFF "before completion" guard; it
+does NOT redefine the status machine, billing projection, or audit. New work is read models in `@brazil-tms/db`
+(board/detail/dashboard/export), one index (`trips_pickup_start_idx`), a trip-board Zod schema + active-status helper
+in `@brazil-tms/shared`, ~5 BFF endpoints, and the three screens. Per the clarified spec (option B), the four
+TRIP-002 dimensions owned by later slices (assigned driver/vehicle/carrier → 006; SLA risk → 007) are NOT built —
+006/007 add their own filters/indicators; Trip Detail shows labelled placeholder sections for assignment/exceptions
+(006/007) and documents/billing (008). It builds on `specs/001-platform-access-shell/` (auth, audit, i18n, app shell,
+permission catalog), `specs/002-master-data-config/` (customers/locations/lanes used as filters + names), and
+`specs/003-trip-domain-lifecycle/` + `specs/004-trip-import-validation/` (the trip model, status machine, plan-update
+service, and import batches it consumes read-only). Seven items remain BLOCKED on business inputs / upstream slices
+(SLA-risk thresholds → 007/§29#2; assignment dims → 006; billing & document detail → 008/§29#3–5; "Limited" edit
+scope → §18; saved-views-by-role mapping; export-cap value) — scaffolded as labeled documented defaults, not invented.
 <!-- SPECKIT END -->

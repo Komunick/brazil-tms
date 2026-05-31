@@ -174,6 +174,40 @@ describe.skipIf(!hasDb)("trip-plan updateTripPlan (integration)", () => {
     expect(prevs).toContain("truck");
   });
 
+  it("rejects a PARTIAL edit that inverts the merged pickup window (INVALID_PLAN_WINDOW)", async () => {
+    const start = new Date("2026-06-01T12:00:00.000Z");
+    const detail = await createTrip(
+      {
+        customerId,
+        externalTripId: code("EXT"),
+        originLocationId: originId,
+        destinationLocationId: destId,
+        plannedPickupWindowStart: start,
+      },
+      actorId,
+    );
+    createdTripIds.push(detail.id);
+
+    // Send ONLY the end, earlier than the existing (untouched) start → the merged window is invalid.
+    await expect(
+      updateTripPlan(
+        detail.id,
+        { plannedPickupWindowEnd: new Date("2026-06-01T08:00:00.000Z") },
+        {},
+        actorId,
+      ),
+    ).rejects.toMatchObject({ code: "INVALID_PLAN_WINDOW" });
+
+    // A valid end (after the start) is accepted.
+    const ok = await updateTripPlan(
+      detail.id,
+      { plannedPickupWindowEnd: new Date("2026-06-01T15:00:00.000Z") },
+      {},
+      actorId,
+    );
+    expect(ok.plannedPickupWindowEnd).toBe("2026-06-01T15:00:00.000Z");
+  });
+
   it("update of a missing trip throws NOT_FOUND", async () => {
     await expect(
       updateTripPlan(

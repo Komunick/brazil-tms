@@ -5,8 +5,14 @@ import { testAccounts } from "./test-config";
 
 /**
  * US1 — trip read-only inspector authorization + payload shape (T023). Drives the two BFF read
- * endpoints against the running app and asserts the cross-cutting `manage_trips` gate plus the
- * returned `TripDetail` shape (events + audit + derived billingStatus).
+ * endpoints against the running app and asserts the returned `TripDetail` shape (events + audit +
+ * derived billingStatus).
+ *
+ * NOTE (005 re-gate): the trip READ endpoints (`GET /api/trips`, `GET /api/trips/:id`) are now gated
+ * on `view_all_trips` — held by ALL seven internal roles — instead of `manage_trips`. So Finance, an
+ * authenticated internal role, now READS the trip (200); there is no internal role that is denied the
+ * read, so the only meaningful denial for reads is the 401 (no session). Editing still requires
+ * `manage_trips` (covered by trip-detail.spec.ts).
  *
  * The fixture is SELF-SEEDED directly via `@brazil-tms/db` (NOT the `server-only` services, which a
  * Playwright spec cannot import): one customer + two locations + one trip with an immutable
@@ -14,11 +20,10 @@ import { testAccounts } from "./test-config";
  * DATABASE_URL to be set for the test process (the same local dev DB the app uses).
  *
  * Login choices:
- *  - 200 case uses Operations Manager (`testAccounts.opsManager`) — a fully-onboarded e2e-seeded role
- *    that HOLDS `manage_trips`. The seeded Admin is `must_change_password=true`, so an API-only
- *    sign-in would hit the onboarding gate (403) before any protected route; Ops Manager avoids that.
- *  - 403 case uses Finance (`testAccounts.nonAdmin`), an authenticated-but-unauthorized user. The
- *    spec's illustrative `customer_viewer` role is non-assignable/unseeded, so Finance stands in.
+ *  - The authorized case uses Operations Manager (`testAccounts.opsManager`) — a fully-onboarded
+ *    e2e-seeded role. The seeded Admin is `must_change_password=true`, so an API-only sign-in would
+ *    hit the onboarding gate (403) before any protected route; Ops Manager avoids that.
+ *  - The Finance case (`testAccounts.nonAdmin`) now demonstrates the 005 re-gate: read access granted.
  */
 
 const ADMIN_EMAIL = "admin@braziltransports.com.br";
@@ -130,10 +135,12 @@ test.describe("US1 — trip inspector authorization + payload", () => {
     expect(res.status()).toBe(401);
   });
 
-  test("authenticated but unauthorized (Finance, no manage_trips) → 403", async ({ request }) => {
+  test("authenticated Finance (view_all_trips, 005 re-gate) → 200 read access", async ({ request }) => {
     const ctx = await apiLogin(request, testAccounts.nonAdmin);
     const res = await ctx.get(`/api/trips/${tripId}`);
-    expect(res.status()).toBe(403);
+    expect(res.status()).toBe(200);
+    const { item } = (await res.json()) as { item: { id: string } };
+    expect(item.id).toBe(tripId);
   });
 
   test("authorized (Ops Manager) → 200 with the trip detail (events + audit + billingStatus)", async ({

@@ -91,5 +91,8 @@ export const trips = pgTable(
     index("trips_customer_idx").on(table.customerId),
     index("trips_status_idx").on(table.currentStatus),
     index("trips_created_idx").on(table.createdAt.desc()),
+    // 005 (R5): backs date-range filters, the Today/Next-24h views, default active ordering by pickup,
+    // and the "trips today by status" dashboard count.
+    index("trips_pickup_start_idx").on(table.plannedPickupWindowStart),
   ],
 );

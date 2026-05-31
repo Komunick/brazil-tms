@@ -159,3 +159,63 @@ export const TRIP_CRITICAL_FIELDS = [
   "billingStatus",
   "cancellationReasonCode",
 ] as const;
+
+// ---------------------------------------------------------------------------
+// Active/operating set + edit-window guard (feature 005 — R4, R11)
+// ---------------------------------------------------------------------------
+
+/**
+ * The active/open operating set — the non-terminal statuses a control tower monitors (005 R4). The
+ * Control Tower board defaults to this set, the implicit `scope=active` filter uses it, and the daily
+ * dashboard counts it. It is exactly the complement of {@link NON_EDITABLE_TRIP_STATUSES} within the
+ * 18-value machine (12 active + 6 closed = 18); the two are pinned complementary by a unit test.
+ * Order matches {@link TRIP_STATUSES}.
+ */
+export const ACTIVE_TRIP_STATUSES = [
+  "received",
+  "validation_error",
+  "validated",
+  "assigned",
+  "confirmed",
+  "at_origin",
+  "loading",
+  "loaded",
+  "in_transit",
+  "at_destination",
+  "unloading",
+  "unloaded",
+] as const satisfies readonly TripStatus[];
+
+/** Is `s` an active/open (non-terminal) trip status? (005 R4) */
+export function isActiveStatus(s: TripStatus): boolean {
+  return (ACTIVE_TRIP_STATUSES as readonly TripStatus[]).includes(s);
+}
+
+/**
+ * Map a billing-status FILTER value onto the concrete `current_status` values to match (005 R3). There
+ * is no stored `billing_status` column, so a board filter of `billing_pending` resolves to the single
+ * matching status. Each billing-phase value projects to itself; `null` (no filter / non-billing) →
+ * `[]` (matches no rows). The inverse direction of {@link billingStatus}.
+ */
+export function billingStatusToStatuses(b: BillingStatus): readonly TripStatus[] {
+  return b === null ? [] : [b];
+}
+
+/**
+ * Statuses at/after completion where operational-field editing is hard-blocked (005 R11, TRIP-005
+ * "before completion"). The BFF plan-edit route rejects edits for a trip in any of these with
+ * `409 EDIT_NOT_ALLOWED`. Exactly the closed/terminal complement of {@link ACTIVE_TRIP_STATUSES}.
+ */
+export const NON_EDITABLE_TRIP_STATUSES = [
+  "completed",
+  "billing_pending",
+  "billing_ready",
+  "billed",
+  "cancelled",
+  "disputed",
+] as const satisfies readonly TripStatus[];
+
+/** Is operational-field editing blocked for a trip in status `s`? (005 R11) */
+export function isNonEditableStatus(s: TripStatus): boolean {
+  return (NON_EDITABLE_TRIP_STATUSES as readonly TripStatus[]).includes(s);
+}
