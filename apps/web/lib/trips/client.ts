@@ -17,6 +17,8 @@ import {
   type CreateExceptionInput,
   type UpdateExceptionInput,
   type TransitionExceptionInput,
+  type CreateSlaRuleInput,
+  type UpdateSlaRuleInput,
 } from "@brazil-tms/shared";
 import type {
   TripBoardRow,
