@@ -58,6 +58,52 @@ export const AUDIT_ACTIONS_001: readonly AuditAction[] = [
 ];
 
 /**
+ * Every audit action across 001–004 (the global audit screen must have an `AuditActions` i18n label
+ * for each — the screen looks up `action.replaceAll(".", "_")`). Kept in lockstep with the union above;
+ * `satisfies` flags a typo, and the i18n guard test asserts each has a label.
+ */
+export const ALL_AUDIT_ACTIONS = [
+  "user.create",
+  "user.role_change",
+  "user.status_change",
+  "user.invite_sent",
+  "customer.create",
+  "customer.update",
+  "customer.archive",
+  "location.create",
+  "location.update",
+  "location.archive",
+  "lane.create",
+  "lane.update",
+  "lane.archive",
+  "carrier.create",
+  "carrier.update",
+  "carrier.archive",
+  "driver.create",
+  "driver.update",
+  "driver.archive",
+  "driver.status_change",
+  "vehicle.create",
+  "vehicle.update",
+  "vehicle.archive",
+  "vehicle.status_change",
+  "trailer.create",
+  "trailer.update",
+  "trailer.archive",
+  "trailer.status_change",
+  "trip.create",
+  "trip.plan_update",
+  "trip.status_change",
+  "trip.cancel",
+  "import.create",
+  "import.confirm",
+  "import_template.create",
+  "import_template.update",
+  "status_mapping.upsert",
+  "location_alias.create",
+] as const satisfies readonly AuditAction[];
+
+/**
  * Input to `writeAudit` — the durable record minus DB-generated fields (id, created_at).
  * previous/new values are snapshots of only the relevant fields, never whole rows.
  */

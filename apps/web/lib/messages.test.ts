@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { ALL_AUDIT_ACTIONS } from "@brazil-tms/shared";
 import messages from "../messages/pt-BR.json";
 
 /**
@@ -27,5 +28,14 @@ describe("pt-BR messages", () => {
     const auditActions = (messages as { Trips: { auditActions: Record<string, unknown> } }).Trips
       .auditActions;
     expect((auditActions.trip as Record<string, string>).plan_update).toBe("Plano atualizado");
+  });
+
+  it("has an AuditActions label for EVERY audit action (global screen uses action.replaceAll('.','_'))", () => {
+    const labels = (messages as { AuditActions: Record<string, string> }).AuditActions;
+    const missing = ALL_AUDIT_ACTIONS.filter((action) => {
+      const key = action.replaceAll(".", "_");
+      return typeof labels[key] !== "string" || labels[key] === "";
+    });
+    expect(missing).toEqual([]);
   });
 });

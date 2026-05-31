@@ -157,7 +157,17 @@
     "trailer_create": "Reboque criado",
     "trailer_update": "Reboque atualizado",
     "trailer_archive": "Reboque arquivado",
-    "trailer_status_change": "Status do reboque alterado"
+    "trailer_status_change": "Status do reboque alterado",
+    "trip_create": "Viagem criada",
+    "trip_plan_update": "Plano da viagem atualizado",
+    "trip_status_change": "Status da viagem alterado",
+    "trip_cancel": "Viagem cancelada",
+    "import_create": "Importação enviada",
+    "import_confirm": "Importação confirmada",
+    "import_template_create": "Modelo de importação criado",
+    "import_template_update": "Modelo de importação atualizado",
+    "status_mapping_upsert": "Mapeamento de status salvo",
+    "location_alias_create": "Apelido de local criado"
   },
   "MasterData": {
     "statusColumn": "Situação",
