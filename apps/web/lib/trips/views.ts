@@ -16,7 +16,13 @@ export interface TripBoardView {
   key: string;
   /** i18n key under `Trips.board`. */
   labelKey: string;
-  /** Flat string map of board params (consumed by URLSearchParams). */
+  /**
+   * Flat string map of board params, MERGED into the current URL by `setFilters` (which treats an
+   * empty-string value as "clear this key"). A preset must therefore clear any key that is mutually
+   * exclusive with what it sets — `status` and `billingStatus` both constrain `current_status` and
+   * compose with AND, so a status preset clears `billingStatus` and vice-versa (otherwise a leftover
+   * value intersects to an empty board).
+   */
   params: () => Record<string, string>;
 }
 
@@ -44,11 +50,13 @@ export const DEFAULT_TRIP_VIEWS: TripBoardView[] = [
   {
     key: "inTransit",
     labelKey: "viewInTransit",
-    params: () => ({ status: "in_transit", scope: "all" }),
+    // Clear billingStatus: under AND it would intersect to an empty board with an in_transit status.
+    params: () => ({ status: "in_transit", billingStatus: "", scope: "all" }),
   },
   {
     key: "billingPending",
     labelKey: "viewBillingPending",
-    params: () => ({ billingStatus: "billing_pending", scope: "all" }),
+    // Clear status: under AND a leftover status would intersect to an empty board with billing_pending.
+    params: () => ({ billingStatus: "billing_pending", status: "", scope: "all" }),
   },
 ];
