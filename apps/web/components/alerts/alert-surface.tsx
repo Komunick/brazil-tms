@@ -22,7 +22,9 @@ const SEVERITY_CLASS: Record<string, string> = {
 
 export function AlertSurface() {
   const t = useTranslations("Alerts");
-  const query = useAlerts();
+  // Show only ACTIVE alerts: acknowledging an alert drops it from the surface (and the count) while
+  // the row persists in the DB as `acknowledged` — so it is never re-generated while still true (D3).
+  const query = useAlerts({ state: "active" });
   const acknowledge = useAcknowledgeAlert();
 
   const items = query.data?.items ?? [];

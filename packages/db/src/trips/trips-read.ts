@@ -615,7 +615,7 @@ export interface ResourceOption {
 export interface TripFilterOptions {
   customers: { id: string; name: string }[];
   locations: { id: string; code: string; name: string }[];
-  lanes: { id: string; originLocationId: string; destinationLocationId: string }[];
+  lanes: { id: string; customerId: string; originLocationId: string; destinationLocationId: string }[];
   // Feature 006 — the active fleet lists the assignment pickers / dispatch filters select from
   // (data-model.md §5). NON-ARCHIVED only — NOT filtered by status, so a dispatcher can still pick a
   // resource that will only WARN. `label` = driver name / vehicle plate / trailer plate / carrier name.
@@ -662,6 +662,7 @@ export async function getTripFilterOptions(): Promise<TripFilterOptions> {
     db
       .select({
         id: lanes.id,
+        customerId: lanes.customerId,
         originLocationId: lanes.originLocationId,
         destinationLocationId: lanes.destinationLocationId,
       })

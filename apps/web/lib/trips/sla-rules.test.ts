@@ -216,4 +216,45 @@ describe.skipIf(!hasDb)("customer SLA rules (integration)", () => {
     expect(await reasonsOf(trip)).toContain("missing_assignment");
     void isNull;
   });
+
+  it("rejects a lane that belongs to ANOTHER customer (would never match this customer's trips)", async () => {
+    // A second customer with its own lane.
+    const [otherCust] = await db
+      .insert(customers)
+      .values({ name: "Cliente Outro", customerCode: code("CUST3") })
+      .returning();
+    const [oo] = await db
+      .insert(locations)
+      .values({ customerId: otherCust!.id, code: code("OO"), name: "o" })
+      .returning();
+    const [od] = await db
+      .insert(locations)
+      .values({ customerId: otherCust!.id, code: code("OD"), name: "d" })
+      .returning();
+    const [otherLane] = await db
+      .insert(lanes)
+      .values({ customerId: otherCust!.id, originLocationId: oo!.id, destinationLocationId: od!.id })
+      .returning();
+
+    try {
+      // Scoping THIS customer's rule to the OTHER customer's lane must be refused.
+      await expect(
+        createCustomerSlaRule(
+          {
+            customerId,
+            laneId: otherLane!.id,
+            pickupToleranceMinutes: 0,
+            deliveryToleranceMinutes: 0,
+            confirmationCutoffMinutes: 60,
+            atRiskWarningMinutes: 60,
+          },
+          actorId,
+        ),
+      ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    } finally {
+      await db.delete(lanes).where(eq(lanes.id, otherLane!.id));
+      await db.delete(locations).where(inArray(locations.id, [oo!.id, od!.id]));
+      await db.delete(customers).where(eq(customers.id, otherCust!.id));
+    }
+  });
 });

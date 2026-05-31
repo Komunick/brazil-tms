@@ -7,7 +7,7 @@ import {
   type SlaPolicy,
 } from "@brazil-tms/shared";
 import type { DB } from "../client";
-import { customerSlaRules, exceptions, tripAssignments, tripEvents, trips } from "../../schema";
+import { alerts, customerSlaRules, exceptions, tripAssignments, tripEvents, trips } from "../../schema";
 
 /**
  * Feature 007 — the single on-change SLA recompute (data-model §11.2, R11). Gathers the per-trip facts
@@ -112,8 +112,23 @@ export async function recomputeTripSla(ex: SlaExecutor, tripId: string): Promise
   const trip = tripRows[0];
   if (!trip) return;
 
-  // Terminal/cancelled trips are not evaluated (no write) — the evaluator would return on_track anyway.
-  if (!isActiveStatus(trip.currentStatus)) return;
+  // Terminal/cancelled trips are not evaluated. They are ALSO skipped by the worker sweep, so a trip
+  // that was At Risk/Late when it closed must be cleared HERE — otherwise its stale risk + any active
+  // alerts would linger forever. Clear `sla_status`/`sla_reasons` and auto-resolve every not-yet-cleared
+  // alert for the trip (all cases), then stop. (Done inline rather than via `autoResolveAlert`, whose
+  // executor type requires `insert`; this executor is select+update only.)
+  if (!isActiveStatus(trip.currentStatus)) {
+    const closedAt = new Date();
+    await ex
+      .update(trips)
+      .set({ slaStatus: null, slaReasons: null, updatedAt: closedAt })
+      .where(eq(trips.id, tripId));
+    await ex
+      .update(alerts)
+      .set({ state: "resolved", autoResolvedAt: closedAt, updatedAt: closedAt })
+      .where(and(eq(alerts.tripId, tripId), inArray(alerts.state, ["active", "acknowledged"])));
+    return;
+  }
 
   const now = new Date();
 

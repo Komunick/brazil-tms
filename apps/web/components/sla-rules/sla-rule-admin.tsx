@@ -64,6 +64,10 @@ export function SlaRuleAdmin({ options }: { options: TripFilterOptions }) {
     return `${o} → ${d}`;
   };
 
+  // A lane-scoped rule must reference one of the SELECTED customer's lanes (a cross-customer lane would
+  // never match that customer's trips). Show only this customer's lanes; pick a customer first.
+  const customerLanes = options.lanes.filter((l) => l.customerId === customerId);
+
   const mapError = (e: unknown): string => {
     const code = e instanceof TripsError ? e.code : "REQUEST_FAILED";
     try {
@@ -179,7 +183,13 @@ export function SlaRuleAdmin({ options }: { options: TripFilterOptions }) {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="space-y-1.5">
                 <Label htmlFor="sla-customer">{t("customer")}</Label>
-                <Select value={customerId || undefined} onValueChange={setCustomerId}>
+                <Select
+                  value={customerId || undefined}
+                  onValueChange={(v) => {
+                    setCustomerId(v);
+                    setLaneId(""); // clear any lane from the previously-selected customer
+                  }}
+                >
                   <SelectTrigger id="sla-customer">
                     <SelectValue placeholder={t("customer")} />
                   </SelectTrigger>
@@ -194,13 +204,17 @@ export function SlaRuleAdmin({ options }: { options: TripFilterOptions }) {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="sla-lane">{t("lane")}</Label>
-                <Select value={laneId || ANY} onValueChange={(v) => setLaneId(v === ANY ? "" : v)}>
+                <Select
+                  value={laneId || ANY}
+                  onValueChange={(v) => setLaneId(v === ANY ? "" : v)}
+                  disabled={!customerId}
+                >
                   <SelectTrigger id="sla-lane">
                     <SelectValue placeholder={t("anyLane")} />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={ANY}>{t("anyLane")}</SelectItem>
-                    {options.lanes.map((l) => (
+                    {customerLanes.map((l) => (
                       <SelectItem key={l.id} value={l.id}>
                         {laneLabel(l)}
                       </SelectItem>

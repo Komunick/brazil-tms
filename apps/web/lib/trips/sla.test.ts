@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import {
   alerts,
   auditLogs,
@@ -151,14 +151,43 @@ describe.skipIf(!hasDb)("recomputeTripSla (integration)", () => {
     expect(status).not.toBe("breached"); // Breached is never produced in MVP
   });
 
-  it("terminal trips short-circuit: no write (status stays null)", async () => {
+  it("a trip that becomes terminal has its stale SLA risk CLEARED and active alerts auto-resolved", async () => {
+    // Drive an active trip to Late + open a high-severity exception (→ an active alert + at-risk reason).
+    const tripId = await createTrip("confirmed", {
+      pickupStart: PAST_PICKUP_START,
+      pickupEnd: PAST_PICKUP_END,
+    });
+    await createException(tripId, { reasonCodeId: highReasonId }, actorId);
+    expect((await slaOf(tripId)).status).toBe("late");
+    const activeBefore = await db
+      .select({ id: alerts.id })
+      .from(alerts)
+      .where(and(eq(alerts.tripId, tripId), eq(alerts.state, "active")));
+    expect(activeBefore.length).toBeGreaterThanOrEqual(1);
+
+    // The trip closes (e.g. cancelled). Recompute must CLEAR the stale risk + resolve the alerts —
+    // the worker sweep skips non-active trips, so without this they would linger forever.
+    await db.update(trips).set({ currentStatus: "cancelled" }).where(eq(trips.id, tripId));
+    await recomputeTripSla(db, tripId);
+
+    const { status, reasons } = await slaOf(tripId);
+    expect(status).toBeNull();
+    expect(reasons).toBeNull();
+    const stillActive = await db
+      .select({ id: alerts.id })
+      .from(alerts)
+      .where(and(eq(alerts.tripId, tripId), inArray(alerts.state, ["active", "acknowledged"])));
+    expect(stillActive).toHaveLength(0);
+  });
+
+  it("an already-terminal trip with no prior state stays null (no spurious write)", async () => {
     const tripId = await createTrip("completed", {
       pickupStart: PAST_PICKUP_START,
       pickupEnd: PAST_PICKUP_END,
     });
     await recomputeTripSla(db, tripId);
     const { status } = await slaOf(tripId);
-    expect(status).toBeNull(); // never evaluated
+    expect(status).toBeNull();
   });
 
   it("a customer_sla_rules row overrides DEFAULT_SLA_POLICY (a larger confirmation cutoff fires missing_assignment earlier)", async () => {
