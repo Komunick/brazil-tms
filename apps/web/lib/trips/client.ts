@@ -450,6 +450,57 @@ export function useAcknowledgeAlert() {
   });
 }
 
+// --- SLA-rule hooks (007, US5; per-customer SLA-rule admin via the BFF) ---------------------------
+
+const SLA_RULES_ROOT = ["sla-rules"] as const;
+
+/** The per-customer SLA rules list (GET /api/customer-sla-rules). */
+export function useCustomerSlaRules(): UseQueryResult<{ items: CustomerSlaRuleItem[] }> {
+  return useQuery({
+    queryKey: [...SLA_RULES_ROOT, "list"],
+    queryFn: async () =>
+      asJson<{ items: CustomerSlaRuleItem[] }>(await fetch(`/api/customer-sla-rules`)),
+  });
+}
+
+/** Create a per-customer SLA rule (POST). Invalidates sla-rules + trips (the evaluator uses them). */
+export function useCreateSlaRule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateSlaRuleInput) => {
+      const res = await fetch(`/api/customer-sla-rules`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: CustomerSlaRuleItem }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: SLA_RULES_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/** Edit a per-customer SLA rule (PATCH /api/customer-sla-rules/:id). */
+export function useUpdateSlaRule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ruleId, input }: { ruleId: string; input: UpdateSlaRuleInput }) => {
+      const res = await fetch(`/api/customer-sla-rules/${ruleId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: CustomerSlaRuleItem }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: SLA_RULES_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
 // --- CSV export ----------------------------------------------------------------------------------
 
 /**
