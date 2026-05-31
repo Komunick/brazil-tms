@@ -24,6 +24,7 @@ export default async function HomePage() {
         <p className="text-muted-foreground">{t("subtitle")}</p>
       </header>
       <DashboardWidgets />
+      <AlertSurface />
     </div>
   );
 }

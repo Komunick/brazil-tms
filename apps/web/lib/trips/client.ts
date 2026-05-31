@@ -412,6 +412,44 @@ export function useReasonCodes(): UseQueryResult<{ items: ReasonCodeOption[] }> 
   });
 }
 
+// --- Alert hooks (007, US4; in-app alert list + acknowledge via the BFF) --------------------------
+
+const ALERTS_ROOT = ["alerts"] as const;
+
+/** The active/acknowledged in-app alert list + counts (GET /api/alerts). `state`/`tripId` optional. */
+export function useAlerts(
+  filters: { state?: string; tripId?: string } = {},
+): UseQueryResult<AlertListResult> {
+  const params = new URLSearchParams();
+  if (filters.state) params.set("state", filters.state);
+  if (filters.tripId) params.set("tripId", filters.tripId);
+  const search = params.toString();
+  return useQuery({
+    queryKey: [...ALERTS_ROOT, "list", search],
+    queryFn: async () => asJson<AlertListResult>(await fetch(`/api/alerts?${search}`)),
+    refetchInterval: CONTROL_TOWER_POLL_MS,
+  });
+}
+
+/** Acknowledge an alert (POST /api/alerts/:id/acknowledge). Invalidates alerts + trips. */
+export function useAcknowledgeAlert() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (alertId: string) => {
+      const res = await fetch(`/api/alerts/${alertId}/acknowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      return asJson<{ item: AlertListItem }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ALERTS_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
 // --- CSV export ----------------------------------------------------------------------------------
 
 /**

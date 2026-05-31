@@ -38,27 +38,30 @@ export async function generateAlert(
   tripId: string,
   alertCase: AlertCase,
   severity: AlertSeverity,
-): Promise<void> {
-  await ex
+): Promise<boolean> {
+  const inserted = await ex
     .insert(alerts)
     .values({ tripId, alertCase, severity, state: "active" })
     .onConflictDoNothing({
       target: [alerts.tripId, alerts.alertCase],
       // The arbiter is the partial-unique `alerts_trip_case_open_uq` — its predicate must match.
       where: sql`${alerts.state} IN ('active', 'acknowledged')`,
-    });
+    })
+    .returning({ id: alerts.id });
+  return inserted.length > 0; // false ⇒ an active/acknowledged one already existed (idempotent no-op)
 }
 
 /**
  * Auto-resolve any active/acknowledged alert for `(tripId, alertCase)` when its condition clears. A
  * resolved row falls outside the partial-unique predicate, so a later recurrence can insert fresh.
+ * Returns whether any row was actually resolved (for the sweep's summary counts).
  */
 export async function autoResolveAlert(
   ex: AlertExecutor,
   tripId: string,
   alertCase: AlertCase,
-): Promise<void> {
-  await ex
+): Promise<boolean> {
+  const resolved = await ex
     .update(alerts)
     .set({ state: "resolved", autoResolvedAt: new Date(), updatedAt: new Date() })
     .where(
@@ -67,7 +70,9 @@ export async function autoResolveAlert(
         eq(alerts.alertCase, alertCase),
         inArray(alerts.state, ["active", "acknowledged"]),
       ),
-    );
+    )
+    .returning({ id: alerts.id });
+  return resolved.length > 0;
 }
 
 /**
