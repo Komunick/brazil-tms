@@ -4,6 +4,7 @@ import { tripEvents, trips } from "../../schema";
 import { canTransition, type TransitionTripInput } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
 import { Conflict } from "../errors";
+import { recomputeTripSla } from "./sla";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
 
 /**
@@ -82,6 +83,10 @@ export async function transitionTripStatus(
       newValue: { currentStatus: args.toStatus },
       actorUserId,
     });
+
+    // Feature 007 — a recorded milestone flips SLA risk immediately (terminal trips short-circuit
+    // inside recompute). Runs in-tx after the transition commits so the returned detail is fresh.
+    await recomputeTripSla(tx, tripId, actorUserId);
 
     const detail = await loadTripDetail(tx, tripId);
     if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");

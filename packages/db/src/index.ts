@@ -7,6 +7,8 @@ export { createTrip, getTrip, listTrips } from "./trips/trips-service";
 export { updateTripPlan } from "./trips/trip-plan";
 export { transitionTripStatus } from "./trips/trip-transitions";
 export { cancelTrip } from "./trips/trip-cancellation";
+export { addTripNote } from "./trips/trip-events";
+export { createException, updateException, transitionException } from "./trips/exceptions";
 export {
   assignTrip,
   reassignTrip,
