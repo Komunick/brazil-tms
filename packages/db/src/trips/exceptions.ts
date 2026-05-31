@@ -106,7 +106,7 @@ export async function createException(
     if (severity === "high") {
       await generateAlert(tx, tripId, "high_severity_exception", "high");
     }
-    await recomputeTripSla(tx, tripId, actorUserId);
+    await recomputeTripSla(tx, tripId);
 
     const detail = await loadTripDetail(tx, tripId);
     if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
@@ -159,7 +159,7 @@ export async function updateException(
     });
 
     await syncHighSeverityAlert(tx, existing.tripId);
-    await recomputeTripSla(tx, existing.tripId, actorUserId);
+    await recomputeTripSla(tx, existing.tripId);
 
     const detail = await loadTripDetail(tx, existing.tripId);
     if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
@@ -226,7 +226,7 @@ export async function transitionException(
     });
 
     await syncHighSeverityAlert(tx, existing.tripId);
-    await recomputeTripSla(tx, existing.tripId, actorUserId);
+    await recomputeTripSla(tx, existing.tripId);
 
     const detail = await loadTripDetail(tx, existing.tripId);
     if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");

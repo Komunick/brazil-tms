@@ -43,7 +43,7 @@ export async function addTripNote(
       actorUserId,
     });
 
-    await recomputeTripSla(tx, tripId, actorUserId);
+    await recomputeTripSla(tx, tripId);
 
     const detail = await loadTripDetail(tx, tripId);
     if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");

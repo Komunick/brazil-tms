@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
 import { eq, inArray } from "drizzle-orm";
-import { auditLogs, customers, customerSlaRules, db, locations, trips } from "@brazil-tms/db";
+import { auditLogs, customers, customerSlaRules, db, locations } from "@brazil-tms/db";
 import { testAccounts } from "./test-config";
 
 /**

@@ -318,7 +318,7 @@ describe.skipIf(!hasDb)("trips-read (integration)", () => {
     expect(missing).toBeNull();
   });
 
-  it("queryDashboardMetrics counts today's pickup by status + billing pending, others null", async () => {
+  it("queryDashboardMetrics counts today's pickup by status + billing pending; 006/007 fill their metrics", async () => {
     const metrics = await queryDashboardMetrics();
 
     const todayInTransit = metrics.tripsTodayByStatus.find((s) => s.status === "in_transit");
@@ -333,11 +333,12 @@ describe.skipIf(!hasDb)("trips-read (integration)", () => {
     expect(metrics.unassignedTrips).not.toBeNull();
     expect(metrics.unassignedTrips!).toBeGreaterThanOrEqual(2);
 
-    // The remaining later-slice metrics stay null (scaffolded, not invented).
-    expect(metrics.tripsAtRisk).toBeNull();
-    expect(metrics.activeExceptions).toBeNull();
-    expect(metrics.onTimePickupPct).toBeNull();
-    expect(metrics.onTimeArrivalPct).toBeNull();
+    // 007 — tripsAtRisk + activeExceptions are now COUNTS (always numbers); the on-time percentages
+    // are a number or null (null only when there is no denominator). Missing-docs stays null (008).
+    expect(typeof metrics.tripsAtRisk).toBe("number");
+    expect(typeof metrics.activeExceptions).toBe("number");
+    expect(metrics.onTimePickupPct === null || typeof metrics.onTimePickupPct === "number").toBe(true);
+    expect(metrics.onTimeArrivalPct === null || typeof metrics.onTimeArrivalPct === "number").toBe(true);
     expect(metrics.completedMissingDocuments).toBeNull();
   });
 

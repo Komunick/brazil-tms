@@ -86,7 +86,7 @@ export async function transitionTripStatus(
 
     // Feature 007 — a recorded milestone flips SLA risk immediately (terminal trips short-circuit
     // inside recompute). Runs in-tx after the transition commits so the returned detail is fresh.
-    await recomputeTripSla(tx, tripId, actorUserId);
+    await recomputeTripSla(tx, tripId);
 
     const detail = await loadTripDetail(tx, tripId);
     if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");

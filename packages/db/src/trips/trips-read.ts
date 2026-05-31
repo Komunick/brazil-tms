@@ -19,7 +19,6 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "../client";
 import {
-  alerts,
   carriers,
   customers,
   customerSlaRules,

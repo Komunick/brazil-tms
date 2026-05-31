@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import {
   DEFAULT_SLA_POLICY,
   evaluateSlaRisk,
@@ -73,11 +73,13 @@ export async function resolveSlaPolicy(
         or(isNull(customerSlaRules.effectiveEnd), gte(customerSlaRules.effectiveEnd, ref)),
       ),
     )
-    // lane-scoped first, then vehicle-type-scoped, then customer-default; latest effective_start breaks ties.
+    // Precedence (data-model §4): lane-scoped > vehicle-type-scoped > customer-default; tie-break
+    // latest effective_start. Order by the PRESENCE of each scope (a non-null lane/vehicle-type ranks
+    // higher) — NOT by the id value, since `DESC` on a uuid/enum puts NULLs first and would invert it.
     .orderBy(
-      desc(customerSlaRules.laneId),
-      desc(customerSlaRules.vehicleType),
-      desc(customerSlaRules.effectiveStart),
+      sql`(${customerSlaRules.laneId} is not null) desc`,
+      sql`(${customerSlaRules.vehicleType} is not null) desc`,
+      sql`${customerSlaRules.effectiveStart} desc nulls last`,
     )
     .limit(1);
 
@@ -89,14 +91,10 @@ export async function resolveSlaPolicy(
  * Recompute and persist a trip's SLA risk. Loads planned windows + current status + the latest
  * status-entry time + 006 assignment/confirmation + open high-severity exception count, resolves the
  * policy, evaluates, and writes `sla_status`/`sla_reasons` atomically. Terminal/cancelled trips
- * short-circuit (no write). `actorUserId` is accepted for call-site symmetry but unused (recompute is
- * not audited).
+ * short-circuit (no write). Recompute is a derived projection — NOT separately audited, so no actor
+ * is taken (the triggering mutation carries the audit).
  */
-export async function recomputeTripSla(
-  ex: SlaExecutor,
-  tripId: string,
-  _actorUserId?: string,
-): Promise<void> {
+export async function recomputeTripSla(ex: SlaExecutor, tripId: string): Promise<void> {
   const tripRows = await ex
     .select({
       customerId: trips.customerId,

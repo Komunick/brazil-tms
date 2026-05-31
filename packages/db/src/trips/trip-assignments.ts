@@ -434,7 +434,7 @@ export async function assignTrip(
 
     // Feature 007 — assignment/confirmation changes clear/fire the missing_assignment /
     // missed_confirmation SLA reasons immediately (read-only inputs to the evaluator, FR-017/FR-019).
-    await recomputeTripSla(tx, tripId, actorUserId);
+    await recomputeTripSla(tx, tripId);
 
     const detail = await loadTripDetail(tx, tripId);
     if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
@@ -586,7 +586,7 @@ export async function reassignTrip(
 
     // Feature 007 — assignment/confirmation changes clear/fire the missing_assignment /
     // missed_confirmation SLA reasons immediately (read-only inputs to the evaluator, FR-017/FR-019).
-    await recomputeTripSla(tx, tripId, actorUserId);
+    await recomputeTripSla(tx, tripId);
 
     const detail = await loadTripDetail(tx, tripId);
     if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
@@ -662,7 +662,7 @@ export async function unassignTrip(
 
     // Feature 007 — assignment/confirmation changes clear/fire the missing_assignment /
     // missed_confirmation SLA reasons immediately (read-only inputs to the evaluator, FR-017/FR-019).
-    await recomputeTripSla(tx, tripId, actorUserId);
+    await recomputeTripSla(tx, tripId);
 
     const detail = await loadTripDetail(tx, tripId);
     if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
@@ -768,7 +768,7 @@ export async function confirmTripAssignment(
 
     // Feature 007 — assignment/confirmation changes clear/fire the missing_assignment /
     // missed_confirmation SLA reasons immediately (read-only inputs to the evaluator, FR-017/FR-019).
-    await recomputeTripSla(tx, tripId, actorUserId);
+    await recomputeTripSla(tx, tripId);
 
     const detail = await loadTripDetail(tx, tripId);
     if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");

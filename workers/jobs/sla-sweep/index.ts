@@ -10,7 +10,7 @@ import {
   type AlertCase,
   type AlertSeverity,
 } from "@brazil-tms/db";
-import { ACTIVE_TRIP_STATUSES, type SlaReason, type SlaSweepPayload } from "@brazil-tms/shared";
+import { ACTIVE_TRIP_STATUSES } from "@brazil-tms/shared";
 import { JOB, work } from "../../lib/queue";
 
 /**
@@ -40,11 +40,11 @@ export interface SlaSweepSummary {
 }
 
 /**
- * The 5 TIME-BASED §17 alert cases, keyed by the SLA reason that drives each. `delayed_loading` has NO
- * alert case (only these five time-based cases are in scope); `high_severity_exception` is handled
- * separately (the worker backstop). The 2 deferred cases (008/009) emit nothing.
+ * The 5 TIME-BASED §17 alert cases, keyed by the `sla_reasons` value that drives each. `delayed_loading`
+ * has NO alert case (only these five time-based cases are in scope); `high_severity_exception` is
+ * reconciled separately (the worker backstop). The 2 deferred cases (008/009) emit nothing.
  */
-const REASON_TO_ALERT: Partial<Record<SlaReason, AlertCase>> = {
+const REASON_TO_ALERT: Record<string, AlertCase> = {
   missing_assignment: "unassigned_within_window",
   missed_confirmation: "unconfirmed_within_window",
   delayed_origin_arrival: "missed_origin_arrival",
@@ -103,7 +103,7 @@ async function sweepTrip(tripId: string): Promise<PerTripResult> {
     let alertsResolved = 0;
 
     // The 5 time-based cases: generate when the reason fired, auto-resolve when it cleared.
-    for (const [reason, alertCase] of Object.entries(REASON_TO_ALERT) as [SlaReason, AlertCase][]) {
+    for (const [reason, alertCase] of Object.entries(REASON_TO_ALERT)) {
       if (reasons.has(reason)) {
         if (await generateAlert(tx, tripId, alertCase, ALERT_SEVERITY[alertCase] ?? "medium")) {
           alertsCreated += 1;
@@ -136,10 +136,10 @@ async function sweepTrip(tripId: string): Promise<PerTripResult> {
 
 /**
  * Run one SLA sweep over all active trips. Per-trip fault isolation: a bad trip is logged and skipped,
- * the sweep continues. Emits + returns a structured summary. `_payload` is unused (scheduled cron has
- * no per-run input).
+ * the sweep continues. Emits + returns a structured summary. Scheduled cron has no per-run input, so
+ * the job takes no payload.
  */
-export async function runSlaSweep(_payload?: SlaSweepPayload): Promise<SlaSweepSummary> {
+export async function runSlaSweep(): Promise<SlaSweepSummary> {
   const startedAt = Date.now();
 
   const activeRows = await db

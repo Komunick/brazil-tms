@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useTranslations } from "next-intl";
 import {
   EXCEPTION_RESPONSIBLE_PARTIES,
@@ -74,7 +74,6 @@ export function ExceptionPanel({ trip }: { trip: TripDetailView }) {
   const [closureNotes, setClosureNotes] = useState("");
 
   const codes = reasonCodes.data?.items ?? [];
-  const selectedCode = useMemo(() => codes.find((c) => c.id === reasonCodeId), [codes, reasonCodeId]);
 
   const mapError = (e: unknown): string => {
     const codeErr = e instanceof TripsError ? e.code : "REQUEST_FAILED";

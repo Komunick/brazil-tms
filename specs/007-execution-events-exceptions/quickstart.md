@@ -113,3 +113,20 @@ pnpm test
 ```
 
 Use the PR template (what/why/how-to-test/migration notes/risks). Note in the PR that 007 **first-enforces `update_trip_status` / `create_exceptions` / `resolve_exceptions`** (and reuses `manage_commercial_data` for SLA rules), adds **four tables + three enums + the `note` event-type member + the first scheduled worker job** (no new permission key/package/worker process), keeps `trip_events` append-only, and that **per-customer SLA rules / per-milestone planned times / the two document-&-billing §17 alert cases (008/009) / exception attachments (008)** are **gated business inputs or deferred slice dependencies — configurable defaults, not invented** (Constitution II). AI does not merge to `main`.
+
+---
+
+## Performance sanity (T099 · validates SC-010)
+
+A manual spot-check, **not** a perf harness:
+
+- **Pure SLA evaluator** (`evaluateSlaRisk`) is sub-millisecond per trip (no I/O); the on-change
+  `recomputeTripSla` adds a handful of indexed point-reads + one `UPDATE` inside the mutation tx —
+  negligible against the surrounding write.
+- **Exception Management list** + the **board / "At risk" view** return `< ~3 s` at medium scale: the
+  filters ride the `0006` indexes (`exceptions_*` on trip/status/severity/owner/reason/opened_at; the
+  board's `trips_*` indexes; `customer_sla_rules_scope_idx` for policy resolution).
+- **The ~5-min sweep** over low-thousands of active trips completes well inside its cadence — it scans
+  only `ACTIVE_TRIP_STATUSES`, processes in ≤200-trip chunks, each trip in its own short
+  `SELECT … FOR UPDATE` tx with per-trip fault isolation. Verify via the per-sweep summary log line
+  (`[sla-sweep] done duration_ms=… evaluated=… changed=… alerts_created=… alerts_resolved=… errors=…`).

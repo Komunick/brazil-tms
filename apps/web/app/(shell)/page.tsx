@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { can } from "@brazil-tms/shared";
 import { verifySession } from "@/lib/auth/session";
 import { DashboardWidgets } from "@/components/trips/dashboard/widgets";
+import { AlertSurface } from "@/components/alerts/alert-surface";
 
 /**
  * Home daily dashboard (US4, §15.2). Server guard enforces `view_all_trips` (held by all 7 internal
