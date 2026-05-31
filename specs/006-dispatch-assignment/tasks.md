@@ -179,7 +179,7 @@ Existing monorepo (per plan.md Project Structure): `packages/shared/src/`, `pack
 - [X] T073 [P] Add a performance-sanity note to `specs/006-dispatch-assignment/quickstart.md`: observe assignment + full check `< 2s` (SC-003) and Dispatch Board load `< 3s` (SC-006) at medium scale via the indexed current-assignment lookups (manual timing, not a perf harness) (depends on T064, T040)
 - [X] T074 Run the quickstart.md US1–US5 validation against a fresh build (`pnpm db:seed:e2e` first to reset accounts) (depends on T069, T038, T044, T047, T056)
 - [X] T075 Run the quality gates from repo root and fix failures: `pnpm lint`; `pnpm typecheck`; `pnpm build`; `pnpm test` (with `DATABASE_URL` set) — targeting the `dev` branch (depends on T071, T074)
-- [ ] T076 Open the 006 PR to `dev` via `gh pr create --base dev` using the PR template, noting: first enforcement of `assign_resources`; one new table `trip_assignments` (no new enum/permission key/package/worker); and the out-of-scope/config defaults (carrier approved-for rule, per-customer severity overrides, broader owned-vs-subcontracted policy, vehicle-type substitution, turnaround buffer) — AI does NOT merge to `main` (depends on T075)
+- [X] T076 Open the 006 PR to `dev` via `gh pr create --base dev` using the PR template, noting: first enforcement of `assign_resources`; one new table `trip_assignments` (no new enum/permission key/package/worker); and the out-of-scope/config defaults (carrier approved-for rule, per-customer severity overrides, broader owned-vs-subcontracted policy, vehicle-type substitution, turnaround buffer) — AI does NOT merge to `main` (depends on T075)
 
 ---
 
