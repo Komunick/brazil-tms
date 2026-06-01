@@ -193,4 +193,29 @@ describe.skipIf(!hasDb)("billing.export job (integration, US5)", () => {
     expect(batch.status).toBe("completed");
     expect(batch.tripCount).toBe(1);
   });
+
+  it("a trip linked but DISPUTED (race: moved out of billing_ready) is unlinked + excluded, not exported", async () => {
+    const batchId = await insertBatch("xlsx");
+    // Simulate the disputed-mid-export race: trip D was linked, then another actor disputed it.
+    const tripD = await seedReadyTrip();
+    await db.update(trips).set({ currentStatus: "disputed", disputedFromStatus: "billing_ready" }).where(eq(trips.id, tripD));
+    await db.update(billingItems).set({ exportBatchId: batchId }).where(eq(billingItems.tripId, tripD));
+    // Trip E is a normal billing_ready trip for the same batch.
+    const tripE = await seedReadyTrip();
+
+    await runBillingExport({ exportBatchId: batchId, actorUserId: actorId });
+
+    const batch = (await db.select().from(exportBatches).where(eq(exportBatches.id, batchId)).limit(1))[0]!;
+    expect(batch.status).toBe("completed");
+    expect(batch.tripCount).toBe(1); // ONLY the legitimately-billed trip E
+
+    // Trip D is reconciled OUT: unlinked + left disputed (never billed, never in the export).
+    const dRow = (await db.select({ s: trips.currentStatus, ex: billingItems.exportBatchId }).from(trips).innerJoin(billingItems, eq(billingItems.tripId, trips.id)).where(eq(trips.id, tripD)).limit(1))[0]!;
+    expect(dRow.s).toBe("disputed");
+    expect(dRow.ex).toBeNull();
+    // Trip E is billed + linked.
+    const eRow = (await db.select({ s: trips.currentStatus, ex: billingItems.exportBatchId }).from(trips).innerJoin(billingItems, eq(billingItems.tripId, trips.id)).where(eq(trips.id, tripE)).limit(1))[0]!;
+    expect(eRow.s).toBe("billed");
+    expect(eRow.ex).toBe(batchId);
+  });
 });

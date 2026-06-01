@@ -3,6 +3,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   auditLogs,
   customers,
+  alerts,
   db,
   importBatches,
   importRows,
@@ -128,6 +129,7 @@ describe.skipIf(!hasDb)("detect-duplicates job — full pipeline (integration)",
     }
     if (createdTripIds.length > 0) {
       await db.delete(tripEvents).where(inArray(tripEvents.tripId, createdTripIds));
+      await db.delete(alerts).where(inArray(alerts.tripId, createdTripIds));
       await db.delete(trips).where(inArray(trips.id, createdTripIds));
     }
     for (const batchId of createdBatchIds) {

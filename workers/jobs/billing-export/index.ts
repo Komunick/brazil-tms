@@ -1,9 +1,10 @@
 import ExcelJS from "exceljs";
 import { type PgBoss } from "pg-boss";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "@brazil-tms/db/client";
 import {
   billingItems,
+  Conflict,
   customers,
   exportBatches,
   transitionTripStatus,
@@ -15,30 +16,38 @@ import { JOB, work } from "../../lib/queue";
 
 /**
  * Feature 008 — the on-demand `billing.export` worker job (data-model §12, R11). Off the request path:
- * set `running` → select the INCLUDED set (the customer+period billing-ready trips PLUS any already
- * linked to this batch by a prior partial run) → transition each still-billing_ready trip
- * `billing_ready → billed` (reused `transitionTripStatus`) + link `billing_items.export_batch_id` →
- * generate the file (ExcelJS xlsx/csv — no new dep) → put to the `billing-exports` bucket → ONLY THEN
- * set `file_storage_key`/`trip_count`/`total_amount_cents`/`completed`. A throw sets the batch `failed`
- * + `error_message` (durable status); the catch keeps the batch out of `completed` until every included
- * trip is billed + linked, so FR-021 holds.
+ * set `running` → for each candidate `billing_ready` trip (customer+period) link `export_batch_id`
+ * then drive the guarded `billing_ready → billed` transition (reused `transitionTripStatus`; LINK
+ * BEFORE TRANSITION so a crash between the two writes can't strand a trip billed-but-unlinked) →
+ * reconcile (unlink any trip linked to this batch that did NOT end up `billed`, e.g. disputed
+ * mid-export) → build the file from the AUTHORITATIVE billed+linked set → put to the `billing-exports`
+ * bucket → ONLY THEN set `file_storage_key`/`trip_count`/`total_amount_cents`/`completed`. A throw sets
+ * the batch `failed` + `error_message` (durable status).
  *
- * Idempotent + complete on retry: the select re-includes trips already billed+linked to THIS batch (via
- * the `export_batch_id` predicate), so they stay in the regenerated file/totals and are never
- * double-billed (the loop skips trips no longer `billing_ready`).
+ * FR-021 (never leave a trip half-transitioned, never complete with a non-billed trip): the file/totals
+ * derive solely from trips that are `billed` AND linked to this batch; a `billing_ready` trip that was
+ * linked but then moved (its guarded transition raising `STALE_TRANSITION`) is unlinked by the reconcile
+ * and excluded. Idempotent on retry: already-`billed`+linked trips stay in the set (never double-billed —
+ * only `billing_ready` candidates are transitioned).
  *
  * Until the exact finance format lands, the export uses the LABELED DEFAULT column set (§29 Input #4).
  */
 
 interface ExportRow {
   tripId: string;
-  currentStatus: string;
   externalTripId: string | null;
   customerName: string | null;
   billingPeriod: string;
   baseFreightCents: number | null;
   finalCents: number | null;
 }
+
+/** Per-trip computed final billable value (base freight + live adjustments, discount negated). */
+const finalCentsSql = sql<string | null>`${billingItems.baseFreightCents} + COALESCE((
+  SELECT SUM(CASE WHEN ba.type = 'discount' THEN -ba.amount_cents ELSE ba.amount_cents END)
+  FROM billing_adjustments ba
+  WHERE ba.billing_item_id = ${billingItems.id} AND ba.removed_at IS NULL
+), 0)`;
 
 async function setBatch(
   exportBatchId: string,
@@ -50,56 +59,76 @@ async function setBatch(
     .where(eq(exportBatches.id, exportBatchId));
 }
 
-/**
- * The INCLUDED set for a batch: the customer+period billing-ready trips PLUS any trip already linked to
- * this batch by a prior (partial) run, each with its computed final billable value + current status (so
- * the caller transitions only the still-`billing_ready` ones). The `export_batch_id` arm makes a retry
- * re-include trips a prior run already billed+linked — they stay in the regenerated file/totals.
- */
-async function selectIncludedRows(
+/** The billing-ready trips for a customer+period — the candidates to bill into this batch. */
+async function selectBillingReadyTripIds(
   customerId: string,
   billingPeriod: string,
-  exportBatchId: string,
-): Promise<ExportRow[]> {
-  const finalCents = sql<string | null>`${billingItems.baseFreightCents} + COALESCE((
-    SELECT SUM(CASE WHEN ba.type = 'discount' THEN -ba.amount_cents ELSE ba.amount_cents END)
-    FROM billing_adjustments ba
-    WHERE ba.billing_item_id = ${billingItems.id} AND ba.removed_at IS NULL
-  ), 0)`;
+): Promise<string[]> {
+  const rows = await db
+    .select({ tripId: trips.id })
+    .from(trips)
+    .innerJoin(billingItems, eq(billingItems.tripId, trips.id))
+    .where(
+      and(
+        eq(trips.currentStatus, "billing_ready"),
+        eq(trips.customerId, customerId),
+        eq(billingItems.billingPeriod, billingPeriod),
+      ),
+    );
+  return rows.map((r) => r.tripId);
+}
 
+/**
+ * The AUTHORITATIVE export set: trips that are `billed` AND linked to this batch. The file + totals are
+ * built from exactly this set, so a trip that was linked but then moved out of `billed`/`billing_ready`
+ * (e.g. disputed mid-export, then unlinked by the reconcile) is never present in a completed export.
+ */
+async function selectBilledLinkedRows(exportBatchId: string): Promise<ExportRow[]> {
   const rows = await db
     .select({
       tripId: trips.id,
-      currentStatus: trips.currentStatus,
       externalTripId: trips.externalTripId,
       customerName: customers.name,
       billingPeriod: billingItems.billingPeriod,
       baseFreightCents: billingItems.baseFreightCents,
-      finalCents,
+      finalCents: finalCentsSql,
     })
     .from(trips)
     .innerJoin(billingItems, eq(billingItems.tripId, trips.id))
     .leftJoin(customers, eq(trips.customerId, customers.id))
-    .where(
-      or(
-        and(
-          eq(trips.currentStatus, "billing_ready"),
-          eq(trips.customerId, customerId),
-          eq(billingItems.billingPeriod, billingPeriod),
-        ),
-        eq(billingItems.exportBatchId, exportBatchId),
-      ),
-    );
-
+    .where(and(eq(trips.currentStatus, "billed"), eq(billingItems.exportBatchId, exportBatchId)));
   return rows.map((r) => ({
     tripId: r.tripId,
-    currentStatus: r.currentStatus,
     externalTripId: r.externalTripId,
     customerName: r.customerName,
     billingPeriod: r.billingPeriod,
     baseFreightCents: r.baseFreightCents,
     finalCents: r.finalCents == null ? null : Number(r.finalCents),
   }));
+}
+
+/**
+ * Unlink any trip linked to this batch that did NOT end up `billed` — e.g. a `billing_ready` trip that
+ * was linked (link-before-transition) but then moved to `disputed` by another actor, so its guarded
+ * `→ billed` transition failed. Unlinking + excluding it (below, via {@link selectBilledLinkedRows})
+ * keeps a non-`billed` trip out of a completed export (the P1 race the review flagged).
+ */
+async function unlinkNonBilled(exportBatchId: string): Promise<void> {
+  const stuck = await db
+    .select({ tripId: billingItems.tripId })
+    .from(billingItems)
+    .innerJoin(trips, eq(trips.id, billingItems.tripId))
+    .where(and(eq(billingItems.exportBatchId, exportBatchId), ne(trips.currentStatus, "billed")));
+  if (stuck.length === 0) return;
+  await db
+    .update(billingItems)
+    .set({ exportBatchId: null, updatedAt: new Date() })
+    .where(
+      inArray(
+        billingItems.tripId,
+        stuck.map((r) => r.tripId),
+      ),
+    );
 }
 
 /** Build the export file (labeled default columns) as bytes + the content type, per format. */
@@ -152,38 +181,43 @@ export async function runBillingExport(payload: BillingExportPayload): Promise<v
   try {
     await setBatch(exportBatchId, { status: "running" });
 
-    const rows = await selectIncludedRows(batch.customerId, batch.billingPeriod, exportBatchId);
-
-    // Transition + link EVERY included trip FIRST (FR-021: never leave a trip half-transitioned). A
-    // still-billing_ready trip is billed via the reused machine; a trip already billed by a prior run
-    // (retry) is only (re-)linked. The batch is NOT marked completed until this whole set succeeds.
-    //
-    // LINK BEFORE TRANSITION (atomicity): `transitionTripStatus` opens its own transaction and the
-    // link is a separate statement, so a throw/crash BETWEEN them must not strand a trip. Linking
-    // first means the only intermediate states are billing_ready+unlinked (re-included by the
-    // status arm) or billing_ready+linked (re-included by BOTH arms and transitioned on retry) — a
-    // billed-but-unlinked trip (which the retry would drop) is unreachable.
-    for (const r of rows) {
+    // Bill each candidate billing-ready trip. LINK BEFORE the guarded transition (`transitionTripStatus`
+    // opens its own tx, the link is a separate statement) so a throw/crash between the two writes can
+    // never strand a trip billed-but-unlinked — the only intermediate states are billing_ready+unlinked
+    // (re-picked by the candidate query on retry) or billing_ready+linked (reconciled below).
+    const candidateIds = await selectBillingReadyTripIds(batch.customerId, batch.billingPeriod);
+    for (const tripId of candidateIds) {
       await db
         .update(billingItems)
         .set({ exportBatchId, updatedAt: new Date() })
-        .where(eq(billingItems.tripId, r.tripId));
-      if (r.currentStatus === "billing_ready") {
+        .where(eq(billingItems.tripId, tripId));
+      try {
         await transitionTripStatus(
-          r.tripId,
+          tripId,
           { toStatus: "billed", expectedFromStatus: "billing_ready" },
           actorUserId,
         );
+      } catch (err) {
+        // The trip moved out of `billing_ready` (e.g. another actor disputed it) between the candidate
+        // query and the transition. Don't fail the whole batch — leave it for the reconcile, which
+        // unlinks any linked-but-not-billed trip so it never lands in a completed export.
+        if (err instanceof Conflict && err.code === "STALE_TRANSITION") continue;
+        throw err;
       }
     }
 
-    // Generate the file over the full included set, then mark completed LAST.
+    // Reconcile: unlink any trip linked to this batch that did NOT end up `billed` (the disputed-mid-
+    // export race). Then build the file + totals from the AUTHORITATIVE billed+linked set only.
+    await unlinkNonBilled(exportBatchId);
+    const rows = await selectBilledLinkedRows(exportBatchId);
+
     const { bytes, contentType, ext } = await buildFile(rows, batch.format);
     const key = exportStorageKey(exportBatchId, ext);
     await putExport(key, bytes, contentType);
 
     const total = rows.reduce((sum, r) => sum + (r.finalCents ?? 0), 0);
 
+    // Mark completed LAST (after every included trip is billed + linked and the set is reconciled).
     await setBatch(exportBatchId, {
       fileStorageKey: key,
       tripCount: rows.length,
