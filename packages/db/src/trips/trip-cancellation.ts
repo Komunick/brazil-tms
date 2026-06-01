@@ -4,6 +4,7 @@ import { cancellationOptions, tripEvents, trips } from "../../schema";
 import { canTransition, cancelTripSchema, type CancelTripInput } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
 import { Conflict } from "../errors";
+import { recomputeTripSla } from "./sla";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
 
 /**
@@ -107,6 +108,13 @@ export async function cancelTrip(
       },
       actorUserId,
     });
+
+    // Cancelling is a TERMINAL transition, and the worker sweep only evaluates ACTIVE trips — so a
+    // trip cancelled while At Risk/Late would keep its stale `sla_status`/`sla_reasons` + active alerts
+    // forever. Recompute in-tx (the terminal branch of `recomputeTripSla` clears the risk state and
+    // auto-resolves the trip's alerts) so the returned detail — and the board — reflect a clean close.
+    // Mirrors the `completed` milestone path, which already recomputes via `transitionTripStatus`.
+    await recomputeTripSla(tx, tripId);
 
     const detail = await loadTripDetail(tx, tripId);
     if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");

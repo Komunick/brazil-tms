@@ -156,11 +156,15 @@ export function DashboardWidgets() {
 
   // 006 — the "Unassigned" view deep-link (matches the DEFAULT_TRIP_VIEWS "unassigned" preset).
   const unassignedHref = "/trips?assigned=false&scope=active&sort=pickupStart";
+  // 007 — the "At risk" view deep-link (matches the DEFAULT_TRIP_VIEWS "atRisk" preset).
+  const atRiskHref = "/trips?atRisk=true&scope=active&sort=pickupStart";
+  // 007 — exception queue deep-link (the Exception Management screen).
+  const exceptionsHref = "/exceptions";
 
   const metrics: MetricCardProps[] = [
-    metric("tripsAtRisk", summary.tripsAtRisk),
+    metric("tripsAtRisk", summary.tripsAtRisk, (n) => n, atRiskHref),
     metric("unassignedTrips", summary.unassignedTrips, (n) => n, unassignedHref),
-    metric("activeExceptions", summary.activeExceptions),
+    metric("activeExceptions", summary.activeExceptions, (n) => n, exceptionsHref),
     metric("onTimePickup", summary.onTimePickupPct, pct),
     metric("onTimeArrival", summary.onTimeArrivalPct, pct),
     metric("completedMissingDocuments", summary.completedMissingDocuments),

@@ -7,6 +7,8 @@ export { createTrip, getTrip, listTrips } from "./trips/trips-service";
 export { updateTripPlan } from "./trips/trip-plan";
 export { transitionTripStatus } from "./trips/trip-transitions";
 export { cancelTrip } from "./trips/trip-cancellation";
+export { addTripNote } from "./trips/trip-events";
+export { createException, updateException, transitionException } from "./trips/exceptions";
 export {
   assignTrip,
   reassignTrip,
@@ -23,6 +25,9 @@ export {
   queryDashboardMetrics,
   exportTripRows,
   getTripFilterOptions,
+  queryExceptions,
+  queryReasonCodes,
+  queryCustomerSlaRules,
 } from "./trips/trips-read";
 export type {
   TripBoardRow,
@@ -31,4 +36,21 @@ export type {
   DashboardSummary,
   TripFilterOptions,
   ResourceOption,
+  ExceptionListItem,
+  ReasonCodeOption,
+  CustomerSlaRuleItem,
 } from "./trips/trips-read";
+// Feature 007 — SLA recompute + alert helpers. `ExceptionDto`/`AlertDto` (+ the extended `TripDetail`)
+// are already re-exported via `export * from "./trips/trip-dto"` above.
+export { recomputeTripSla, resolveSlaPolicy } from "./trips/sla";
+export { createCustomerSlaRule, updateCustomerSlaRule } from "./trips/sla-rules";
+export {
+  generateAlert,
+  autoResolveAlert,
+  acknowledgeAlert,
+  listAlerts,
+  type AlertCase,
+  type AlertSeverity,
+  type AlertListItem,
+  type AlertListResult,
+} from "./trips/alerts";

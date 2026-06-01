@@ -12,8 +12,24 @@ import {
   type ConfirmAssignmentInput,
   type CheckAssignmentInput,
   type Finding,
+  type TransitionTripInput,
+  type AddTripNoteInput,
+  type CreateExceptionInput,
+  type UpdateExceptionInput,
+  type TransitionExceptionInput,
+  type CreateSlaRuleInput,
+  type UpdateSlaRuleInput,
 } from "@brazil-tms/shared";
-import type { TripBoardRow, TripDetailView, DashboardSummary } from "@brazil-tms/db";
+import type {
+  TripBoardRow,
+  TripDetailView,
+  DashboardSummary,
+  ExceptionListItem,
+  ReasonCodeOption,
+  AlertListItem,
+  AlertListResult,
+  CustomerSlaRuleItem,
+} from "@brazil-tms/db";
 
 /**
  * Client data layer for the Control Tower (feature 005): TanStack Query hooks, URL filter state,
@@ -163,6 +179,48 @@ export function useUpdateTripPlan(id: string) {
   });
 }
 
+// --- Execution write hooks (007, US1; milestones + free-form notes via the BFF) -------------------
+
+/**
+ * Record an execution milestone (POST /api/trips/:id/status) — drives the 003 status machine and
+ * recomputes SLA server-side. Invalidates the `["trips"]` root so the board/detail/dashboard refresh.
+ * Error codes (mapped to pt-BR by the caller): ILLEGAL_TRANSITION, STALE_TRANSITION, NOT_FOUND.
+ */
+export function useRecordMilestone(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: TransitionTripInput) => {
+      const res = await fetch(`/api/trips/${id}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/** Append a free-form note (POST /api/trips/:id/events) — no status change. */
+export function useAddTripNote(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: AddTripNoteInput) => {
+      const res = await fetch(`/api/trips/${id}/events`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
 // --- Assignment write hooks (006; reuse the @brazil-tms/db assignment services via the BFF) --------
 //
 // All POST/DELETE under `/api/trips/:id/assignment*`; every `onSuccess` invalidates the `["trips"]`
@@ -271,6 +329,179 @@ export function useAssignmentCheck(id: string) {
       });
       const { findings } = await asJson<{ findings: Finding[] }>(res);
       return findings;
+    },
+  });
+}
+
+// --- Exception hooks (007, US2; exception lifecycle + queue via the BFF) --------------------------
+
+const EXCEPTIONS_ROOT = ["exceptions"] as const;
+
+/** Log an exception on a trip (POST /api/trips/:id/exceptions). Invalidates trips + exceptions. */
+export function useCreateException(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateExceptionInput) => {
+      const res = await fetch(`/api/trips/${id}/exceptions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+      void queryClient.invalidateQueries({ queryKey: EXCEPTIONS_ROOT });
+    },
+  });
+}
+
+/** Edit a non-terminal exception (PATCH /api/exceptions/:id). */
+export function useUpdateException() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ exceptionId, input }: { exceptionId: string; input: UpdateExceptionInput }) => {
+      const res = await fetch(`/api/exceptions/${exceptionId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+      void queryClient.invalidateQueries({ queryKey: EXCEPTIONS_ROOT });
+    },
+  });
+}
+
+/** Work an exception through its lifecycle (POST /api/exceptions/:id/transition). */
+export function useTransitionException() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      exceptionId,
+      input,
+    }: {
+      exceptionId: string;
+      input: TransitionExceptionInput;
+    }) => {
+      const res = await fetch(`/api/exceptions/${exceptionId}/transition`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+      void queryClient.invalidateQueries({ queryKey: EXCEPTIONS_ROOT });
+    },
+  });
+}
+
+/** The Exception Management queue (GET /api/exceptions). `search` is the filter query string. */
+export function useExceptions(search: string): UseQueryResult<{ items: ExceptionListItem[] }> {
+  return useQuery({
+    queryKey: [...EXCEPTIONS_ROOT, "list", search],
+    queryFn: async () => asJson<{ items: ExceptionListItem[] }>(await fetch(`/api/exceptions?${search}`)),
+    refetchInterval: CONTROL_TOWER_POLL_MS,
+  });
+}
+
+/** Active reason codes for the create-exception form (GET /api/reason-codes). */
+export function useReasonCodes(): UseQueryResult<{ items: ReasonCodeOption[] }> {
+  return useQuery({
+    queryKey: [...EXCEPTIONS_ROOT, "reason-codes"],
+    queryFn: async () => asJson<{ items: ReasonCodeOption[] }>(await fetch(`/api/reason-codes`)),
+  });
+}
+
+// --- Alert hooks (007, US4; in-app alert list + acknowledge via the BFF) --------------------------
+
+const ALERTS_ROOT = ["alerts"] as const;
+
+/** The active/acknowledged in-app alert list + counts (GET /api/alerts). `state`/`tripId` optional. */
+export function useAlerts(
+  filters: { state?: string; tripId?: string } = {},
+): UseQueryResult<AlertListResult> {
+  const params = new URLSearchParams();
+  if (filters.state) params.set("state", filters.state);
+  if (filters.tripId) params.set("tripId", filters.tripId);
+  const search = params.toString();
+  return useQuery({
+    queryKey: [...ALERTS_ROOT, "list", search],
+    queryFn: async () => asJson<AlertListResult>(await fetch(`/api/alerts?${search}`)),
+    refetchInterval: CONTROL_TOWER_POLL_MS,
+  });
+}
+
+/** Acknowledge an alert (POST /api/alerts/:id/acknowledge). Invalidates alerts + trips. */
+export function useAcknowledgeAlert() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (alertId: string) => {
+      const res = await fetch(`/api/alerts/${alertId}/acknowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      return asJson<{ item: AlertListItem }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ALERTS_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+// --- SLA-rule hooks (007, US5; per-customer SLA-rule admin via the BFF) ---------------------------
+
+const SLA_RULES_ROOT = ["sla-rules"] as const;
+
+/** The per-customer SLA rules list (GET /api/customer-sla-rules). */
+export function useCustomerSlaRules(): UseQueryResult<{ items: CustomerSlaRuleItem[] }> {
+  return useQuery({
+    queryKey: [...SLA_RULES_ROOT, "list"],
+    queryFn: async () =>
+      asJson<{ items: CustomerSlaRuleItem[] }>(await fetch(`/api/customer-sla-rules`)),
+  });
+}
+
+/** Create a per-customer SLA rule (POST). Invalidates sla-rules + trips (the evaluator uses them). */
+export function useCreateSlaRule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateSlaRuleInput) => {
+      const res = await fetch(`/api/customer-sla-rules`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: CustomerSlaRuleItem }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: SLA_RULES_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/** Edit a per-customer SLA rule (PATCH /api/customer-sla-rules/:id). */
+export function useUpdateSlaRule() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ruleId, input }: { ruleId: string; input: UpdateSlaRuleInput }) => {
+      const res = await fetch(`/api/customer-sla-rules/${ruleId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: CustomerSlaRuleItem }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: SLA_RULES_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
     },
   });
 }

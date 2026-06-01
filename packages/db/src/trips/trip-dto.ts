@@ -1,13 +1,17 @@
 import { alias } from "drizzle-orm/pg-core";
 import { and, desc, eq } from "drizzle-orm";
 import {
+  alerts,
   auditLogs,
   carriers,
   drivers,
+  exceptions,
+  reasonCodes,
   tripAssignments,
   tripEvents,
   trailers,
   trips,
+  users,
   vehicles,
 } from "../../schema";
 import type { DB } from "../client";
@@ -47,6 +51,7 @@ export interface TripSummary {
   currentStatus: TripStatus;
   billingStatus: BillingStatus;
   slaStatus: string | null;
+  slaReasons: string[] | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -61,7 +66,46 @@ export interface TripEventDto {
   actorUserId: string | null;
   locationId: string | null;
   notes: string | null;
+  exceptionId: string | null;
   createdAt: string;
+}
+
+/**
+ * Feature 007 — an exception on the trip detail (FR-008..FR-012). Joins `reason_codes` for the DERIVED
+ * `category`/`reasonLabelPt` (never stored on the exception) and the owner's display name.
+ */
+export interface ExceptionDto {
+  id: string;
+  reasonCodeId: string;
+  reasonCode: string;
+  category: string;
+  reasonLabelPt: string;
+  severity: string;
+  status: string;
+  responsibleParty: string;
+  ownerUserId: string;
+  ownerName: string | null;
+  description: string;
+  openedAt: string;
+  resolvedAt: string | null;
+  closureNotes: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Feature 007 — an in-app alert on the trip detail (active/acknowledged/resolved, FR-023/024). */
+export interface AlertDto {
+  id: string;
+  tripId: string;
+  alertCase: string;
+  severity: string;
+  state: string;
+  createdAt: string;
+  acknowledgedByUserId: string | null;
+  acknowledgedByName: string | null;
+  acknowledgedAt: string | null;
+  autoResolvedAt: string | null;
 }
 
 export interface AuditEntryDto {
@@ -124,6 +168,10 @@ export interface TripDetail extends TripSummary {
   currentAssignment: TripAssignmentDto | null;
   /** Superseded assignment rows (`is_current=false`), newest-first — retained history (006). */
   assignmentHistory: TripAssignmentDto[];
+  /** Feature 007 — the trip's exceptions, newest-first (opened_at). */
+  exceptions: ExceptionDto[];
+  /** Feature 007 — the trip's in-app alerts, newest-first (created_at). */
+  alerts: AlertDto[];
 }
 
 /** The Drizzle row type for `trips` (camelCase columns; timestamps are Date). */
@@ -143,6 +191,7 @@ export function toTripSummary(row: TripRow): TripSummary {
     currentStatus: row.currentStatus,
     billingStatus: billingStatus(row.currentStatus),
     slaStatus: row.slaStatus,
+    slaReasons: row.slaReasons,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -154,7 +203,10 @@ export function toTripSummary(row: TripRow): TripSummary {
  */
 function toTripBase(
   row: TripRow,
-): Omit<TripDetail, "events" | "audit" | "currentAssignment" | "assignmentHistory"> {
+): Omit<
+  TripDetail,
+  "events" | "audit" | "currentAssignment" | "assignmentHistory" | "exceptions" | "alerts"
+> {
   return {
     ...toTripSummary(row),
     originalPlan: row.originalPlan,
@@ -182,6 +234,9 @@ const asgDriver = alias(drivers, "asg_driver");
 const asgVehicle = alias(vehicles, "asg_vehicle");
 const asgTrailer = alias(trailers, "asg_trailer");
 const asgCarrier = alias(carriers, "asg_carrier");
+// Feature 007 — the exception owner + alert acknowledger display-name joins (aliased copies of users).
+const excOwner = alias(users, "exc_owner");
+const alertAck = alias(users, "alert_ack");
 
 /** The assignment-row + joined-name select shape (shared by current + history loads). */
 const assignmentColumns = {
@@ -294,6 +349,52 @@ export async function loadTripDetail(
   const current = assignmentRows.find((a) => a.isCurrent);
   const history = assignmentRows.filter((a) => !a.isCurrent);
 
+  // Feature 007 — the trip's exceptions (with the derived reason-code category/label + owner name).
+  const exceptionRows = await executor
+    .select({
+      id: exceptions.id,
+      reasonCodeId: exceptions.reasonCodeId,
+      reasonCode: reasonCodes.code,
+      category: reasonCodes.category,
+      reasonLabelPt: reasonCodes.labelPt,
+      severity: exceptions.severity,
+      status: exceptions.status,
+      responsibleParty: exceptions.responsibleParty,
+      ownerUserId: exceptions.ownerUserId,
+      ownerName: excOwner.name,
+      description: exceptions.description,
+      openedAt: exceptions.openedAt,
+      resolvedAt: exceptions.resolvedAt,
+      closureNotes: exceptions.closureNotes,
+      createdByUserId: exceptions.createdByUserId,
+      createdAt: exceptions.createdAt,
+      updatedAt: exceptions.updatedAt,
+    })
+    .from(exceptions)
+    .innerJoin(reasonCodes, eq(exceptions.reasonCodeId, reasonCodes.id))
+    .leftJoin(excOwner, eq(exceptions.ownerUserId, excOwner.id))
+    .where(eq(exceptions.tripId, tripId))
+    .orderBy(desc(exceptions.openedAt));
+
+  // Feature 007 — the trip's in-app alerts (active/acknowledged/resolved) + the acknowledger name.
+  const alertRows = await executor
+    .select({
+      id: alerts.id,
+      tripId: alerts.tripId,
+      alertCase: alerts.alertCase,
+      severity: alerts.severity,
+      state: alerts.state,
+      createdAt: alerts.createdAt,
+      acknowledgedByUserId: alerts.acknowledgedByUserId,
+      acknowledgedByName: alertAck.name,
+      acknowledgedAt: alerts.acknowledgedAt,
+      autoResolvedAt: alerts.autoResolvedAt,
+    })
+    .from(alerts)
+    .leftJoin(alertAck, eq(alerts.acknowledgedByUserId, alertAck.id))
+    .where(eq(alerts.tripId, tripId))
+    .orderBy(desc(alerts.createdAt));
+
   return {
     ...toTripBase(row),
     events: eventRows.map((e) => ({
@@ -306,6 +407,7 @@ export async function loadTripDetail(
       actorUserId: e.actorUserId,
       locationId: e.locationId,
       notes: e.notes,
+      exceptionId: e.exceptionId,
       createdAt: e.createdAt.toISOString(),
     })),
     audit: auditRows.map((a) => ({
@@ -319,5 +421,36 @@ export async function loadTripDetail(
     })),
     currentAssignment: current ? toAssignmentDto(current) : null,
     assignmentHistory: history.map(toAssignmentDto),
+    exceptions: exceptionRows.map((e) => ({
+      id: e.id,
+      reasonCodeId: e.reasonCodeId,
+      reasonCode: e.reasonCode,
+      category: e.category,
+      reasonLabelPt: e.reasonLabelPt,
+      severity: e.severity,
+      status: e.status,
+      responsibleParty: e.responsibleParty,
+      ownerUserId: e.ownerUserId,
+      ownerName: e.ownerName,
+      description: e.description,
+      openedAt: e.openedAt.toISOString(),
+      resolvedAt: iso(e.resolvedAt),
+      closureNotes: e.closureNotes,
+      createdByUserId: e.createdByUserId,
+      createdAt: e.createdAt.toISOString(),
+      updatedAt: e.updatedAt.toISOString(),
+    })),
+    alerts: alertRows.map((a) => ({
+      id: a.id,
+      tripId: a.tripId,
+      alertCase: a.alertCase,
+      severity: a.severity,
+      state: a.state,
+      createdAt: a.createdAt.toISOString(),
+      acknowledgedByUserId: a.acknowledgedByUserId,
+      acknowledgedByName: a.acknowledgedByName,
+      acknowledgedAt: iso(a.acknowledgedAt),
+      autoResolvedAt: iso(a.autoResolvedAt),
+    })),
   };
 }

@@ -44,6 +44,41 @@ describe("pt-BR messages", () => {
     }
   });
 
+  it("has nested + flat labels for the 007 exception / note / sla_rule actions", () => {
+    const trip = (messages as { Trips: { auditActions: { trip: Record<string, string> } } }).Trips
+      .auditActions.trip;
+    const exception = (
+      messages as { Trips: { auditActions: { exception: Record<string, string> } } }
+    ).Trips.auditActions.exception;
+    const slaRule = (messages as { Trips: { auditActions: { sla_rule: Record<string, string> } } })
+      .Trips.auditActions.sla_rule;
+    const flat = (messages as { AuditActions: Record<string, string> }).AuditActions;
+
+    // nested resolution (next-intl dot-path) for the 007 additions ...
+    expect(typeof trip.note).toBe("string");
+    for (const a of ["create", "update", "resolve", "cancel"] as const) {
+      expect(typeof exception[a]).toBe("string");
+      expect(exception[a]).not.toBe("");
+    }
+    for (const a of ["create", "update"] as const) {
+      expect(typeof slaRule[a]).toBe("string");
+      expect(slaRule[a]).not.toBe("");
+    }
+    // ... and the flat `AuditActions` labels the global audit screen looks up via `_`.
+    for (const key of [
+      "exception_create",
+      "exception_update",
+      "exception_resolve",
+      "exception_cancel",
+      "trip_note",
+      "sla_rule_create",
+      "sla_rule_update",
+    ] as const) {
+      expect(typeof flat[key]).toBe("string");
+      expect(flat[key]).not.toBe("");
+    }
+  });
+
   it("has an AuditActions label for EVERY audit action (global screen uses action.replaceAll('.','_'))", () => {
     const labels = (messages as { AuditActions: Record<string, string> }).AuditActions;
     const missing = ALL_AUDIT_ACTIONS.filter((action) => {

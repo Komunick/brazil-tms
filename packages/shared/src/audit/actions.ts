@@ -54,7 +54,17 @@ export type AuditAction =
   | "trip.assign"
   | "trip.reassign"
   | "trip.unassign"
-  | "trip.confirm";
+  | "trip.confirm"
+  // feature 007 — execution events, exceptions & SLA rules (data-model §9.4 / R13). Exception
+  // lifecycle, free-form notes, and per-customer SLA-rule admin each write one audit row. Milestones
+  // reuse `trip.status_change`; SLA recompute + alert generate/acknowledge are NOT audit actions.
+  | "exception.create"
+  | "exception.update"
+  | "exception.resolve"
+  | "exception.cancel"
+  | "trip.note"
+  | "sla_rule.create"
+  | "sla_rule.update";
 
 /** The four actions audited by feature 001 (useful for tests / iteration). */
 export const AUDIT_ACTIONS_001: readonly AuditAction[] = [
@@ -112,6 +122,13 @@ export const ALL_AUDIT_ACTIONS = [
   "trip.reassign",
   "trip.unassign",
   "trip.confirm",
+  "exception.create",
+  "exception.update",
+  "exception.resolve",
+  "exception.cancel",
+  "trip.note",
+  "sla_rule.create",
+  "sla_rule.update",
 ] as const satisfies readonly AuditAction[];
 
 /**

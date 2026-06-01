@@ -144,6 +144,12 @@ export function ControlTowerTable({
       cell: ({ row }) => <TripStatusBadge status={row.original.currentStatus} />,
     },
     {
+      // 007 — server-computed SLA-risk indicator (the UI never computes it).
+      id: "sla",
+      header: () => t("board.colSla"),
+      cell: ({ row }) => <SlaCell row={row.original} />,
+    },
+    {
       // 006 — assignment row indicator + assigned resources (fills 005 FR-007).
       id: "assignment",
       header: () => t("board.colAssignment"),
@@ -318,6 +324,39 @@ export function ControlTowerTable({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+const SLA_STATUS_CLASS: Record<string, string> = {
+  on_track: "bg-emerald-100 text-emerald-900",
+  at_risk: "bg-amber-100 text-amber-900",
+  late: "bg-orange-100 text-orange-900",
+  breached: "bg-destructive/15 text-destructive",
+};
+
+/** The server-computed SLA-risk cell (007): a coloured status pill; contributing reasons on hover. */
+function SlaCell({ row }: { row: TripBoardRow }) {
+  const t = useTranslations("Sla");
+  const status = row.slaStatus;
+  if (!status) return <span className="text-muted-foreground">—</span>;
+  const reasons = (row.slaReasons ?? [])
+    .map((r) => {
+      try {
+        return t(`reason.${r}` as Parameters<typeof t>[0]);
+      } catch {
+        return r;
+      }
+    })
+    .join(", ");
+  return (
+    <span
+      title={reasons || undefined}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+        SLA_STATUS_CLASS[status] ?? "bg-muted text-muted-foreground"
+      }`}
+    >
+      {t(`status.${status}` as Parameters<typeof t>[0])}
+    </span>
   );
 }
 

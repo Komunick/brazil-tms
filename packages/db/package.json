@@ -20,7 +20,9 @@
     "db:seed:e2e": "tsx ./seed/e2e-accounts.ts",
     "db:seed:master-data": "tsx ./seed/master-data-sample.ts",
     "db:seed:trip-domain": "tsx ./seed/trip-domain-sample.ts",
-    "db:seed:import": "tsx ./seed/import-sample.ts"
+    "db:seed:import": "tsx ./seed/import-sample.ts",
+    "db:seed:reason-codes": "tsx ./seed/reason-codes.ts",
+    "db:seed:sla-rules": "tsx ./seed/sla-rules.ts"
   },
   "dependencies": {
     "@brazil-tms/shared": "workspace:*",

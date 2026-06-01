@@ -130,6 +130,31 @@ describe("tripBoardQueryFromParams — 006 assignment filters round-trip via PAR
   });
 });
 
+describe("tripBoardQuerySchema — 007 SLA filters", () => {
+  it("accepts slaStatus (one or many) and atRisk true/false", () => {
+    const q = tripBoardQuerySchema.parse({ slaStatus: "at_risk", atRisk: "true" });
+    expect(q.slaStatus).toEqual(["at_risk"]);
+    expect(q.atRisk).toBe("true");
+  });
+
+  it("rejects an unknown sla status / atRisk value", () => {
+    expect(tripBoardQuerySchema.safeParse({ slaStatus: "exploded" }).success).toBe(false);
+    expect(tripBoardQuerySchema.safeParse({ atRisk: "maybe" }).success).toBe(false);
+  });
+});
+
+describe("tripBoardQueryFromParams — 007 SLA filters round-trip via PARAM_KEYS", () => {
+  it("reads repeated slaStatus + atRisk from URL search params", () => {
+    const params = new URLSearchParams();
+    params.append("slaStatus", "at_risk");
+    params.append("slaStatus", "late");
+    params.set("atRisk", "true");
+    const q = tripBoardQueryFromParams(params);
+    expect(q.slaStatus).toEqual(["at_risk", "late"]);
+    expect(q.atRisk).toBe("true");
+  });
+});
+
 describe("tripExportQuerySchema — no pagination", () => {
   it("parses the same filters but strips limit/offset", () => {
     const q = tripExportQuerySchema.parse({ status: "in_transit", limit: "9999", offset: "5" });

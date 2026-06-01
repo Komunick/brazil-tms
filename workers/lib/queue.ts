@@ -1,31 +1,40 @@
 import { PgBoss, type Job } from "pg-boss";
 import {
-  IMPORT_JOBS as JOB,
-  type ImportJobName as JobName,
-  type ImportJobPayloads as JobPayloads,
+  IMPORT_JOBS,
+  SLA_JOBS,
+  type ImportJobName,
+  type ImportJobPayloads,
+  type SlaJobName,
+  type SlaJobPayloads,
 } from "@brazil-tms/shared";
 
 /**
- * pg-boss queue surface for the import worker (feature 004, research R1/R3). One Node worker, one
- * Postgres-backed queue (no Redis/broker — STACK §3.11). Job names + typed payloads are the shared
- * contract in `@brazil-tms/shared` (so the BFF can enqueue with the same types); this module adds the
- * worker-side pg-boss plumbing. The pipeline jobs chain on success: parse → validate →
- * detect-duplicates (→ generate-error-report when there are errors); confirm is enqueued by the user.
+ * pg-boss queue surface for the single worker (features 004 + 007, research R1/R3/R10). One Node
+ * worker, one Postgres-backed queue (no Redis/broker — STACK §3.11). Job names + typed payloads are
+ * the shared contract in `@brazil-tms/shared`; this module adds the worker-side pg-boss plumbing.
+ *
+ * The import pipeline jobs chain on success (parse → validate → detect-duplicates → optional
+ * generate-error-report; confirm is enqueued by the user). Feature 007 merges the SLA sweep job
+ * (`sla.sweep`) — the first SCHEDULED (cron) job — into the same `JOB`/`JobName`/`JobPayloads`
+ * surface and the bootstrap queue-creation loop.
  */
 
-export { JOB };
-export type { JobName, JobPayloads };
+/** The merged job-name → queue-name map (import pipeline + the 007 SLA sweep). */
+export const JOB = { ...IMPORT_JOBS, ...SLA_JOBS } as const;
+
+export type JobName = ImportJobName | SlaJobName;
+export type JobPayloads = ImportJobPayloads & SlaJobPayloads;
 
 /** Construct the pg-boss instance against the worker's DATABASE_URL (server/worker-only). */
 export function createBoss(): PgBoss {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) {
-    throw new Error("DATABASE_URL is required for the import worker (pg-boss).");
+    throw new Error("DATABASE_URL is required for the worker (pg-boss).");
   }
   return new PgBoss({ connectionString });
 }
 
-/** Create every import queue (idempotent). Must run after `boss.start()` and before send/work. */
+/** Create every queue (idempotent). Must run after `boss.start()` and before send/work/schedule. */
 export async function setupQueues(boss: PgBoss): Promise<void> {
   for (const name of Object.values(JOB)) {
     await boss.createQueue(name);
@@ -43,8 +52,8 @@ export async function enqueue<K extends JobName>(
 
 /**
  * Typed worker registration. pg-boss delivers a batch array; we unwrap and run the handler per job
- * so each import stage stays a simple `(payload) => Promise<void>`. A throw makes pg-boss retry the
- * job (handlers are idempotent — STACK §3.11).
+ * so each stage stays a simple `(payload) => Promise<void>`. A throw makes pg-boss retry the job
+ * (handlers are idempotent — STACK §3.11).
  */
 export async function work<K extends JobName>(
   boss: PgBoss,

@@ -60,6 +60,9 @@ export const trips = pgTable(
     laneId: uuid("lane_id").references(() => lanes.id),
     currentStatus: tripStatus("current_status").notNull().default("received"),
     slaStatus: text("sla_status"),
+    // feature 007 — server-computed SLA risk (D4): `sla_status` stays text (CHECK-validated, no enum);
+    // `sla_reasons` is the schema's first `.array()` column (text[]). Both written atomically.
+    slaReasons: text("sla_reasons").array(),
     originalPlan: jsonb("original_plan").notNull(),
     plannedPickupWindowStart: timestamp("planned_pickup_window_start", { withTimezone: true }),
     plannedPickupWindowEnd: timestamp("planned_pickup_window_end", { withTimezone: true }),
@@ -83,6 +86,11 @@ export const trips = pgTable(
     check(
       "trips_origin_dest_ck",
       sql`${table.originLocationId} <> ${table.destinationLocationId}`,
+    ),
+    // feature 007 — validate sla_status to the four risk states (D4 — text + CHECK, no enum).
+    check(
+      "trips_sla_status_ck",
+      sql`${table.slaStatus} IS NULL OR ${table.slaStatus} IN ('on_track','at_risk','late','breached')`,
     ),
     // A customer's own trip id is unique within that customer when present (import matching/updates).
     uniqueIndex("trips_customer_external_id_uq")

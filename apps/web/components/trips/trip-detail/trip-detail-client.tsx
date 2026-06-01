@@ -14,8 +14,9 @@ import { AuditHistorySection } from "@/components/trips/trip-detail/audit-histor
 import {
   BillingPlaceholder,
   DocumentsPlaceholder,
-  ExceptionsPlaceholder,
 } from "@/components/trips/trip-detail/placeholders";
+import { ExceptionPanel } from "@/components/trips/trip-detail/exception-panel";
+import { SlaIndicator } from "@/components/trips/trip-detail/sla-indicator";
 import { AssignmentPanel } from "@/components/trips/trip-detail/assignment-panel";
 import { PlanEditForm } from "@/components/trips/plan-edit-form";
 
@@ -75,8 +76,9 @@ export function TripDetailClient({
       <CustomerPlanSection trip={trip} />
       <PlanEditForm trip={trip} />
       <AssignmentPanel trip={trip} resourceOptions={resourceOptions} />
-      <TimelineSection events={trip.events} />
-      <ExceptionsPlaceholder />
+      <SlaIndicator trip={trip} />
+      <TimelineSection trip={trip} />
+      <ExceptionPanel trip={trip} />
       <DocumentsPlaceholder />
       <BillingPlaceholder />
       <NotesSection events={trip.events} />

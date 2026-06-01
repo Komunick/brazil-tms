@@ -248,3 +248,49 @@ describe("006 dispatch-assignment permission invariants (contracts/permission-ma
     expect(can(Role.Dispatcher, "manage_fleet_data")).toBe(false);
   });
 });
+
+describe("007 execution/exception/SLA permission invariants (contracts/permission-matrix.md — no new key)", () => {
+  it("update_trip_status (milestones/notes) is granted to Admin, Ops Manager, Dispatcher, Control Tower", () => {
+    for (const role of [
+      Role.Admin,
+      Role.OperationsManager,
+      Role.Dispatcher,
+      Role.ControlTower,
+    ] as const) {
+      expect(can(role, "update_trip_status")).toBe(true);
+    }
+  });
+
+  it("update_trip_status is denied to Fleet Coordinator, Finance, Executive Viewer", () => {
+    for (const role of [Role.FleetCoordinator, Role.Finance, Role.ExecutiveViewer] as const) {
+      expect(can(role, "update_trip_status")).toBe(false);
+    }
+  });
+
+  it("create_exceptions/resolve_exceptions are granted to those four PLUS Fleet Coordinator", () => {
+    for (const role of [
+      Role.Admin,
+      Role.OperationsManager,
+      Role.Dispatcher,
+      Role.ControlTower,
+      Role.FleetCoordinator,
+    ] as const) {
+      expect(can(role, "create_exceptions")).toBe(true);
+      expect(can(role, "resolve_exceptions")).toBe(true);
+    }
+  });
+
+  it("create_exceptions/resolve_exceptions are denied to Finance and Executive Viewer", () => {
+    for (const role of [Role.Finance, Role.ExecutiveViewer] as const) {
+      expect(can(role, "create_exceptions")).toBe(false);
+      expect(can(role, "resolve_exceptions")).toBe(false);
+    }
+  });
+
+  it("SLA-rule admin reuses manage_commercial_data (Admin + Ops Manager only)", () => {
+    for (const role of ALL_ROLES) {
+      const expected = role === Role.Admin || role === Role.OperationsManager;
+      expect(can(role, "manage_commercial_data")).toBe(expected);
+    }
+  });
+});

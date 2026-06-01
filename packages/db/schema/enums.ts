@@ -102,6 +102,9 @@ export const tripEventType = pgEnum("trip_event_type", [
   "destination_arrived",
   "unloaded",
   "completed",
+  // feature 007 — the single event-vocabulary extension (D5/R6): free-form notes. Loading/Unloading
+  // are recorded as `status_change`, NOT new members; no `gps`/`driver_input` source is added.
+  "note",
 ]);
 
 export const tripEventSource = pgEnum("trip_event_source", [
@@ -150,4 +153,27 @@ export const importRowMatch = pgEnum("import_row_match", [
   "no_op",
   "potential_duplicate",
   "unresolved",
+]);
+
+/**
+ * Trip-execution enums (feature 007, data-model.md §1). pgEnums for the fixed sets the domain logic /
+ * SLA evaluator reference; kept in lockstep with the `@brazil-tms/shared` `EXCEPTION_*` arrays.
+ * `alert_case`/`alert_state`/`reason_codes.category` and `trips.sla_status` stay text+CHECK
+ * (D4 — business-mutable / no domain enum), NOT pgEnums.
+ */
+export const exceptionStatus = pgEnum("exception_status", [
+  "open",
+  "monitoring",
+  "resolved",
+  "cancelled",
+]);
+
+export const exceptionSeverity = pgEnum("exception_severity", ["low", "medium", "high"]);
+
+export const exceptionResponsibleParty = pgEnum("exception_responsible_party", [
+  "customer_caused",
+  "brazil_transports_caused",
+  "carrier_caused",
+  "force_majeure",
+  "unknown",
 ]);

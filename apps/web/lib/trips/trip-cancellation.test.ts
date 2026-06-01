@@ -1,12 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { ZodError } from "zod";
 import {
+  alerts,
   auditLogs,
   cancellationOptions,
+  createException,
   customers,
   db,
+  exceptions,
   locations,
+  reasonCodes,
   tripEvents,
   trips,
   users,
@@ -34,6 +38,7 @@ describe.skipIf(!hasDb)("trip-cancellation (integration)", () => {
   let destinationLocationId = "";
   let reasonCode = "";
   let billingImpactCode = "";
+  let highReasonId = "";
   const createdTripIds: string[] = [];
   const createdOptionIds: string[] = [];
   const createdLocationIds: string[] = [];
@@ -114,15 +119,31 @@ describe.skipIf(!hasDb)("trip-cancellation (integration)", () => {
       })
       .returning();
     createdOptionIds.push(billingRow[0]!.id);
+
+    // A high-severity reason code so an exception drives an At-Risk SLA state + an active alert.
+    const high = await db
+      .insert(reasonCodes)
+      .values({
+        code: code("RC"),
+        category: "breakdown",
+        labelPt: "Pane",
+        defaultSeverity: "high",
+        defaultResponsibleParty: "carrier_caused",
+      })
+      .returning();
+    highReasonId = high[0]!.id;
   });
 
   afterAll(async () => {
     // FK-safe order: trip children (events + audit) → trips → options → locations → customers.
     for (const id of createdTripIds) {
+      await db.delete(alerts).where(eq(alerts.tripId, id));
+      await db.delete(exceptions).where(eq(exceptions.tripId, id));
       await db.delete(tripEvents).where(eq(tripEvents.tripId, id));
       await db.delete(auditLogs).where(eq(auditLogs.entityId, id));
       await db.delete(trips).where(eq(trips.id, id));
     }
+    if (highReasonId) await db.delete(reasonCodes).where(eq(reasonCodes.id, highReasonId));
     for (const id of createdOptionIds) {
       await db.delete(cancellationOptions).where(eq(cancellationOptions.id, id));
     }
@@ -201,6 +222,36 @@ describe.skipIf(!hasDb)("trip-cancellation (integration)", () => {
     const tripId = await insertTrip("at_destination");
     const detail = await cancelTrip(tripId, validInput(), actorId);
     expect(detail.currentStatus).toBe("cancelled");
+  });
+
+  it("cancelling clears the trip's SLA risk state and auto-resolves its active alerts", async () => {
+    // An in_transit trip with an open high-severity exception → At Risk + an active alert.
+    const tripId = await insertTrip("in_transit");
+    await createException(tripId, { reasonCodeId: highReasonId }, actorId);
+    const activeBefore = await db
+      .select({ id: alerts.id })
+      .from(alerts)
+      .where(and(eq(alerts.tripId, tripId), eq(alerts.state, "active")));
+    expect(activeBefore.length).toBeGreaterThanOrEqual(1);
+
+    // Cancelling is a TERMINAL transition and the worker sweep skips non-active trips, so cancelTrip
+    // itself must recompute to clear the stale risk + resolve the alerts. (Regression guard: without
+    // the recomputeTripSla call in cancelTrip, slaStatus/slaReasons stay set and the alert stays active.)
+    const detail = await cancelTrip(tripId, validInput(), actorId);
+    expect(detail.currentStatus).toBe("cancelled");
+
+    const [trip] = await db
+      .select({ s: trips.slaStatus, r: trips.slaReasons })
+      .from(trips)
+      .where(eq(trips.id, tripId))
+      .limit(1);
+    expect(trip!.s).toBeNull();
+    expect(trip!.r).toBeNull();
+    const stillActive = await db
+      .select({ id: alerts.id })
+      .from(alerts)
+      .where(and(eq(alerts.tripId, tripId), inArray(alerts.state, ["active", "acknowledged"])));
+    expect(stillActive).toHaveLength(0);
   });
 
   it("rejects cancelling a completed trip with NOT_CANCELLABLE", async () => {

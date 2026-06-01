@@ -43,6 +43,11 @@ Thumbs.db
 # Local-only compose overrides
 **/docker-compose.override.yml
 
+# Claude Code local runtime state (session id / pid / timestamp) — never versioned.
+# Keep .claude/skills/ tracked; only ignore transient runtime files.
+.claude/*.lock
+.claude/scheduled_tasks.lock
+
 # Playwright artifacts
 test-results/
 playwright-report/

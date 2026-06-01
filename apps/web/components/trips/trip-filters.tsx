@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   BILLING_PHASE_STATUSES,
+  SLA_STATUSES,
   TRIP_STATUSES,
   VEHICLE_TYPE_VALUES,
   type TripBoardQuery,
@@ -36,7 +37,8 @@ type FilterValue = string | string[] | undefined;
  * APIs, so the read-only roles 005 serves get populated filters. Lanes carry no display label, so
  * their option label is derived `O → D` from the locations code map. Feature 006 adds the assignment
  * filters (assigned tri-state + assigned driver/vehicle/carrier), sourced from the same server-loaded
- * `options` (now carrying the active fleet lists). SLA risk remains a later slice (007).
+ * `options` (now carrying the active fleet lists). Feature 007 adds the SLA-risk filter + the "At
+ * risk" view (from `DEFAULT_TRIP_VIEWS`).
  */
 export function TripFilters({
   query,
@@ -54,6 +56,7 @@ export function TripFilters({
   const t = useTranslations("Trips");
   const tCommon = useTranslations("Common");
   const tVehicle = useTranslations("VehicleTypes");
+  const tSla = useTranslations("Sla.status");
 
   // Local search box state, synced to the URL `q` param on submit (Enter / blur).
   const [q, setQ] = useState(query.q ?? "");
@@ -217,6 +220,30 @@ export function TripFilters({
                 {VEHICLE_TYPE_VALUES.map((vt) => (
                   <SelectItem key={vt} value={vt}>
                     {tVehicle(vt)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* 007 — SLA-risk filter. Picking a specific status clears the broad `atRisk` shorthand so
+              they never compose to an empty board (atRisk = at_risk|late|breached). */}
+          <div className="space-y-1.5">
+            <Label>{t("board.filterSlaStatus")}</Label>
+            <Select
+              value={query.slaStatus?.[0] ?? ""}
+              onValueChange={(v) =>
+                setFilters({ slaStatus: v === "__all__" ? [] : [v], atRisk: undefined })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={t("board.all")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">{t("board.all")}</SelectItem>
+                {SLA_STATUSES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {tSla(s)}
                   </SelectItem>
                 ))}
               </SelectContent>
