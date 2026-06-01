@@ -591,6 +591,52 @@ export function useDocumentTypes(): UseQueryResult<{ items: DocumentTypeView[] }
   });
 }
 
+// --- Completion / Billing-Ready hooks (008, US2) -------------------------------------------------
+
+export interface WaivedRequirementInput {
+  documentTypeId: string;
+  reason: string;
+}
+
+/**
+ * Mark Completed (POST /api/trips/:id/complete). A blocked gate throws `TripsError("COMPLETION_BLOCKED")`
+ * carrying the blockers/missing types in `findings`. Invalidates the `["trips"]` root.
+ */
+export function useMarkCompleted(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { waivedRequirements?: WaivedRequirementInput[] } = {}) => {
+      const res = await fetch(`/api/trips/${id}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/** Mark Billing Ready (POST /api/trips/:id/billing-ready). Blocked ⇒ `TripsError("BILLING_READY_BLOCKED")`. */
+export function useMarkBillingReady(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { waivedRequirements?: WaivedRequirementInput[] } = {}) => {
+      const res = await fetch(`/api/trips/${id}/billing-ready`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
 // --- CSV export ----------------------------------------------------------------------------------
 
 /**

@@ -78,6 +78,7 @@ export {
   loadBillingItemView,
   billingPeriodSaoPaulo,
 } from "./billing/billing-items";
+export { markCompleted, markBillingReady } from "./trips/completion";
 export {
   queryBillingList,
   queryExportBatches,

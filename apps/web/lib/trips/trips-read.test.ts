@@ -334,12 +334,15 @@ describe.skipIf(!hasDb)("trips-read (integration)", () => {
     expect(metrics.unassignedTrips!).toBeGreaterThanOrEqual(2);
 
     // 007 — tripsAtRisk + activeExceptions are now COUNTS (always numbers); the on-time percentages
-    // are a number or null (null only when there is no denominator). Missing-docs stays null (008).
+    // are a number or null (null only when there is no denominator).
     expect(typeof metrics.tripsAtRisk).toBe("number");
     expect(typeof metrics.activeExceptions).toBe("number");
     expect(metrics.onTimePickupPct === null || typeof metrics.onTimePickupPct === "number").toBe(true);
     expect(metrics.onTimeArrivalPct === null || typeof metrics.onTimeArrivalPct === "number").toBe(true);
-    expect(metrics.completedMissingDocuments).toBeNull();
+    // 008 — completedMissingDocuments is now a COUNT (billing-phase trips missing required-for-billing
+    // proof), no longer the null placeholder.
+    expect(typeof metrics.completedMissingDocuments).toBe("number");
+    expect(metrics.completedMissingDocuments!).toBeGreaterThanOrEqual(0);
   });
 
   // -------------------------------------------------------------------------
