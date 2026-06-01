@@ -73,6 +73,9 @@ export const tripBoardQuerySchema = z.object({
   // narrows to specific risk states; `atRisk=true` is the union (at_risk|late|breached) for the view.
   slaStatus: oneOrMany(z.enum(SLA_STATUSES)),
   atRisk: optParam(z.enum(["true", "false"])),
+  // feature 008 — the "Missing documents" board view: billing-phase trips with an unmet
+  // required-for-billing document (data-model §10, R13).
+  missingDocuments: optParam(z.enum(["true", "false"])),
   q: z.preprocess(
     (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
     z.string().trim().min(1).max(200).optional(),
@@ -114,6 +117,7 @@ const PARAM_KEYS = [
   "pickupFrom",
   "pickupTo",
   "atRisk",
+  "missingDocuments",
   "q",
   "scope",
   "sort",

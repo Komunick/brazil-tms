@@ -25,6 +25,11 @@ export const NAV_ITEMS: readonly NavItem[] = [
   // rules admin (manage_commercial_data: Admin, Ops Manager).
   { key: "exceptions", href: "/exceptions", icon: "TriangleAlert", permission: "view_all_trips" },
   { key: "slaRules", href: "/sla-rules", icon: "Gauge", permission: "manage_commercial_data" },
+  // 008 — Documents + Billing (view_all_trips: all 7 internal roles read) + Rates (edit_rates:
+  // Admin, Finance).
+  { key: "documents", href: "/documents", icon: "FileCheck", permission: "view_all_trips" },
+  { key: "billing", href: "/billing", icon: "Receipt", permission: "view_all_trips" },
+  { key: "rates", href: "/billing/rates", icon: "DollarSign", permission: "edit_rates" },
   { key: "adminUsers", href: "/admin/users", icon: "Users", permission: "manage_users" },
   { key: "adminAudit", href: "/admin/audit", icon: "ScrollText", permission: "view_audit_log" },
   // 002 — commercial master data (manage_commercial_data: Admin, Ops Manager).

@@ -155,6 +155,25 @@ describe("tripBoardQueryFromParams — 007 SLA filters round-trip via PARAM_KEYS
   });
 });
 
+describe("tripBoardQuerySchema — 008 missingDocuments filter", () => {
+  it("accepts missingDocuments true/false and rejects an invalid value", () => {
+    expect(tripBoardQuerySchema.parse({ missingDocuments: "true" }).missingDocuments).toBe("true");
+    expect(tripBoardQuerySchema.safeParse({ missingDocuments: "maybe" }).success).toBe(false);
+  });
+
+  it("treats a blank missingDocuments as absent", () => {
+    expect(tripBoardQuerySchema.parse({ missingDocuments: "" }).missingDocuments).toBeUndefined();
+  });
+});
+
+describe("tripBoardQueryFromParams — 008 missingDocuments round-trip via PARAM_KEYS", () => {
+  it("reads missingDocuments from URL search params", () => {
+    const params = new URLSearchParams();
+    params.set("missingDocuments", "true");
+    expect(tripBoardQueryFromParams(params).missingDocuments).toBe("true");
+  });
+});
+
 describe("tripExportQuerySchema — no pagination", () => {
   it("parses the same filters but strips limit/offset", () => {
     const q = tripExportQuerySchema.parse({ status: "in_transit", limit: "9999", offset: "5" });

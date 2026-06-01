@@ -26,3 +26,11 @@ export * from "./reason-codes";
 export * from "./exceptions";
 export * from "./customer-sla-rules";
 export * from "./alerts";
+// Feature 008 — documents, completion, billing readiness, rates & export.
+export * from "./document-types";
+export * from "./documents";
+export * from "./document-requirements";
+export * from "./rates";
+export * from "./export-batches";
+export * from "./billing-items";
+export * from "./billing-adjustments";

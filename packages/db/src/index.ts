@@ -54,3 +54,33 @@ export {
   type AlertListItem,
   type AlertListResult,
 } from "./trips/alerts";
+// Feature 008 — documents / requirements / rates / billing-items foundational reads + helpers.
+// (`DocumentDto`/`DocumentSummary`/`BillingItemView`/`BillingAdjustmentDto`/`DocRef` flow through
+// `export * from "./trips/trip-dto"` above.)
+export {
+  resolveRequiredTypes,
+  satisfiedDocumentTypeIds,
+  loadChecklistStatus,
+  listDocumentRequirements,
+  listDocumentTypes,
+  type TripScope,
+  type ChecklistStatus,
+} from "./documents/requirements";
+export { resolveRate, listRates, type RateRow } from "./billing/rates";
+export {
+  ensureBillingItem,
+  loadBillingItemView,
+  billingPeriodSaoPaulo,
+} from "./billing/billing-items";
+export {
+  queryBillingList,
+  queryExportBatches,
+  queryRates,
+  queryDocumentRequirements,
+  queryDocumentTypes,
+  type BillingListRow,
+  type ExportBatchRow,
+  type RateRowView,
+  type DocumentRequirementView,
+  type DocumentTypeView,
+} from "./trips/trips-read";

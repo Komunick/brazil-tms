@@ -294,3 +294,61 @@ describe("007 execution/exception/SLA permission invariants (contracts/permissio
     }
   });
 });
+
+describe("008 documents/billing permission invariants (contracts/permission-matrix.md — first enforcement, no new key)", () => {
+  it("upload_documents = everyone except Executive Viewer", () => {
+    for (const role of [
+      Role.Admin,
+      Role.OperationsManager,
+      Role.Dispatcher,
+      Role.ControlTower,
+      Role.FleetCoordinator,
+      Role.Finance,
+    ] as const) {
+      expect(can(role, "upload_documents")).toBe(true);
+    }
+    expect(can(Role.ExecutiveViewer, "upload_documents")).toBe(false);
+  });
+
+  it("verify_documents = Admin, Ops Manager, Finance", () => {
+    for (const role of ALL_ROLES) {
+      const expected =
+        role === Role.Admin || role === Role.OperationsManager || role === Role.Finance;
+      expect(can(role, "verify_documents")).toBe(expected);
+    }
+  });
+
+  it("mark_completed = Admin, Ops Manager, Control Tower", () => {
+    for (const role of ALL_ROLES) {
+      const expected =
+        role === Role.Admin || role === Role.OperationsManager || role === Role.ControlTower;
+      expect(can(role, "mark_completed")).toBe(expected);
+    }
+  });
+
+  it("mark_billing_ready / edit_rates / export_billing = Admin + Finance only", () => {
+    for (const key of ["mark_billing_ready", "edit_rates", "export_billing"] as const) {
+      for (const role of ALL_ROLES) {
+        const expected = role === Role.Admin || role === Role.Finance;
+        expect(can(role, key)).toBe(expected);
+      }
+    }
+  });
+
+  it("document requirements/types reuse manage_commercial_data (Admin + Ops Manager)", () => {
+    for (const role of ALL_ROLES) {
+      const expected = role === Role.Admin || role === Role.OperationsManager;
+      expect(can(role, "manage_commercial_data")).toBe(expected);
+    }
+  });
+
+  it("Ops Manager holds mark_completed but NOT mark_billing_ready (Finance owns the billing gate)", () => {
+    expect(can(Role.OperationsManager, "mark_completed")).toBe(true);
+    expect(can(Role.OperationsManager, "mark_billing_ready")).toBe(false);
+  });
+
+  it("a Dispatcher can upload but cannot verify (verify is the review authority)", () => {
+    expect(can(Role.Dispatcher, "upload_documents")).toBe(true);
+    expect(can(Role.Dispatcher, "verify_documents")).toBe(false);
+  });
+});

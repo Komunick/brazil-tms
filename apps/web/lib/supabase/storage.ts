@@ -14,4 +14,11 @@ export {
   importBucket,
   originalStorageKey,
   errorReportStorageKey,
+  // Feature 008 — documents + billing-export binaries (two new private buckets).
+  putDocument,
+  putExport,
+  documentStorageKey,
+  exportStorageKey,
+  documentsBucket,
+  exportsBucket,
 } from "@brazil-tms/db/storage";
