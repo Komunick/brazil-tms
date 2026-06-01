@@ -173,7 +173,7 @@ Existing monorepo (per plan.md Project Structure): `packages/shared/src/`, `pack
 
 - [X] T048 [P] Run the quickstart.md US-by-US validation (US1–US5) against a seeded dev DB and confirm each independent test passes
 - [X] T049 Run the quality gate `pnpm lint && pnpm typecheck && pnpm build && pnpm test` (and the e2e suite against a prod build, `--workers=1`, `db:seed:e2e` first — MEMORY); fix any route-export lint (helpers off `route.ts`, MEMORY `nextjs_route_exports`) or dotted-i18n-key issues — the green gate is the SPEC-SLICING 009 exit criterion
-- [ ] T050 Open the PR to **`dev`** (never `main`) with the traceability matrix + performance numbers in the description; AI does not merge to `main` (Constitution / DELIVERY-WORKFLOW)
+- [X] T050 Open the PR to **`dev`** (never `main`) with the traceability matrix + performance numbers in the description; AI does not merge to `main` (Constitution / DELIVERY-WORKFLOW)
 
 ---
 
