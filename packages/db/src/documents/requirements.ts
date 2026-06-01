@@ -4,8 +4,13 @@ import { documentRequirements, documentTypes, documents } from "../../schema";
 import {
   DEFAULT_DOCUMENT_CHECKLIST,
   evaluateChecklist,
+  type CreateDocumentRequirementInput,
+  type CreateDocumentTypeInput,
   type RequiredType,
+  type UpdateDocumentRequirementInput,
+  type UpdateDocumentTypeInput,
 } from "@brazil-tms/shared";
+import { writeAudit } from "../audit/write-audit";
 
 /**
  * Feature 008 — document-requirement + document-type reads (data-model §11, R2). The applicable
@@ -197,4 +202,123 @@ export async function listDocumentRequirements(customerId?: string, executor: Qu
     ? await base.where(eq(documentRequirements.customerId, customerId))
     : await base;
   return rows;
+}
+
+// ---------------------------------------------------------------------------
+// CRUD (US3) — config administered via `manage_commercial_data`, audited
+// ---------------------------------------------------------------------------
+
+export async function createDocumentRequirement(
+  input: CreateDocumentRequirementInput,
+  actorUserId: string,
+) {
+  return db.transaction(async (tx) => {
+    const inserted = await tx
+      .insert(documentRequirements)
+      .values({
+        customerId: input.customerId,
+        documentTypeId: input.documentTypeId,
+        requiredForCompletion: input.requiredForCompletion,
+        requiredForBilling: input.requiredForBilling,
+        laneId: input.laneId ?? null,
+        vehicleType: input.vehicleType ?? null,
+        active: input.active,
+      })
+      .returning();
+    await writeAudit(tx, {
+      entityType: "document_requirement",
+      entityId: inserted[0]!.id,
+      action: "document_requirement.create",
+      previousValue: null,
+      newValue: inserted[0]!,
+      actorUserId,
+    });
+    return inserted[0]!;
+  });
+}
+
+export async function updateDocumentRequirement(
+  id: string,
+  input: UpdateDocumentRequirementInput,
+  actorUserId: string,
+) {
+  return db.transaction(async (tx) => {
+    const updated = await tx
+      .update(documentRequirements)
+      .set({
+        ...(input.requiredForCompletion !== undefined
+          ? { requiredForCompletion: input.requiredForCompletion }
+          : {}),
+        ...(input.requiredForBilling !== undefined
+          ? { requiredForBilling: input.requiredForBilling }
+          : {}),
+        ...(input.laneId !== undefined ? { laneId: input.laneId ?? null } : {}),
+        ...(input.vehicleType !== undefined ? { vehicleType: input.vehicleType ?? null } : {}),
+        ...(input.active !== undefined ? { active: input.active } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(documentRequirements.id, id))
+      .returning();
+    await writeAudit(tx, {
+      entityType: "document_requirement",
+      entityId: id,
+      action: "document_requirement.update",
+      previousValue: null,
+      newValue: updated[0] ?? null,
+      actorUserId,
+    });
+    return updated[0]!;
+  });
+}
+
+export async function createDocumentType(input: CreateDocumentTypeInput, actorUserId: string) {
+  return db.transaction(async (tx) => {
+    const inserted = await tx
+      .insert(documentTypes)
+      .values({
+        code: input.code,
+        labelPt: input.labelPt,
+        active: input.active,
+        ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
+      })
+      .returning();
+    await writeAudit(tx, {
+      entityType: "document_type",
+      entityId: inserted[0]!.id,
+      action: "document_type.create",
+      previousValue: null,
+      newValue: inserted[0]!,
+      actorUserId,
+    });
+    return inserted[0]!;
+  });
+}
+
+export async function updateDocumentType(
+  id: string,
+  input: UpdateDocumentTypeInput,
+  actorUserId: string,
+) {
+  return db.transaction(async (tx) => {
+    const updated = await tx
+      .update(documentTypes)
+      .set({
+        ...(input.code !== undefined ? { code: input.code } : {}),
+        ...(input.labelPt !== undefined ? { labelPt: input.labelPt } : {}),
+        ...(input.active !== undefined ? { active: input.active } : {}),
+        ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(documentTypes.id, id))
+      .returning();
+    await writeAudit(tx, {
+      entityType: "document_type",
+      entityId: id,
+      action: "document_type.update",
+      previousValue: null,
+      newValue: updated[0] ?? null,
+      actorUserId,
+    });
+    return updated[0]!;
+  });
 }

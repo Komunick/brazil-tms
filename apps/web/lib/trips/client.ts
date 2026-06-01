@@ -19,6 +19,10 @@ import {
   type TransitionExceptionInput,
   type CreateSlaRuleInput,
   type UpdateSlaRuleInput,
+  type CreateDocumentRequirementInput,
+  type UpdateDocumentRequirementInput,
+  type CreateDocumentTypeInput,
+  type UpdateDocumentTypeInput,
 } from "@brazil-tms/shared";
 import type {
   TripBoardRow,
@@ -30,6 +34,7 @@ import type {
   AlertListResult,
   CustomerSlaRuleItem,
   DocumentTypeView,
+  DocumentRequirementView,
 } from "@brazil-tms/db";
 
 /**
@@ -633,6 +638,98 @@ export function useMarkBillingReady(id: string) {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+// --- Document requirement / type admin hooks (008, US3) ------------------------------------------
+
+const DOC_REQ_ROOT = ["document-requirements"] as const;
+
+const jsonMutation = <I, T>(url: () => string, method: "POST" | "PATCH") => ({
+  mutationFn: async (input: I) => {
+    const res = await fetch(url(), {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    return asJson<T>(res);
+  },
+});
+
+/** A customer's document-requirement checklist (GET). */
+export function useDocumentRequirements(
+  customerId?: string,
+): UseQueryResult<{ items: DocumentRequirementView[] }> {
+  const search = customerId ? `?customerId=${customerId}` : "";
+  return useQuery({
+    queryKey: [...DOC_REQ_ROOT, "list", customerId ?? ""],
+    queryFn: async () =>
+      asJson<{ items: DocumentRequirementView[] }>(
+        await fetch(`/api/document-requirements${search}`),
+      ),
+    enabled: Boolean(customerId),
+  });
+}
+
+export function useCreateDocumentRequirement() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    ...jsonMutation<CreateDocumentRequirementInput, { item: DocumentRequirementView }>(
+      () => `/api/document-requirements`,
+      "POST",
+    ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: DOC_REQ_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+export function useUpdateDocumentRequirement() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: UpdateDocumentRequirementInput }) => {
+      const res = await fetch(`/api/document-requirements/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: DocumentRequirementView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: DOC_REQ_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+export function useCreateDocumentType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    ...jsonMutation<CreateDocumentTypeInput, { item: DocumentTypeView }>(
+      () => `/api/document-types`,
+      "POST",
+    ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: DOCUMENTS_ROOT });
+    },
+  });
+}
+
+export function useUpdateDocumentType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: UpdateDocumentTypeInput }) => {
+      const res = await fetch(`/api/document-types/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: DocumentTypeView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: DOCUMENTS_ROOT });
     },
   });
 }

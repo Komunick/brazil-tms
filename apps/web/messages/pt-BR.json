@@ -74,7 +74,8 @@
     "slaRules": "Regras de SLA",
     "documents": "Documentos",
     "billing": "Faturamento",
-    "rates": "Tarifas"
+    "rates": "Tarifas",
+    "documentRequirements": "Requisitos de Documentos"
   },
   "Roles": {
     "admin": "Administrador",

@@ -63,6 +63,10 @@ export {
   loadChecklistStatus,
   listDocumentRequirements,
   listDocumentTypes,
+  createDocumentRequirement,
+  updateDocumentRequirement,
+  createDocumentType,
+  updateDocumentType,
   type TripScope,
   type ChecklistStatus,
 } from "./documents/requirements";

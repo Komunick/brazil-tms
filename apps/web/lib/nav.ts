@@ -36,6 +36,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: "customers", href: "/admin/customers", icon: "Building2", permission: "manage_commercial_data" },
   { key: "locations", href: "/admin/locations", icon: "MapPin", permission: "manage_commercial_data" },
   { key: "lanes", href: "/admin/lanes", icon: "Route", permission: "manage_commercial_data" },
+  // 008 — per-customer document-requirement checklists + the document-type master.
+  {
+    key: "documentRequirements",
+    href: "/admin/document-requirements",
+    icon: "ListChecks",
+    permission: "manage_commercial_data",
+  },
   // 004 — trip import (import_trips: Admin, Ops Manager, Dispatcher).
   { key: "imports", href: "/imports", icon: "Upload", permission: "import_trips" },
   { key: "importHistory", href: "/imports/history", icon: "History", permission: "import_trips" },
