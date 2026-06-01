@@ -4,6 +4,7 @@ import {
   auditLogs,
   billingItems,
   customers,
+  alerts,
   db,
   documentRequirements,
   documentTypes,
@@ -86,6 +87,7 @@ describe.skipIf(!hasDb)("billing export + lists (integration, US5)", () => {
     await db.delete(exportBatches).where(eq(exportBatches.customerId, customerId));
     for (const id of tripIds) {
       await db.delete(billingItems).where(eq(billingItems.tripId, id));
+      await db.delete(alerts).where(eq(alerts.tripId, id));
       await db.delete(trips).where(eq(trips.id, id));
     }
     await db.delete(documentRequirements).where(eq(documentRequirements.customerId, customerId));

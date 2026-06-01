@@ -111,7 +111,7 @@ export function BillingLists({ options }: { options: TripFilterOptions }) {
             <Label htmlFor="bl-period">{t("period")}</Label>
             <Input
               id="bl-period"
-              placeholder="AAAA-MM"
+              placeholder={t("periodPlaceholder")}
               value={period}
               onChange={(e) => setPeriod(e.target.value)}
             />

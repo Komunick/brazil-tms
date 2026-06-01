@@ -327,6 +327,7 @@
       "ready": "Pronto para faturar",
       "customer": "Cliente",
       "period": "Período",
+      "periodPlaceholder": "AAAA-MM",
       "value": "Valor",
       "missingProof": "Comprovação pendente",
       "empty": "Nenhuma viagem encontrada."
@@ -335,6 +336,7 @@
       "title": "Exportar faturamento",
       "customer": "Cliente",
       "period": "Período (AAAA-MM)",
+      "periodPlaceholder": "AAAA-MM",
       "format": "Formato",
       "generate": "Gerar exportação",
       "generating": "Gerando...",
@@ -371,6 +373,7 @@
     "effectiveStart": "Início da vigência",
     "effectiveEnd": "Fim da vigência",
     "active": "Ativa",
+    "inactiveTag": "(inativa)",
     "add": "Adicionar tarifa",
     "save": "Salvar",
     "tollRule": "Regra de pedágio (Input #5)",

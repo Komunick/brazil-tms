@@ -93,7 +93,7 @@ export function ExportPanel({ options }: { options: TripFilterOptions }) {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="ex-period">{t("period")}</Label>
-            <Input id="ex-period" placeholder="AAAA-MM" value={period} onChange={(e) => setPeriod(e.target.value)} />
+            <Input id="ex-period" placeholder={t("periodPlaceholder")} value={period} onChange={(e) => setPeriod(e.target.value)} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="ex-format">{t("format")}</Label>

@@ -5,6 +5,7 @@ import {
   billingAdjustments,
   billingItems,
   customers,
+  alerts,
   db,
   ensureBillingItem,
   locations,
@@ -91,6 +92,7 @@ describe.skipIf(!hasDb)("billing items (integration, US4)", () => {
         await db.delete(auditLogs).where(eq(auditLogs.entityId, it.id));
         await db.delete(billingItems).where(eq(billingItems.id, it.id));
       }
+      await db.delete(alerts).where(eq(alerts.tripId, id));
       await db.delete(trips).where(eq(trips.id, id));
     }
     await db.delete(rates).where(eq(rates.customerId, pricedCustomerId));

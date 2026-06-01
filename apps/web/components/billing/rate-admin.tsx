@@ -95,7 +95,7 @@ export function RateAdmin({ options }: { options: TripFilterOptions }) {
                 <span className="text-muted-foreground">{r.laneLabel ?? "—"}</span>
                 {r.vehicleType ? <span className="text-muted-foreground">{r.vehicleType}</span> : null}
                 <span className="ml-auto font-semibold tabular-nums">{brl(r.baseAmountCents)}</span>
-                {!r.active ? <span className="text-xs text-muted-foreground">(inativa)</span> : null}
+                {!r.active ? <span className="text-xs text-muted-foreground">{t("inactiveTag")}</span> : null}
               </li>
             ))}
           </ul>

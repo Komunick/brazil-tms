@@ -5,6 +5,7 @@ import {
   billingAdjustments,
   billingItems,
   customers,
+  alerts,
   db,
   exportBatches,
   locations,
@@ -97,6 +98,7 @@ describe.skipIf(!hasDb)("billing.export job (integration, US5)", () => {
       await db.delete(billingItems).where(eq(billingItems.tripId, id));
       await db.delete(tripEvents).where(eq(tripEvents.tripId, id));
       await db.delete(auditLogs).where(eq(auditLogs.entityId, id));
+      await db.delete(alerts).where(eq(alerts.tripId, id));
       await db.delete(trips).where(eq(trips.id, id));
     }
     for (const id of batchIds) await db.delete(auditLogs).where(eq(auditLogs.entityId, id));
