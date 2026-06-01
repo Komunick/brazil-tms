@@ -6,6 +6,7 @@ import { registerGenerateErrorReport } from "./generate-error-report";
 import { registerConfirm } from "./confirm-import";
 import { registerSlaSweep } from "./sla-sweep";
 import { registerDocumentChecks } from "./document-checks";
+import { registerBillingExport } from "./billing-export";
 
 /**
  * Registry of import job handlers (feature 004, research R3). The bootstrap (`workers/index.ts`)
@@ -31,4 +32,6 @@ export async function registerJobHandlers(boss: PgBoss): Promise<void> {
   await registerSlaSweep(boss);
   // Feature 008 (T065): the SECOND scheduled job — the ~5-min document-checks sweep (the two §17 cases).
   await registerDocumentChecks(boss);
+  // Feature 008 (T094): the on-demand billing-export job (heavy ExcelJS generation off the request path).
+  await registerBillingExport(boss);
 }

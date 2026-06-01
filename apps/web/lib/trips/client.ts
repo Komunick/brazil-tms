@@ -27,6 +27,7 @@ import {
   type UpdateRateInput,
   type UpdateBillingItemInput,
   type AddBillingAdjustmentInput,
+  type CreateExportInput,
 } from "@brazil-tms/shared";
 import type {
   TripBoardRow,
@@ -41,6 +42,8 @@ import type {
   DocumentRequirementView,
   RateRowView,
   BillingItemView,
+  BillingListRow,
+  ExportBatchRow,
 } from "@brazil-tms/db";
 
 /**
@@ -830,6 +833,68 @@ export function useRemoveBillingAdjustment() {
       void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
     },
   });
+}
+
+// --- Billing list + export hooks (008, US5) ------------------------------------------------------
+
+const BILLING_ROOT = ["billing"] as const;
+
+/** The billing pending/ready list (GET /api/billing). 30s polling. */
+export function useBillingList(
+  scope: "pending" | "ready",
+  filters: { customerId?: string; period?: string } = {},
+): UseQueryResult<{ items: BillingListRow[] }> {
+  const params = new URLSearchParams({ scope });
+  if (filters.customerId) params.set("customerId", filters.customerId);
+  if (filters.period) params.set("period", filters.period);
+  const search = params.toString();
+  return useQuery({
+    queryKey: [...BILLING_ROOT, "list", search],
+    queryFn: async () => asJson<{ items: BillingListRow[] }>(await fetch(`/api/billing?${search}`)),
+    refetchInterval: CONTROL_TOWER_POLL_MS,
+  });
+}
+
+/** Export-batch history (GET /api/billing/exports). 30s polling (status progresses on the worker). */
+export function useExportBatches(
+  filters: { customerId?: string; period?: string } = {},
+): UseQueryResult<{ items: ExportBatchRow[] }> {
+  const params = new URLSearchParams();
+  if (filters.customerId) params.set("customerId", filters.customerId);
+  if (filters.period) params.set("period", filters.period);
+  const search = params.toString();
+  return useQuery({
+    queryKey: [...BILLING_ROOT, "exports", search],
+    queryFn: async () =>
+      asJson<{ items: ExportBatchRow[] }>(await fetch(`/api/billing/exports?${search}`)),
+    refetchInterval: CONTROL_TOWER_POLL_MS,
+  });
+}
+
+/** Trigger a billing export (POST /api/billing/exports). Blocked ⇒ `TripsError("NO_BILLABLE_TRIPS")`. */
+export function useCreateExport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateExportInput) => {
+      const res = await fetch(`/api/billing/exports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: ExportBatchRow }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: BILLING_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/** Fetch a signed URL to an export file (GET); not a hook — call on click. */
+export async function fetchExportDownloadUrl(exportBatchId: string): Promise<string> {
+  const res = await fetch(`/api/billing/exports/${exportBatchId}/download`);
+  const { url } = await asJson<{ url: string }>(res);
+  return url;
 }
 
 // --- CSV export ----------------------------------------------------------------------------------

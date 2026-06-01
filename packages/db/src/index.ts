@@ -86,6 +86,7 @@ export {
   removeBillingAdjustment,
 } from "./billing/billing-items";
 export { markCompleted, markBillingReady } from "./trips/completion";
+export { createExportBatch, countBillableTrips, getExportDownload } from "./billing/export";
 export {
   queryBillingList,
   queryExportBatches,
