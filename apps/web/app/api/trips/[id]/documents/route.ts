@@ -42,6 +42,13 @@ export async function POST(
     requirePermission(ctx, "upload_documents");
     const { id: tripId } = await params;
 
+    // Reject an oversize body BEFORE buffering it (the precise per-file check is below as a backstop).
+    // A valid <=10 MB file's multipart body is the file + small meta/boundary overhead, so allow a margin.
+    const declaredSize = Number(request.headers.get("content-length") ?? 0);
+    if (declaredSize > maxBytes() + 64 * 1024) {
+      throw new Conflict("FILE_TOO_LARGE", "Arquivo muito grande (máximo ~10 MB).");
+    }
+
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {

@@ -13,6 +13,7 @@ import {
   exportBatches,
   locations,
   rates,
+  tripEvents,
   trips,
 } from "@brazil-tms/db";
 import { testAccounts } from "./test-config";
@@ -137,6 +138,7 @@ test.afterAll(async () => {
     await db.delete(billingItems).where(inArray(billingItems.tripId, tripIds));
     await db.delete(documents).where(inArray(documents.tripId, tripIds));
     await db.delete(auditLogs).where(inArray(auditLogs.entityId, tripIds));
+    await db.delete(tripEvents).where(inArray(tripEvents.tripId, tripIds));
     await db.delete(trips).where(inArray(trips.id, tripIds));
   }
   if (customerId) {

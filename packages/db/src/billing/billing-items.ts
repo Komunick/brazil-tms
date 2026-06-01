@@ -8,7 +8,7 @@ import {
   type UpdateBillingItemInput,
 } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
-import { Conflict } from "../errors";
+import { Conflict, NotFound } from "../errors";
 import { resolveRate } from "./rates";
 import { loadChecklistStatus, type ChecklistStatus, type DocRef, type TripScope } from "../documents/requirements";
 
@@ -196,13 +196,13 @@ async function billingItemIdForTrip(executor: Querier, tripId: string): Promise<
     .from(billingItems)
     .where(eq(billingItems.tripId, tripId))
     .limit(1);
-  if (!rows[0]) throw new Conflict("NOT_FOUND", "Item de faturamento não encontrado.");
+  if (!rows[0]) throw new NotFound("NOT_FOUND", "Item de faturamento não encontrado.");
   return rows[0].id;
 }
 
 async function reloadView(tripId: string): Promise<BillingItemView> {
   const view = await loadBillingItemView(db, tripId);
-  if (!view) throw new Conflict("NOT_FOUND", "Item de faturamento não encontrado.");
+  if (!view) throw new NotFound("NOT_FOUND", "Item de faturamento não encontrado.");
   return view;
 }
 
@@ -273,7 +273,7 @@ export async function removeBillingAdjustment(
     .from(billingAdjustments)
     .where(eq(billingAdjustments.id, adjustmentId))
     .limit(1);
-  if (!rows[0]) throw new Conflict("NOT_FOUND", "Ajuste não encontrado.");
+  if (!rows[0]) throw new NotFound("NOT_FOUND", "Ajuste não encontrado.");
   const itemId = rows[0].itemId;
   const tripRows = await db
     .select({ tripId: billingItems.tripId })
