@@ -1,11 +1,14 @@
 import { and, eq } from "drizzle-orm";
-import { db } from "../client";
+import { db, type DB } from "../client";
 import { tripEvents, trips } from "../../schema";
 import { canTransition, type TransitionTripInput } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
 import { Conflict } from "../errors";
 import { recomputeTripSla } from "./sla";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
+
+/** The transaction handle passed to a {@link transitionTripStatus} `txHook` (the inner `tx`). */
+export type TripTransitionTx = Parameters<Parameters<DB["transaction"]>[0]>[0];
 
 /**
  * Atomic, status-guarded trip status transition (R7, FR-008..FR-012; contract:
@@ -20,11 +23,18 @@ import { loadTripDetail, type TripDetail } from "./trip-dto";
  * returns zero rows when another actor already moved the trip → `STALE_TRANSITION`. The trips row
  * update, the `trip_events` status_change row, and the `trip.status_change` audit all commit in the
  * SAME transaction, so a transition is never half-recorded (SC-003).
+ *
+ * `txHook` (optional) runs INSIDE that same transaction, AFTER the guarded update (so it only runs
+ * when the transition actually applied — a `STALE_TRANSITION` rolls everything back and the hook
+ * never fires). A caller uses it to make a side-write atomic with the status change — e.g. 008's
+ * billing export links `billing_items.export_batch_id` in the same tx as `billing_ready → billed`,
+ * so a crash can never leave a trip billed-but-unlinked (FR-021).
  */
 export async function transitionTripStatus(
   tripId: string,
   args: TransitionTripInput,
   actorUserId: string,
+  txHook?: (tx: TripTransitionTx) => Promise<void>,
 ): Promise<TripDetail> {
   const currentRows = await db
     .select({ currentStatus: trips.currentStatus, disputedFromStatus: trips.disputedFromStatus })
@@ -87,6 +97,10 @@ export async function transitionTripStatus(
     // Feature 007 — a recorded milestone flips SLA risk immediately (terminal trips short-circuit
     // inside recompute). Runs in-tx after the transition commits so the returned detail is fresh.
     await recomputeTripSla(tx, tripId);
+
+    // Optional caller side-write, atomic with the transition (008 billing-export link). A throw here
+    // rolls back the whole transition (the status change never applies).
+    if (txHook) await txHook(tx);
 
     const detail = await loadTripDetail(tx, tripId);
     if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");

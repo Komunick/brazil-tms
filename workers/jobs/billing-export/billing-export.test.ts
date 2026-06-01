@@ -179,27 +179,59 @@ describe.skipIf(!hasDb)("billing.export job (integration, US5)", () => {
     expect(aLink.ex).toBe(batchId);
   });
 
-  it("a billing_ready trip already LINKED (prior link-without-transition) is billed on retry, not dropped", async () => {
+  it("a billing_ready trip carrying a stray prior link is billed + (re)linked atomically, not dropped", async () => {
     const batchId = await insertBatch("xlsx");
-    // Simulate the link-first / transition-failed intermediate state: linked but still billing_ready.
+    // A stray link on a still-billing_ready trip is harmless: atomic bill+link re-sets it inside the
+    // guarded transition, so the trip is billed and stays in the batch (never dropped).
     const tripId = await seedReadyTrip();
     await db.update(billingItems).set({ exportBatchId: batchId }).where(eq(billingItems.tripId, tripId));
 
     await runBillingExport({ exportBatchId: batchId, actorUserId: actorId });
 
     const trip = (await db.select({ s: trips.currentStatus }).from(trips).where(eq(trips.id, tripId)).limit(1))[0]!;
-    expect(trip.s).toBe("billed"); // re-included by both arms + transitioned (never dropped)
+    expect(trip.s).toBe("billed");
     const batch = (await db.select().from(exportBatches).where(eq(exportBatches.id, batchId)).limit(1))[0]!;
     expect(batch.status).toBe("completed");
     expect(batch.tripCount).toBe(1);
   });
 
-  it("a trip linked but DISPUTED (race: moved out of billing_ready) is unlinked + excluded, not exported", async () => {
+  it("a trip billed into this batch then disputed stays in the batch's record (permanent link — no strand)", async () => {
     const batchId = await insertBatch("xlsx");
-    // Simulate the disputed-mid-export race: trip D was linked, then another actor disputed it.
+    // A prior run billed trip D into this batch; another actor then disputed it (billed → disputed is a
+    // legal transition). The link is PERMANENT, so D stays in the batch — it is NOT stranded (which is the
+    // failure mode unlink-on-dispute would cause: a trip billed-but-attached-to-no-batch forever). The
+    // dispute's money effect is a downstream credit (deferred 003 round-trip), not a retroactive edit to
+    // this completed export.
+    const tripD = await seedReadyTrip();
+    await db.update(billingItems).set({ exportBatchId: batchId }).where(eq(billingItems.tripId, tripD));
+    await db.update(trips).set({ currentStatus: "disputed", disputedFromStatus: "billed" }).where(eq(trips.id, tripD));
+    // Trip E is billed into the same batch this run.
+    const tripE = await seedReadyTrip();
+
+    await runBillingExport({ exportBatchId: batchId, actorUserId: actorId });
+
+    const batch = (await db.select().from(exportBatches).where(eq(exportBatches.id, batchId)).limit(1))[0]!;
+    expect(batch.status).toBe("completed");
+    expect(batch.tripCount).toBe(2); // D (permanent record) + E (newly billed)
+    expect(Number(batch.totalAmountCents)).toBe(300_000);
+
+    // D stays linked (never unlinked) though disputed — present in the batch, not stranded.
+    const dRow = (await db.select({ s: trips.currentStatus, ex: billingItems.exportBatchId }).from(trips).innerJoin(billingItems, eq(billingItems.tripId, trips.id)).where(eq(trips.id, tripD)).limit(1))[0]!;
+    expect(dRow.s).toBe("disputed");
+    expect(dRow.ex).toBe(batchId);
+    // E is billed + linked.
+    const eRow = (await db.select({ s: trips.currentStatus, ex: billingItems.exportBatchId }).from(trips).innerJoin(billingItems, eq(billingItems.tripId, trips.id)).where(eq(trips.id, tripE)).limit(1))[0]!;
+    expect(eRow.s).toBe("billed");
+    expect(eRow.ex).toBe(batchId);
+  });
+
+  it("a disputed (non-candidate) trip is never billed OR linked — the atomic hook can't orphan a link on STALE", async () => {
+    const batchId = await insertBatch("xlsx");
+    // Trip D was disputed out of billing_ready before this run, so its guarded transition raises STALE and
+    // the link hook (which rides INSIDE that transaction) never runs. The crux of the atomic fix: there is
+    // no window where a non-billed trip ends up linked, so a disputed trip can't slip into a completed batch.
     const tripD = await seedReadyTrip();
     await db.update(trips).set({ currentStatus: "disputed", disputedFromStatus: "billing_ready" }).where(eq(trips.id, tripD));
-    await db.update(billingItems).set({ exportBatchId: batchId }).where(eq(billingItems.tripId, tripD));
     // Trip E is a normal billing_ready trip for the same batch.
     const tripE = await seedReadyTrip();
 
@@ -209,7 +241,7 @@ describe.skipIf(!hasDb)("billing.export job (integration, US5)", () => {
     expect(batch.status).toBe("completed");
     expect(batch.tripCount).toBe(1); // ONLY the legitimately-billed trip E
 
-    // Trip D is reconciled OUT: unlinked + left disputed (never billed, never in the export).
+    // Trip D: never billed, never linked (the hook didn't run for the STALE transition).
     const dRow = (await db.select({ s: trips.currentStatus, ex: billingItems.exportBatchId }).from(trips).innerJoin(billingItems, eq(billingItems.tripId, trips.id)).where(eq(trips.id, tripD)).limit(1))[0]!;
     expect(dRow.s).toBe("disputed");
     expect(dRow.ex).toBeNull();
