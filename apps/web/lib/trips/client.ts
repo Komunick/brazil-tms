@@ -28,6 +28,11 @@ import {
   type UpdateBillingItemInput,
   type AddBillingAdjustmentInput,
   type CreateExportInput,
+  // feature 009 — report read-model row types + the audit-view page shape (pure, from shared).
+  type SlaReport,
+  type ExceptionReport,
+  type BillingReadinessReport,
+  type AuditLogPage,
 } from "@brazil-tms/shared";
 import type {
   TripBoardRow,
@@ -62,6 +67,8 @@ export const CONTROL_TOWER_POLL_MS = 30_000;
 export const DASHBOARD_POLL_MS = 60_000;
 /** Trip Detail — operational view that may be edited; 30s polling. */
 export const TRIP_DETAIL_POLL_MS = 30_000;
+/** Reports + audit view — coarse aggregates / forensic browse; 60s polling (matches the dashboard). */
+export const REPORTS_POLL_MS = 60_000;
 /** Synchronous CSV export row cap (R13); single source in @brazil-tms/shared, re-exported for UI copy. */
 export { EXPORT_ROW_CAP };
 
@@ -131,6 +138,10 @@ export function dashboardKey(): unknown[] {
   return [...TRIPS_ROOT, "dashboard"];
 }
 
+// feature 009 — reports + audit-view query keys.
+const REPORTS_ROOT = ["reports"] as const;
+const AUDIT_ROOT = ["audit-logs"] as const;
+
 // --- Response shapes -----------------------------------------------------------------------------
 
 export interface TripBoardResponse {
@@ -167,6 +178,45 @@ export function useDashboardSummary(): UseQueryResult<{ summary: DashboardSummar
     queryKey: dashboardKey(),
     queryFn: async () => asJson<{ summary: DashboardSummary }>(await fetch(`/api/dashboard/summary`)),
     refetchInterval: DASHBOARD_POLL_MS,
+  });
+}
+
+// --- Feature 009 report + audit-view read hooks (poll 60s; reads, no mutations) ------------------
+
+/** SLA performance report (US1). `search` is the report-filter query string. Returns the report directly. */
+export function useSlaReport(search: string): UseQueryResult<SlaReport> {
+  return useQuery({
+    queryKey: [...REPORTS_ROOT, "sla", search],
+    queryFn: async () => asJson<SlaReport>(await fetch(`/api/reports/sla?${search}`)),
+    refetchInterval: REPORTS_POLL_MS,
+  });
+}
+
+/** Exception volume / delay-reason report (US2). */
+export function useExceptionReport(search: string): UseQueryResult<ExceptionReport> {
+  return useQuery({
+    queryKey: [...REPORTS_ROOT, "exceptions", search],
+    queryFn: async () => asJson<ExceptionReport>(await fetch(`/api/reports/exceptions?${search}`)),
+    refetchInterval: REPORTS_POLL_MS,
+  });
+}
+
+/** Billing-readiness report (US3). */
+export function useBillingReadinessReport(search: string): UseQueryResult<BillingReadinessReport> {
+  return useQuery({
+    queryKey: [...REPORTS_ROOT, "billing-readiness", search],
+    queryFn: async () =>
+      asJson<BillingReadinessReport>(await fetch(`/api/reports/billing-readiness?${search}`)),
+    refetchInterval: REPORTS_POLL_MS,
+  });
+}
+
+/** Audit-history view (US4). `search` is the audit-log query string; returns `{ items, total }`. */
+export function useAuditLog(search: string): UseQueryResult<AuditLogPage> {
+  return useQuery({
+    queryKey: [...AUDIT_ROOT, search],
+    queryFn: async () => asJson<AuditLogPage>(await fetch(`/api/admin/audit-logs?${search}`)),
+    refetchInterval: REPORTS_POLL_MS,
   });
 }
 

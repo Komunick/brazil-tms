@@ -75,7 +75,8 @@
     "documents": "Documentos",
     "billing": "Faturamento",
     "rates": "Tarifas",
-    "documentRequirements": "Requisitos de Documentos"
+    "documentRequirements": "Requisitos de Documentos",
+    "reports": "Relatórios"
   },
   "Roles": {
     "admin": "Administrador",
@@ -135,6 +136,106 @@
     "reason": "Motivo",
     "empty": "Nenhum registro de auditoria.",
     "loadError": "Não foi possível carregar a auditoria."
+  },
+  "AuditView": {
+    "filters": "Filtros",
+    "entityType": "Tipo de entidade",
+    "entityId": "ID da entidade",
+    "action": "Ação",
+    "actor": "ID do responsável",
+    "actorPlaceholder": "UUID do responsável",
+    "from": "De",
+    "to": "Até",
+    "apply": "Aplicar",
+    "clear": "Limpar",
+    "showing": "Mostrando {count} de {total}",
+    "loadMore": "Carregar mais",
+    "presets": {
+      "all": "Todas",
+      "trip": "Viagens",
+      "exception": "Exceções",
+      "document": "Documentos",
+      "billing": "Cobrança",
+      "export": "Exportações",
+      "user": "Usuários"
+    }
+  },
+  "Reports": {
+    "title": "Relatórios",
+    "subtitle": "Desempenho de SLA, exceções e prontidão de cobrança por cliente, rota e período.",
+    "period": "Período",
+    "provisionalLabel": "Provisório",
+    "loadError": "Não foi possível carregar o relatório.",
+    "empty": "Nenhum dado para o período e filtros selecionados.",
+    "tabs": {
+      "sla": "SLA",
+      "exceptions": "Exceções",
+      "billingReadiness": "Prontidão de cobrança"
+    },
+    "filters": {
+      "customer": "Cliente",
+      "lane": "Rota",
+      "from": "De",
+      "to": "Até",
+      "groupBy": "Agrupar por",
+      "all": "Todos",
+      "clear": "Limpar"
+    },
+    "groupByValue": {
+      "customer": "Cliente",
+      "lane": "Rota"
+    },
+    "sla": {
+      "onTimePickup": "Coleta no prazo",
+      "onTimeArrival": "Entrega no prazo",
+      "breached": "Violados",
+      "group": "Cliente/Rota",
+      "total": "Total",
+      "onTrack": "No prazo",
+      "atRisk": "Em risco",
+      "late": "Atrasado",
+      "breachedCol": "Violado"
+    },
+    "exceptions": {
+      "total": "Total",
+      "open": "Abertas",
+      "resolved": "Resolvidas",
+      "avgResolution": "Tempo médio de resolução",
+      "byCategory": "Por categoria",
+      "bySeverity": "Por severidade",
+      "category": "Categoria",
+      "severity": "Severidade",
+      "count": "Quantidade",
+      "group": "Cliente/Rota"
+    },
+    "billing": {
+      "billing_pending": "Pendente",
+      "billing_ready": "Pronto",
+      "billed": "Faturado",
+      "disputed": "Em disputa",
+      "completedMissingDocuments": "Concluídas sem documentos",
+      "pctReadyWithin24h": "% prontas em 24h",
+      "customer": "Cliente"
+    },
+    "categoryValue": {
+      "delay": "Atraso",
+      "no_show": "Não comparecimento",
+      "breakdown": "Pane",
+      "driver_issue": "Problema com motorista",
+      "customer_delay": "Atraso do cliente",
+      "loading_delay": "Atraso no carregamento",
+      "unloading_delay": "Atraso no descarregamento",
+      "documentation": "Documentação",
+      "accident": "Acidente",
+      "route_deviation": "Desvio de rota",
+      "cancellation": "Cancelamento",
+      "other": "Outro"
+    },
+    "severityValue": {
+      "low": "Baixa",
+      "medium": "Média",
+      "high": "Alta"
+    }
   },
   "AuditActions": {
     "user_create": "Usuário criado",

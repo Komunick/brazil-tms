@@ -55,6 +55,7 @@ import {
 } from "@brazil-tms/shared";
 import { Conflict } from "../errors";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
+import { onTimeExpr } from "./on-time";
 
 /**
  * Feature 005 — Control Tower read models (board / detail / dashboard / export). These are the
@@ -289,7 +290,9 @@ function toBoardRow(row: BoardRow): TripBoardRow {
  */
 const DEFAULT_BILLING_DOC_CODE = "pod"; // mirrors DEFAULT_DOCUMENT_CHECKLIST in @brazil-tms/shared
 
-function missingBillingDocumentsSql(): SQL<boolean> {
+// Exported (009) so the billing-readiness report reuses the EXACT 008 missing-proof predicate
+// (DRY-for-correctness) rather than re-deriving the "completed but missing documents" signal.
+export function missingBillingDocumentsSql(): SQL<boolean> {
   return sql<boolean>`(
     EXISTS (
       SELECT 1 FROM ${documentRequirements} dr
@@ -542,6 +545,9 @@ export async function getTripDetailView(id: string): Promise<TripDetailView | nu
  */
 export async function queryDashboardMetrics(): Promise<DashboardSummary> {
   const { from, to } = dayRangeSaoPaulo(new Date());
+  // 009 — the shared on-time predicate (R2): one source of truth with the SLA report.
+  const pickup = onTimeExpr("pickup");
+  const arrival = onTimeExpr("arrival");
 
   const [
     byStatus,
@@ -592,41 +598,35 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
         .select({ value: count() })
         .from(exceptions)
         .where(inArray(exceptions.status, ["open", "monitoring"])),
-      // Feature 007 — on-time pickup %: trips (planned pickup in the last 30 days, window known) that
-      // recorded an origin arrival within the planned pickup window. NULL when no denominator yet.
-      db.execute(sql`
-        WITH arrivals AS (
-          SELECT
-            t.planned_pickup_window_end AS win_end,
-            (SELECT min(coalesce(e.event_timestamp, e.created_at))
-               FROM trip_events e
-               WHERE e.trip_id = t.id AND e.status_after = 'at_origin') AS arrived_at
-          FROM trips t
-          WHERE t.planned_pickup_window_end IS NOT NULL
-            AND t.planned_pickup_window_start >= now() - interval '30 days'
-        )
-        SELECT
-          count(*) FILTER (WHERE arrived_at IS NOT NULL)::int AS denom,
-          count(*) FILTER (WHERE arrived_at IS NOT NULL AND arrived_at <= win_end)::int AS num
-        FROM arrivals
-      `),
-      // Feature 007 — on-time arrival %: same, for destination arrival vs the planned delivery window.
-      db.execute(sql`
-        WITH arrivals AS (
-          SELECT
-            t.planned_delivery_window_end AS win_end,
-            (SELECT min(coalesce(e.event_timestamp, e.created_at))
-               FROM trip_events e
-               WHERE e.trip_id = t.id AND e.status_after = 'at_destination') AS arrived_at
-          FROM trips t
-          WHERE t.planned_delivery_window_end IS NOT NULL
-            AND t.planned_pickup_window_start >= now() - interval '30 days'
-        )
-        SELECT
-          count(*) FILTER (WHERE arrived_at IS NOT NULL)::int AS denom,
-          count(*) FILTER (WHERE arrived_at IS NOT NULL AND arrived_at <= win_end)::int AS num
-        FROM arrivals
-      `),
+      // Feature 007/009 — on-time pickup %: trips (planned pickup in the last 30 days, window known)
+      // that recorded an origin arrival within the planned pickup window. NULL when no denominator yet.
+      // Sourced from the shared `onTimeExpr` (DRY-for-correctness, R2) — behavior-preserving: same
+      // denom/num the inline CTE produced, now from the single predicate the SLA report also uses.
+      db
+        .select({
+          denom: sql<number>`count(*) FILTER (WHERE ${pickup.actualRecorded})::int`,
+          num: sql<number>`count(*) FILTER (WHERE ${pickup.onTime})::int`,
+        })
+        .from(trips)
+        .where(
+          and(
+            isNotNull(trips.plannedPickupWindowEnd),
+            gte(trips.plannedPickupWindowStart, sql`now() - interval '30 days'`),
+          ),
+        ),
+      // Feature 007/009 — on-time arrival %: same, for destination arrival vs the planned delivery window.
+      db
+        .select({
+          denom: sql<number>`count(*) FILTER (WHERE ${arrival.actualRecorded})::int`,
+          num: sql<number>`count(*) FILTER (WHERE ${arrival.onTime})::int`,
+        })
+        .from(trips)
+        .where(
+          and(
+            isNotNull(trips.plannedDeliveryWindowEnd),
+            gte(trips.plannedPickupWindowStart, sql`now() - interval '30 days'`),
+          ),
+        ),
       // Feature 008 — billing-phase trips with ≥1 unmet required-for-billing document (R13, COV-001).
       db
         .select({ value: count() })
@@ -639,7 +639,7 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
         ),
     ]);
 
-  const pct = (rows: Array<Record<string, unknown>>): number | null => {
+  const pct = (rows: Array<{ denom: number; num: number }>): number | null => {
     const r = rows[0];
     const denom = Number(r?.denom ?? 0);
     const num = Number(r?.num ?? 0);
@@ -652,8 +652,8 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
     tripsAtRisk: atRisk[0]?.value ?? 0,
     unassignedTrips: unassigned[0]?.value ?? 0,
     activeExceptions: activeExc[0]?.value ?? 0,
-    onTimePickupPct: pct(pickupPct as unknown as Array<Record<string, unknown>>),
-    onTimeArrivalPct: pct(arrivalPct as unknown as Array<Record<string, unknown>>),
+    onTimePickupPct: pct(pickupPct),
+    onTimeArrivalPct: pct(arrivalPct),
     completedMissingDocuments: missingDocs[0]?.value ?? 0,
   };
 }

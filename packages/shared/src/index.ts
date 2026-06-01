@@ -29,3 +29,7 @@ export * from "./schemas/document-requirement";
 export * from "./schemas/rate";
 export * from "./schemas/billing";
 export * from "./import";
+// feature 009 — reporting + audit-view query schemas, period helpers & read-model row types.
+export * from "./schemas/report";
+export * from "./schemas/audit";
+export * from "./domain/reporting";

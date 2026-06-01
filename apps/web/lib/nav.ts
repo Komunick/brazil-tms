@@ -30,6 +30,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: "documents", href: "/documents", icon: "FileCheck", permission: "view_all_trips" },
   { key: "billing", href: "/billing", icon: "Receipt", permission: "view_all_trips" },
   { key: "rates", href: "/billing/rates", icon: "DollarSign", permission: "edit_rates" },
+  // 009 — Reports (view_all_trips: all 7 internal roles, mirroring the 005 dashboard).
+  { key: "reports", href: "/reports", icon: "BarChart3", permission: "view_all_trips" },
   { key: "adminUsers", href: "/admin/users", icon: "Users", permission: "manage_users" },
   { key: "adminAudit", href: "/admin/audit", icon: "ScrollText", permission: "view_audit_log" },
   // 002 — commercial master data (manage_commercial_data: Admin, Ops Manager).

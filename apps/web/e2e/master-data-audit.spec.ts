@@ -20,8 +20,8 @@ async function adminApi(request: APIRequestContext): Promise<APIRequestContext> 
 async function actionsFor(ctx: APIRequestContext, entityId: string): Promise<string[]> {
   const res = await ctx.get(`/api/admin/audit-logs?entityId=${entityId}`);
   expect(res.ok()).toBeTruthy();
-  const body = (await res.json()) as { entries: { action: string; entityType: string }[] };
-  return body.entries.map((e) => e.action);
+  const body = (await res.json()) as { items: { action: string; entityType: string }[] };
+  return body.items.map((e) => e.action);
 }
 
 test.describe("US5 — audit coverage", () => {
