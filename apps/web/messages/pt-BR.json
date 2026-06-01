@@ -226,6 +226,10 @@
     "requiredForBilling": "Obrigatório para faturamento",
     "checklistBlocked": "Lista de documentos do cliente não homologada (usando padrão).",
     "empty": "Nenhum documento anexado.",
+    "colTrip": "Viagem",
+    "colCustomer": "Cliente",
+    "colLane": "Rota",
+    "colStatus": "Status",
     "status": {
       "pending_review": "Em análise",
       "accepted": "Aceito",

@@ -29,6 +29,7 @@ import type {
   AlertListItem,
   AlertListResult,
   CustomerSlaRuleItem,
+  DocumentTypeView,
 } from "@brazil-tms/db";
 
 /**
@@ -503,6 +504,90 @@ export function useUpdateSlaRule() {
       void queryClient.invalidateQueries({ queryKey: SLA_RULES_ROOT });
       void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
     },
+  });
+}
+
+// --- Document hooks (008, US1; upload / verify / archive / download via the BFF) ------------------
+
+const DOCUMENTS_ROOT = ["documents"] as const;
+
+export interface UploadDocumentMetaInput {
+  documentTypeId: string;
+  externalReference?: string;
+  notes?: string;
+  fileName: string;
+}
+
+/** Upload a proof document (multipart POST /api/trips/:id/documents). Invalidates trips + documents. */
+export function useUploadDocument(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ file, meta }: { file: File; meta: UploadDocumentMetaInput }) => {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("meta", JSON.stringify(meta));
+      const res = await fetch(`/api/trips/${id}/documents`, { method: "POST", body: form });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+      void queryClient.invalidateQueries({ queryKey: DOCUMENTS_ROOT });
+    },
+  });
+}
+
+/** Verify a document (PATCH /api/documents/:id). */
+export function useVerifyDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      documentId,
+      input,
+    }: {
+      documentId: string;
+      input: { verificationStatus: "pending_review" | "accepted" | "rejected"; notes?: string };
+    }) => {
+      const res = await fetch(`/api/documents/${documentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+      void queryClient.invalidateQueries({ queryKey: DOCUMENTS_ROOT });
+    },
+  });
+}
+
+/** Archive a document (DELETE /api/documents/:id) — soft-delete. */
+export function useArchiveDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (documentId: string) => {
+      const res = await fetch(`/api/documents/${documentId}`, { method: "DELETE" });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+      void queryClient.invalidateQueries({ queryKey: DOCUMENTS_ROOT });
+    },
+  });
+}
+
+/** Fetch a short-lived signed download URL for a document (GET); not a hook — call on click. */
+export async function fetchDocumentDownloadUrl(tripId: string, docId: string): Promise<string> {
+  const res = await fetch(`/api/trips/${tripId}/documents/${docId}/download`);
+  const { url } = await asJson<{ url: string }>(res);
+  return url;
+}
+
+/** The document-type master (GET /api/document-types) — powers the upload type picker. */
+export function useDocumentTypes(): UseQueryResult<{ items: DocumentTypeView[] }> {
+  return useQuery({
+    queryKey: [...DOCUMENTS_ROOT, "types"],
+    queryFn: async () => asJson<{ items: DocumentTypeView[] }>(await fetch(`/api/document-types`)),
   });
 }
 

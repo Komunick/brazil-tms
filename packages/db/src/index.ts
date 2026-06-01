@@ -66,6 +66,12 @@ export {
   type TripScope,
   type ChecklistStatus,
 } from "./documents/requirements";
+export {
+  uploadDocument,
+  verifyDocument,
+  archiveDocument,
+  getDocumentFileKey,
+} from "./documents/documents";
 export { resolveRate, listRates, type RateRow } from "./billing/rates";
 export {
   ensureBillingItem,
