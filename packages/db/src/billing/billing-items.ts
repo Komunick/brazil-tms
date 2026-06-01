@@ -1,7 +1,13 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { db, type DB } from "../client";
 import { billingAdjustments, billingItems, trips } from "../../schema";
-import { computeBillingValues, type AdjustmentInput } from "@brazil-tms/shared";
+import {
+  computeBillingValues,
+  type AddBillingAdjustmentInput,
+  type AdjustmentInput,
+  type UpdateBillingItemInput,
+} from "@brazil-tms/shared";
+import { writeAudit } from "../audit/write-audit";
 import { Conflict } from "../errors";
 import { resolveRate } from "./rates";
 import { loadChecklistStatus, type ChecklistStatus, type DocRef, type TripScope } from "../documents/requirements";
@@ -178,4 +184,117 @@ export async function loadBillingItemView(
     hasRate: item.rateId != null,
     checklistSignedOff: status?.hasExplicitChecklist ?? false,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Mutations (US4) — `edit_rates`, audited (billing_item.update)
+// ---------------------------------------------------------------------------
+
+async function billingItemIdForTrip(executor: Querier, tripId: string): Promise<string> {
+  const rows = await executor
+    .select({ id: billingItems.id })
+    .from(billingItems)
+    .where(eq(billingItems.tripId, tripId))
+    .limit(1);
+  if (!rows[0]) throw new Conflict("NOT_FOUND", "Item de faturamento não encontrado.");
+  return rows[0].id;
+}
+
+async function reloadView(tripId: string): Promise<BillingItemView> {
+  const view = await loadBillingItemView(db, tripId);
+  if (!view) throw new Conflict("NOT_FOUND", "Item de faturamento não encontrado.");
+  return view;
+}
+
+/** Set the manual base / period / dispute / notes on a trip's billing item. */
+export async function updateBillingItem(
+  tripId: string,
+  input: UpdateBillingItemInput,
+  actorUserId: string,
+): Promise<BillingItemView> {
+  const itemId = await billingItemIdForTrip(db, tripId);
+  await db.transaction(async (tx) => {
+    await tx
+      .update(billingItems)
+      .set({
+        ...(input.baseFreightCents !== undefined ? { baseFreightCents: input.baseFreightCents } : {}),
+        ...(input.billingPeriod !== undefined ? { billingPeriod: input.billingPeriod } : {}),
+        ...(input.disputeStatus !== undefined ? { disputeStatus: input.disputeStatus } : {}),
+        ...(input.notes !== undefined ? { notes: input.notes ?? null } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(billingItems.id, itemId));
+    await writeAudit(tx, {
+      entityType: "billing_item",
+      entityId: itemId,
+      action: "billing_item.update",
+      previousValue: null,
+      newValue: { tripId, ...input },
+      actorUserId,
+    });
+  });
+  return reloadView(tripId);
+}
+
+/** Add a typed adjustment to a trip's billing item. */
+export async function addBillingAdjustment(
+  tripId: string,
+  input: AddBillingAdjustmentInput,
+  actorUserId: string,
+): Promise<BillingItemView> {
+  const itemId = await billingItemIdForTrip(db, tripId);
+  await db.transaction(async (tx) => {
+    await tx.insert(billingAdjustments).values({
+      billingItemId: itemId,
+      type: input.type,
+      amountCents: input.amountCents,
+      note: input.note ?? null,
+      createdByUserId: actorUserId,
+    });
+    await writeAudit(tx, {
+      entityType: "billing_item",
+      entityId: itemId,
+      action: "billing_item.update",
+      previousValue: null,
+      newValue: { tripId, addedAdjustment: { type: input.type, amountCents: input.amountCents } },
+      actorUserId,
+    });
+  });
+  return reloadView(tripId);
+}
+
+/** Soft-remove an adjustment (never hard-delete a financial row — Constitution III). */
+export async function removeBillingAdjustment(
+  adjustmentId: string,
+  actorUserId: string,
+): Promise<BillingItemView> {
+  const rows = await db
+    .select({ itemId: billingAdjustments.billingItemId })
+    .from(billingAdjustments)
+    .where(eq(billingAdjustments.id, adjustmentId))
+    .limit(1);
+  if (!rows[0]) throw new Conflict("NOT_FOUND", "Ajuste não encontrado.");
+  const itemId = rows[0].itemId;
+  const tripRows = await db
+    .select({ tripId: billingItems.tripId })
+    .from(billingItems)
+    .where(eq(billingItems.id, itemId))
+    .limit(1);
+  const tripId = tripRows[0]!.tripId;
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(billingAdjustments)
+      .set({ removedAt: new Date(), removedByUserId: actorUserId })
+      .where(eq(billingAdjustments.id, adjustmentId));
+    await writeAudit(tx, {
+      entityType: "billing_item",
+      entityId: itemId,
+      action: "billing_item.update",
+      previousValue: null,
+      newValue: { tripId, removedAdjustmentId: adjustmentId },
+      actorUserId,
+    });
+  });
+  return reloadView(tripId);
 }

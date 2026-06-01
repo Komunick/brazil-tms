@@ -76,11 +76,14 @@ export {
   archiveDocument,
   getDocumentFileKey,
 } from "./documents/documents";
-export { resolveRate, listRates, type RateRow } from "./billing/rates";
+export { resolveRate, listRates, createRate, updateRate, type RateRow } from "./billing/rates";
 export {
   ensureBillingItem,
   loadBillingItemView,
   billingPeriodSaoPaulo,
+  updateBillingItem,
+  addBillingAdjustment,
+  removeBillingAdjustment,
 } from "./billing/billing-items";
 export { markCompleted, markBillingReady } from "./trips/completion";
 export {

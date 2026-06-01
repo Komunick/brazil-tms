@@ -23,6 +23,10 @@ import {
   type UpdateDocumentRequirementInput,
   type CreateDocumentTypeInput,
   type UpdateDocumentTypeInput,
+  type CreateRateInput,
+  type UpdateRateInput,
+  type UpdateBillingItemInput,
+  type AddBillingAdjustmentInput,
 } from "@brazil-tms/shared";
 import type {
   TripBoardRow,
@@ -35,6 +39,8 @@ import type {
   CustomerSlaRuleItem,
   DocumentTypeView,
   DocumentRequirementView,
+  RateRowView,
+  BillingItemView,
 } from "@brazil-tms/db";
 
 /**
@@ -730,6 +736,98 @@ export function useUpdateDocumentType() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: DOCUMENTS_ROOT });
+    },
+  });
+}
+
+// --- Rate + billing-item hooks (008, US4) --------------------------------------------------------
+
+const RATES_ROOT = ["rates"] as const;
+
+/** Rates list with labels (GET /api/rates). */
+export function useRates(customerId?: string): UseQueryResult<{ items: RateRowView[] }> {
+  const search = customerId ? `?customerId=${customerId}` : "";
+  return useQuery({
+    queryKey: [...RATES_ROOT, "list", customerId ?? ""],
+    queryFn: async () => asJson<{ items: RateRowView[] }>(await fetch(`/api/rates${search}`)),
+  });
+}
+
+export function useCreateRate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    ...jsonMutation<CreateRateInput, { item: unknown }>(() => `/api/rates`, "POST"),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: RATES_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+export function useUpdateRate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: UpdateRateInput }) => {
+      const res = await fetch(`/api/rates/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: unknown }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: RATES_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/** Set the manual base / period / dispute / notes on a trip's billing item (PATCH). */
+export function useUpdateBillingItem(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateBillingItemInput) => {
+      const res = await fetch(`/api/trips/${id}/billing`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: BillingItemView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/** Add a typed adjustment to a trip's billing item (POST). */
+export function useAddBillingAdjustment(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: AddBillingAdjustmentInput) => {
+      const res = await fetch(`/api/trips/${id}/billing/adjustments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: BillingItemView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/** Soft-remove a billing adjustment (DELETE /api/billing-adjustments/:id). */
+export function useRemoveBillingAdjustment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (adjustmentId: string) => {
+      const res = await fetch(`/api/billing-adjustments/${adjustmentId}`, { method: "DELETE" });
+      return asJson<{ item: BillingItemView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
     },
   });
 }

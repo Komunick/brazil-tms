@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
+import { BILLING_ADJUSTMENT_TYPES } from "@brazil-tms/shared";
 import type { TripDetailView } from "@/lib/trips/trips-read";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,16 +17,19 @@ import {
 } from "@/components/ui/select";
 import {
   TripsError,
+  useAddBillingAdjustment,
   useMarkBillingReady,
   useMarkCompleted,
+  useRemoveBillingAdjustment,
+  useUpdateBillingItem,
   type WaivedRequirementInput,
 } from "@/lib/trips/client";
 
 /**
- * Trip-Detail billing section (008, US2) — replaces the 005 `BillingPlaceholder`. Shows the computed
- * billing values (read-only at this stage) and the Mark Completed / Mark Billing Ready actions with a
- * server-side blockers display and a per-document waiver input. US4 extends this with the editable
- * rate/adjustment controls. All writes go through the BFF + invalidate `["trips"]`. pt-BR.
+ * Trip-Detail billing section (008, US2 + US4) — replaces the 005 `BillingPlaceholder`. Shows the
+ * computed planned/executed/adjustment/final values, the editable manual base + typed adjustments
+ * (US4), the Mark Completed / Mark Billing Ready actions with a server-side blockers display, and a
+ * per-document waiver input. All writes go through the BFF + invalidate `["trips"]`. pt-BR.
  */
 
 function brl(cents: number | null | undefined): string {
@@ -33,18 +37,54 @@ function brl(cents: number | null | undefined): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(cents / 100);
 }
 
+/** Parse a reais string ("1.500,00" or "1500.00") to integer centavos, or null. */
+function reaisToCents(input: string): number | null {
+  const normalized = input.replace(/\./g, "").replace(",", ".").trim();
+  if (normalized === "") return null;
+  const v = Number(normalized);
+  return Number.isFinite(v) ? Math.round(v * 100) : null;
+}
+
 export function BillingSection({ trip }: { trip: TripDetailView }) {
   const t = useTranslations("Billing");
   const complete = useMarkCompleted(trip.id);
   const billingReady = useMarkBillingReady(trip.id);
+  const updateItem = useUpdateBillingItem(trip.id);
+  const addAdjustment = useAddBillingAdjustment(trip.id);
+  const removeAdjustment = useRemoveBillingAdjustment();
 
   const [waivers, setWaivers] = useState<WaivedRequirementInput[]>([]);
   const [waiveType, setWaiveType] = useState("");
   const [waiveReason, setWaiveReason] = useState("");
   const [blockers, setBlockers] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [manualBase, setManualBase] = useState("");
+  const [adjType, setAdjType] = useState("");
+  const [adjAmount, setAdjAmount] = useState("");
+  const [adjNote, setAdjNote] = useState("");
 
   const billing = trip.billing;
+
+  const onSaveBase = () => {
+    const cents = reaisToCents(manualBase);
+    if (cents == null) return;
+    updateItem.mutate({ baseFreightCents: cents }, { onSuccess: () => setManualBase("") });
+  };
+
+  const onAddAdjustment = () => {
+    const cents = reaisToCents(adjAmount);
+    if (!adjType || cents == null) return;
+    addAdjustment.mutate(
+      { type: adjType as (typeof BILLING_ADJUSTMENT_TYPES)[number], amountCents: cents, note: adjNote.trim() || undefined },
+      {
+        onSuccess: () => {
+          setAdjType("");
+          setAdjAmount("");
+          setAdjNote("");
+        },
+      },
+    );
+  };
   // Required docs still missing (union, unique) — candidates for a waiver.
   const missing = Array.from(
     new Map(
@@ -130,6 +170,110 @@ export function BillingSection({ trip }: { trip: TripDetailView }) {
 
         {billing && !billing.hasRate ? (
           <p className="text-xs text-amber-700">{t("rateBlocked")}</p>
+        ) : null}
+
+        {/* US4 — editable manual base + typed adjustments (BFF gates on edit_rates) */}
+        {billing ? (
+          <div className="space-y-4 rounded-md border p-3">
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="bill-base">{t("manualAmount")}</Label>
+                <Input
+                  id="bill-base"
+                  inputMode="decimal"
+                  placeholder={billing.baseFreightCents != null ? brl(billing.baseFreightCents) : "0,00"}
+                  value={manualBase}
+                  onChange={(e) => setManualBase(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onSaveBase}
+                disabled={updateItem.isPending || reaisToCents(manualBase) == null}
+              >
+                {t("save")}
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-sm font-medium">{t("adjustments.title")}</div>
+              {billing.adjustments.length > 0 ? (
+                <ul className="space-y-1">
+                  {billing.adjustments.map((a) => (
+                    <li key={a.id} className="flex items-center gap-2 text-sm">
+                      <span className="text-muted-foreground">
+                        {(() => {
+                          try {
+                            return t(`adjustments.types.${a.type}` as Parameters<typeof t>[0]);
+                          } catch {
+                            return a.type;
+                          }
+                        })()}
+                      </span>
+                      <span className="font-medium">{brl(a.amountCents)}</span>
+                      {a.note ? <span className="text-muted-foreground">— {a.note}</span> : null}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="ml-auto"
+                        onClick={() => removeAdjustment.mutate(a.id)}
+                        disabled={removeAdjustment.isPending}
+                      >
+                        {t("adjustments.remove")}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="adj-type">{t("adjustments.type")}</Label>
+                  <Select value={adjType || undefined} onValueChange={setAdjType}>
+                    <SelectTrigger id="adj-type" className="w-44">
+                      <SelectValue placeholder="—" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {BILLING_ADJUSTMENT_TYPES.map((ty) => (
+                        <SelectItem key={ty} value={ty}>
+                          {(() => {
+                            try {
+                              return t(`adjustments.types.${ty}` as Parameters<typeof t>[0]);
+                            } catch {
+                              return ty;
+                            }
+                          })()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="adj-amount">{t("adjustments.amount")}</Label>
+                  <Input
+                    id="adj-amount"
+                    inputMode="decimal"
+                    value={adjAmount}
+                    onChange={(e) => setAdjAmount(e.target.value)}
+                    className="w-32"
+                  />
+                </div>
+                <div className="space-y-1.5 flex-1 min-w-[10rem]">
+                  <Label htmlFor="adj-note">{t("adjustments.note")}</Label>
+                  <Input id="adj-note" value={adjNote} onChange={(e) => setAdjNote(e.target.value)} maxLength={500} />
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={onAddAdjustment}
+                  disabled={addAdjustment.isPending || !adjType || reaisToCents(adjAmount) == null}
+                >
+                  {t("adjustments.add")}
+                </Button>
+              </div>
+            </div>
+          </div>
         ) : null}
 
         {/* Blockers from the last refused gate */}

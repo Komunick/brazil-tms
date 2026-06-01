@@ -1,6 +1,8 @@
 import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { db, type DB } from "../client";
 import { rates } from "../../schema";
+import type { CreateRateInput, UpdateRateInput } from "@brazil-tms/shared";
+import { writeAudit } from "../audit/write-audit";
 import type { TripScope } from "../documents/requirements";
 
 /**
@@ -72,4 +74,73 @@ export async function listRates(
   return filters.customerId
     ? base.where(eq(rates.customerId, filters.customerId))
     : base;
+}
+
+// ---------------------------------------------------------------------------
+// CRUD (US4) — `edit_rates`, audited
+// ---------------------------------------------------------------------------
+
+export async function createRate(input: CreateRateInput, actorUserId: string): Promise<RateRow> {
+  return db.transaction(async (tx) => {
+    const inserted = await tx
+      .insert(rates)
+      .values({
+        customerId: input.customerId,
+        laneId: input.laneId ?? null,
+        vehicleType: input.vehicleType ?? null,
+        baseAmountCents: input.baseAmountCents,
+        currency: input.currency,
+        tollHandlingRule: input.tollHandlingRule ?? null,
+        waitingTimeRule: input.waitingTimeRule ?? null,
+        extraStopRule: input.extraStopRule ?? null,
+        effectiveStart: input.effectiveStart ?? null,
+        effectiveEnd: input.effectiveEnd ?? null,
+        active: input.active,
+      })
+      .returning();
+    await writeAudit(tx, {
+      entityType: "rate",
+      entityId: inserted[0]!.id,
+      action: "rate.create",
+      previousValue: null,
+      newValue: inserted[0]!,
+      actorUserId,
+    });
+    return inserted[0]!;
+  });
+}
+
+export async function updateRate(
+  id: string,
+  input: UpdateRateInput,
+  actorUserId: string,
+): Promise<RateRow> {
+  return db.transaction(async (tx) => {
+    const updated = await tx
+      .update(rates)
+      .set({
+        ...(input.laneId !== undefined ? { laneId: input.laneId ?? null } : {}),
+        ...(input.vehicleType !== undefined ? { vehicleType: input.vehicleType ?? null } : {}),
+        ...(input.baseAmountCents !== undefined ? { baseAmountCents: input.baseAmountCents } : {}),
+        ...(input.currency !== undefined ? { currency: input.currency } : {}),
+        ...(input.tollHandlingRule !== undefined ? { tollHandlingRule: input.tollHandlingRule ?? null } : {}),
+        ...(input.waitingTimeRule !== undefined ? { waitingTimeRule: input.waitingTimeRule ?? null } : {}),
+        ...(input.extraStopRule !== undefined ? { extraStopRule: input.extraStopRule ?? null } : {}),
+        ...(input.effectiveStart !== undefined ? { effectiveStart: input.effectiveStart ?? null } : {}),
+        ...(input.effectiveEnd !== undefined ? { effectiveEnd: input.effectiveEnd ?? null } : {}),
+        ...(input.active !== undefined ? { active: input.active } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(rates.id, id))
+      .returning();
+    await writeAudit(tx, {
+      entityType: "rate",
+      entityId: id,
+      action: "rate.update",
+      previousValue: null,
+      newValue: updated[0] ?? null,
+      actorUserId,
+    });
+    return updated[0]!;
+  });
 }
