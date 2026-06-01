@@ -80,8 +80,20 @@ describe("pt-BR messages", () => {
   });
 
   it("has nested + flat labels for the 008 document / requirement / type / rate / billing actions", () => {
-    const a = (messages as { Trips: { auditActions: Record<string, Record<string, string>> } }).Trips
-      .auditActions;
+    const a = (
+      messages as {
+        Trips: {
+          auditActions: {
+            document: Record<string, string>;
+            document_requirement: Record<string, string>;
+            document_type: Record<string, string>;
+            rate: Record<string, string>;
+            billing_item: Record<string, string>;
+            billing: Record<string, string>;
+          };
+        };
+      }
+    ).Trips.auditActions;
     const flat = (messages as { AuditActions: Record<string, string> }).AuditActions;
 
     // Nested resolution (next-intl dot-path) for the twelve 008 additions.
