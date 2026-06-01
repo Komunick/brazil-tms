@@ -97,11 +97,19 @@ export interface SlaReportRow {
   onTimePickupPct: number | null;
   /** via the shared onTimeExpr("arrival"); null when no actual destination arrivals recorded. */
   onTimeArrivalPct: number | null;
-  /** counts grouped from the STORED trips.sla_status (never re-derived). */
+  /**
+   * Counts grouped from the STORED trips.sla_status (never re-derived, Constitution III). This is a
+   * LIVE-risk snapshot: 007 clears sla_status when a trip leaves the active set, so closed trips fall
+   * into `settled`. `onTrack + atRisk + late + breached + settled = total`. For a historical period
+   * (mostly closed trips) the period performance is the on-time %s above; these states reflect the
+   * still-open trips' current risk.
+   */
   onTrack: number;
   atRisk: number;
   late: number;
   breached: number;
+  /** trips with no stored sla_status (closed/settled — 007 cleared the live risk state). */
+  settled: number;
 }
 
 /**
@@ -116,6 +124,8 @@ export interface SlaReportTotals {
   atRisk: number;
   late: number;
   breached: number;
+  /** trips with no stored sla_status (closed/settled). onTrack+atRisk+late+breached+settled = total. */
+  settled: number;
 }
 
 export interface SlaReport {

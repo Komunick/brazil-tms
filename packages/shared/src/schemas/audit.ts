@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dateStringSchema } from "./master-data";
 
 /**
  * Feature 009 — the audit-log query schema (contracts/bff-endpoints §4, data-model §5). EXTENDS the
@@ -6,7 +7,9 @@ import { z } from "zod";
  * `actorUserId`, a `from`/`to` date range (over `created_at`), and `limit`/`offset` pagination. ONE
  * validated parse shared by the extended `GET /api/admin/audit-logs` route and the audit screen's
  * filter bar. The view stays gated on `view_audit_log` (Admin); the read is append-only (Constitution
- * III). `from`/`to` are ISO datetimes (the audit screen filters by instant, not calendar day).
+ * III). `from`/`to` are São Paulo calendar-day strings (`YYYY-MM-DD`), resolved to half-open BRT day
+ * boundaries in the read model (`to` inclusive of its day) — the same convention the reports use, so a
+ * date-only filter never excludes that day's records or drifts by the UTC offset.
  */
 
 const optParam = <T extends z.ZodTypeAny>(schema: T) =>
@@ -22,10 +25,10 @@ export const auditLogQuerySchema = z.object({
   entityType: optParam(z.string().trim().min(1).max(100)),
   entityId: uuidParam("Entidade"),
   action: optParam(z.string().trim().min(1).max(100)),
-  // NEW (009) — actor + date range + pagination
+  // NEW (009) — actor + date range (SP calendar days) + pagination
   actorUserId: uuidParam("Autor"),
-  from: optParam(z.coerce.date()),
-  to: optParam(z.coerce.date()),
+  from: optParam(dateStringSchema),
+  to: optParam(dateStringSchema),
   limit: z.coerce
     .number()
     .int("Limite inválido.")

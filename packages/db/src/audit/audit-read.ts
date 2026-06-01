@@ -1,5 +1,5 @@
-import { and, count, desc, eq, gte, lte, type SQL } from "drizzle-orm";
-import type { AuditLogPage, AuditLogQuery, AuditLogView } from "@brazil-tms/shared";
+import { and, count, desc, eq, gte, lt, type SQL } from "drizzle-orm";
+import { dayRangeSaoPaulo, type AuditLogPage, type AuditLogQuery, type AuditLogView } from "@brazil-tms/shared";
 import { db } from "../client";
 import { auditLogs, users } from "../../schema";
 
@@ -16,8 +16,14 @@ export async function queryAuditLog(filters: AuditLogQuery): Promise<AuditLogPag
   if (filters.entityId) conditions.push(eq(auditLogs.entityId, filters.entityId));
   if (filters.action) conditions.push(eq(auditLogs.action, filters.action));
   if (filters.actorUserId) conditions.push(eq(auditLogs.actorUserId, filters.actorUserId));
-  if (filters.from) conditions.push(gte(auditLogs.createdAt, filters.from));
-  if (filters.to) conditions.push(lte(auditLogs.createdAt, filters.to));
+  // `from`/`to` are SP calendar-day strings → half-open BRT day range, `to` inclusive of its day
+  // (mirrors the 005 board's pickup filter), so a date-only filter never drops that day's records.
+  if (filters.from) {
+    conditions.push(gte(auditLogs.createdAt, new Date(dayRangeSaoPaulo(filters.from).from)));
+  }
+  if (filters.to) {
+    conditions.push(lt(auditLogs.createdAt, new Date(dayRangeSaoPaulo(filters.to).to)));
+  }
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
   const [rows, totalRows] = await Promise.all([

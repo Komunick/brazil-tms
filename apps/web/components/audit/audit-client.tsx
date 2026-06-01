@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { formatDateTime } from "@brazil-tms/shared";
+import { ALL_AUDIT_ACTIONS, formatDateTime } from "@brazil-tms/shared";
 import { useAuditLog } from "@/lib/trips/client";
 import {
   Table,
@@ -15,13 +15,20 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 const COLUMN_COUNT = 7;
 const PAGE = 50;
-const MAX_LIMIT = 200; // mirrors auditLogQuerySchema's max — beyond this the user must narrow filters.
+const ALL = "__all__";
 
 /** §21.5 entity-type presets → the audit `entity_type` values the 001–008 services write. */
 const PRESETS = [
@@ -36,18 +43,23 @@ const PRESETS = [
 
 interface AuditFilters {
   entityType?: string;
+  entityId?: string;
+  action?: string;
   actorUserId?: string;
   from?: string;
   to?: string;
 }
 
-function buildSearch(filters: AuditFilters, limit: number): string {
+function buildSearch(filters: AuditFilters, offset: number): string {
   const params = new URLSearchParams();
   if (filters.entityType) params.set("entityType", filters.entityType);
+  if (filters.entityId) params.set("entityId", filters.entityId);
+  if (filters.action) params.set("action", filters.action);
   if (filters.actorUserId) params.set("actorUserId", filters.actorUserId);
   if (filters.from) params.set("from", filters.from);
   if (filters.to) params.set("to", filters.to);
-  params.set("limit", String(limit));
+  params.set("limit", String(PAGE));
+  params.set("offset", String(offset));
   return params.toString();
 }
 
@@ -59,8 +71,9 @@ function shortId(id: string): string {
 
 /**
  * Audit read view (US4 — EXTENDED by 009). The Admin-only append-only audit trail with §21.5 forensic
- * filters: entity-type presets + actor + date range, paginated (TanStack Query polling, no Realtime).
- * Renders when/action/entity/actor-name/previous/new/reason. Read-only: no mutation UI (FR-019).
+ * filters: entity-type presets + specific entity id + action + actor + a São Paulo date range, with
+ * offset pagination (TanStack Query polling, no Realtime). Renders when/action/entity/actor-name/
+ * previous/new/reason. Read-only: no mutation UI (append-only, FR-019).
  */
 export function AuditClient() {
   const t = useTranslations("Audit");
@@ -70,21 +83,37 @@ export function AuditClient() {
   const tCommon = useTranslations("Common");
 
   const [filters, setFilters] = useState<AuditFilters>({});
-  const [limit, setLimit] = useState(PAGE);
-  const search = useMemo(() => buildSearch(filters, limit), [filters, limit]);
+  const [offset, setOffset] = useState(0);
+  const search = useMemo(() => buildSearch(filters, offset), [filters, offset]);
 
   const { data, isPending, isError } = useAuditLog(search);
   const items = data?.items ?? [];
   const total = data?.total ?? 0;
 
+  // Any filter change resets to the first page.
   const setFilter = (key: keyof AuditFilters, value: string | undefined) => {
-    setLimit(PAGE);
+    setOffset(0);
     setFilters((prev) => ({ ...prev, [key]: value || undefined }));
+  };
+  const clearAll = () => {
+    setOffset(0);
+    setFilters({});
   };
 
   function snapshot(value: Record<string, unknown> | null): string {
     return value == null ? tCommon("none") : JSON.stringify(value);
   }
+
+  const start = total === 0 ? 0 : offset + 1;
+  const end = offset + items.length;
+  const canPrev = offset > 0;
+  const canNext = offset + items.length < total;
+
+  // Action options: the canonical audit-action set with pt-BR labels (flat AuditActions lookup).
+  const actionOptions = ALL_AUDIT_ACTIONS.map((a) => ({
+    value: a,
+    label: tActions(a.replaceAll(".", "_")),
+  })).sort((x, y) => x.label.localeCompare(y.label, "pt-BR"));
 
   return (
     <Card>
@@ -112,8 +141,34 @@ export function AuditClient() {
           })}
         </div>
 
-        {/* Actor + date-range filters. */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Action + entity-id + actor + date-range filters. */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <Field id="audit-f-action" label={tView("action")}>
+            <Select
+              value={filters.action ?? ALL}
+              onValueChange={(v) => setFilter("action", v === ALL ? undefined : v)}
+            >
+              <SelectTrigger id="audit-f-action">
+                <SelectValue placeholder={tView("actionAll")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>{tView("actionAll")}</SelectItem>
+                {actionOptions.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field id="audit-f-entity" label={tView("entityId")}>
+            <Input
+              id="audit-f-entity"
+              value={filters.entityId ?? ""}
+              placeholder={tView("entityIdPlaceholder")}
+              onChange={(e) => setFilter("entityId", e.target.value)}
+            />
+          </Field>
           <Field id="audit-f-actor" label={tView("actor")}>
             <Input
               id="audit-f-actor"
@@ -139,14 +194,7 @@ export function AuditClient() {
             />
           </Field>
           <div className="flex items-end">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                setFilters({});
-                setLimit(PAGE);
-              }}
-            >
+            <Button variant="ghost" size="sm" onClick={clearAll}>
               {tView("clear")}
             </Button>
           </div>
@@ -208,10 +256,7 @@ export function AuditClient() {
                           {shortId(entry.entityId)}
                         </span>
                       </TableCell>
-                      <TableCell
-                        className="whitespace-nowrap"
-                        title={entry.actorUserId}
-                      >
+                      <TableCell className="whitespace-nowrap" title={entry.actorUserId}>
                         {entry.actorName ?? shortId(entry.actorUserId)}
                       </TableCell>
                       <TableCell className="max-w-xs truncate font-mono text-xs">
@@ -229,16 +274,25 @@ export function AuditClient() {
 
             {!isPending && total > 0 ? (
               <div className="flex items-center justify-between text-sm text-muted-foreground">
-                <span>{tView("showing", { count: items.length, total })}</span>
-                {items.length < total && limit < MAX_LIMIT ? (
+                <span>{tView("showingRange", { start, end, total })}</span>
+                <div className="flex gap-2">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setLimit((n) => Math.min(n + PAGE, MAX_LIMIT))}
+                    disabled={!canPrev}
+                    onClick={() => setOffset((n) => Math.max(0, n - PAGE))}
                   >
-                    {tView("loadMore")}
+                    {tView("previous")}
                   </Button>
-                ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!canNext}
+                    onClick={() => setOffset((n) => n + PAGE)}
+                  >
+                    {tView("next")}
+                  </Button>
+                </div>
               </div>
             ) : null}
           </>

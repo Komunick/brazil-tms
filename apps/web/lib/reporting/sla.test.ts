@@ -37,7 +37,8 @@ describe.skipIf(!hasDb)("querySlaReport (integration, US1)", () => {
   const TO = "2026-05-31";
 
   async function seedTrip(opts: {
-    slaStatus: "on_track" | "at_risk" | "late" | "breached";
+    slaStatus: "on_track" | "at_risk" | "late" | "breached" | null;
+    currentStatus?: "in_transit" | "completed" | "billed";
     pickupEnd: string; // planned pickup window end (UTC ISO)
     deliveryEnd: string; // planned delivery window end (UTC ISO)
     originArrivedAt?: string; // actual at_origin event ts
@@ -52,7 +53,7 @@ describe.skipIf(!hasDb)("querySlaReport (integration, US1)", () => {
         originLocationId: originId,
         destinationLocationId: destId,
         laneId,
-        currentStatus: "in_transit",
+        currentStatus: opts.currentStatus ?? "in_transit",
         slaStatus: opts.slaStatus,
         originalPlan: { customerId, originLocationId: originId, destinationLocationId: destId },
         plannedPickupWindowStart: pickupStart,
@@ -127,6 +128,15 @@ describe.skipIf(!hasDb)("querySlaReport (integration, US1)", () => {
       pickupEnd: "2026-05-12T12:00:00.000Z",
       deliveryEnd: "2026-05-13T12:00:00.000Z",
     });
+    // Trip 4 — a CLOSED trip: 007 clears sla_status on terminal, so it carries NULL (the P1 case).
+    // On-time pickup recorded (counts toward the pickup %), but no live SLA state → `settled`.
+    await seedTrip({
+      slaStatus: null,
+      currentStatus: "billed",
+      pickupEnd: "2026-05-12T12:00:00.000Z",
+      deliveryEnd: "2026-05-13T12:00:00.000Z",
+      originArrivedAt: "2026-05-12T10:30:00.000Z",
+    });
   });
 
   afterAll(async () => {
@@ -152,21 +162,26 @@ describe.skipIf(!hasDb)("querySlaReport (integration, US1)", () => {
     expect(report.groups).toHaveLength(1);
     const g = report.groups[0]!;
     expect(g.groupKey).toBe(customerId);
-    expect(g.total).toBe(3);
-    // SLA-state counts come from the STORED sla_status (never re-derived).
+    expect(g.total).toBe(4);
+    // SLA-state counts come from the STORED sla_status (never re-derived). The closed trip (trip4)
+    // has NULL sla_status (007 cleared it) → `settled`, NOT a zeroed risk state.
     expect(g.onTrack).toBe(1);
     expect(g.atRisk).toBe(1);
     expect(g.late).toBe(0);
     expect(g.breached).toBe(1);
-    // Pickup: 2 recorded (trip1 on-time, trip2 late) → 50%. Arrival: 1 recorded (trip1 late) → 0%.
-    expect(g.onTimePickupPct).toBe(50);
+    expect(g.settled).toBe(1);
+    // The five state buckets reconcile to total (no closed trip silently vanishes — the P1 fix).
+    expect(g.onTrack + g.atRisk + g.late + g.breached + g.settled).toBe(g.total);
+    // Pickup: 3 recorded (trip1 on-time, trip2 late, trip4 on-time) → 67%. Arrival: 1 recorded (trip1 late) → 0%.
+    expect(g.onTimePickupPct).toBe(67);
     expect(g.onTimeArrivalPct).toBe(0);
 
     // Totals (ungrouped) mirror the single group here.
-    expect(report.totals.total).toBe(3);
-    expect(report.totals.onTimePickupPct).toBe(50);
+    expect(report.totals.total).toBe(4);
+    expect(report.totals.onTimePickupPct).toBe(67);
     expect(report.totals.onTimeArrivalPct).toBe(0);
     expect(report.totals.breached).toBe(1);
+    expect(report.totals.settled).toBe(1);
   });
 
   it("groups by lane with the derived lane label", async () => {
@@ -174,7 +189,7 @@ describe.skipIf(!hasDb)("querySlaReport (integration, US1)", () => {
     expect(report.groups).toHaveLength(1);
     expect(report.groups[0]!.groupKey).toBe(laneId);
     expect(report.groups[0]!.groupLabel).toContain("→");
-    expect(report.groups[0]!.total).toBe(3);
+    expect(report.groups[0]!.total).toBe(4);
   });
 
   it("is provisional when the customer has no active SLA rules, and clears once a rule exists", async () => {

@@ -141,14 +141,19 @@
     "filters": "Filtros",
     "entityType": "Tipo de entidade",
     "entityId": "ID da entidade",
+    "entityIdPlaceholder": "UUID da entidade",
     "action": "Ação",
     "actor": "ID do responsável",
     "actorPlaceholder": "UUID do responsável",
+    "actionAll": "Todas as ações",
     "from": "De",
     "to": "Até",
     "apply": "Aplicar",
     "clear": "Limpar",
     "showing": "Mostrando {count} de {total}",
+    "showingRange": "Mostrando {start}–{end} de {total}",
+    "previous": "Anterior",
+    "next": "Próxima",
     "loadMore": "Carregar mais",
     "presets": {
       "all": "Todas",
@@ -194,7 +199,9 @@
       "onTrack": "No prazo",
       "atRisk": "Em risco",
       "late": "Atrasado",
-      "breachedCol": "Violado"
+      "breachedCol": "Violado",
+      "settled": "Sem estado",
+      "statesNote": "O desempenho do período é dado pelas % no prazo. Os estados de SLA (no prazo/em risco/atrasado/violado) refletem o risco atual das viagens em aberto; viagens encerradas não mantêm estado de risco e aparecem em \"Sem estado\"."
     },
     "exceptions": {
       "total": "Total",

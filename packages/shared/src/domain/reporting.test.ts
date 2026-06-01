@@ -108,19 +108,23 @@ describe("auditLogQuerySchema", () => {
     expect(parsed.actorUserId).toBeUndefined();
   });
 
-  it("coerces and bounds pagination + parses a date range", () => {
+  it("coerces/bounds pagination and accepts a date-only (YYYY-MM-DD) from/to", () => {
     const parsed = auditLogQuerySchema.parse({
       limit: "100",
       offset: "10",
-      from: "2026-05-01T00:00:00.000Z",
+      from: "2026-05-01",
+      to: "2026-05-31",
     });
     expect(parsed.limit).toBe(100);
     expect(parsed.offset).toBe(10);
-    expect(parsed.from).toBeInstanceOf(Date);
+    // SP calendar-day strings (resolved to BRT day boundaries server-side) — not raw instants.
+    expect(parsed.from).toBe("2026-05-01");
+    expect(parsed.to).toBe("2026-05-31");
   });
 
-  it("rejects an over-max limit and a non-uuid actor", () => {
+  it("rejects an over-max limit, a non-uuid actor, and a non-date-only from", () => {
     expect(() => auditLogQuerySchema.parse({ limit: "500" })).toThrow();
     expect(() => auditLogQuerySchema.parse({ actorUserId: "nope" })).toThrow();
+    expect(() => auditLogQuerySchema.parse({ from: "2026-05-01T00:00:00Z" })).toThrow();
   });
 });

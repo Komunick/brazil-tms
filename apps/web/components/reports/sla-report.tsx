@@ -57,6 +57,7 @@ export function SlaReport({ search }: { search: string }) {
       header: () => tSla("breachedCol"),
       cell: ({ row }) => row.original.breached,
     },
+    { id: "settled", header: () => tSla("settled"), cell: ({ row }) => row.original.settled },
   ];
 
   const table = useReactTable({
@@ -90,6 +91,8 @@ export function SlaReport({ search }: { search: string }) {
         <SummaryCard label={tSla("onTimeArrival")} value={pct(report.totals.onTimeArrivalPct)} />
         <SummaryCard label={tSla("breached")} value={String(report.totals.breached)} />
       </div>
+
+      <p className="text-xs text-muted-foreground">{tSla("statesNote")}</p>
 
       <Card>
         <CardContent className="p-0">

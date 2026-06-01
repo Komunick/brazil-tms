@@ -88,22 +88,19 @@ describe.skipIf(!hasDb)("queryAuditLog (integration, US4)", () => {
     expect(financeOnly.items[0]!.action).toBe("trip.plan_update");
   });
 
-  it("honors the from/to date range", async () => {
-    const afterMay12 = await queryAuditLog({
-      ...base,
-      entityId: E1,
-      from: new Date("2026-05-12T00:00:00.000Z"),
-    });
+  it("honors the from/to date range (São Paulo calendar days, `to` inclusive)", async () => {
+    // from 2026-05-12 (BRT) → excludes the May-10 row, includes the May-15 row.
+    const afterMay12 = await queryAuditLog({ ...base, entityId: E1, from: "2026-05-12" });
     expect(afterMay12.total).toBe(1);
     expect(afterMay12.items[0]!.action).toBe("trip.plan_update");
 
-    const wholeMonth = await queryAuditLog({
-      ...base,
-      entityId: E1,
-      from: new Date("2026-05-01T00:00:00.000Z"),
-      to: new Date("2026-05-31T23:59:59.000Z"),
-    });
+    // The whole month includes both May rows; `to` of the last day is inclusive of that day.
+    const wholeMonth = await queryAuditLog({ ...base, entityId: E1, from: "2026-05-01", to: "2026-05-31" });
     expect(wholeMonth.total).toBe(2);
+
+    // A `to` on the same day as a record still includes it (the date-only boundary bug fix).
+    const upToMay15 = await queryAuditLog({ ...base, entityId: E1, to: "2026-05-15" });
+    expect(upToMay15.total).toBe(2);
   });
 
   it("honors limit/offset pagination while reporting the full total", async () => {

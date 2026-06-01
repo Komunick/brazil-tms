@@ -56,22 +56,24 @@ period default: last completed calendar month in America/Sao_Paulo (defaultRepor
   period:    { from: ISODate, to: ISODate, label: string },   // e.g. "maio/2026"
   provisional: boolean,                                        // true if any included customer lacks customer_sla_rules (R8)
   provisionalReason?: string,                                  // "pendente de regras de SLA do cliente"
+  totals:    SlaReportTotals,                                  // ungrouped figures for the summary cards
   groups: SlaReportRow[]
 }
 
-SlaReportRow {
-  groupKey: uuid,            // customerId or laneId
-  groupLabel: string,       // customer name or "ORIG → DEST" lane label
+SlaReportRow / SlaReportTotals {
+  // (SlaReportRow adds groupKey: uuid (customerId|laneId) + groupLabel: string)
   total: int,
-  onTimePickupPct: number | null,     // via onTimeExpr("pickup")
+  onTimePickupPct: number | null,     // via onTimeExpr("pickup") — the period performance headline (SC-001)
   onTimeArrivalPct: number | null,    // via onTimeExpr("arrival")
-  onTrack: int, atRisk: int, late: int, breached: int   // counts grouped from trips.sla_status
+  onTrack: int, atRisk: int, late: int, breached: int,  // counts grouped from the STORED trips.sla_status
+  settled: int                        // trips with sla_status IS NULL (closed — 007 clears the live state)
 }
+// Reconciliation: onTrack + atRisk + late + breached + settled = total.
 ```
 
 - **Reads**: `trips` (`customer_id`, `lane_id`, `sla_status`, `planned_pickup_window_*`, `planned_delivery_window_*`), `trip_events` (via `onTimeExpr`), `customers`/`lanes` (labels), `customer_sla_rules` (existence → `provisional`). Excludes `cancelled`/archived trips.
 - **Period membership**: by `planned_pickup_window_start` date within `[from,to]` (R3). Grouped by customer (default) or lane.
-- **SLA state counts**: grouped from the stored `trips.sla_status` ∈ `{on_track, at_risk, late, breached}` (007) — **never re-derived in this slice** (Constitution III).
+- **SLA state counts**: grouped from the stored `trips.sla_status` ∈ `{on_track, at_risk, late, breached}` (007) — **never re-derived in this slice** (Constitution III). Because 007 **clears `sla_status` when a trip leaves the active set** (`sla.ts`), closed trips carry `NULL` and are counted under **`settled`** (so the four risk states never silently swallow a closed trip; a historical-period report's risk states reflect the still-open trips, while the on-time %s give the period performance).
 
 ---
 
@@ -141,7 +143,7 @@ AuditLogView {                                              // existing columns 
 ```
 
 - **Reads only** `audit_logs` (+ a `users` join for `actorName`); append-only, never mutated (Constitution III). No new column.
-- **Existing indexes suffice**: `audit_logs_entity_idx (entity_type, entity_id)`, `audit_logs_actor_idx (actor_user_id)`, `audit_logs_created_idx (created_at DESC)` back the entity/actor/date-range filters; `from/to` is a `created_at BETWEEN` range (date-scoped for §21.3 across-years).
+- **Existing indexes suffice**: `audit_logs_entity_idx (entity_type, entity_id)`, `audit_logs_actor_idx (actor_user_id)`, `audit_logs_created_idx (created_at DESC)` back the entity/actor/date-range filters. `from`/`to` are **São Paulo calendar-day strings** (`YYYY-MM-DD`), resolved to a half-open BRT day range via `dayRangeSaoPaulo` (`to` **inclusive** of its day) — the same convention the reports use, so a date-only filter never excludes that day's records or drifts by the UTC offset. The screen also exposes `entityType` (presets) + a specific `entityId`, `action`, and `actorUserId`, with offset pagination (no client-side row cap).
 - The **§21.5 record coverage** (status changes, assignment changes, document verification, billing changes, export-batch history) is presentation: the screen offers entity-type/action presets over the actions slices 001–008 already write (`trip.status_change`, `trip.assign/reassign/unassign`, `document.verify`, `billing_item.update`, `billing.export`, etc.). The **embedded per-trip timeline** (`loadTripDetail` → `audit: AuditEntryDto[]`, 005) is unchanged and stays on `view_all_trips`.
 
 ---

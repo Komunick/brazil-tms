@@ -41,6 +41,8 @@ function aggregates() {
     atRisk: sql<number>`count(*) FILTER (WHERE ${trips.slaStatus} = 'at_risk')::int`,
     late: sql<number>`count(*) FILTER (WHERE ${trips.slaStatus} = 'late')::int`,
     breached: sql<number>`count(*) FILTER (WHERE ${trips.slaStatus} = 'breached')::int`,
+    // closed/settled trips: 007 clears sla_status when a trip leaves the active set (sla.ts).
+    settled: sql<number>`count(*) FILTER (WHERE ${trips.slaStatus} IS NULL)::int`,
   };
 }
 
@@ -54,6 +56,7 @@ interface AggRow {
   atRisk: number;
   late: number;
   breached: number;
+  settled: number;
 }
 
 const pct = (num: number, denom: number): number | null =>
@@ -70,6 +73,7 @@ function toRow(a: AggRow, groupKey: string, groupLabel: string): SlaReportRow {
     atRisk: Number(a.atRisk),
     late: Number(a.late),
     breached: Number(a.breached),
+    settled: Number(a.settled),
   };
 }
 
@@ -132,6 +136,7 @@ export async function querySlaReport(filters: ReportFilter): Promise<SlaReport> 
     atRisk: Number(o?.atRisk ?? 0),
     late: Number(o?.late ?? 0),
     breached: Number(o?.breached ?? 0),
+    settled: Number(o?.settled ?? 0),
   };
 
   // provisional: any included customer lacking an active customer_sla_rules row runs on the default
