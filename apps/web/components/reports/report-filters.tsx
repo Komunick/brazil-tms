@@ -49,6 +49,12 @@ export function ReportFilters({
   const set = (key: keyof ReportFiltersValue, v: string | undefined) =>
     onChange({ ...value, [key]: v });
 
+  // Changing the customer must clear the lane: a lane belongs to one customer, so a previously
+  // selected laneId would otherwise persist (hidden) and serialize as customerId=B&laneId=A,
+  // returning empty reports. Clearing it here keeps the filter coherent.
+  const setCustomer = (v: string | undefined) =>
+    onChange({ ...value, customerId: v, laneId: undefined });
+
   const laneLabel = (l: TripFilterOptions["lanes"][number]): string => {
     const o = options.locations.find((x) => x.id === l.originLocationId)?.code ?? "?";
     const d = options.locations.find((x) => x.id === l.destinationLocationId)?.code ?? "?";
@@ -67,7 +73,7 @@ export function ReportFilters({
         label={t("filters.customer")}
         value={value.customerId}
         allLabel={t("filters.all")}
-        onChange={(v) => set("customerId", v)}
+        onChange={setCustomer}
         options={options.customers.map((c) => ({ value: c.id, label: c.name }))}
       />
       {showLaneAndGroup ? (
