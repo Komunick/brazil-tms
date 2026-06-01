@@ -3,6 +3,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import {
   auditLogs,
   customers,
+  alerts,
   db,
   importBatches,
   importRows,
@@ -95,6 +96,7 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
       await db.delete(auditLogs).where(eq(auditLogs.entityId, tripId));
     }
     if (createdTripIds.length > 0) {
+      await db.delete(alerts).where(inArray(alerts.tripId, createdTripIds));
       await db.delete(trips).where(inArray(trips.id, createdTripIds));
     }
     for (const batchId of createdBatchIds) {

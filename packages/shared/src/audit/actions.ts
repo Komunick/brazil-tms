@@ -64,7 +64,22 @@ export type AuditAction =
   | "exception.cancel"
   | "trip.note"
   | "sla_rule.create"
-  | "sla_rule.update";
+  | "sla_rule.update"
+  // feature 008 — documents, completion, billing readiness, rates & export (data-model §9.4 / R12).
+  // Document verification + rate/billing changes + export are explicitly must-audit (Constitution IV).
+  // Completion/Billing-Ready/Billed transitions reuse `trip.status_change` (via `transitionTripStatus`).
+  | "document.upload"
+  | "document.verify"
+  | "document.waive"
+  | "document.archive"
+  | "document_requirement.create"
+  | "document_requirement.update"
+  | "document_type.create"
+  | "document_type.update"
+  | "rate.create"
+  | "rate.update"
+  | "billing_item.update"
+  | "billing.export";
 
 /** The four actions audited by feature 001 (useful for tests / iteration). */
 export const AUDIT_ACTIONS_001: readonly AuditAction[] = [
@@ -129,6 +144,18 @@ export const ALL_AUDIT_ACTIONS = [
   "trip.note",
   "sla_rule.create",
   "sla_rule.update",
+  "document.upload",
+  "document.verify",
+  "document.waive",
+  "document.archive",
+  "document_requirement.create",
+  "document_requirement.update",
+  "document_type.create",
+  "document_type.update",
+  "rate.create",
+  "rate.update",
+  "billing_item.update",
+  "billing.export",
 ] as const satisfies readonly AuditAction[];
 
 /**

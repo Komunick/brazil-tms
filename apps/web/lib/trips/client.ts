@@ -19,6 +19,15 @@ import {
   type TransitionExceptionInput,
   type CreateSlaRuleInput,
   type UpdateSlaRuleInput,
+  type CreateDocumentRequirementInput,
+  type UpdateDocumentRequirementInput,
+  type CreateDocumentTypeInput,
+  type UpdateDocumentTypeInput,
+  type CreateRateInput,
+  type UpdateRateInput,
+  type UpdateBillingItemInput,
+  type AddBillingAdjustmentInput,
+  type CreateExportInput,
 } from "@brazil-tms/shared";
 import type {
   TripBoardRow,
@@ -29,6 +38,12 @@ import type {
   AlertListItem,
   AlertListResult,
   CustomerSlaRuleItem,
+  DocumentTypeView,
+  DocumentRequirementView,
+  RateRowView,
+  BillingItemView,
+  BillingListRow,
+  ExportBatchRow,
 } from "@brazil-tms/db";
 
 /**
@@ -504,6 +519,382 @@ export function useUpdateSlaRule() {
       void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
     },
   });
+}
+
+// --- Document hooks (008, US1; upload / verify / archive / download via the BFF) ------------------
+
+const DOCUMENTS_ROOT = ["documents"] as const;
+
+export interface UploadDocumentMetaInput {
+  documentTypeId: string;
+  externalReference?: string;
+  notes?: string;
+  fileName: string;
+}
+
+/** Upload a proof document (multipart POST /api/trips/:id/documents). Invalidates trips + documents. */
+export function useUploadDocument(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ file, meta }: { file: File; meta: UploadDocumentMetaInput }) => {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("meta", JSON.stringify(meta));
+      const res = await fetch(`/api/trips/${id}/documents`, { method: "POST", body: form });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+      void queryClient.invalidateQueries({ queryKey: DOCUMENTS_ROOT });
+    },
+  });
+}
+
+/** Verify a document (PATCH /api/documents/:id). */
+export function useVerifyDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      documentId,
+      input,
+    }: {
+      documentId: string;
+      input: { verificationStatus: "pending_review" | "accepted" | "rejected"; notes?: string };
+    }) => {
+      const res = await fetch(`/api/documents/${documentId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+      void queryClient.invalidateQueries({ queryKey: DOCUMENTS_ROOT });
+    },
+  });
+}
+
+/** Archive a document (DELETE /api/documents/:id) — soft-delete. */
+export function useArchiveDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (documentId: string) => {
+      const res = await fetch(`/api/documents/${documentId}`, { method: "DELETE" });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+      void queryClient.invalidateQueries({ queryKey: DOCUMENTS_ROOT });
+    },
+  });
+}
+
+/** Fetch a short-lived signed download URL for a document (GET); not a hook — call on click. */
+export async function fetchDocumentDownloadUrl(tripId: string, docId: string): Promise<string> {
+  const res = await fetch(`/api/trips/${tripId}/documents/${docId}/download`);
+  const { url } = await asJson<{ url: string }>(res);
+  return url;
+}
+
+/** The document-type master (GET /api/document-types) — powers the upload type picker. */
+export function useDocumentTypes(): UseQueryResult<{ items: DocumentTypeView[] }> {
+  return useQuery({
+    queryKey: [...DOCUMENTS_ROOT, "types"],
+    queryFn: async () => asJson<{ items: DocumentTypeView[] }>(await fetch(`/api/document-types`)),
+  });
+}
+
+// --- Completion / Billing-Ready hooks (008, US2) -------------------------------------------------
+
+export interface WaivedRequirementInput {
+  documentTypeId: string;
+  reason: string;
+}
+
+/**
+ * Mark Completed (POST /api/trips/:id/complete). A blocked gate throws `TripsError("COMPLETION_BLOCKED")`
+ * carrying the blockers/missing types in `findings`. Invalidates the `["trips"]` root.
+ */
+export function useMarkCompleted(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { waivedRequirements?: WaivedRequirementInput[] } = {}) => {
+      const res = await fetch(`/api/trips/${id}/complete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/** Mark Billing Ready (POST /api/trips/:id/billing-ready). Blocked ⇒ `TripsError("BILLING_READY_BLOCKED")`. */
+export function useMarkBillingReady(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { waivedRequirements?: WaivedRequirementInput[] } = {}) => {
+      const res = await fetch(`/api/trips/${id}/billing-ready`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+// --- Document requirement / type admin hooks (008, US3) ------------------------------------------
+
+const DOC_REQ_ROOT = ["document-requirements"] as const;
+
+const jsonMutation = <I, T>(url: () => string, method: "POST" | "PATCH") => ({
+  mutationFn: async (input: I) => {
+    const res = await fetch(url(), {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    return asJson<T>(res);
+  },
+});
+
+/** A customer's document-requirement checklist (GET). */
+export function useDocumentRequirements(
+  customerId?: string,
+): UseQueryResult<{ items: DocumentRequirementView[] }> {
+  const search = customerId ? `?customerId=${customerId}` : "";
+  return useQuery({
+    queryKey: [...DOC_REQ_ROOT, "list", customerId ?? ""],
+    queryFn: async () =>
+      asJson<{ items: DocumentRequirementView[] }>(
+        await fetch(`/api/document-requirements${search}`),
+      ),
+    enabled: Boolean(customerId),
+  });
+}
+
+export function useCreateDocumentRequirement() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    ...jsonMutation<CreateDocumentRequirementInput, { item: DocumentRequirementView }>(
+      () => `/api/document-requirements`,
+      "POST",
+    ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: DOC_REQ_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+export function useUpdateDocumentRequirement() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: UpdateDocumentRequirementInput }) => {
+      const res = await fetch(`/api/document-requirements/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: DocumentRequirementView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: DOC_REQ_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+export function useCreateDocumentType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    ...jsonMutation<CreateDocumentTypeInput, { item: DocumentTypeView }>(
+      () => `/api/document-types`,
+      "POST",
+    ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: DOCUMENTS_ROOT });
+    },
+  });
+}
+
+export function useUpdateDocumentType() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: UpdateDocumentTypeInput }) => {
+      const res = await fetch(`/api/document-types/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: DocumentTypeView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: DOCUMENTS_ROOT });
+    },
+  });
+}
+
+// --- Rate + billing-item hooks (008, US4) --------------------------------------------------------
+
+const RATES_ROOT = ["rates"] as const;
+
+/** Rates list with labels (GET /api/rates). */
+export function useRates(customerId?: string): UseQueryResult<{ items: RateRowView[] }> {
+  const search = customerId ? `?customerId=${customerId}` : "";
+  return useQuery({
+    queryKey: [...RATES_ROOT, "list", customerId ?? ""],
+    queryFn: async () => asJson<{ items: RateRowView[] }>(await fetch(`/api/rates${search}`)),
+  });
+}
+
+export function useCreateRate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    ...jsonMutation<CreateRateInput, { item: unknown }>(() => `/api/rates`, "POST"),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: RATES_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+export function useUpdateRate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, input }: { id: string; input: UpdateRateInput }) => {
+      const res = await fetch(`/api/rates/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: unknown }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: RATES_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/** Set the manual base / period / dispute / notes on a trip's billing item (PATCH). */
+export function useUpdateBillingItem(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: UpdateBillingItemInput) => {
+      const res = await fetch(`/api/trips/${id}/billing`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: BillingItemView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/** Add a typed adjustment to a trip's billing item (POST). */
+export function useAddBillingAdjustment(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: AddBillingAdjustmentInput) => {
+      const res = await fetch(`/api/trips/${id}/billing/adjustments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: BillingItemView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/** Soft-remove a billing adjustment (DELETE /api/billing-adjustments/:id). */
+export function useRemoveBillingAdjustment() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (adjustmentId: string) => {
+      const res = await fetch(`/api/billing-adjustments/${adjustmentId}`, { method: "DELETE" });
+      return asJson<{ item: BillingItemView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+// --- Billing list + export hooks (008, US5) ------------------------------------------------------
+
+const BILLING_ROOT = ["billing"] as const;
+
+/** The billing pending/ready list (GET /api/billing). 30s polling. */
+export function useBillingList(
+  scope: "pending" | "ready",
+  filters: { customerId?: string; period?: string } = {},
+): UseQueryResult<{ items: BillingListRow[] }> {
+  const params = new URLSearchParams({ scope });
+  if (filters.customerId) params.set("customerId", filters.customerId);
+  if (filters.period) params.set("period", filters.period);
+  const search = params.toString();
+  return useQuery({
+    queryKey: [...BILLING_ROOT, "list", search],
+    queryFn: async () => asJson<{ items: BillingListRow[] }>(await fetch(`/api/billing?${search}`)),
+    refetchInterval: CONTROL_TOWER_POLL_MS,
+  });
+}
+
+/** Export-batch history (GET /api/billing/exports). 30s polling (status progresses on the worker). */
+export function useExportBatches(
+  filters: { customerId?: string; period?: string } = {},
+): UseQueryResult<{ items: ExportBatchRow[] }> {
+  const params = new URLSearchParams();
+  if (filters.customerId) params.set("customerId", filters.customerId);
+  if (filters.period) params.set("period", filters.period);
+  const search = params.toString();
+  return useQuery({
+    queryKey: [...BILLING_ROOT, "exports", search],
+    queryFn: async () =>
+      asJson<{ items: ExportBatchRow[] }>(await fetch(`/api/billing/exports?${search}`)),
+    refetchInterval: CONTROL_TOWER_POLL_MS,
+  });
+}
+
+/** Trigger a billing export (POST /api/billing/exports). Blocked ⇒ `TripsError("NO_BILLABLE_TRIPS")`. */
+export function useCreateExport() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CreateExportInput) => {
+      const res = await fetch(`/api/billing/exports`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: ExportBatchRow }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: BILLING_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/** Fetch a signed URL to an export file (GET); not a hook — call on click. */
+export async function fetchExportDownloadUrl(exportBatchId: string): Promise<string> {
+  const res = await fetch(`/api/billing/exports/${exportBatchId}/download`);
+  const { url } = await asJson<{ url: string }>(res);
+  return url;
 }
 
 // --- CSV export ----------------------------------------------------------------------------------

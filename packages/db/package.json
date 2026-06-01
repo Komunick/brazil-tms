@@ -22,7 +22,10 @@
     "db:seed:trip-domain": "tsx ./seed/trip-domain-sample.ts",
     "db:seed:import": "tsx ./seed/import-sample.ts",
     "db:seed:reason-codes": "tsx ./seed/reason-codes.ts",
-    "db:seed:sla-rules": "tsx ./seed/sla-rules.ts"
+    "db:seed:sla-rules": "tsx ./seed/sla-rules.ts",
+    "db:seed:document-types": "tsx ./seed/document-types.ts",
+    "db:seed:rates": "tsx ./seed/rates.ts",
+    "db:seed:buckets": "tsx ./seed/storage-buckets.ts"
   },
   "dependencies": {
     "@brazil-tms/shared": "workspace:*",

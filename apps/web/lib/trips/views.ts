@@ -92,4 +92,19 @@ export const DEFAULT_TRIP_VIEWS: TripBoardView[] = [
       slaStatus: "",
     }),
   },
+  {
+    // 008 — billing-phase trips with an unmet required-for-billing document. `missingDocuments=true`
+    // itself constrains current_status to the billing phase (it suppresses the active-scope default),
+    // so clear status/billingStatus/slaStatus to avoid a leftover filter intersecting to an empty board.
+    key: "missingDocuments",
+    labelKey: "viewMissingDocuments",
+    params: () => ({
+      missingDocuments: "true",
+      scope: "active",
+      sort: "pickupStart",
+      status: "",
+      billingStatus: "",
+      slaStatus: "",
+    }),
+  },
 ];

@@ -19,13 +19,20 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { db } from "../client";
 import {
+  billingAdjustments,
+  billingItems,
   carriers,
   customers,
   customerSlaRules,
+  documentRequirements,
+  documentTypes,
+  documents,
   drivers,
   exceptions,
+  exportBatches,
   lanes,
   locations,
+  rates,
   reasonCodes,
   trailers,
   tripAssignments,
@@ -35,6 +42,7 @@ import {
 } from "../../schema";
 import {
   ACTIVE_TRIP_STATUSES,
+  BILLING_PHASE_STATUSES,
   EXPORT_ROW_CAP,
   billingStatus,
   billingStatusToStatuses,
@@ -272,9 +280,52 @@ function toBoardRow(row: BoardRow): TripBoardRow {
 }
 
 /**
+ * Feature 008 — the "trip is missing a required-for-billing proof document" predicate (R13, COV-001),
+ * as a reusable boolean SQL fragment over the `trips` table. True when EITHER (a) an applicable active
+ * `required_for_billing` requirement (unscoped OR matching lane/vehicle-type) lacks an accepted-or-
+ * waived document, OR (b) the customer has NO explicit checklist at all and the DEFAULT (`pod`
+ * required-for-billing) is unmet. Used by the dashboard metric, the "Missing documents" board filter,
+ * and the billing-list missing-proof indicator.
+ */
+const DEFAULT_BILLING_DOC_CODE = "pod"; // mirrors DEFAULT_DOCUMENT_CHECKLIST in @brazil-tms/shared
+
+function missingBillingDocumentsSql(): SQL<boolean> {
+  return sql<boolean>`(
+    EXISTS (
+      SELECT 1 FROM ${documentRequirements} dr
+      WHERE dr.customer_id = ${trips.customerId}
+        AND dr.active
+        AND dr.required_for_billing
+        AND (dr.lane_id IS NULL OR dr.lane_id = ${trips.laneId})
+        AND (dr.vehicle_type IS NULL OR dr.vehicle_type = ${trips.plannedVehicleType})
+        AND NOT EXISTS (
+          SELECT 1 FROM ${documents} d
+          WHERE d.trip_id = ${trips.id}
+            AND d.document_type_id = dr.document_type_id
+            AND d.archived_at IS NULL
+            AND (d.verification_status = 'accepted' OR d.waived_at IS NOT NULL)
+        )
+    )
+    OR (
+      NOT EXISTS (
+        SELECT 1 FROM ${documentRequirements} dr2
+        WHERE dr2.customer_id = ${trips.customerId} AND dr2.active
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM ${documents} d2
+        JOIN ${documentTypes} dt ON dt.id = d2.document_type_id AND dt.code = ${DEFAULT_BILLING_DOC_CODE}
+        WHERE d2.trip_id = ${trips.id}
+          AND d2.archived_at IS NULL
+          AND (d2.verification_status = 'accepted' OR d2.waived_at IS NOT NULL)
+      )
+    )
+  )`;
+}
+
+/**
  * Build the `WHERE` from a board/export query. Filters compose with AND; the status constraint
- * applies AT MOST one of: explicit `status` list, `billingStatus` projection, or the implicit
- * `scope=active` default (the default never contradicts an explicit status/billing filter).
+ * applies AT MOST one of: explicit `status` list, `billingStatus` projection, the 008
+ * `missingDocuments` (billing-phase) view, or the implicit `scope=active` default.
  */
 function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
   const conditions: SQL[] = [];
@@ -292,7 +343,19 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
       inArray(trips.currentStatus, [...billingStatusToStatuses(query.billingStatus)]),
     );
   }
-  if (!query.status?.length && !query.billingStatus && query.scope === "active") {
+  // Feature 008 — the "Missing documents" view: billing-phase trips with an unmet required-for-billing
+  // document. This itself constrains current_status, so (like status/billingStatus) it suppresses the
+  // active-scope default below.
+  if (query.missingDocuments === "true") {
+    conditions.push(inArray(trips.currentStatus, [...BILLING_PHASE_STATUSES]));
+    conditions.push(missingBillingDocumentsSql());
+  }
+  if (
+    !query.status?.length &&
+    !query.billingStatus &&
+    query.missingDocuments !== "true" &&
+    query.scope === "active"
+  ) {
     conditions.push(inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]));
   }
 
@@ -480,8 +543,16 @@ export async function getTripDetailView(id: string): Promise<TripDetailView | nu
 export async function queryDashboardMetrics(): Promise<DashboardSummary> {
   const { from, to } = dayRangeSaoPaulo(new Date());
 
-  const [byStatus, billingPending, unassigned, atRisk, activeExc, pickupPct, arrivalPct] =
-    await Promise.all([
+  const [
+    byStatus,
+    billingPending,
+    unassigned,
+    atRisk,
+    activeExc,
+    pickupPct,
+    arrivalPct,
+    missingDocs,
+  ] = await Promise.all([
       db
         .select({ status: trips.currentStatus, value: count() })
         .from(trips)
@@ -556,6 +627,16 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
           count(*) FILTER (WHERE arrived_at IS NOT NULL AND arrived_at <= win_end)::int AS num
         FROM arrivals
       `),
+      // Feature 008 — billing-phase trips with ≥1 unmet required-for-billing document (R13, COV-001).
+      db
+        .select({ value: count() })
+        .from(trips)
+        .where(
+          and(
+            inArray(trips.currentStatus, [...BILLING_PHASE_STATUSES]),
+            missingBillingDocumentsSql(),
+          ),
+        ),
     ]);
 
   const pct = (rows: Array<Record<string, unknown>>): number | null => {
@@ -573,7 +654,7 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
     activeExceptions: activeExc[0]?.value ?? 0,
     onTimePickupPct: pct(pickupPct as unknown as Array<Record<string, unknown>>),
     onTimeArrivalPct: pct(arrivalPct as unknown as Array<Record<string, unknown>>),
-    completedMissingDocuments: null,
+    completedMissingDocuments: missingDocs[0]?.value ?? 0,
   };
 }
 
@@ -867,6 +948,325 @@ export async function queryCustomerSlaRules(): Promise<CustomerSlaRuleItem[]> {
     effectiveStart: r.effectiveStart ? r.effectiveStart.toISOString() : null,
     effectiveEnd: r.effectiveEnd ? r.effectiveEnd.toISOString() : null,
     active: r.active,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Feature 008 — billing lists, export history, rate/requirement/type admin reads (R13)
+// ---------------------------------------------------------------------------
+
+export interface BillingListRow {
+  tripId: string;
+  externalTripId: string | null;
+  customerId: string;
+  customerName: string;
+  laneLabel: string | null;
+  currentStatus: TripStatus;
+  billingStatus: BillingStatus;
+  billingPeriod: string | null;
+  finalBillableCents: number | null;
+  hasMissingProof: boolean;
+  updatedAt: string;
+}
+
+// Origin/destination aliases for the billing-list lane label (reuse the board pattern).
+const billOriginLoc = alias(locations, "bill_origin_loc");
+const billDestLoc = alias(locations, "bill_dest_loc");
+
+/**
+ * The billing pending / ready list (FR-019): the billing-phase trips in the requested phase, filtered
+ * by customer + `YYYY-MM` period, with each trip's computed final billable value and a missing-proof
+ * indicator. `scope='pending'` → `billing_pending`; `scope='ready'` → `billing_ready`.
+ */
+export async function queryBillingList(args: {
+  scope: "pending" | "ready";
+  customerId?: string;
+  billingPeriod?: string;
+}): Promise<BillingListRow[]> {
+  const status: TripStatus = args.scope === "ready" ? "billing_ready" : "billing_pending";
+  const conditions: SQL[] = [eq(trips.currentStatus, status)];
+  if (args.customerId) conditions.push(eq(trips.customerId, args.customerId));
+  if (args.billingPeriod) conditions.push(eq(billingItems.billingPeriod, args.billingPeriod));
+
+  const finalBillable = sql<string | null>`${billingItems.baseFreightCents} + COALESCE((
+    SELECT SUM(CASE WHEN ba.type = 'discount' THEN -ba.amount_cents ELSE ba.amount_cents END)
+    FROM ${billingAdjustments} ba
+    WHERE ba.billing_item_id = ${billingItems.id} AND ba.removed_at IS NULL
+  ), 0)`;
+
+  const rows = await db
+    .select({
+      tripId: trips.id,
+      externalTripId: trips.externalTripId,
+      customerId: trips.customerId,
+      customerName: customers.name,
+      originCode: billOriginLoc.code,
+      destinationCode: billDestLoc.code,
+      laneId: trips.laneId,
+      currentStatus: trips.currentStatus,
+      billingPeriod: billingItems.billingPeriod,
+      finalBillableCents: finalBillable,
+      hasMissingProof: missingBillingDocumentsSql(),
+      updatedAt: trips.updatedAt,
+    })
+    .from(trips)
+    .innerJoin(billingItems, eq(billingItems.tripId, trips.id))
+    .leftJoin(customers, eq(trips.customerId, customers.id))
+    .leftJoin(billOriginLoc, eq(trips.originLocationId, billOriginLoc.id))
+    .leftJoin(billDestLoc, eq(trips.destinationLocationId, billDestLoc.id))
+    .where(and(...conditions))
+    .orderBy(asc(trips.updatedAt));
+
+  return rows.map((r) => ({
+    tripId: r.tripId,
+    externalTripId: r.externalTripId,
+    customerId: r.customerId,
+    customerName: r.customerName ?? "",
+    laneLabel: r.laneId ? `${r.originCode ?? ""} → ${r.destinationCode ?? ""}` : null,
+    currentStatus: r.currentStatus,
+    billingStatus: billingStatus(r.currentStatus),
+    billingPeriod: r.billingPeriod,
+    finalBillableCents: r.finalBillableCents == null ? null : Number(r.finalBillableCents),
+    hasMissingProof: Boolean(r.hasMissingProof),
+    updatedAt: r.updatedAt.toISOString(),
+  }));
+}
+
+export interface ExportBatchRow {
+  id: string;
+  customerId: string;
+  customerName: string;
+  billingPeriod: string;
+  format: string;
+  status: string;
+  tripCount: number;
+  totalAmountCents: number;
+  fileStorageKey: string | null;
+  errorMessage: string | null;
+  generatedByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Export-batch history (BILL-008), newest-first, optionally filtered by customer + period. */
+export async function queryExportBatches(
+  filters: { customerId?: string; billingPeriod?: string } = {},
+): Promise<ExportBatchRow[]> {
+  const conditions: SQL[] = [];
+  if (filters.customerId) conditions.push(eq(exportBatches.customerId, filters.customerId));
+  if (filters.billingPeriod) conditions.push(eq(exportBatches.billingPeriod, filters.billingPeriod));
+
+  const rows = await db
+    .select({
+      id: exportBatches.id,
+      customerId: exportBatches.customerId,
+      customerName: customers.name,
+      billingPeriod: exportBatches.billingPeriod,
+      format: exportBatches.format,
+      status: exportBatches.status,
+      tripCount: exportBatches.tripCount,
+      totalAmountCents: exportBatches.totalAmountCents,
+      fileStorageKey: exportBatches.fileStorageKey,
+      errorMessage: exportBatches.errorMessage,
+      generatedByUserId: exportBatches.generatedByUserId,
+      createdAt: exportBatches.createdAt,
+      updatedAt: exportBatches.updatedAt,
+    })
+    .from(exportBatches)
+    .leftJoin(customers, eq(exportBatches.customerId, customers.id))
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(desc(exportBatches.createdAt));
+
+  return rows.map((r) => ({
+    id: r.id,
+    customerId: r.customerId,
+    customerName: r.customerName ?? "",
+    billingPeriod: r.billingPeriod,
+    format: r.format,
+    status: r.status,
+    tripCount: r.tripCount,
+    totalAmountCents: Number(r.totalAmountCents),
+    fileStorageKey: r.fileStorageKey,
+    errorMessage: r.errorMessage,
+    generatedByUserId: r.generatedByUserId,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  }));
+}
+
+export interface RateRowView {
+  id: string;
+  customerId: string;
+  customerName: string;
+  laneId: string | null;
+  laneLabel: string | null;
+  vehicleType: string | null;
+  baseAmountCents: number;
+  currency: string;
+  tollHandlingRule: string | null;
+  waitingTimeRule: string | null;
+  extraStopRule: string | null;
+  effectiveStart: string | null;
+  effectiveEnd: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const rateOriginLoc = alias(locations, "rate_origin_loc");
+const rateDestLoc = alias(locations, "rate_dest_loc");
+
+/** All rates with customer name + derived lane label (rate admin list). */
+export async function queryRates(
+  filters: { customerId?: string } = {},
+): Promise<RateRowView[]> {
+  const conditions: SQL[] = [];
+  if (filters.customerId) conditions.push(eq(rates.customerId, filters.customerId));
+
+  const rows = await db
+    .select({
+      id: rates.id,
+      customerId: rates.customerId,
+      customerName: customers.name,
+      laneId: rates.laneId,
+      originCode: rateOriginLoc.code,
+      destinationCode: rateDestLoc.code,
+      vehicleType: rates.vehicleType,
+      baseAmountCents: rates.baseAmountCents,
+      currency: rates.currency,
+      tollHandlingRule: rates.tollHandlingRule,
+      waitingTimeRule: rates.waitingTimeRule,
+      extraStopRule: rates.extraStopRule,
+      effectiveStart: rates.effectiveStart,
+      effectiveEnd: rates.effectiveEnd,
+      active: rates.active,
+      createdAt: rates.createdAt,
+      updatedAt: rates.updatedAt,
+    })
+    .from(rates)
+    .leftJoin(customers, eq(rates.customerId, customers.id))
+    .leftJoin(lanes, eq(rates.laneId, lanes.id))
+    .leftJoin(rateOriginLoc, eq(lanes.originLocationId, rateOriginLoc.id))
+    .leftJoin(rateDestLoc, eq(lanes.destinationLocationId, rateDestLoc.id))
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(asc(customers.name), desc(rates.effectiveStart));
+
+  return rows.map((r) => ({
+    id: r.id,
+    customerId: r.customerId,
+    customerName: r.customerName ?? "",
+    laneId: r.laneId,
+    laneLabel: r.laneId ? `${r.originCode ?? ""} → ${r.destinationCode ?? ""}` : null,
+    vehicleType: r.vehicleType,
+    baseAmountCents: Number(r.baseAmountCents),
+    currency: r.currency,
+    tollHandlingRule: r.tollHandlingRule,
+    waitingTimeRule: r.waitingTimeRule,
+    extraStopRule: r.extraStopRule,
+    effectiveStart: r.effectiveStart ? r.effectiveStart.toISOString() : null,
+    effectiveEnd: r.effectiveEnd ? r.effectiveEnd.toISOString() : null,
+    active: r.active,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  }));
+}
+
+export interface DocumentRequirementView {
+  id: string;
+  customerId: string;
+  customerName: string;
+  documentTypeId: string;
+  documentTypeCode: string;
+  documentTypeLabelPt: string;
+  requiredForCompletion: boolean;
+  requiredForBilling: boolean;
+  laneId: string | null;
+  laneLabel: string | null;
+  vehicleType: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const reqOriginLoc = alias(locations, "req_origin_loc");
+const reqDestLoc = alias(locations, "req_dest_loc");
+
+/** A customer's document-requirement checklist with customer/type/lane labels (US3 admin list). */
+export async function queryDocumentRequirements(
+  filters: { customerId?: string } = {},
+): Promise<DocumentRequirementView[]> {
+  const conditions: SQL[] = [];
+  if (filters.customerId) conditions.push(eq(documentRequirements.customerId, filters.customerId));
+
+  const rows = await db
+    .select({
+      id: documentRequirements.id,
+      customerId: documentRequirements.customerId,
+      customerName: customers.name,
+      documentTypeId: documentRequirements.documentTypeId,
+      documentTypeCode: documentTypes.code,
+      documentTypeLabelPt: documentTypes.labelPt,
+      requiredForCompletion: documentRequirements.requiredForCompletion,
+      requiredForBilling: documentRequirements.requiredForBilling,
+      laneId: documentRequirements.laneId,
+      originCode: reqOriginLoc.code,
+      destinationCode: reqDestLoc.code,
+      vehicleType: documentRequirements.vehicleType,
+      active: documentRequirements.active,
+      createdAt: documentRequirements.createdAt,
+      updatedAt: documentRequirements.updatedAt,
+    })
+    .from(documentRequirements)
+    .leftJoin(customers, eq(documentRequirements.customerId, customers.id))
+    .innerJoin(documentTypes, eq(documentRequirements.documentTypeId, documentTypes.id))
+    .leftJoin(lanes, eq(documentRequirements.laneId, lanes.id))
+    .leftJoin(reqOriginLoc, eq(lanes.originLocationId, reqOriginLoc.id))
+    .leftJoin(reqDestLoc, eq(lanes.destinationLocationId, reqDestLoc.id))
+    .where(conditions.length ? and(...conditions) : undefined)
+    .orderBy(asc(customers.name), asc(documentTypes.sortOrder));
+
+  return rows.map((r) => ({
+    id: r.id,
+    customerId: r.customerId,
+    customerName: r.customerName ?? "",
+    documentTypeId: r.documentTypeId,
+    documentTypeCode: r.documentTypeCode,
+    documentTypeLabelPt: r.documentTypeLabelPt,
+    requiredForCompletion: r.requiredForCompletion,
+    requiredForBilling: r.requiredForBilling,
+    laneId: r.laneId,
+    laneLabel: r.laneId ? `${r.originCode ?? ""} → ${r.destinationCode ?? ""}` : null,
+    vehicleType: r.vehicleType,
+    active: r.active,
+    createdAt: r.createdAt.toISOString(),
+    updatedAt: r.updatedAt.toISOString(),
+  }));
+}
+
+export interface DocumentTypeView {
+  id: string;
+  code: string;
+  labelPt: string;
+  active: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The document-type master (admin list + upload type picker), ordered by sort order. */
+export async function queryDocumentTypes(): Promise<DocumentTypeView[]> {
+  const rows = await db
+    .select()
+    .from(documentTypes)
+    .orderBy(asc(documentTypes.sortOrder), asc(documentTypes.code));
+  return rows.map((r) => ({
+    id: r.id,
+    code: r.code,
+    labelPt: r.labelPt,
+    active: r.active,
+    sortOrder: r.sortOrder,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
   }));

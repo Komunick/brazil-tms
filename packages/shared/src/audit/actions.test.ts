@@ -33,6 +33,31 @@ describe("ALL_AUDIT_ACTIONS", () => {
     }
   });
 
+  it("contains the twelve feature 008 document/rate/billing/export actions", () => {
+    for (const action of [
+      "document.upload",
+      "document.verify",
+      "document.waive",
+      "document.archive",
+      "document_requirement.create",
+      "document_requirement.update",
+      "document_type.create",
+      "document_type.update",
+      "rate.create",
+      "rate.update",
+      "billing_item.update",
+      "billing.export",
+    ] as const) {
+      expect(ALL_AUDIT_ACTIONS).toContain<AuditAction>(action);
+    }
+  });
+
+  it("does NOT add a completion/billing-ready action (those reuse trip.status_change)", () => {
+    expect(ALL_AUDIT_ACTIONS).toContain<AuditAction>("trip.status_change");
+    expect(ALL_AUDIT_ACTIONS).not.toContain("trip.complete" as AuditAction);
+    expect(ALL_AUDIT_ACTIONS).not.toContain("trip.billing_ready" as AuditAction);
+  });
+
   it("has no duplicate entries", () => {
     expect(new Set(ALL_AUDIT_ACTIONS).size).toBe(ALL_AUDIT_ACTIONS.length);
   });

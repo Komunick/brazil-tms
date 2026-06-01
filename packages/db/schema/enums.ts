@@ -177,3 +177,33 @@ export const exceptionResponsibleParty = pgEnum("exception_responsible_party", [
   "force_majeure",
   "unknown",
 ]);
+
+/**
+ * Documents / billing / export enums (feature 008, data-model.md §1). pgEnums for the fixed sets the
+ * completion/billing gate + the billable-value computation reference; kept in lockstep with the
+ * `@brazil-tms/shared` `DOCUMENT_VERIFICATION_STATUSES` / `EXPORT_BATCH_STATUSES` /
+ * `BILLING_ADJUSTMENT_TYPES` arrays. `export_batches.format` / `billing_items.dispute_status` stay
+ * text+CHECK (display / readable-predicate sets) and `document_types` is a config table — NOT enums.
+ */
+export const documentVerificationStatus = pgEnum("document_verification_status", [
+  "pending_review",
+  "accepted",
+  "rejected",
+]);
+
+export const exportBatchStatus = pgEnum("export_batch_status", [
+  "queued",
+  "running",
+  "completed",
+  "failed", // mirrors import_batch_status
+]);
+
+export const billingAdjustmentType = pgEnum("billing_adjustment_type", [
+  "toll",
+  "waiting_time",
+  "redelivery",
+  "extra_stop",
+  "penalty",
+  "discount",
+  "manual_adjustment",
+]);

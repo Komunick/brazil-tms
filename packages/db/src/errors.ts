@@ -16,3 +16,15 @@ export class Conflict extends Error {
     this.name = "Conflict";
   }
 }
+
+/** A missing resource (no row for the given id) → HTTP 404 (distinct from a 409 business conflict). */
+export class NotFound extends Error {
+  readonly status = 404;
+  constructor(
+    readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "NotFound";
+  }
+}

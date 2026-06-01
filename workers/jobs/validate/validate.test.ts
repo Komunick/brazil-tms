@@ -3,6 +3,7 @@ import { asc, eq, inArray } from "drizzle-orm";
 import {
   auditLogs,
   customers,
+  alerts,
   db,
   importBatches,
   importRows,
@@ -122,6 +123,7 @@ describe.skipIf(!hasDb)("validate job (integration)", () => {
     }
     // Trips (import_batch_id → import_batches) must go before the batches they reference.
     if (createdTripIds.length > 0) {
+      await db.delete(alerts).where(inArray(alerts.tripId, createdTripIds));
       await db.delete(trips).where(inArray(trips.id, createdTripIds));
     }
     for (const batchId of createdBatchIds) {

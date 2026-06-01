@@ -71,7 +71,11 @@
     "trailers": "Reboques",
     "carriers": "Transportadoras",
     "exceptions": "Exceções",
-    "slaRules": "Regras de SLA"
+    "slaRules": "Regras de SLA",
+    "documents": "Documentos",
+    "billing": "Faturamento",
+    "rates": "Tarifas",
+    "documentRequirements": "Requisitos de Documentos"
   },
   "Roles": {
     "admin": "Administrador",
@@ -181,7 +185,202 @@
     "exception_cancel": "Exceção cancelada",
     "trip_note": "Nota adicionada",
     "sla_rule_create": "Regra de SLA criada",
-    "sla_rule_update": "Regra de SLA atualizada"
+    "sla_rule_update": "Regra de SLA atualizada",
+    "document_upload": "Documento enviado",
+    "document_verify": "Documento verificado",
+    "document_waive": "Documento dispensado",
+    "document_archive": "Documento arquivado",
+    "document_requirement_create": "Requisito de documento criado",
+    "document_requirement_update": "Requisito de documento atualizado",
+    "document_type_create": "Tipo de documento criado",
+    "document_type_update": "Tipo de documento atualizado",
+    "rate_create": "Tarifa criada",
+    "rate_update": "Tarifa atualizada",
+    "billing_item_update": "Item de faturamento atualizado",
+    "billing_export": "Exportação de faturamento gerada"
+  },
+  "Documents": {
+    "title": "Documentos",
+    "screenTitle": "Documentos",
+    "description": "Anexe e verifique comprovantes de execução das viagens.",
+    "upload": "Enviar documento",
+    "uploadTitle": "Enviar comprovante",
+    "type": "Tipo de documento",
+    "file": "Arquivo",
+    "externalReference": "Referência externa (CT-e / POD / portal)",
+    "notes": "Observações",
+    "submit": "Enviar",
+    "sending": "Enviando...",
+    "verify": "Verificar",
+    "accept": "Aceitar",
+    "reject": "Rejeitar",
+    "archive": "Arquivar",
+    "download": "Baixar",
+    "waiver": "Dispensa",
+    "waiverReason": "Justificativa",
+    "verifiedBy": "Verificado por",
+    "verifiedAt": "Verificado em",
+    "uploadedAt": "Enviado em",
+    "missingTitle": "Documentos obrigatórios pendentes",
+    "missingNone": "Todos os documentos obrigatórios foram atendidos.",
+    "requiredForCompletion": "Obrigatório para conclusão",
+    "requiredForBilling": "Obrigatório para faturamento",
+    "checklistBlocked": "Lista de documentos do cliente não homologada (usando padrão).",
+    "empty": "Nenhum documento anexado.",
+    "colTrip": "Viagem",
+    "colCustomer": "Cliente",
+    "colLane": "Rota",
+    "colStatus": "Status",
+    "status": {
+      "pending_review": "Em análise",
+      "accepted": "Aceito",
+      "rejected": "Rejeitado"
+    },
+    "errors": {
+      "UNSUPPORTED_FILE_TYPE": "Tipo de arquivo não suportado (use PDF, JPG ou PNG).",
+      "FILE_TOO_LARGE": "Arquivo muito grande (máximo ~10 MB).",
+      "INVALID_DOCUMENT_TYPE": "Tipo de documento inválido."
+    },
+    "requirementsAdmin": {
+      "title": "Requisitos de documentos por cliente",
+      "customer": "Cliente",
+      "type": "Tipo de documento",
+      "lane": "Rota (opcional)",
+      "vehicleType": "Tipo de veículo (opcional)",
+      "requiredForCompletion": "Bloqueia conclusão",
+      "requiredForBilling": "Bloqueia faturamento",
+      "active": "Ativo",
+      "add": "Adicionar requisito",
+      "save": "Salvar",
+      "blocked": "Sem lista configurada — homologação pendente (usando padrão)."
+    },
+    "typeAdmin": {
+      "title": "Tipos de documento",
+      "code": "Código",
+      "label": "Rótulo",
+      "active": "Ativo",
+      "sortOrder": "Ordem",
+      "add": "Adicionar tipo",
+      "save": "Salvar"
+    }
+  },
+  "Billing": {
+    "title": "Faturamento",
+    "screenTitle": "Faturamento",
+    "description": "Liste, precifique e exporte viagens prontas para faturar.",
+    "markCompleted": "Marcar como concluída",
+    "markBillingReady": "Marcar pronta para faturar",
+    "completed": "Concluída",
+    "billingReady": "Pronta para faturar",
+    "baseFreight": "Frete base",
+    "billingPeriod": "Período (AAAA-MM)",
+    "disputeStatus": "Disputa",
+    "manualAmount": "Valor manual",
+    "rateBlocked": "Sem tarifa correspondente — valor manual; homologação de regra pendente.",
+    "save": "Salvar",
+    "blockers": {
+      "title": "Pendências",
+      "not_unloaded": "A viagem ainda não foi descarregada.",
+      "missing_completion_documents": "Documentos obrigatórios para conclusão pendentes.",
+      "cancelled": "Viagem cancelada.",
+      "not_billing_pending": "A viagem não está em faturamento pendente.",
+      "missing_billing_documents": "Documentos obrigatórios para faturamento pendentes.",
+      "no_pricing": "Sem valor de frete (tarifa ou valor manual).",
+      "open_billing_dispute": "Disputa de faturamento em aberto."
+    },
+    "values": {
+      "planned": "Planejado",
+      "executed": "Executado",
+      "adjustment": "Ajustes",
+      "final": "Total a faturar"
+    },
+    "dispute": {
+      "none": "Nenhuma",
+      "open": "Aberta",
+      "resolved": "Resolvida"
+    },
+    "adjustments": {
+      "title": "Ajustes",
+      "type": "Tipo",
+      "amount": "Valor",
+      "note": "Observação",
+      "add": "Adicionar ajuste",
+      "remove": "Remover",
+      "types": {
+        "toll": "Pedágio",
+        "waiting_time": "Tempo de espera",
+        "redelivery": "Reentrega",
+        "extra_stop": "Parada extra",
+        "penalty": "Multa",
+        "discount": "Desconto",
+        "manual_adjustment": "Ajuste manual"
+      }
+    },
+    "waiver": {
+      "title": "Dispensar documento",
+      "type": "Tipo de documento",
+      "reason": "Justificativa",
+      "add": "Dispensar"
+    },
+    "lists": {
+      "pending": "Faturamento pendente",
+      "ready": "Pronto para faturar",
+      "customer": "Cliente",
+      "period": "Período",
+      "periodPlaceholder": "AAAA-MM",
+      "value": "Valor",
+      "missingProof": "Comprovação pendente",
+      "empty": "Nenhuma viagem encontrada."
+    },
+    "export": {
+      "title": "Exportar faturamento",
+      "customer": "Cliente",
+      "period": "Período (AAAA-MM)",
+      "periodPlaceholder": "AAAA-MM",
+      "format": "Formato",
+      "generate": "Gerar exportação",
+      "generating": "Gerando...",
+      "history": "Histórico de exportações",
+      "status": "Status",
+      "tripCount": "Viagens",
+      "total": "Total",
+      "download": "Baixar",
+      "signOffBlocked": "Formato de exportação não homologado (usando colunas padrão).",
+      "statuses": {
+        "queued": "Na fila",
+        "running": "Processando",
+        "completed": "Concluída",
+        "failed": "Falhou"
+      },
+      "errors": {
+        "NO_BILLABLE_TRIPS": "Nenhuma viagem pronta para faturar neste período."
+      }
+    },
+    "errors": {
+      "COMPLETION_BLOCKED": "Não é possível concluir: existem pendências.",
+      "BILLING_READY_BLOCKED": "Não é possível marcar como pronta: existem pendências."
+    }
+  },
+  "Rates": {
+    "title": "Tarifas",
+    "screenTitle": "Tarifas",
+    "description": "Mantenha as tarifas por cliente, rota, tipo de veículo e vigência.",
+    "customer": "Cliente",
+    "lane": "Rota (opcional)",
+    "vehicleType": "Tipo de veículo (opcional)",
+    "baseAmount": "Valor base (R$)",
+    "currency": "Moeda",
+    "effectiveStart": "Início da vigência",
+    "effectiveEnd": "Fim da vigência",
+    "active": "Ativa",
+    "inactiveTag": "(inativa)",
+    "add": "Adicionar tarifa",
+    "save": "Salvar",
+    "tollRule": "Regra de pedágio (Input #5)",
+    "waitingRule": "Regra de espera (Input #5)",
+    "extraStopRule": "Regra de parada extra (Input #5)",
+    "rulesNote": "Regras de pedágio/espera/parada são entradas comerciais pendentes (§29 Input #5).",
+    "empty": "Nenhuma tarifa cadastrada."
   },
   "MasterData": {
     "statusColumn": "Situação",
@@ -533,6 +732,8 @@
       "viewBillingPending": "Faturamento pendente",
       "viewUnassigned": "Não atribuídas",
       "viewAtRisk": "Em risco",
+      "viewMissingDocuments": "Documentos pendentes",
+      "filterMissingDocuments": "Documentos pendentes",
       "filterSlaStatus": "Risco de SLA",
       "filterCustomer": "Cliente",
       "filterStatus": "Status",
@@ -667,6 +868,30 @@
       "sla_rule": {
         "create": "Regra de SLA criada",
         "update": "Regra de SLA atualizada"
+      },
+      "document": {
+        "upload": "Documento enviado",
+        "verify": "Documento verificado",
+        "waive": "Documento dispensado",
+        "archive": "Documento arquivado"
+      },
+      "document_requirement": {
+        "create": "Requisito de documento criado",
+        "update": "Requisito de documento atualizado"
+      },
+      "document_type": {
+        "create": "Tipo de documento criado",
+        "update": "Tipo de documento atualizado"
+      },
+      "rate": {
+        "create": "Tarifa criada",
+        "update": "Tarifa atualizada"
+      },
+      "billing_item": {
+        "update": "Item de faturamento atualizado"
+      },
+      "billing": {
+        "export": "Exportação de faturamento gerada"
       }
     },
     "edit": {

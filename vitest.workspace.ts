@@ -29,6 +29,9 @@ export default defineWorkspace([
       root: "./apps/web",
       environment: "node",
       include: ["lib/**/*.test.ts"],
+      // Integration tests hit the dev DB + Supabase Storage; allow headroom over the 5s default so
+      // Storage latency under concurrent load does not flake a run.
+      testTimeout: 20_000,
     },
   },
   {
@@ -59,6 +62,8 @@ export default defineWorkspace([
       root: "./workers",
       environment: "node",
       include: ["**/*.test.ts"],
+      // Worker jobs hit the dev DB + Supabase Storage (ExcelJS export, putExport); headroom over 5s.
+      testTimeout: 20_000,
     },
   },
 ]);

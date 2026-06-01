@@ -234,4 +234,54 @@ describe.skipIf(!hasDb)("trip-transitions (integration)", () => {
     expect(resolved.currentStatus).toBe("completed");
     expect(resolved.disputedFromStatus).toBeNull();
   });
+
+  it("runs the optional txHook side-write atomically with a successful transition", async () => {
+    const tripId = await createTripAt("billing_ready");
+    let hookRan = false;
+    const detail = await transitionTripStatus(
+      tripId,
+      { toStatus: "billed", expectedFromStatus: "billing_ready" },
+      actorId,
+      async (tx) => {
+        // A real caller (008 billing-export) writes a side-row through `tx`; here we just confirm the hook
+        // runs INSIDE the transition's transaction and receives a usable tx handle.
+        hookRan = true;
+        await tx.select({ id: trips.id }).from(trips).where(eq(trips.id, tripId)).limit(1);
+      },
+    );
+    expect(hookRan).toBe(true);
+    expect(detail.currentStatus).toBe("billed");
+    expect(await statusOf(tripId)).toBe("billed");
+  });
+
+  it("rolls the WHOLE transition back when the txHook throws — the side-write is atomic (no half-transition, FR-021)", async () => {
+    const tripId = await createTripAt("billing_ready");
+    // Models 008's export linking billing_items in the SAME tx as billing_ready → billed. If that side-write
+    // fails (or the worker dies in this window), the status change MUST NOT persist — so a trip can never be
+    // left billed-but-unlinked. This is the atomicity the hook buys (refutes the "autocommit between the
+    // UPDATE and the hook" reading: every statement here runs against the same `tx`, committed only on return).
+    await expect(
+      transitionTripStatus(
+        tripId,
+        { toStatus: "billed", expectedFromStatus: "billing_ready" },
+        actorId,
+        async () => {
+          throw new Error("simulated link-write failure");
+        },
+      ),
+    ).rejects.toThrow("simulated link-write failure");
+
+    // Rolled back: still billing_ready, with no status_change event and no audit row written.
+    expect(await statusOf(tripId)).toBe("billing_ready");
+    const events = await db
+      .select()
+      .from(tripEvents)
+      .where(and(eq(tripEvents.tripId, tripId), eq(tripEvents.eventType, "status_change")));
+    expect(events).toHaveLength(0);
+    const audits = await db
+      .select()
+      .from(auditLogs)
+      .where(and(eq(auditLogs.entityId, tripId), eq(auditLogs.action, "trip.status_change")));
+    expect(audits).toHaveLength(0);
+  });
 });

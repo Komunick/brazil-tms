@@ -160,6 +160,8 @@ export function DashboardWidgets() {
   const atRiskHref = "/trips?atRisk=true&scope=active&sort=pickupStart";
   // 007 — exception queue deep-link (the Exception Management screen).
   const exceptionsHref = "/exceptions";
+  // 008 — the "Missing documents" view deep-link (matches the DEFAULT_TRIP_VIEWS "missingDocuments").
+  const missingDocsHref = "/trips?missingDocuments=true&scope=active&sort=pickupStart";
 
   const metrics: MetricCardProps[] = [
     metric("tripsAtRisk", summary.tripsAtRisk, (n) => n, atRiskHref),
@@ -167,7 +169,7 @@ export function DashboardWidgets() {
     metric("activeExceptions", summary.activeExceptions, (n) => n, exceptionsHref),
     metric("onTimePickup", summary.onTimePickupPct, pct),
     metric("onTimeArrival", summary.onTimeArrivalPct, pct),
-    metric("completedMissingDocuments", summary.completedMissingDocuments),
+    metric("completedMissingDocuments", summary.completedMissingDocuments, (n) => n, missingDocsHref),
   ];
 
   return (

@@ -10,6 +10,20 @@ export {
   queryReasonCodes,
   queryCustomerSlaRules,
   listAlerts,
+  // Feature 008 — billing lists / export history / rate + requirement/type admin reads + foundational
+  // helpers (resolveRequiredTypes/resolveRate/ensureBillingItem/loadBillingItemView).
+  queryBillingList,
+  queryExportBatches,
+  queryRates,
+  queryDocumentRequirements,
+  queryDocumentTypes,
+  resolveRequiredTypes,
+  resolveRate,
+  ensureBillingItem,
+  loadBillingItemView,
+  listDocumentRequirements,
+  listDocumentTypes,
+  listRates,
 } from "@brazil-tms/db";
 export type {
   TripBoardRow,
@@ -25,4 +39,10 @@ export type {
   CustomerSlaRuleItem,
   AlertListItem,
   AlertListResult,
+  // Feature 008 read-model types.
+  BillingListRow,
+  ExportBatchRow,
+  RateRowView,
+  DocumentRequirementView,
+  DocumentTypeView,
 } from "@brazil-tms/db";

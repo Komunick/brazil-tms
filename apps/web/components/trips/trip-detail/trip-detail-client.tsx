@@ -11,10 +11,8 @@ import { CustomerPlanSection } from "@/components/trips/trip-detail/customer-pla
 import { TimelineSection } from "@/components/trips/trip-detail/timeline";
 import { NotesSection } from "@/components/trips/trip-detail/notes";
 import { AuditHistorySection } from "@/components/trips/trip-detail/audit-history";
-import {
-  BillingPlaceholder,
-  DocumentsPlaceholder,
-} from "@/components/trips/trip-detail/placeholders";
+import { DocumentsSection } from "@/components/trips/trip-detail/documents-section";
+import { BillingSection } from "@/components/trips/trip-detail/billing-section";
 import { ExceptionPanel } from "@/components/trips/trip-detail/exception-panel";
 import { SlaIndicator } from "@/components/trips/trip-detail/sla-indicator";
 import { AssignmentPanel } from "@/components/trips/trip-detail/assignment-panel";
@@ -79,8 +77,8 @@ export function TripDetailClient({
       <SlaIndicator trip={trip} />
       <TimelineSection trip={trip} />
       <ExceptionPanel trip={trip} />
-      <DocumentsPlaceholder />
-      <BillingPlaceholder />
+      <DocumentsSection trip={trip} />
+      <BillingSection trip={trip} />
       <NotesSection events={trip.events} />
       <AuditHistorySection audit={trip.audit} />
     </div>

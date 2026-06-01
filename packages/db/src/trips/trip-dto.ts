@@ -1,9 +1,11 @@
 import { alias } from "drizzle-orm/pg-core";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import {
   alerts,
   auditLogs,
   carriers,
+  documentTypes,
+  documents,
   drivers,
   exceptions,
   reasonCodes,
@@ -24,6 +26,11 @@ import {
   type TripEventType,
   type TripStatus,
 } from "@brazil-tms/shared";
+import { loadChecklistStatus, type DocRef, type TripScope } from "../documents/requirements";
+import { loadBillingItemView, type BillingItemView } from "../billing/billing-items";
+
+export type { BillingItemView, BillingAdjustmentDto } from "../billing/billing-items";
+export type { DocRef } from "../documents/requirements";
 
 /**
  * Shared trip DTO mapping + detail loader for the feature 003 trip services (contract:
@@ -118,6 +125,35 @@ export interface AuditEntryDto {
   createdAt: string;
 }
 
+/** Feature 008 — a proof document (or waiver) on the trip detail (DOC-001/002/004/006; waiver R3). */
+export interface DocumentDto {
+  id: string;
+  tripId: string;
+  documentTypeId: string;
+  documentTypeCode: string;
+  documentTypeLabelPt: string;
+  fileStorageKey: string | null;
+  externalReference: string | null;
+  verificationStatus: string;
+  verifiedByUserId: string | null;
+  verifiedAt: string | null;
+  waivedAt: string | null;
+  waivedReason: string | null;
+  waivedByUserId: string | null;
+  notes: string | null;
+  uploadedByUserId: string;
+  isWaiver: boolean;
+  createdAt: string;
+}
+
+/** Feature 008 — the trip's required-document checklist status (drives the missing-document list). */
+export interface DocumentSummary {
+  completionMissing: DocRef[];
+  billingMissing: DocRef[];
+  /** False ⇒ the customer has no explicit checklist (running on DEFAULT; sign-off blocked). */
+  checklistSignedOff: boolean;
+}
+
 /**
  * A trip-assignment row projected for the detail view (data-model.md §1, §5). Joins the resource name
  * tables so the client renders driver/vehicle/trailer/carrier labels without a second lookup. The SAME
@@ -172,6 +208,12 @@ export interface TripDetail extends TripSummary {
   exceptions: ExceptionDto[];
   /** Feature 007 — the trip's in-app alerts, newest-first (created_at). */
   alerts: AlertDto[];
+  /** Feature 008 — the trip's non-archived proof documents (+ waivers), newest-first. */
+  documents: DocumentDto[];
+  /** Feature 008 — the required-document checklist status (missing lists + sign-off flag). */
+  documentSummary: DocumentSummary;
+  /** Feature 008 — the billing item + computed values, or null when not yet in the billing phase. */
+  billing: BillingItemView | null;
 }
 
 /** The Drizzle row type for `trips` (camelCase columns; timestamps are Date). */
@@ -205,7 +247,15 @@ function toTripBase(
   row: TripRow,
 ): Omit<
   TripDetail,
-  "events" | "audit" | "currentAssignment" | "assignmentHistory" | "exceptions" | "alerts"
+  | "events"
+  | "audit"
+  | "currentAssignment"
+  | "assignmentHistory"
+  | "exceptions"
+  | "alerts"
+  | "documents"
+  | "documentSummary"
+  | "billing"
 > {
   return {
     ...toTripSummary(row),
@@ -395,6 +445,41 @@ export async function loadTripDetail(
     .where(eq(alerts.tripId, tripId))
     .orderBy(desc(alerts.createdAt));
 
+  // Feature 008 — the trip's non-archived proof documents (+ waivers), with their type code/label.
+  const documentRows = await executor
+    .select({
+      id: documents.id,
+      tripId: documents.tripId,
+      documentTypeId: documents.documentTypeId,
+      documentTypeCode: documentTypes.code,
+      documentTypeLabelPt: documentTypes.labelPt,
+      fileStorageKey: documents.fileStorageKey,
+      externalReference: documents.externalReference,
+      verificationStatus: documents.verificationStatus,
+      verifiedByUserId: documents.verifiedByUserId,
+      verifiedAt: documents.verifiedAt,
+      waivedAt: documents.waivedAt,
+      waivedReason: documents.waivedReason,
+      waivedByUserId: documents.waivedByUserId,
+      notes: documents.notes,
+      uploadedByUserId: documents.uploadedByUserId,
+      createdAt: documents.createdAt,
+    })
+    .from(documents)
+    .innerJoin(documentTypes, eq(documents.documentTypeId, documentTypes.id))
+    .where(and(eq(documents.tripId, tripId), isNull(documents.archivedAt)))
+    .orderBy(desc(documents.createdAt));
+
+  // Feature 008 — required-document checklist status (computed once, shared by the doc + billing views).
+  const tripScope: TripScope = {
+    id: row.id,
+    customerId: row.customerId,
+    laneId: row.laneId,
+    plannedVehicleType: row.plannedVehicleType,
+  };
+  const checklist = await loadChecklistStatus(tripScope, executor);
+  const billing = await loadBillingItemView(executor, tripId, checklist);
+
   return {
     ...toTripBase(row),
     events: eventRows.map((e) => ({
@@ -452,5 +537,30 @@ export async function loadTripDetail(
       acknowledgedAt: iso(a.acknowledgedAt),
       autoResolvedAt: iso(a.autoResolvedAt),
     })),
+    documents: documentRows.map((d) => ({
+      id: d.id,
+      tripId: d.tripId,
+      documentTypeId: d.documentTypeId,
+      documentTypeCode: d.documentTypeCode,
+      documentTypeLabelPt: d.documentTypeLabelPt,
+      fileStorageKey: d.fileStorageKey,
+      externalReference: d.externalReference,
+      verificationStatus: d.verificationStatus,
+      verifiedByUserId: d.verifiedByUserId,
+      verifiedAt: iso(d.verifiedAt),
+      waivedAt: iso(d.waivedAt),
+      waivedReason: d.waivedReason,
+      waivedByUserId: d.waivedByUserId,
+      notes: d.notes,
+      uploadedByUserId: d.uploadedByUserId,
+      isWaiver: d.waivedAt != null,
+      createdAt: d.createdAt.toISOString(),
+    })),
+    documentSummary: {
+      completionMissing: checklist.completionMissing,
+      billingMissing: checklist.billingMissing,
+      checklistSignedOff: checklist.hasExplicitChecklist,
+    },
+    billing,
   };
 }

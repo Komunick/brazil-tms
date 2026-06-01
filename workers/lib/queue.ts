@@ -1,7 +1,13 @@
 import { PgBoss, type Job } from "pg-boss";
 import {
+  BILLING_JOBS,
+  DOCUMENT_JOBS,
   IMPORT_JOBS,
   SLA_JOBS,
+  type BillingJobName,
+  type BillingJobPayloads,
+  type DocumentJobName,
+  type DocumentJobPayloads,
   type ImportJobName,
   type ImportJobPayloads,
   type SlaJobName,
@@ -19,11 +25,17 @@ import {
  * surface and the bootstrap queue-creation loop.
  */
 
-/** The merged job-name → queue-name map (import pipeline + the 007 SLA sweep). */
-export const JOB = { ...IMPORT_JOBS, ...SLA_JOBS } as const;
+/**
+ * The merged job-name → queue-name map (import pipeline + the 007 SLA sweep + the 008 on-demand
+ * `billing.export` and the second scheduled job `documents.checks`).
+ */
+export const JOB = { ...IMPORT_JOBS, ...SLA_JOBS, ...BILLING_JOBS, ...DOCUMENT_JOBS } as const;
 
-export type JobName = ImportJobName | SlaJobName;
-export type JobPayloads = ImportJobPayloads & SlaJobPayloads;
+export type JobName = ImportJobName | SlaJobName | BillingJobName | DocumentJobName;
+export type JobPayloads = ImportJobPayloads &
+  SlaJobPayloads &
+  BillingJobPayloads &
+  DocumentJobPayloads;
 
 /** Construct the pg-boss instance against the worker's DATABASE_URL (server/worker-only). */
 export function createBoss(): PgBoss {

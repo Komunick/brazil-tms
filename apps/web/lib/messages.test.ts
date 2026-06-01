@@ -79,6 +79,55 @@ describe("pt-BR messages", () => {
     }
   });
 
+  it("has nested + flat labels for the 008 document / requirement / type / rate / billing actions", () => {
+    const a = (
+      messages as {
+        Trips: {
+          auditActions: {
+            document: Record<string, string>;
+            document_requirement: Record<string, string>;
+            document_type: Record<string, string>;
+            rate: Record<string, string>;
+            billing_item: Record<string, string>;
+            billing: Record<string, string>;
+          };
+        };
+      }
+    ).Trips.auditActions;
+    const flat = (messages as { AuditActions: Record<string, string> }).AuditActions;
+
+    // Nested resolution (next-intl dot-path) for the twelve 008 additions.
+    for (const k of ["upload", "verify", "waive", "archive"] as const) {
+      expect(a.document[k]).toBeTruthy();
+    }
+    for (const k of ["create", "update"] as const) {
+      expect(a.document_requirement[k]).toBeTruthy();
+      expect(a.document_type[k]).toBeTruthy();
+      expect(a.rate[k]).toBeTruthy();
+    }
+    expect(a.billing_item.update).toBeTruthy();
+    expect(a.billing.export).toBeTruthy();
+
+    // Flat `AuditActions` (global audit screen lookup via action.replaceAll('.','_')).
+    for (const key of [
+      "document_upload",
+      "document_verify",
+      "document_waive",
+      "document_archive",
+      "document_requirement_create",
+      "document_requirement_update",
+      "document_type_create",
+      "document_type_update",
+      "rate_create",
+      "rate_update",
+      "billing_item_update",
+      "billing_export",
+    ] as const) {
+      expect(typeof flat[key]).toBe("string");
+      expect(flat[key]).not.toBe("");
+    }
+  });
+
   it("has an AuditActions label for EVERY audit action (global screen uses action.replaceAll('.','_'))", () => {
     const labels = (messages as { AuditActions: Record<string, string> }).AuditActions;
     const missing = ALL_AUDIT_ACTIONS.filter((action) => {
