@@ -11,6 +11,7 @@ import {
   type UpdateDocumentTypeInput,
 } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
+import { NotFound } from "../errors";
 
 /**
  * Feature 008 — document-requirement + document-type reads (data-model §11, R2). The applicable
@@ -259,15 +260,16 @@ export async function updateDocumentRequirement(
       })
       .where(eq(documentRequirements.id, id))
       .returning();
+    if (!updated[0]) throw new NotFound("NOT_FOUND", "Requisito de documento não encontrado.");
     await writeAudit(tx, {
       entityType: "document_requirement",
       entityId: id,
       action: "document_requirement.update",
       previousValue: null,
-      newValue: updated[0] ?? null,
+      newValue: updated[0],
       actorUserId,
     });
-    return updated[0]!;
+    return updated[0];
   });
 }
 
@@ -311,14 +313,15 @@ export async function updateDocumentType(
       })
       .where(eq(documentTypes.id, id))
       .returning();
+    if (!updated[0]) throw new NotFound("NOT_FOUND", "Tipo de documento não encontrado.");
     await writeAudit(tx, {
       entityType: "document_type",
       entityId: id,
       action: "document_type.update",
       previousValue: null,
-      newValue: updated[0] ?? null,
+      newValue: updated[0],
       actorUserId,
     });
-    return updated[0]!;
+    return updated[0];
   });
 }

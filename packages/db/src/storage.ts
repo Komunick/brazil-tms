@@ -109,6 +109,16 @@ export async function putExport(
   return putObject(key, bytes, contentType, exportsBucket());
 }
 
+/** Feature 008 — best-effort delete of an object (e.g. roll back a stored binary when the metadata
+ * insert fails). Swallows errors so cleanup never masks the original failure. */
+export async function removeObject(key: string, bucket: string): Promise<void> {
+  try {
+    await getClient().storage.from(bucket).remove([key]);
+  } catch {
+    // best-effort: leave the orphan rather than throw over the real error.
+  }
+}
+
 /** Upload the original import file; returns its storage key (recorded on `import_batches`). */
 export async function putOriginal(
   batchId: string,

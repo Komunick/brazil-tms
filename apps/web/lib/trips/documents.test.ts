@@ -10,7 +10,14 @@ import {
   trips,
   users,
 } from "@brazil-tms/db";
-import { archiveDocument, uploadDocument, verifyDocument } from "./documents";
+import { randomUUID } from "node:crypto";
+import {
+  archiveDocument,
+  assertUploadable,
+  getDocumentFileKey,
+  uploadDocument,
+  verifyDocument,
+} from "./documents";
 import { Conflict } from "@/lib/api/respond";
 
 /**
@@ -167,5 +174,31 @@ describe.skipIf(!hasDb)("document services (integration, US1)", () => {
       ),
     ).rejects.toMatchObject({ code: "INVALID_DOCUMENT_TYPE" });
     expect(Conflict).toBeDefined();
+  });
+
+  it("getDocumentFileKey returns null for an archived document (no signed URL after archive)", async () => {
+    const detail = await uploadDocument(
+      tripId,
+      { documentTypeId: activeTypeId, fileStorageKey: `trips/${tripId}/arch.pdf` },
+      actorId,
+    );
+    const doc = detail.documents.find((d) => d.fileStorageKey === `trips/${tripId}/arch.pdf`)!;
+    createdDocIds.push(doc.id);
+    expect(await getDocumentFileKey(tripId, doc.id)).not.toBeNull(); // live → downloadable
+    await archiveDocument(doc.id, actorId);
+    expect(await getDocumentFileKey(tripId, doc.id)).toBeNull(); // archived → no key (404 at the route)
+  });
+
+  it("assertUploadable: missing trip ⇒ NotFound (404); inactive type ⇒ INVALID_DOCUMENT_TYPE (409) — before any store", async () => {
+    await expect(assertUploadable(randomUUID(), activeTypeId)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      status: 404,
+    });
+    await expect(assertUploadable(tripId, inactiveTypeId)).rejects.toMatchObject({
+      code: "INVALID_DOCUMENT_TYPE",
+      status: 409,
+    });
+    // a valid (trip, active type) pair preflights cleanly.
+    await expect(assertUploadable(tripId, activeTypeId)).resolves.toBeUndefined();
   });
 });

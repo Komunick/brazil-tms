@@ -1,6 +1,6 @@
 import ExcelJS from "exceljs";
 import { type PgBoss } from "pg-boss";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import { db } from "@brazil-tms/db/client";
 import {
   billingItems,
@@ -15,18 +15,24 @@ import { JOB, work } from "../../lib/queue";
 
 /**
  * Feature 008 — the on-demand `billing.export` worker job (data-model §12, R11). Off the request path:
- * set `running` → select the billing-ready trips for the batch's customer+period with their computed
- * final billable value → generate the file (ExcelJS xlsx/csv — no new dep) → put to the
- * `billing-exports` bucket → set `file_storage_key`/`trip_count`/`total_amount_cents`/`completed` →
- * transition each included trip `billing_ready → billed` (reused `transitionTripStatus`) + link
- * `billing_items.export_batch_id`. A throw sets the batch `failed` + `error_message` (durable status).
- * Idempotent retry: the select only picks still-`billing_ready` trips, so already-billed ones are skipped.
+ * set `running` → select the INCLUDED set (the customer+period billing-ready trips PLUS any already
+ * linked to this batch by a prior partial run) → transition each still-billing_ready trip
+ * `billing_ready → billed` (reused `transitionTripStatus`) + link `billing_items.export_batch_id` →
+ * generate the file (ExcelJS xlsx/csv — no new dep) → put to the `billing-exports` bucket → ONLY THEN
+ * set `file_storage_key`/`trip_count`/`total_amount_cents`/`completed`. A throw sets the batch `failed`
+ * + `error_message` (durable status); the catch keeps the batch out of `completed` until every included
+ * trip is billed + linked, so FR-021 holds.
+ *
+ * Idempotent + complete on retry: the select re-includes trips already billed+linked to THIS batch (via
+ * the `export_batch_id` predicate), so they stay in the regenerated file/totals and are never
+ * double-billed (the loop skips trips no longer `billing_ready`).
  *
  * Until the exact finance format lands, the export uses the LABELED DEFAULT column set (§29 Input #4).
  */
 
 interface ExportRow {
   tripId: string;
+  currentStatus: string;
   externalTripId: string | null;
   customerName: string | null;
   billingPeriod: string;
@@ -44,8 +50,17 @@ async function setBatch(
     .where(eq(exportBatches.id, exportBatchId));
 }
 
-/** The billing-ready trips for a customer+period, with each trip's computed final billable value. */
-async function selectBillableRows(customerId: string, billingPeriod: string): Promise<ExportRow[]> {
+/**
+ * The INCLUDED set for a batch: the customer+period billing-ready trips PLUS any trip already linked to
+ * this batch by a prior (partial) run, each with its computed final billable value + current status (so
+ * the caller transitions only the still-`billing_ready` ones). The `export_batch_id` arm makes a retry
+ * re-include trips a prior run already billed+linked — they stay in the regenerated file/totals.
+ */
+async function selectIncludedRows(
+  customerId: string,
+  billingPeriod: string,
+  exportBatchId: string,
+): Promise<ExportRow[]> {
   const finalCents = sql<string | null>`${billingItems.baseFreightCents} + COALESCE((
     SELECT SUM(CASE WHEN ba.type = 'discount' THEN -ba.amount_cents ELSE ba.amount_cents END)
     FROM billing_adjustments ba
@@ -55,6 +70,7 @@ async function selectBillableRows(customerId: string, billingPeriod: string): Pr
   const rows = await db
     .select({
       tripId: trips.id,
+      currentStatus: trips.currentStatus,
       externalTripId: trips.externalTripId,
       customerName: customers.name,
       billingPeriod: billingItems.billingPeriod,
@@ -65,15 +81,19 @@ async function selectBillableRows(customerId: string, billingPeriod: string): Pr
     .innerJoin(billingItems, eq(billingItems.tripId, trips.id))
     .leftJoin(customers, eq(trips.customerId, customers.id))
     .where(
-      and(
-        eq(trips.currentStatus, "billing_ready"),
-        eq(trips.customerId, customerId),
-        eq(billingItems.billingPeriod, billingPeriod),
+      or(
+        and(
+          eq(trips.currentStatus, "billing_ready"),
+          eq(trips.customerId, customerId),
+          eq(billingItems.billingPeriod, billingPeriod),
+        ),
+        eq(billingItems.exportBatchId, exportBatchId),
       ),
     );
 
   return rows.map((r) => ({
     tripId: r.tripId,
+    currentStatus: r.currentStatus,
     externalTripId: r.externalTripId,
     customerName: r.customerName,
     billingPeriod: r.billingPeriod,
@@ -132,7 +152,32 @@ export async function runBillingExport(payload: BillingExportPayload): Promise<v
   try {
     await setBatch(exportBatchId, { status: "running" });
 
-    const rows = await selectBillableRows(batch.customerId, batch.billingPeriod);
+    const rows = await selectIncludedRows(batch.customerId, batch.billingPeriod, exportBatchId);
+
+    // Transition + link EVERY included trip FIRST (FR-021: never leave a trip half-transitioned). A
+    // still-billing_ready trip is billed via the reused machine; a trip already billed by a prior run
+    // (retry) is only (re-)linked. The batch is NOT marked completed until this whole set succeeds.
+    //
+    // LINK BEFORE TRANSITION (atomicity): `transitionTripStatus` opens its own transaction and the
+    // link is a separate statement, so a throw/crash BETWEEN them must not strand a trip. Linking
+    // first means the only intermediate states are billing_ready+unlinked (re-included by the
+    // status arm) or billing_ready+linked (re-included by BOTH arms and transitioned on retry) — a
+    // billed-but-unlinked trip (which the retry would drop) is unreachable.
+    for (const r of rows) {
+      await db
+        .update(billingItems)
+        .set({ exportBatchId, updatedAt: new Date() })
+        .where(eq(billingItems.tripId, r.tripId));
+      if (r.currentStatus === "billing_ready") {
+        await transitionTripStatus(
+          r.tripId,
+          { toStatus: "billed", expectedFromStatus: "billing_ready" },
+          actorUserId,
+        );
+      }
+    }
+
+    // Generate the file over the full included set, then mark completed LAST.
     const { bytes, contentType, ext } = await buildFile(rows, batch.format);
     const key = exportStorageKey(exportBatchId, ext);
     await putExport(key, bytes, contentType);
@@ -145,20 +190,6 @@ export async function runBillingExport(payload: BillingExportPayload): Promise<v
       totalAmountCents: total,
       status: "completed",
     });
-
-    // Mark each included trip Billed (reused machine) + link it to this batch. The select only picks
-    // still-billing_ready trips, so a retry never double-bills.
-    for (const r of rows) {
-      await transitionTripStatus(
-        r.tripId,
-        { toStatus: "billed", expectedFromStatus: "billing_ready" },
-        actorUserId,
-      );
-      await db
-        .update(billingItems)
-        .set({ exportBatchId, updatedAt: new Date() })
-        .where(eq(billingItems.tripId, r.tripId));
-    }
   } catch (err) {
     await setBatch(exportBatchId, {
       status: "failed",

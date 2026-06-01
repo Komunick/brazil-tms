@@ -9,4 +9,5 @@ export {
   verifyDocument,
   archiveDocument,
   getDocumentFileKey,
+  assertUploadable,
 } from "@brazil-tms/db";

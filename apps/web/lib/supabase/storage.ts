@@ -17,6 +17,7 @@ export {
   // Feature 008 — documents + billing-export binaries (two new private buckets).
   putDocument,
   putExport,
+  removeObject,
   documentStorageKey,
   exportStorageKey,
   documentsBucket,

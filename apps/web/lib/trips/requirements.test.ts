@@ -158,4 +158,22 @@ describe.skipIf(!hasDb)("document requirements (integration, US3)", () => {
     });
     expect(status.hasExplicitChecklist).toBe(false); // running on DEFAULT ⇒ document-checklist sign-off blocked
   });
+
+  it("updating a non-existent requirement / type throws NotFound (404) — no spurious audit", async () => {
+    const missingId = randomUUID();
+    await expect(updateDocumentRequirement(missingId, { active: false }, actorId)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      status: 404,
+    });
+    await expect(updateDocumentType(missingId, { labelPt: "x" }, actorId)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      status: 404,
+    });
+    // The rolled-back transaction wrote no audit row for the missing id.
+    const audit = await db
+      .select({ id: auditLogs.id })
+      .from(auditLogs)
+      .where(eq(auditLogs.entityId, missingId));
+    expect(audit.length).toBe(0);
+  });
 });

@@ -137,6 +137,12 @@ test.describe("008 rates — create / read authz", () => {
 
     // Read (any reader) → 200.
     expect((await request.get(`/api/rates?customerId=${customerId}`)).status()).toBe(200);
+
+    // PATCH a non-existent rate → 404 (NotFound), not a silent 200.
+    const missing = await request.patch(`/api/rates/00000000-0000-0000-0000-000000000000`, {
+      data: { baseAmountCents: 1 },
+    });
+    expect(missing.status()).toBe(404);
   });
 });
 

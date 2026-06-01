@@ -134,11 +134,11 @@ describe.skipIf(!hasDb)("billing.export job (integration, US5)", () => {
     expect(batch.fileStorageKey).not.toBeNull();
   });
 
-  it("idempotent retry does not double-bill (the already-billed trip is skipped)", async () => {
-    const tripId = await seedReadyTrip();
+  it("idempotent retry does not double-bill AND keeps the billed trip in the file/totals", async () => {
+    const tripId = await seedReadyTrip({ adjustment: 10_000 }); // final 160_000
     const batchId = await insertBatch("xlsx");
     await runBillingExport({ exportBatchId: batchId, actorUserId: actorId });
-    // Re-run the same batch: the trip is now 'billed', so the select returns nothing — no throw, no double-bill.
+    // Re-run the same batch: the trip is now 'billed' but stays LINKED, so it is re-included (not zeroed).
     await runBillingExport({ exportBatchId: batchId, actorUserId: actorId });
 
     const trip = (await db.select({ s: trips.currentStatus }).from(trips).where(eq(trips.id, tripId)).limit(1))[0]!;
@@ -148,5 +148,49 @@ describe.skipIf(!hasDb)("billing.export job (integration, US5)", () => {
       .from(tripEvents)
       .where(and(eq(tripEvents.tripId, tripId), eq(tripEvents.statusAfter, "billed")));
     expect(billedEvents.length).toBe(1); // transitioned to billed exactly once
+
+    // The retry did NOT drop the billed trip from the batch (the FR-021 / P1 regression guard).
+    const batch = (await db.select().from(exportBatches).where(eq(exportBatches.id, batchId)).limit(1))[0]!;
+    expect(batch.tripCount).toBe(1);
+    expect(Number(batch.totalAmountCents)).toBe(160_000);
+  });
+
+  it("a partial prior run is completed: an already-billed+linked trip is re-included alongside a new billing_ready one", async () => {
+    const batchId = await insertBatch("xlsx");
+    // Simulate a prior partial run: trip A is already billed and linked to this batch.
+    const tripA = await seedReadyTrip();
+    await db.update(trips).set({ currentStatus: "billed" }).where(eq(trips.id, tripA));
+    await db.update(billingItems).set({ exportBatchId: batchId }).where(eq(billingItems.tripId, tripA));
+    // Trip C is still billing_ready for the same customer+period.
+    const tripC = await seedReadyTrip();
+
+    await runBillingExport({ exportBatchId: batchId, actorUserId: actorId });
+
+    const batch = (await db.select().from(exportBatches).where(eq(exportBatches.id, batchId)).limit(1))[0]!;
+    expect(batch.status).toBe("completed");
+    expect(batch.tripCount).toBe(2); // BOTH trips are in the file/totals
+    expect(Number(batch.totalAmountCents)).toBe(300_000);
+
+    const cStatus = (await db.select({ s: trips.currentStatus }).from(trips).where(eq(trips.id, tripC)).limit(1))[0]!;
+    expect(cStatus.s).toBe("billed"); // the new one was billed
+    const aStatus = (await db.select({ s: trips.currentStatus }).from(trips).where(eq(trips.id, tripA)).limit(1))[0]!;
+    expect(aStatus.s).toBe("billed"); // the prior one stays billed (not double-transitioned)
+    const aLink = (await db.select({ ex: billingItems.exportBatchId }).from(billingItems).where(eq(billingItems.tripId, tripA)).limit(1))[0]!;
+    expect(aLink.ex).toBe(batchId);
+  });
+
+  it("a billing_ready trip already LINKED (prior link-without-transition) is billed on retry, not dropped", async () => {
+    const batchId = await insertBatch("xlsx");
+    // Simulate the link-first / transition-failed intermediate state: linked but still billing_ready.
+    const tripId = await seedReadyTrip();
+    await db.update(billingItems).set({ exportBatchId: batchId }).where(eq(billingItems.tripId, tripId));
+
+    await runBillingExport({ exportBatchId: batchId, actorUserId: actorId });
+
+    const trip = (await db.select({ s: trips.currentStatus }).from(trips).where(eq(trips.id, tripId)).limit(1))[0]!;
+    expect(trip.s).toBe("billed"); // re-included by both arms + transitioned (never dropped)
+    const batch = (await db.select().from(exportBatches).where(eq(exportBatches.id, batchId)).limit(1))[0]!;
+    expect(batch.status).toBe("completed");
+    expect(batch.tripCount).toBe(1);
   });
 });

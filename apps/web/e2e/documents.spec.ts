@@ -33,6 +33,7 @@ import { testAccounts } from "./test-config";
 function code(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 }
+const SOME_UUID = "00000000-0000-0000-0000-000000000000";
 
 async function apiLogin(
   request: APIRequestContext,
@@ -50,6 +51,7 @@ let customerId = "";
 let originId = "";
 let destId = "";
 let docTypeId = "";
+let inactiveDocTypeId = "";
 const tripIds: string[] = [];
 
 async function seedTrip(currentStatus = "in_transit"): Promise<string> {
@@ -90,6 +92,11 @@ test.beforeAll(async () => {
     .values({ code: code("DT"), labelPt: "Comprovante de entrega" })
     .returning({ id: documentTypes.id });
   docTypeId = dt[0]!.id;
+  const dtInactive = await db
+    .insert(documentTypes)
+    .values({ code: code("DTX"), labelPt: "Tipo Inativo", active: false })
+    .returning({ id: documentTypes.id });
+  inactiveDocTypeId = dtInactive[0]!.id;
 });
 
 test.afterAll(async () => {
@@ -110,6 +117,7 @@ test.afterAll(async () => {
   }
   if (customerId) await db.delete(exportBatches).where(eq(exportBatches.customerId, customerId));
   if (docTypeId) await db.delete(documentTypes).where(eq(documentTypes.id, docTypeId));
+  if (inactiveDocTypeId) await db.delete(documentTypes).where(eq(documentTypes.id, inactiveDocTypeId));
   for (const id of [originId, destId]) if (id) await db.delete(locations).where(eq(locations.id, id));
   if (customerId) await db.delete(customers).where(eq(customers.id, customerId));
 });
@@ -201,5 +209,41 @@ test.describe("008 documents — verify + download", () => {
     const dl = await request.get(`/api/trips/${tripId}/documents/${docId}/download`);
     expect(dl.status()).toBe(200);
     expect(((await dl.json()) as { url: string }).url).toBeTruthy();
+
+    // After ARCHIVING the document, its download URL path 404s (no signed URL for an archived doc).
+    await apiLogin(request, testAccounts.dispatcher); // holds upload_documents (archive)
+    const archived = await request.delete(`/api/documents/${docId}`);
+    expect(archived.status()).toBe(200);
+    const dlArchived = await request.get(`/api/trips/${tripId}/documents/${docId}/download`);
+    expect(dlArchived.status()).toBe(404);
+  });
+});
+
+test.describe("008 documents — upload preflight (nothing stored on a bad ref)", () => {
+  test("missing trip → 404; inactive type → 409 INVALID_DOCUMENT_TYPE (nothing stored)", async ({
+    request,
+  }) => {
+    await apiLogin(request, testAccounts.dispatcher);
+
+    // A missing trip is preflighted to a clean 404 (not a 500 from the FK).
+    const missingTrip = await request.post(`/api/trips/${SOME_UUID}/documents`, {
+      multipart: { file: PDF, meta: JSON.stringify({ documentTypeId: docTypeId, fileName: "pod.pdf" }) },
+    });
+    expect(missingTrip.status()).toBe(404);
+
+    // An inactive document type → 409 INVALID_DOCUMENT_TYPE, and nothing is stored for the trip.
+    const tripId = await seedTrip();
+    const badType = await request.post(`/api/trips/${tripId}/documents`, {
+      multipart: {
+        file: PDF,
+        meta: JSON.stringify({ documentTypeId: inactiveDocTypeId, fileName: "pod.pdf" }),
+      },
+    });
+    expect(badType.status()).toBe(409);
+    expect(((await badType.json()) as { error: { code: string } }).error.code).toBe(
+      "INVALID_DOCUMENT_TYPE",
+    );
+    const stored = await db.select({ id: documents.id }).from(documents).where(eq(documents.tripId, tripId));
+    expect(stored.length).toBe(0); // preflight rejected before storing
   });
 });

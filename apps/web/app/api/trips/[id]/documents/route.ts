@@ -3,8 +3,8 @@ import { NextResponse } from "next/server";
 import { uploadDocumentMetaSchema } from "@brazil-tms/shared";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
 import { Conflict, handleRouteError } from "@/lib/api/respond";
-import { uploadDocument } from "@/lib/trips/documents";
-import { documentStorageKey, putDocument } from "@/lib/supabase/storage";
+import { assertUploadable, uploadDocument } from "@/lib/trips/documents";
+import { documentStorageKey, documentsBucket, putDocument, removeObject } from "@/lib/supabase/storage";
 
 export const dynamic = "force-dynamic";
 
@@ -68,22 +68,32 @@ export async function POST(
       typeof metaRaw === "string" ? JSON.parse(metaRaw) : {},
     );
 
+    // Preflight the DB refs (trip exists, type active) BEFORE storing — no orphan object / FK 500.
+    await assertUploadable(tripId, meta.documentTypeId);
+
     const documentId = randomUUID();
     const key = documentStorageKey(tripId, documentId, inferred.ext);
     const bytes = Buffer.from(await file.arrayBuffer());
     await putDocument(key, bytes, inferred.contentType);
 
-    const item = await uploadDocument(
-      tripId,
-      {
-        id: documentId,
-        documentTypeId: meta.documentTypeId,
-        fileStorageKey: key,
-        externalReference: meta.externalReference,
-        notes: meta.notes,
-      },
-      ctx.userId,
-    );
+    let item;
+    try {
+      item = await uploadDocument(
+        tripId,
+        {
+          id: documentId,
+          documentTypeId: meta.documentTypeId,
+          fileStorageKey: key,
+          externalReference: meta.externalReference,
+          notes: meta.notes,
+        },
+        ctx.userId,
+      );
+    } catch (insertError) {
+      // Roll back the stored binary if the metadata insert fails (e.g. a race after the preflight).
+      await removeObject(key, documentsBucket());
+      throw insertError;
+    }
     return NextResponse.json({ item }, { status: 201 });
   } catch (error) {
     return handleRouteError(error);

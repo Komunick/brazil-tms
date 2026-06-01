@@ -3,6 +3,7 @@ import { db, type DB } from "../client";
 import { rates } from "../../schema";
 import type { CreateRateInput, UpdateRateInput } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
+import { NotFound } from "../errors";
 import type { TripScope } from "../documents/requirements";
 
 /**
@@ -133,14 +134,15 @@ export async function updateRate(
       })
       .where(eq(rates.id, id))
       .returning();
+    if (!updated[0]) throw new NotFound("NOT_FOUND", "Tarifa não encontrada.");
     await writeAudit(tx, {
       entityType: "rate",
       entityId: id,
       action: "rate.update",
       previousValue: null,
-      newValue: updated[0] ?? null,
+      newValue: updated[0],
       actorUserId,
     });
-    return updated[0]!;
+    return updated[0];
   });
 }

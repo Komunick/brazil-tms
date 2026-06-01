@@ -136,4 +136,17 @@ describe.skipIf(!hasDb)("rates (integration, US4)", () => {
 
     await db.delete(rates).where(eq(rates.id, created.id));
   });
+
+  it("updateRate on a non-existent id throws NotFound (404) — no spurious audit", async () => {
+    const missingId = "99999999-9999-4999-8999-999999999999";
+    await expect(updateRate(missingId, { baseAmountCents: 1 }, actorId)).rejects.toMatchObject({
+      code: "NOT_FOUND",
+      status: 404,
+    });
+    const audit = await db
+      .select({ id: auditLogs.id })
+      .from(auditLogs)
+      .where(eq(auditLogs.entityId, missingId));
+    expect(audit.length).toBe(0);
+  });
 });

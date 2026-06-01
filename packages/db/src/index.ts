@@ -75,6 +75,7 @@ export {
   verifyDocument,
   archiveDocument,
   getDocumentFileKey,
+  assertUploadable,
 } from "./documents/documents";
 export { resolveRate, listRates, createRate, updateRate, type RateRow } from "./billing/rates";
 export {

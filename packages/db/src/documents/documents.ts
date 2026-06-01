@@ -1,9 +1,9 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "../client";
-import { documents, documentTypes } from "../../schema";
+import { documents, documentTypes, trips } from "../../schema";
 import type { DocumentVerificationStatus } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
-import { Conflict } from "../errors";
+import { Conflict, NotFound } from "../errors";
 import { loadTripDetail, type TripDetail } from "../trips/trip-dto";
 
 /**
@@ -21,6 +21,24 @@ interface UploadDocumentInput {
   fileStorageKey: string;
   externalReference?: string | null;
   notes?: string | null;
+}
+
+/**
+ * Preflight the DB references BEFORE the route stores the binary (R9): the trip must exist (else 404)
+ * and the document type must be active (else `INVALID_DOCUMENT_TYPE` 409). This prevents an orphan
+ * Storage object (and a 500 from the trips FK) when the metadata insert would have failed anyway.
+ */
+export async function assertUploadable(tripId: string, documentTypeId: string): Promise<void> {
+  const tripRows = await db.select({ id: trips.id }).from(trips).where(eq(trips.id, tripId)).limit(1);
+  if (!tripRows[0]) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
+  const typeRows = await db
+    .select({ active: documentTypes.active })
+    .from(documentTypes)
+    .where(eq(documentTypes.id, documentTypeId))
+    .limit(1);
+  if (!typeRows[0] || !typeRows[0].active) {
+    throw new Conflict("INVALID_DOCUMENT_TYPE", "Tipo de documento inválido ou inativo.");
+  }
 }
 
 async function reload(tx: Parameters<typeof loadTripDetail>[0], tripId: string): Promise<TripDetail> {
@@ -80,7 +98,13 @@ export async function getDocumentFileKey(
   const rows = await db
     .select({ key: documents.fileStorageKey })
     .from(documents)
-    .where(and(eq(documents.id, documentId), eq(documents.tripId, tripId)))
+    .where(
+      and(
+        eq(documents.id, documentId),
+        eq(documents.tripId, tripId),
+        isNull(documents.archivedAt),
+      ),
+    )
     .limit(1);
   return rows[0]?.key ?? null;
 }
