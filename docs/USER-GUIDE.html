@@ -947,7 +947,7 @@ footer.site{max-width:var(--maxw);margin:30px auto 50px;padding:22px 24px;color:
 
 <div class="callout tip">
 <p class="callout-title">If a button looks unavailable</p>
-<p>It's almost always your role, not a bug. For example, a Dispatcher won't see <em>Faturamento</em> (Billing), and Finance won't see <em>Expedição</em> (Dispatch). If you genuinely need to do something your role blocks, ask an <strong>Administrador</strong> — they manage roles on the <em>Usuários e Perfis</em> screen (<code>/admin/users</code>). Don't expect a workaround; the rule is enforced everywhere.</p>
+<p>It's almost always your role, not a bug. For example, a Dispatcher can open <em>Faturamento</em> (Billing) to view it, but won't see the rate screen <em>Tarifas</em> (Rates) or the export button — those need Finance or an Admin; and Finance won't see <em>Expedição</em> (Dispatch) at all. If you genuinely need to do something your role blocks, ask an <strong>Administrador</strong> — they manage roles on the <em>Usuários e Perfis</em> screen (<code>/admin/users</code>). Don't expect a workaround; the rule is enforced everywhere.</p>
 </div>
 
 <div class="callout warn">
@@ -1089,7 +1089,7 @@ footer.site{max-width:var(--maxw);margin:30px auto 50px;padding:22px 24px;color:
 
 <div class="callout tip">
 <p class="callout-title">Se um botão parecer indisponível</p>
-<p>Quase sempre é o seu perfil, não um defeito. Por exemplo, um Despachante não verá <em>Faturamento</em>, e o Financeiro não verá <em>Expedição</em>. Se você realmente precisar fazer algo que o seu perfil bloqueia, peça a um <strong>Administrador</strong> — ele gerencia os perfis na tela <em>Usuários e Perfis</em> (<code>/admin/users</code>). Não espere um "jeitinho"; a regra é aplicada em todos os lugares.</p>
+<p>Quase sempre é o seu perfil, não um defeito. Por exemplo, um Despachante consegue abrir o <em>Faturamento</em> para visualizar, mas não verá a tela <em>Tarifas</em> nem o botão de exportação — isso exige Financeiro ou Administrador; e o Financeiro não verá <em>Expedição</em>. Se você realmente precisar fazer algo que o seu perfil bloqueia, peça a um <strong>Administrador</strong> — ele gerencia os perfis na tela <em>Usuários e Perfis</em> (<code>/admin/users</code>). Não espere um "jeitinho"; a regra é aplicada em todos os lugares.</p>
 </div>
 
 <div class="callout warn">
@@ -3442,7 +3442,7 @@ footer.site{max-width:var(--maxw);margin:30px auto 50px;padding:22px 24px;color:
 
 <section class="doc" id="documents" data-title-en="Proof &amp; paperwork (Documents)" data-title-pt="Comprovação e documentos (Documentos)">
   <h2 class="sec-title"><span class="sec-ico" aria-hidden="true">📎</span><span class="lang" data-lang="en">Proof &amp; paperwork (Documents)</span><span class="lang" data-lang="pt">Comprovação e documentos (Documentos)</span><a class="sec-anchor" href="#documents" aria-label="link">#</a></h2>
-  <p class="sec-summary"><span class="lang" data-lang="en">How to upload, label, reference, and verify proof-of-execution files, and how a customer's required-document checklist blocks or warns a trip before it can reach Billing Ready.</span><span class="lang" data-lang="pt">Como enviar, classificar, referenciar e verificar comprovantes de execução, e como a lista de documentos obrigatórios do cliente bloqueia ou alerta uma viagem antes de ela ficar Pronta para faturar.</span></p>
+  <p class="sec-summary"><span class="lang" data-lang="en">How to upload, label, reference, and verify proof-of-execution files, and how a customer's required-document checklist blocks a trip before it can reach Billing Ready.</span><span class="lang" data-lang="pt">Como enviar, classificar, referenciar e verificar comprovantes de execução, e como a lista de documentos obrigatórios do cliente bloqueia uma viagem antes de ela ficar Pronta para faturar.</span></p>
   <div class="sec-body lang" data-lang="en">
 <p>In this part you'll learn how the system keeps the <strong>proof that a trip really happened</strong> — the scanned signatures, receipts, and tax papers — all in one place, attached to the right trip, so nobody has to dig through email or WhatsApp later. You'll see how to <strong>upload</strong> a file, tell the system <strong>what kind</strong> of document it is, add the right <strong>reference numbers</strong>, and how a reviewer marks each file <strong>accepted</strong>, <strong>rejected</strong>, or <strong>still being checked</strong>. You'll also learn about the safety net that stops a trip from being billed when a required document is missing.</p>
 
@@ -3479,7 +3479,7 @@ footer.site{max-width:var(--maxw);margin:30px auto 50px;padding:22px 24px;color:
 <li>Add any <strong>Observações</strong> ("Notes"), then click <strong>Enviar</strong> ("Submit").</li>
 </ol>
 
-<p>The moment you upload, the document starts life as <span class="pill is-warn">Em análise</span> ("Pending review") — meaning it's in the folder but a reviewer hasn't approved it yet. The system also records <strong>who</strong> uploaded it and <strong>when</strong> (in Brazil time, America/São_Paulo).</p>
+<p>The moment you upload, the document starts life as <span class="pill is-warn">Em análise</span> ("Pending review") — meaning it's in the folder but a reviewer hasn't approved it yet. The system also records <strong>who</strong> uploaded it and <strong>when</strong> (in Brazil time, America/Sao_Paulo).</p>
 
 <div class="callout tip"><p class="callout-title">Reference numbers are optional but powerful</p><p>You don't always need a reference number, but adding one (for example the CT-e or POD number) makes a document instantly searchable and matches it to the customer's own records — which prevents billing disputes down the line.</p></div>
 
@@ -3514,7 +3514,7 @@ footer.site{max-width:var(--maxw);margin:30px auto 50px;padding:22px 24px;color:
 
 <p>This is the system's safety net against billing the customer with incomplete proof. It works at two levels:</p>
 <ol>
-<li><strong>It blocks the wrong move.</strong> Missing documents <strong>block</strong> a trip from advancing — by default the system stops the action and tells you why. (A company can configure this to only <em>warn</em> instead, but the default is <strong>block</strong>, to protect revenue.) When a move is blocked you'll see <em>"Não é possível marcar como pronta: existem pendências"</em> ("Can't mark as ready: there are pending items") with the specific blocker <em>"Documentos obrigatórios para faturamento pendentes"</em>.</li>
+<li><strong>It blocks the wrong move.</strong> Missing documents <strong>block</strong> a trip from advancing — the system stops the action and tells you why, to protect revenue. When a move is blocked you'll see <em>"Não é possível marcar como pronta: existem pendências"</em> ("Can't mark as ready: there are pending items") with the specific blocker <em>"Documentos obrigatórios para faturamento pendentes"</em>.</li>
 <li><strong>It surfaces stragglers automatically.</strong> A background check sweeps trips that are finished but still missing required paperwork, and they appear on the Home dashboard (<strong>Início</strong>) count <strong>"Concluídas sem documentos"</strong> ("Completed without documents") and as an in-app alert — so a forgotten document doesn't quietly stall billing.</li>
 </ol>
 
@@ -3523,7 +3523,7 @@ footer.site{max-width:var(--maxw);margin:30px auto 50px;padding:22px 24px;color:
 <h3>How this connects to billing</h3>
 <p>This is where the paperwork pays off. When Finance (<span class="badge">Financeiro</span>) later goes to mark a trip <strong>Pronta para faturar</strong> ("Billing Ready") on the <strong>Faturamento</strong> screen, the system checks that the billing-required documents are accepted (or waived) — among other rules, like having a price. If proof is missing, the trip is held back and shows a <strong>Comprovação pendente</strong> ("Missing proof") indicator on the billing list, and it simply cannot be exported until the folder is in order. The detail of completion and billing lives in its own section of this guide; here the takeaway is: <strong>good proof now means clean billing later</strong>.</p>
 
-<div class="callout key"><p class="callout-title">Key takeaways</p><p>Upload proof to a trip, tag its type, and add a reference number where it applies. Most operational roles plus Finance can upload; only Admin, Operations Manager, and Finance verify. Each document is Accepted, Rejected, or Pending review — only Accepted (or a reasoned waiver) counts. A per-customer checklist marks documents required for completion and/or for billing, and missing required documents block (by default) or warn against moving the trip forward — the missing-documents list and dashboard count are your safety net.</p></div>
+<div class="callout key"><p class="callout-title">Key takeaways</p><p>Upload proof to a trip, tag its type, and add a reference number where it applies. Most operational roles plus Finance can upload; only Admin, Operations Manager, and Finance verify. Each document is Accepted, Rejected, or Pending review — only Accepted (or a reasoned waiver) counts. A per-customer checklist marks documents required for completion and/or for billing, and missing required documents block moving the trip forward — the missing-documents list and dashboard count are your safety net.</p></div>
   </div>
   <div class="sec-body lang" data-lang="pt">
 <p>Nesta parte você vai aprender como o sistema guarda a <strong>prova de que a viagem realmente aconteceu</strong> — assinaturas digitalizadas, recibos e documentos fiscais — tudo em um só lugar, vinculado à viagem certa, para que ninguém precise vasculhar e-mail ou WhatsApp depois. Você verá como <strong>enviar</strong> um arquivo, dizer ao sistema <strong>que tipo</strong> de documento ele é, adicionar os <strong>números de referência</strong> corretos, e como um revisor marca cada arquivo como <strong>aceito</strong>, <strong>rejeitado</strong> ou <strong>ainda em análise</strong>. Você também vai conhecer a rede de segurança que impede uma viagem de ser faturada quando falta um documento obrigatório.</p>
@@ -3561,7 +3561,7 @@ footer.site{max-width:var(--maxw);margin:30px auto 50px;padding:22px 24px;color:
 <li>Adicione <strong>Observações</strong> se quiser e clique em <strong>Enviar</strong>.</li>
 </ol>
 
-<p>No instante em que você envia, o documento começa como <span class="pill is-warn">Em análise</span> — ou seja, já está na pasta, mas um revisor ainda não o aprovou. O sistema também registra <strong>quem</strong> enviou e <strong>quando</strong> (no horário de Brasília, America/São_Paulo).</p>
+<p>No instante em que você envia, o documento começa como <span class="pill is-warn">Em análise</span> — ou seja, já está na pasta, mas um revisor ainda não o aprovou. O sistema também registra <strong>quem</strong> enviou e <strong>quando</strong> (no horário de Brasília, America/Sao_Paulo).</p>
 
 <div class="callout tip"><p class="callout-title">Números de referência são opcionais, mas poderosos</p><p>Nem sempre você precisa de um número de referência, mas adicionar um (por exemplo o número do CT-e ou do POD) torna o documento pesquisável na hora e o vincula aos próprios registros do cliente — o que evita disputas de faturamento lá na frente.</p></div>
 
@@ -3596,7 +3596,7 @@ footer.site{max-width:var(--maxw);margin:30px auto 50px;padding:22px 24px;color:
 
 <p>Esta é a rede de segurança do sistema contra faturar o cliente com comprovação incompleta. Ela funciona em dois níveis:</p>
 <ol>
-<li><strong>Bloqueia o passo errado.</strong> Documentos pendentes <strong>bloqueiam</strong> o avanço da viagem — por padrão o sistema impede a ação e explica o motivo. (Uma empresa pode configurar para apenas <em>alertar</em>, mas o padrão é <strong>bloquear</strong>, para proteger a receita.) Quando um passo é bloqueado, você vê <em>"Não é possível marcar como pronta: existem pendências"</em> com a pendência específica <em>"Documentos obrigatórios para faturamento pendentes"</em>.</li>
+<li><strong>Bloqueia o passo errado.</strong> Documentos pendentes <strong>bloqueiam</strong> o avanço da viagem — o sistema impede a ação e explica o motivo, para proteger a receita. Quando um passo é bloqueado, você vê <em>"Não é possível marcar como pronta: existem pendências"</em> com a pendência específica <em>"Documentos obrigatórios para faturamento pendentes"</em>.</li>
 <li><strong>Revela os atrasados automaticamente.</strong> Uma verificação em segundo plano varre as viagens já concluídas que ainda têm documentos obrigatórios faltando, e elas aparecem no indicador <strong>"Concluídas sem documentos"</strong> da tela inicial (<strong>Início</strong>) e como um alerta dentro do sistema — assim, um documento esquecido não trava o faturamento em silêncio.</li>
 </ol>
 
@@ -3605,7 +3605,7 @@ footer.site{max-width:var(--maxw);margin:30px auto 50px;padding:22px 24px;color:
 <h3>Como isso se conecta ao faturamento</h3>
 <p>É aqui que a documentação compensa. Quando o Financeiro (<span class="badge">Financeiro</span>) for marcar uma viagem como <strong>Pronta para faturar</strong> na tela <strong>Faturamento</strong>, o sistema verifica se os documentos obrigatórios para faturamento estão aceitos (ou dispensados) — entre outras regras, como ter um preço. Se faltar comprovação, a viagem fica retida e mostra o indicador <strong>Comprovação pendente</strong> na lista de faturamento, e simplesmente não pode ser exportada até a pasta estar em ordem. O detalhe da conclusão e do faturamento está em outra seção deste guia; aqui a lição é: <strong>boa comprovação agora significa faturamento limpo depois</strong>.</p>
 
-<div class="callout key"><p class="callout-title">Pontos principais</p><p>Envie a comprovação para a viagem, marque o tipo e adicione um número de referência quando se aplicar. A maioria dos perfis operacionais e o Financeiro podem enviar; apenas Administrador, Gerente de Operações e Financeiro verificam. Cada documento fica Aceito, Rejeitado ou Em análise — só Aceito (ou uma dispensa justificada) conta. Uma lista por cliente marca os documentos como obrigatórios para conclusão e/ou para faturamento, e documentos obrigatórios pendentes bloqueiam (por padrão) ou alertam contra o avanço da viagem — a lista de documentos pendentes e o indicador da tela inicial são a sua rede de segurança.</p></div>
+<div class="callout key"><p class="callout-title">Pontos principais</p><p>Envie a comprovação para a viagem, marque o tipo e adicione um número de referência quando se aplicar. A maioria dos perfis operacionais e o Financeiro podem enviar; apenas Administrador, Gerente de Operações e Financeiro verificam. Cada documento fica Aceito, Rejeitado ou Em análise — só Aceito (ou uma dispensa justificada) conta. Uma lista por cliente marca os documentos como obrigatórios para conclusão e/ou para faturamento, e documentos obrigatórios pendentes bloqueiam o avanço da viagem — a lista de documentos pendentes e o indicador da tela inicial são a sua rede de segurança.</p></div>
   </div>
 </section>
 
@@ -3683,7 +3683,7 @@ footer.site{max-width:var(--maxw);margin:30px auto 50px;padding:22px 24px;color:
   <li>A <strong>Finance user confirms</strong> the billing review.</li>
 </ol>
 
-<div class="callout warn"><p class="callout-title">Missing proof blocks (or warns) — and here's the escape hatch</p><p>If a required document is missing, the system <strong>blocks</strong> the trip from going Billing Ready by default (it can also be set to only warn, per company policy). You'll see exactly what's pending under <strong>Pendências</strong> (pending items), with messages like "Documentos obrigatórios para faturamento pendentes" or "Sem valor de frete". When a document genuinely cannot be obtained, an authorized user can mark that one document <strong>unavailable with a reason</strong> (a <strong>Dispensa</strong>, recording who, when, and why). That satisfies just that one requirement; the system still checks all the others.</p></div>
+<div class="callout warn"><p class="callout-title">Missing proof blocks the trip — and here's the escape hatch</p><p>If a required document is missing, the system <strong>blocks</strong> the trip from going Billing Ready. You'll see exactly what's pending under <strong>Pendências</strong> (pending items), with messages like "Documentos obrigatórios para faturamento pendentes" or "Sem valor de frete". When a document genuinely cannot be obtained, an authorized user can mark that one document <strong>unavailable with a reason</strong> (a <strong>Dispensa</strong>, recording who, when, and why). That satisfies just that one requirement; the system still checks all the others.</p></div>
 
 <p>Marking a trip Billing Ready requires the <code>mark_billing_ready</code> permission, held by <span class="badge">Administrador</span> and <span class="badge">Financeiro</span>.</p>
 
@@ -3784,7 +3784,7 @@ footer.site{max-width:var(--maxw);margin:30px auto 50px;padding:22px 24px;color:
   <li>Um usuário do <strong>Financeiro confirma</strong> a revisão de faturamento.</li>
 </ol>
 
-<div class="callout warn"><p class="callout-title">Comprovação faltando bloqueia (ou avisa) — e existe uma saída</p><p>Se um documento obrigatório estiver faltando, o sistema <strong>bloqueia</strong> a viagem de ficar Pronta para faturar por padrão (também pode ser configurado para apenas avisar, conforme a política da empresa). Você verá exatamente o que está pendente em <strong>Pendências</strong>, com mensagens como "Documentos obrigatórios para faturamento pendentes" ou "Sem valor de frete". Quando um documento realmente não puder ser obtido, um usuário autorizado pode marcar aquele documento como <strong>indisponível com justificativa</strong> (uma <strong>Dispensa</strong>, registrando quem, quando e por quê). Isso atende apenas àquele requisito; o sistema continua checando todos os demais.</p></div>
+<div class="callout warn"><p class="callout-title">Comprovação faltando bloqueia — e existe uma saída</p><p>Se um documento obrigatório estiver faltando, o sistema <strong>bloqueia</strong> a viagem de ficar Pronta para faturar. Você verá exatamente o que está pendente em <strong>Pendências</strong>, com mensagens como "Documentos obrigatórios para faturamento pendentes" ou "Sem valor de frete". Quando um documento realmente não puder ser obtido, um usuário autorizado pode marcar aquele documento como <strong>indisponível com justificativa</strong> (uma <strong>Dispensa</strong>, registrando quem, quando e por quê). Isso atende apenas àquele requisito; o sistema continua checando todos os demais.</p></div>
 
 <p>Marcar uma viagem como Pronta para faturar exige a permissão <code>mark_billing_ready</code>, atribuída a <span class="badge">Administrador</span> e <span class="badge">Financeiro</span>.</p>
 
