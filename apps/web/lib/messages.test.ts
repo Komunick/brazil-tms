@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { ALL_AUDIT_ACTIONS } from "@brazil-tms/shared";
+import {
+  ALL_AUDIT_ACTIONS,
+  BILLING_PHASE_STATUSES,
+  EXCEPTION_SEVERITIES,
+  REASON_CODE_CATEGORIES,
+} from "@brazil-tms/shared";
 import messages from "../messages/pt-BR.json";
 
 /**
@@ -135,5 +140,60 @@ describe("pt-BR messages", () => {
       return typeof labels[key] !== "string" || labels[key] === "";
     });
     expect(missing).toEqual([]);
+  });
+
+  // ---- feature 009 — Reports + AuditView localization coverage (FR-018 / SC-006) -----------------
+
+  it("has the 009 Reports and AuditView namespaces", () => {
+    const m = messages as Record<string, unknown>;
+    expect(typeof m.Reports).toBe("object");
+    expect(typeof m.AuditView).toBe("object");
+    expect((m as { Nav: Record<string, string> }).Nav.reports).toBeTruthy();
+  });
+
+  it("Reports has the screen-shell keys the components look up", () => {
+    const r = (messages as { Reports: Record<string, Record<string, string> | string> }).Reports;
+    for (const k of ["title", "subtitle", "period", "provisionalLabel", "loadError", "empty"]) {
+      expect(typeof r[k]).toBe("string");
+      expect(r[k]).not.toBe("");
+    }
+    const tabs = r.tabs as Record<string, string>;
+    for (const k of ["sla", "exceptions", "billingReadiness"]) expect(tabs[k]).toBeTruthy();
+    const filters = r.filters as Record<string, string>;
+    for (const k of ["customer", "lane", "from", "to", "groupBy", "all", "clear"]) {
+      expect(filters[k]).toBeTruthy();
+    }
+  });
+
+  it("Reports.categoryValue covers every reason-code category (no raw token in the exception report)", () => {
+    const cat = (messages as { Reports: { categoryValue: Record<string, string> } }).Reports
+      .categoryValue;
+    const missing = REASON_CODE_CATEGORIES.filter((c) => typeof cat[c] !== "string" || cat[c] === "");
+    expect(missing).toEqual([]);
+  });
+
+  it("Reports.severityValue covers every exception severity", () => {
+    const sev = (messages as { Reports: { severityValue: Record<string, string> } }).Reports
+      .severityValue;
+    const missing = EXCEPTION_SEVERITIES.filter((s) => typeof sev[s] !== "string" || sev[s] === "");
+    expect(missing).toEqual([]);
+  });
+
+  it("Reports.billing covers every billing-phase status", () => {
+    const billing = (messages as { Reports: { billing: Record<string, string> } }).Reports.billing;
+    const missing = BILLING_PHASE_STATUSES.filter(
+      (s) => typeof billing[s] !== "string" || billing[s] === "",
+    );
+    expect(missing).toEqual([]);
+    for (const k of ["completedMissingDocuments", "pctReadyWithin24h", "customer"]) {
+      expect(billing[k]).toBeTruthy();
+    }
+  });
+
+  it("AuditView covers the §21.5 entity-type presets the audit screen renders", () => {
+    const view = (messages as { AuditView: { presets: Record<string, string> } }).AuditView;
+    for (const k of ["all", "trip", "exception", "document", "billing", "export", "user"]) {
+      expect(view.presets[k]).toBeTruthy();
+    }
   });
 });

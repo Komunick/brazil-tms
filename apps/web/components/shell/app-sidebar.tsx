@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import {
+  BarChart3,
   Building2,
   Container,
   Factory,
@@ -24,6 +25,7 @@ import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, LucideIcon> = {
   LayoutDashboard,
+  BarChart3,
   Users,
   ScrollText,
   Building2,

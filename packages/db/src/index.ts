@@ -43,6 +43,13 @@ export type {
 // Feature 007 — SLA recompute + alert helpers. `ExceptionDto`/`AlertDto` (+ the extended `TripDetail`)
 // are already re-exported via `export * from "./trips/trip-dto"` above.
 export { recomputeTripSla, resolveSlaPolicy } from "./trips/sla";
+// feature 009 — the shared on-time predicate (DRY-for-correctness with the dashboard, R2). The three
+// report read models + the extended audit read are exported within their story phases below.
+export { onTimeExpr, type OnTimeExpr, type OnTimeKind } from "./trips/on-time";
+export { querySlaReport } from "./reporting/sla";
+export { queryExceptionReport } from "./reporting/exceptions";
+export { queryBillingReadinessReport } from "./reporting/billing-readiness";
+export { queryAuditLog } from "./audit/audit-read";
 export { createCustomerSlaRule, updateCustomerSlaRule } from "./trips/sla-rules";
 export {
   generateAlert,

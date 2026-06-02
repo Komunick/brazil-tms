@@ -64,23 +64,27 @@ test.describe("US4 — audit trail read view", () => {
     expect(statusRes.ok()).toBeTruthy();
 
     // The audit API returns every action, newest first; confirm all four are present for this user.
+    // 009 — response shape is now `{ items, total }` with an `actorName` join (contracts §4).
     const logsRes = await page.request.get(
       `/api/admin/audit-logs?entityType=user&entityId=${userId}`,
     );
     expect(logsRes.ok()).toBeTruthy();
-    const { entries } = (await logsRes.json()) as {
-      entries: Array<{
+    const { items: entries, total } = (await logsRes.json()) as {
+      total: number;
+      items: Array<{
         id: string;
         entityType: string;
         entityId: string;
         action: string;
         actorUserId: string;
+        actorName: string | null;
         createdAt: string;
         previousValue: unknown;
         newValue: unknown;
         reason: string | null;
       }>;
     };
+    expect(total).toBeGreaterThanOrEqual(4);
 
     const actions = entries.map((e) => e.action);
     for (const expected of [
@@ -108,6 +112,20 @@ test.describe("US4 — audit trail read view", () => {
     expect(roleChange?.newValue).toBeTruthy();
     const statusChange = entries.find((e) => e.action === "user.status_change");
     expect(statusChange?.reason).toBe("Encerramento de teste e2e");
+
+    // 009 (US4) — the actor-name join is populated, and the new actor + date-range filters work.
+    expect(entries.some((e) => e.actorName)).toBe(true);
+    const actorId = entries[0]!.actorUserId;
+    const filtered = await page.request.get(
+      `/api/admin/audit-logs?actorUserId=${actorId}&entityType=user&from=2020-01-01`,
+    );
+    expect(filtered.ok()).toBeTruthy();
+    const filteredBody = (await filtered.json()) as {
+      items: Array<{ actorUserId: string }>;
+      total: number;
+    };
+    expect(filteredBody.items.length).toBeGreaterThanOrEqual(1);
+    expect(filteredBody.items.every((e) => e.actorUserId === actorId)).toBe(true);
 
     // The same entries are visible on the audit page: navigate and assert the new action labels.
     await page.goto(routes.adminAudit);
