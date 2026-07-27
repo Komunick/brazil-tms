@@ -67,9 +67,19 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/015-collapse-validation-statuses/plan.md` (Collapse Validation Statuses into "Recebida").
-For technologies, project structure, BFF/auth patterns, data model, contracts, and setup/test commands,
-read that plan and its `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`.
+Active feature plan: `specs/021-ai-document-extraction/plan.md` (AI Document Reading — issue #29 [0006]).
+**Slice com dependência nova justificada**: `@anthropic-ai/sdk` (apps/web) + Claude API (`claude-opus-4-8`, adaptive
+thinking, structured outputs via `messages.parse` + `zodOutputFormat`, visão). NEW `POST /api/master-data/
+extract-document` (`manage_fleet_data`; body {docType cnh|crlv, mediaType, data base64 ≤10MB}) → CNH pré-preenche
+motorista (name, licenseExpiry), CRLV pré-preenche veículo/reboque (plate, vehicleType do enum existente,
+documentExpiry). Schemas compartilhados nullable em `packages/shared/src/schemas/document-extraction.ts`. TRAPS:
+(1) PREFILL ONLY — nunca chamar create/update com saída da IA (revisão humana obrigatória); (2) imagem EFÊMERA —
+nunca persistir/logar o payload; (3) `ANTHROPIC_API_KEY` server-only (nunca NEXT_PUBLIC), ausente → 503
+EXTRACTION_NOT_CONFIGURED (feature apagada, forms manuais intactos); (4) campo ilegível → null, nunca chute — UI
+lista os campos não lidos. Chamada síncrona no BFF (60s timeout; precedente 016 R1 — sem pg-boss). e2e sem chave
+cobre botão + caminho não-configurado + 403; extração real é verificação manual com chave (quickstart).
+
+Previous slice (015) context, still load-bearing:
 This is a **corrective, cross-cutting** change to the trip status machine that **references** shipped slices 003 (status
 machine), 004 (import+validation), 006 (dispatch/assignment), 013 (predefined import template), 014 (auto-validate) — it
 **supersedes 014's born-`validated`** decision and does **not** edit shipped specs; it **amends** `docs/PRD.md`
