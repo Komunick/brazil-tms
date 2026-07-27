@@ -19,12 +19,12 @@ description: "Task list for slice 021 — AI Document Reading (CNH/CRLV prefill)
 
 ## Tasks
 
-- [ ] T001 Branch `021-ai-document-extraction` off `dev`; baseline gates green; `pnpm --filter @brazil-tms/web add @anthropic-ai/sdk`.
-- [ ] T002 Shared schemas + tests (`packages/shared/src/schemas/document-extraction.ts`).
-- [ ] T003 `apps/web/lib/ai/extract-document.ts` (client factory, prompt, parse call, error mapping) + unit tests with injected fake client.
-- [ ] T004 Route `POST /api/master-data/extract-document` (auth + manage_fleet_data; 503/502/400 per plan).
-- [ ] T005 `useExtractDocument` hook + `document-read-button.tsx` (shared, review notice) + pt-BR keys.
-- [ ] T006 Mount on driver form (CNH → name/licenseExpiry) and vehicle+trailer forms (CRLV → plate/vehicleType/documentExpiry) via `setValue`.
-- [ ] T007 e2e `ai-extraction.spec.ts`: button on 3 forms; not-configured path; 403 for non-holders.
-- [ ] T008 Gates: lint/typecheck/build; Vitest; Playwright vs local mock-GoTrue stack (no key → exercises the dark path).
-- [ ] T009 Quickstart (live-key manual verification steps) + PR to `dev`; CLAUDE.md SPECKIT block.
+- [X] T001 Branch `021-ai-document-extraction` off `dev`; baseline gates green; `pnpm --filter @brazil-tms/web add @anthropic-ai/sdk`.
+- [X] T002 Shared schemas + tests (`packages/shared/src/schemas/document-extraction.ts`).
+- [X] T003 `apps/web/lib/ai/extract-document.ts` (client factory, prompt, parse call, error mapping) + unit tests with injected fake client.
+- [X] T004 Route `POST /api/master-data/extract-document` (auth + manage_fleet_data; 503/502/400 per plan).
+- [X] T005 `useExtractDocument` hook + `document-read-button.tsx` (shared, review notice) + pt-BR keys.
+- [X] T006 Mount on driver form (CNH → name/licenseExpiry) and vehicle+trailer forms (CRLV → plate/vehicleType/documentExpiry) via `setValue`.
+- [X] T007 e2e `ai-extraction.spec.ts`: button on 3 forms; not-configured path; 403 for non-holders.
+- [X] T008 Gates: lint/typecheck/build; Vitest; Playwright vs local mock-GoTrue stack (no key → exercises the dark path).
+- [X] T009 Quickstart (live-key manual verification steps) + PR to `dev`; CLAUDE.md SPECKIT block.

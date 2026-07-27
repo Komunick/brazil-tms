@@ -697,6 +697,20 @@
     "ownershipCarrierMismatch": "Recurso subcontratado exige transportadora; recurso próprio não pode ter transportadora.",
     "duplicatePlate": "Já existe um recurso com essa placa.",
     "duplicateTaxId": "Já existe uma transportadora com esse CNPJ.",
+    "aiRead": {
+      "buttonCnh": "Ler CNH (IA)",
+      "buttonCrlv": "Ler CRLV (IA)",
+      "reading": "Lendo documento…",
+      "hint": "Envie a foto ou PDF do documento para pré-preencher o cadastro. Confira os dados antes de salvar.",
+      "reviewNotice": "Campos preenchidos a partir do documento — confira e corrija antes de salvar.",
+      "unreadablePrefix": "Não foi possível ler:",
+      "nothingRead": "Não foi possível ler o documento. Verifique a imagem e tente novamente.",
+      "invalidType": "Formato não suportado. Envie JPEG, PNG, WebP, GIF ou PDF.",
+      "tooLarge": "Arquivo muito grande (máximo 10 MB).",
+      "notConfigured": "Leitura de documentos não configurada. Contate um administrador.",
+      "forbidden": "Seu perfil não tem permissão para usar a leitura de documentos.",
+      "failed": "Não foi possível ler o documento. Tente novamente."
+    },
     "drivers": {
       "title": "Motoristas",
       "subtitle": "Cadastro de motoristas próprios e subcontratados.",

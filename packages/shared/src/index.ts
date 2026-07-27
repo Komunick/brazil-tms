@@ -25,6 +25,7 @@ export * from "./schemas/customer-sla-rule";
 export * from "./schemas/alert";
 export * from "./schemas/import";
 export * from "./schemas/document";
+export * from "./schemas/document-extraction";
 export * from "./schemas/document-requirement";
 export * from "./schemas/rate";
 export * from "./schemas/billing";
