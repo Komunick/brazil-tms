@@ -103,6 +103,14 @@ describe.skipIf(!hasDb)("resource-documents-service (integration)", () => {
     await expect(
       assertResourceDocumentParent("driver", driverId, { forUpload: true }),
     ).rejects.toMatchObject({ code: "ARCHIVED_RESOURCE" });
+    // The INSERT transaction re-checks the parent under a row lock (archive-race guard): even if
+    // the route's preflight passed earlier, an archived parent must reject at insert time.
+    await expect(
+      createResourceDocument(input("Race Doc"), actorId),
+    ).rejects.toMatchObject({ code: "ARCHIVED_RESOURCE" });
+    await expect(
+      createResourceDocument({ ...input("Orphan Doc"), entityId: randomUUID() }, actorId),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
     // Listing still works — history remains accessible on archived resources.
     const items = await listResourceDocuments("driver", driverId);
     expect(items.length).toBeGreaterThanOrEqual(2);

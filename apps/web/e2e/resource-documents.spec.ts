@@ -80,9 +80,10 @@ test.describe("Documentos tab (issue #32)", () => {
     await expect(entries.first()).toContainText("Photocheck");
     await expect(entries.last()).toContainText("CNH digital");
 
-    // Clicking an entry opens the binary through a signed Storage URL (never a public path).
+    // Each entry is a plain <a target="_blank"> into the 302 download route (user activation
+    // survives — no popup blocking); the new tab lands on the signed Storage URL.
     const popupPromise = context.waitForEvent("page");
-    await entries.first().getByRole("button").click();
+    await entries.first().getByRole("link").click();
     const popup = await popupPromise;
     await popup.waitForLoadState("domcontentloaded");
     expect(popup.url()).toContain("/storage/v1/object/sign/");

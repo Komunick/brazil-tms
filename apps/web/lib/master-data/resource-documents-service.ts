@@ -109,12 +109,30 @@ export interface CreateResourceDocumentInput {
   fileStorageKey: string;
 }
 
-/** Insert the metadata row + the audit entry in ONE transaction (the binary is already stored). */
+/**
+ * Insert the metadata row + the audit entry in ONE transaction (the binary is already stored).
+ * The parent is RE-CHECKED here under a row lock: the route's preflight runs before the Storage
+ * upload, so a concurrent archive could land in between — `FOR UPDATE` serializes against the
+ * archive's row UPDATE and guarantees no document is attached to an archived resource. On throw,
+ * the route rolls the stored binary back.
+ */
 export async function createResourceDocument(
   input: CreateResourceDocumentInput,
   actorUserId: string,
 ): Promise<ResourceDocumentDto> {
   return db.transaction(async (tx) => {
+    const table = input.entityType === "driver" ? drivers : vehicles;
+    const parent = await tx
+      .select({ archivedAt: table.archivedAt })
+      .from(table)
+      .where(eq(table.id, input.entityId))
+      .limit(1)
+      .for("update");
+    if (!parent[0]) throw new NotFound("NOT_FOUND", NOT_FOUND_MESSAGE[input.entityType]);
+    if (parent[0].archivedAt !== null) {
+      throw new Conflict("ARCHIVED_RESOURCE", "Recurso arquivado não recebe novos documentos.");
+    }
+
     const inserted = await tx
       .insert(resourceDocuments)
       .values({ ...input, uploadedByUserId: actorUserId })

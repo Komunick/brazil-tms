@@ -79,8 +79,10 @@ antes; (4) `driver-detail-client.tsx` também é editado pelo PR #39 — manter 
 `manage_fleet_data` em tudo (upload/list/download; sem chave nova). Tipos de documento = TEXTO LIVRE ≤60 com sugestões
 por entidade na UI (sem config nova — KISS; promover a master se o negócio pedir). Sem delete/replace: histórico é o
 pedido. Dep nova justificada: `@radix-ui/react-tabs` (shadcn tabs — a issue pede "aba"; mesma família Radix). Download
-por signed URL 60s (nunca URL pública). Harness local sem Docker: mock-gotrue.mjs (fora do repo, .local) ganha
-endpoints mínimos de Storage p/ e2e completo. Fora de escopo: reboques, verificação, master de tipos, vínculo com
+= rota **302-redirect** para signed URL 60s + `<a target="_blank">` simples (padrão do error-report da 004; NUNCA
+`{url}`+`window.open` pós-await — popup block silencioso). Insert re-checa o pai com `FOR UPDATE` na mesma tx (guarda
+contra corrida com arquivamento; preflight da rota roda antes do upload do binário). Harness local sem Docker:
+mock-gotrue.mjs (fora do repo, .local) ganha endpoints mínimos de Storage p/ e2e completo. Fora de escopo: reboques, verificação, master de tipos, vínculo com
 validade (leitor 021).
 
 Previous slice (015) context:

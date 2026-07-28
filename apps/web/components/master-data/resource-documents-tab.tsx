@@ -16,9 +16,10 @@ import { MasterDataError, readApiError } from "@/lib/master-data/client";
 
 /**
  * Slice 025 (issue #32 [0009]) — the "Documentos" tab shared by the driver and vehicle EDIT pages:
- * an append-only upload history (newest first: date/time São Paulo | type | file name; click →
- * short-lived signed URL) + the upload control (free-text type with per-entity suggestions,
- * PDF/JPG/PNG ≤ ~10 MB). There is deliberately NO delete/replace — history is the requirement.
+ * an append-only upload history (newest first: date/time São Paulo | type | file name; each entry
+ * is a plain `<a target="_blank">` into the 302 download route — the imports error-report
+ * pattern) + the upload control (free-text type with per-entity suggestions, PDF/JPG/PNG ≤ ~10 MB).
+ * There is deliberately NO delete/replace — history is the requirement.
  */
 
 interface Props {
@@ -100,18 +101,6 @@ export function ResourceDocumentsTab({ entityType, entityId }: Props) {
     },
   });
 
-  async function openDocument(doc: ResourceDocumentDto) {
-    setError(null);
-    try {
-      const res = await fetch(`${documentsPath(entityType, entityId)}/${doc.id}/download`);
-      if (!res.ok) throw new Error("download");
-      const { url } = (await res.json()) as { url: string };
-      window.open(url, "_blank", "noopener");
-    } catch {
-      setError(t("downloadError"));
-    }
-  }
-
   const items = query.data ?? [];
   const suggestionsId = `${entityType}-doc-type-suggestions`;
 
@@ -178,10 +167,13 @@ export function ResourceDocumentsTab({ entityType, entityId }: Props) {
           <ul className="divide-y rounded-md border">
             {items.map((doc) => (
               <li key={doc.id}>
-                <button
-                  type="button"
-                  className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-left text-sm hover:bg-muted"
-                  onClick={() => void openDocument(doc)}
+                {/* Plain link into the 302 download route — user activation survives (no
+                    fetch-then-window.open, which popup blockers silently kill). */}
+                <a
+                  href={`${documentsPath(entityType, entityId)}/${doc.id}/download`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex w-full flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-sm hover:bg-muted"
                 >
                   <span className="tabular-nums text-muted-foreground">
                     {formatDateTime(doc.createdAt)}
@@ -189,7 +181,7 @@ export function ResourceDocumentsTab({ entityType, entityId }: Props) {
                   <span aria-hidden>|</span>
                   <span className="font-medium">{doc.docType}</span>
                   <span className="truncate text-muted-foreground">{doc.fileName}</span>
-                </button>
+                </a>
               </li>
             ))}
           </ul>

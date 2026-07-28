@@ -718,8 +718,7 @@
       "unsupportedType": "Tipo de arquivo não suportado (use PDF, JPG ou PNG).",
       "tooLarge": "Arquivo muito grande (máximo ~10 MB).",
       "archivedResource": "Recurso arquivado não recebe novos documentos.",
-      "uploadError": "Não foi possível enviar o documento. Tente novamente.",
-      "downloadError": "Não foi possível abrir o documento. Tente novamente."
+      "uploadError": "Não foi possível enviar o documento. Tente novamente."
     },
     "drivers": {
       "title": "Motoristas",

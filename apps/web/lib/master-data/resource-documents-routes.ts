@@ -107,8 +107,8 @@ export async function handleResourceDocumentUpload(
       try {
         metaParsed = JSON.parse(metaRaw);
       } catch {
-        // Malformed meta must be a 400, not an unhandled SyntaxError 500.
-        throw new Conflict("VALIDATION", "Metadados do documento inválidos.");
+        // Malformed meta is a client error: a real 400 (Conflict would map to 409).
+        return apiError(400, "VALIDATION", "Metadados do documento inválidos.");
       }
     }
     const meta = uploadResourceDocumentMetaSchema.parse(metaParsed);
@@ -147,7 +147,12 @@ export async function handleResourceDocumentUpload(
   }
 }
 
-/** GET …/[id]/documents/[docId]/download — short-lived signed URL (never a public object path). */
+/**
+ * GET …/[id]/documents/[docId]/download — mints a short-lived signed URL and **302-redirects** to
+ * it (the imports error-report pattern), so the UI can use a plain `<a target="_blank">`. This
+ * deliberately avoids `{ url }` + client `window.open`, which browsers silently popup-block when
+ * the open happens after an `await`. The signed URL never reaches client JS.
+ */
 export async function handleResourceDocumentDownload(
   entityType: ResourceDocumentEntityType,
   entityId: string,
@@ -159,7 +164,7 @@ export async function handleResourceDocumentDownload(
     const key = await getResourceDocumentFileKey(entityType, entityId, documentId);
     if (!key) return apiError(404, "NOT_FOUND", "Documento não encontrado.");
     const url = await signedUrl(key, DOWNLOAD_URL_TTL_SECONDS, documentsBucket());
-    return NextResponse.json({ url });
+    return NextResponse.redirect(url, 302);
   } catch (error) {
     return handleRouteError(error);
   }
