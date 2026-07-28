@@ -67,7 +67,24 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/015-collapse-validation-statuses/plan.md` (Collapse Validation Statuses into "Recebida").
+Active feature plan: `specs/025-resource-documents/plan.md` (Documents Tab for Drivers and Vehicles — issue #32 [0009]).
+**Slice novo domínio enxuto**: aba "Documentos" nas páginas de EDIÇÃO de motorista/veículo — histórico append-only de
+anexos (CNH digital, photocheck, CRLV…) sobre a tubulação de storage da 008. Tabela nova `resource_documents`
+(metadata; entity_type CHECK driver|vehicle extensível; binário SÓ no bucket privado `documents`, prefixo
+`resources/<tipo>/<id>/<docId>.<ext>` via `resourceDocumentStorageKey`). TRAPS: (1) NÃO tocar a tabela/rotas 008
+(`documents` é trip-scoped com verificação/billing — domínio shipped); (2) validar tipo (PDF/JPG/PNG) + tamanho
+(`DOCUMENT_MAX_BYTES`) e preflight do pai (existe + não arquivado → senão 404/409) ANTES do `putDocument`; rollback do
+binário se o insert falhar; (3) TERCEIRA migração `0009` em voo (PRs #39/#40 têm as suas) — renumerar no merge, nunca
+antes; (4) `driver-detail-client.tsx` também é editado pelo PR #39 — manter a edição das tabs cirúrgica. Permissão:
+`manage_fleet_data` em tudo (upload/list/download; sem chave nova). Tipos de documento = TEXTO LIVRE ≤60 com sugestões
+por entidade na UI (sem config nova — KISS; promover a master se o negócio pedir). Sem delete/replace: histórico é o
+pedido. Dep nova justificada: `@radix-ui/react-tabs` (shadcn tabs — a issue pede "aba"; mesma família Radix). Download
+por signed URL 60s (nunca URL pública). Harness local sem Docker: mock-gotrue.mjs (fora do repo, .local) ganha
+endpoints mínimos de Storage p/ e2e completo. Fora de escopo: reboques, verificação, master de tipos, vínculo com
+validade (leitor 021).
+
+Previous slice (015) context:
+Collapse Validation Statuses into "Recebida".
 For technologies, project structure, BFF/auth patterns, data model, contracts, and setup/test commands,
 read that plan and its `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`.
 This is a **corrective, cross-cutting** change to the trip status machine that **references** shipped slices 003 (status
