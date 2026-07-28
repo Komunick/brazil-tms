@@ -26,9 +26,10 @@ conflict pass (established in the PR #40 note).
 Storage endpoints (upload / signed URL / signed download, in-memory) so the full flow runs in the
 no-Docker e2e harness; the real stack path is the quickstart's manual step.
 
-**Testing**: Vitest — shared meta-schema cases; service integration (DB on 5433) with an injected
-fake storage for upload/list/audit/refusal paths. Playwright — tab presence, upload → history →
-signed-URL download against the extended mock (fallback if mock proves flaky: UI/empty-state only).
+**Testing**: Vitest — shared meta-schema cases; service integration (DB on 5433) — the service
+ended up storage-free by design (the ROUTE owns the binary), so its tests need no fake storage;
+the storage round-trip (upload → signed URL → bytes) is covered end-to-end by Playwright against
+the extended mock. The binary-rollback branch stays covered by the 008-pattern review only.
 
 ## Constitution Check
 

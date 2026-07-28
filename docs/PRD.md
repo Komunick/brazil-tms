@@ -707,6 +707,7 @@ Fields:
 - Employer or carrier.
 - Status.
 - Notes.
+- Attached documents (upload history — e.g. digital license, photocheck).
 
 #### Vehicle
 
@@ -723,6 +724,7 @@ Fields:
 - Document expiration dates.
 - Status.
 - Notes.
+- Attached documents (upload history — e.g. digital registration, insurance).
 
 #### Trailer
 
@@ -1637,3 +1639,4 @@ Decisions made to bring this PRD to execution-readiness. Override any of these i
 - **Localization** (21.6): i18n from day one; MVP UI in pt-BR.
 - **SLA milestone data**: MVP SLA computed from pickup/delivery windows + assignment/confirmation cutoffs; per-milestone planned times deferred to Input #2.
 - **Collapse validation statuses** (slice 015, 2026-06-07): the three early validation states — `Received`, `Validation Error`, `Validated` — are collapsed into a single `Received`, which becomes the first **dispatchable** status (§12, §12.1). Import already validates every row (only Valid/Warning rows are applied), so a separate trip-level validate hop carried no information. The active status machine drops from 18 to 16 values; `Assigned`/`Confirmed` and everything from `Confirmed` onward are unchanged (the confirm step and the confirmation-cutoff SLA are out of scope). This **supersedes slice 014's born-`Validated`** decision: imported trips are now born `Received`, and assign/unassign run `Received → Assigned` / `Assigned → Received`. The `trip_status` DB enum keeps all 18 physical members (Postgres has no `DROP VALUE`); the two removed values become **dormant** (retained only for immutable `trip_events` history) and a one-time data migration backfills any live trip off them. The separate `import_batch_status` enum (which also has `validated`) is untouched.
+- **Registry attachments** (slice 025, issue #32, 2026-07-28): driver and vehicle records gain an **append-only document history** ("Documentos" tab on the edit pages) — uploads such as the digital license or photocheck, stored in the private documents bucket with metadata in a dedicated `resource_documents` table (separate from the trip-proof `documents` domain, whose verification/billing semantics do not apply). Document types are free text with UI suggestions (a configurable type master is future hardening); files follow the 008 posture (PDF/JPG/PNG ≤ ~10 MB, validated before storing, signed-URL downloads); everything gates on the fleet-data permission and every upload is audited. No delete/replace: history is the requirement. Trailers deferred until asked.

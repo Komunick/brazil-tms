@@ -49,6 +49,19 @@ export function documentStorageKey(tripId: string, documentId: string, ext: stri
   return `trips/${tripId}/${documentId}.${ext}`;
 }
 
+/**
+ * Slice 025 — storage key of a driver/vehicle registry attachment
+ * (`resources/<entityType>/<entityId>/<documentId>.<ext>`; same private documents bucket as 008).
+ */
+export function resourceDocumentStorageKey(
+  entityType: "driver" | "vehicle",
+  entityId: string,
+  documentId: string,
+  ext: string,
+): string {
+  return `resources/${entityType}/${entityId}/${documentId}.${ext}`;
+}
+
 /** Feature 008 — storage key of a generated billing-export file (`exports/<exportBatchId>.<ext>`). */
 export function exportStorageKey(exportBatchId: string, ext: string): string {
   return `exports/${exportBatchId}.${ext}`;

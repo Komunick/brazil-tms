@@ -20,13 +20,13 @@ description: "Task list for slice 025 — Documents Tab for Drivers and Vehicles
 
 ## Tasks
 
-- [ ] T001 Branch `025-resource-documents` off `dev` (worktree); baseline gates green.
-- [ ] T002 DB: `resource_documents` schema + index export + `resourceDocumentStorageKey` + generated additive migration.
-- [ ] T003 Shared: entity-type list, upload meta schema (docType 1–60), DTO type + unit tests.
-- [ ] T004 Service: list (newest first) / insert+audit (tx) / fileKey lookup / parent preflight; integration tests with fake storage.
-- [ ] T005 Routes ×4 (drivers/vehicles list+upload, download) — 008 shape, `manage_fleet_data`.
-- [ ] T006 UI: shadcn `tabs.tsx` (+ `@radix-ui/react-tabs`), shared `resource-documents-tab.tsx`, tabs in the two detail clients (edit mode only), pt-BR keys.
-- [ ] T007 PRD amendments (§14 Driver/Vehicle, §30).
-- [ ] T008 Mock harness: minimal Storage endpoints in `.local/brazil-tms-dev/mock-gotrue.mjs` (outside repo); e2e `resource-documents.spec.ts` (tab → upload → history → download).
-- [ ] T009 Adversarial verification workflow; gates: lint/typecheck/vitest/build; migration on local pg; Playwright.
-- [ ] T010 PR to `dev` (0009-renumber note); CLAUDE.md SPECKIT block → this plan.
+- [X] T001 Branch `025-resource-documents` off `dev` (worktree); baseline gates green.
+- [X] T002 DB: `resource_documents` schema + index export + `resourceDocumentStorageKey` + generated additive migration.
+- [X] T003 Shared: entity-type list, upload meta schema (docType 1–60), DTO type + unit tests.
+- [X] T004 Service: list (newest first) / insert+audit (tx) / fileKey lookup / parent preflight; integration tests with fake storage.
+- [X] T005 Routes ×4 (drivers/vehicles list+upload, download) — 008 shape, `manage_fleet_data`.
+- [X] T006 UI: shadcn `tabs.tsx` (+ `@radix-ui/react-tabs`), shared `resource-documents-tab.tsx`, tabs in the two detail clients (edit mode only), pt-BR keys.
+- [X] T007 PRD amendments (§14 Driver/Vehicle, §30).
+- [X] T008 Mock harness: minimal Storage endpoints in `.local/brazil-tms-dev/mock-gotrue.mjs` (outside repo); e2e `resource-documents.spec.ts` (tab → upload → history → download).
+- [X] T009 Adversarial verification workflow; gates: lint/typecheck/vitest/build; migration on local pg; Playwright.
+- [X] T010 PR to `dev` (0009-renumber note); CLAUDE.md SPECKIT block → this plan.

@@ -22,4 +22,6 @@ export {
   exportStorageKey,
   documentsBucket,
   exportsBucket,
+  // Slice 025 — driver/vehicle registry attachments (same documents bucket, resources/ prefix).
+  resourceDocumentStorageKey,
 } from "@brazil-tms/db/storage";

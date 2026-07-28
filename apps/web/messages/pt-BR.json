@@ -305,7 +305,9 @@
     "rate_create": "Tarifa criada",
     "rate_update": "Tarifa atualizada",
     "billing_item_update": "Item de faturamento atualizado",
-    "billing_export": "Exportação de faturamento gerada"
+    "billing_export": "Exportação de faturamento gerada",
+    "driver_document_upload": "Documento do motorista enviado",
+    "vehicle_document_upload": "Documento do veículo enviado"
   },
   "Documents": {
     "title": "Documentos",
@@ -697,6 +699,28 @@
     "ownershipCarrierMismatch": "Recurso subcontratado exige transportadora; recurso próprio não pode ter transportadora.",
     "duplicatePlate": "Já existe um recurso com essa placa.",
     "duplicateTaxId": "Já existe uma transportadora com esse CNPJ.",
+    "documents": {
+      "dataTab": "Dados gerais",
+      "tabTitle": "Documentos",
+      "historyTitle": "Documentos anexados",
+      "docType": "Tipo do documento",
+      "docTypePlaceholder": "Ex.: CNH digital, Photocheck",
+      "file": "Arquivo",
+      "upload": "Enviar",
+      "uploading": "Enviando…",
+      "uploaded": "Documento enviado.",
+      "hint": "PDF, JPG ou PNG, até ~10 MB. O histórico guarda todos os envios.",
+      "loading": "Carregando…",
+      "loadError": "Não foi possível carregar os documentos.",
+      "empty": "Nenhum documento enviado ainda.",
+      "noFile": "Selecione o arquivo do documento.",
+      "noDocType": "Informe o tipo do documento.",
+      "unsupportedType": "Tipo de arquivo não suportado (use PDF, JPG ou PNG).",
+      "tooLarge": "Arquivo muito grande (máximo ~10 MB).",
+      "archivedResource": "Recurso arquivado não recebe novos documentos.",
+      "uploadError": "Não foi possível enviar o documento. Tente novamente.",
+      "downloadError": "Não foi possível abrir o documento. Tente novamente."
+    },
     "drivers": {
       "title": "Motoristas",
       "subtitle": "Cadastro de motoristas próprios e subcontratados.",
