@@ -30,6 +30,7 @@ export * from "./alerts";
 export * from "./document-types";
 export * from "./documents";
 export * from "./document-requirements";
+export * from "./resource-documents";
 export * from "./rates";
 export * from "./export-batches";
 export * from "./billing-items";

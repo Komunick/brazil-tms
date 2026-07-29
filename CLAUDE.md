@@ -67,16 +67,23 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/024-larger-resource-dialogs/plan.md` (Larger Resource Registration Dialogs — issue #31 [0008]).
-**Presentation-only slice** (padrão da 020): os diálogos de criação de Motorista/Veículo/Reboque saem do `max-w-lg`
-base (512px) para **`max-w-4xl` (896px) + `max-h-[90vh]`**, via `className` nos três `DialogContent` de
-`drivers-client.tsx` / `vehicles-client.tsx` / `trailers-client.tsx` (o `cn()` usa tailwind-merge, então o `max-w-*`
-passado sobrescreve o base limpo). TRAPS: (1) NÃO tocar `ui/dialog.tsx` — alargaria TODOS os diálogos do app;
-(2) NÃO tocar os forms — `driver-form.tsx` é do PR #39 [022] e `vehicle-form.tsx` do PR #40 [023]; mexer aqui cria
-conflito desnecessário entre PRs (por isso os pares de campos NÃO são re-agrupados — isso foi a 0007). Outros diálogos
-de master-data (customers/carriers/locations/lanes) e páginas de edição ficam como estão (issue nomeia só os três).
-e2e novo `dialog-size.spec.ts` mede boundingBox ≥ 850px no viewport 1280. Redesign com abas/3 colunas do sistema de
-referência = futuro, se o negócio pedir.
+Active feature plan: `specs/025-resource-documents/plan.md` (Documents Tab for Drivers and Vehicles — issue #32 [0009]).
+**Slice novo domínio enxuto**: aba "Documentos" nas páginas de EDIÇÃO de motorista/veículo — histórico append-only de
+anexos (CNH digital, photocheck, CRLV…) sobre a tubulação de storage da 008. Tabela nova `resource_documents`
+(metadata; entity_type CHECK driver|vehicle extensível; binário SÓ no bucket privado `documents`, prefixo
+`resources/<tipo>/<id>/<docId>.<ext>` via `resourceDocumentStorageKey`). TRAPS: (1) NÃO tocar a tabela/rotas 008
+(`documents` é trip-scoped com verificação/billing — domínio shipped); (2) validar tipo (PDF/JPG/PNG) + tamanho
+(`DOCUMENT_MAX_BYTES`) e preflight do pai (existe + não arquivado → senão 404/409) ANTES do `putDocument`; rollback do
+binário se o insert falhar; (3) TERCEIRA migração `0009` em voo (PRs #39/#40 têm as suas) — renumerar no merge, nunca
+antes; (4) `driver-detail-client.tsx` também é editado pelo PR #39 — manter a edição das tabs cirúrgica. Permissão:
+`manage_fleet_data` em tudo (upload/list/download; sem chave nova). Tipos de documento = TEXTO LIVRE ≤60 com sugestões
+por entidade na UI (sem config nova — KISS; promover a master se o negócio pedir). Sem delete/replace: histórico é o
+pedido. Dep nova justificada: `@radix-ui/react-tabs` (shadcn tabs — a issue pede "aba"; mesma família Radix). Download
+= rota **302-redirect** para signed URL 60s + `<a target="_blank">` simples (padrão do error-report da 004; NUNCA
+`{url}`+`window.open` pós-await — popup block silencioso). Insert re-checa o pai com `FOR UPDATE` na mesma tx (guarda
+contra corrida com arquivamento; preflight da rota roda antes do upload do binário). Harness local sem Docker:
+mock-gotrue.mjs (fora do repo, .local) ganha endpoints mínimos de Storage p/ e2e completo. Fora de escopo: reboques, verificação, master de tipos, vínculo com
+validade (leitor 021).
 
 Previous slice (015) context:
 Collapse Validation Statuses into "Recebida".

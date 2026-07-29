@@ -85,6 +85,13 @@
       "when": 1785348254787,
       "tag": "0011_stiff_microchip",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785348913786,
+      "tag": "0012_tough_wither",
+      "breakpoints": true
     }
   ]
 }

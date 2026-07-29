@@ -27,6 +27,7 @@ export * from "./schemas/import";
 export * from "./schemas/document";
 export * from "./schemas/document-extraction";
 export * from "./schemas/document-requirement";
+export * from "./schemas/resource-documents";
 export * from "./schemas/rate";
 export * from "./schemas/billing";
 export * from "./import";

@@ -8,7 +8,9 @@ import { useTranslations } from "next-intl";
 import type { CreateVehicleInput } from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { VehicleForm } from "@/components/master-data/vehicle-form";
+import { ResourceDocumentsTab } from "@/components/master-data/resource-documents-tab";
 import {
   archiveEntity,
   createEntity,
@@ -30,6 +32,7 @@ export function VehicleDetailClient({ vehicleId, canArchive }: Props) {
   const tResources = useTranslations("Resources");
   const tMaster = useTranslations("MasterData");
   const tCommon = useTranslations("Common");
+  const tDocs = useTranslations("Resources.documents");
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -106,6 +109,36 @@ export function VehicleDetailClient({ vehicleId, canArchive }: Props) {
       }
     : undefined;
 
+  const formCard = (
+    <Card>
+      <CardHeader>
+        <CardTitle>{isNew ? t("new") : (current?.plate ?? "")}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <VehicleForm
+          defaultValues={defaultValues}
+          submitting={saveMutation.isPending}
+          errorMessage={error}
+          submitLabel={tCommon("save")}
+          onCancel={() => router.push("/resources/vehicles")}
+          onSubmit={(values) => saveMutation.mutate(values)}
+        />
+
+        {!isNew && canArchive && current && !current.archived ? (
+          <div className="border-t pt-4">
+            <Button
+              variant="ghost"
+              disabled={archiveMutation.isPending}
+              onClick={() => archiveMutation.mutate()}
+            >
+              {tMaster("archive")}
+            </Button>
+          </div>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center justify-between gap-4">
@@ -119,33 +152,26 @@ export function VehicleDetailClient({ vehicleId, canArchive }: Props) {
         </p>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{isNew ? t("new") : (current?.plate ?? "")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <VehicleForm
-            defaultValues={defaultValues}
-            submitting={saveMutation.isPending}
-            errorMessage={error}
-            submitLabel={tCommon("save")}
-            onCancel={() => router.push("/resources/vehicles")}
-            onSubmit={(values) => saveMutation.mutate(values)}
-          />
-
-          {!isNew && canArchive && current && !current.archived ? (
-            <div className="border-t pt-4">
-              <Button
-                variant="ghost"
-                disabled={archiveMutation.isPending}
-                onClick={() => archiveMutation.mutate()}
-              >
-                {tMaster("archive")}
-              </Button>
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+      {isNew ? (
+        formCard
+      ) : (
+        /* Slice 025 (issue #32): the edit page gains the "Documentos" tab; create has no record
+           to attach to yet, so it keeps the plain form. */
+        <Tabs defaultValue="data">
+          <TabsList>
+            <TabsTrigger value="data">{tDocs("dataTab")}</TabsTrigger>
+            <TabsTrigger value="documents">{tDocs("tabTitle")}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="data">{formCard}</TabsContent>
+          <TabsContent value="documents">
+            <Card>
+              <CardContent className="pt-6">
+                <ResourceDocumentsTab entityType="vehicle" entityId={vehicleId} />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 }
