@@ -499,7 +499,7 @@ MVP computes SLA status from the planned pickup window, planned delivery window,
 | RES-001 | Users can create and edit driver records. | MVP |
 | RES-002 | Driver records include name, phone, CPF, license category, document expiry dates, carrier/employer, status, and notes. | MVP |
 | RES-003 | Users can create and edit vehicle records. | MVP |
-| RES-004 | Vehicle records include plate, type, capacity, owner/carrier, document expiry dates, tracker identifier if available, and status. | MVP |
+| RES-004 | Vehicle records include plate, type, ANTT/Renavam/chassis if available, capacity, owner/carrier, document expiry dates, tracker identifier if available, and status. | MVP |
 | RES-005 | Users can create and edit trailer records where applicable. | MVP |
 | RES-006 | Users can create and edit carrier/subcontractor records. | MVP |
 | RES-007 | System tracks resource active, inactive, unavailable, maintenance, and blocked statuses. | MVP |
@@ -733,6 +733,9 @@ Fields:
 - Vehicle ID.
 - Plate.
 - Vehicle type.
+- ANTT (RNTRC) number if available.
+- Renavam if available.
+- Chassis (VIN) if available.
 - Capacity.
 - Owner.
 - Carrier.
@@ -1678,3 +1681,4 @@ Decisions made to bring this PRD to execution-readiness. Override any of these i
 - **Freight rate lookup (slice 016, 2026-07-13)**: NEW scope added on the product owner's request — an internal agregados spot-price table ("Tabela de Fretes", 13.14 / 15.13) searchable by route and one-way price, replaced wholesale by uploading the standard spreadsheet (Admin + Finance, mirroring the "Edit rates" precedent in Section 18). Deliberately separate from customer lane pricing (LANE-004): lane rates are contracted per customer; this table is agregado spot pricing maintained outside the system. Vehicle types are free-form labels from the sheet (not the fleet vehicle-type enum) so new labels never require a migration. The spreadsheet holds commercial data and must never enter the (public) repository — tests and seeds are synthetic.
 - **Trip cancellation exposure & Dispatcher "Limited" (slice 017, 2026-07-27)**: the §18 `Cancel trip` action ships in the UI on three surfaces — Trip Detail, the Dispatch board row, and the Control Tower table row — all driving the single justified flow (§19.5: reason + responsible party + billing impact; user and timestamp recorded server-side). The Dispatcher's **"Limited"** cell is defined as: a Dispatcher may cancel only trips still in the **dispatch phase** (`Received`, `Assigned`, `Confirmed`); Admin and Ops Manager may cancel any legally cancellable trip (§12.1). Cancellation is reachable ONLY through the dedicated cancellation flow — the generic status-update path refuses `Cancelled` as a target, closing a §19.5 bypass. Default pt-BR cancellation **reason** options are seeded as labeled scaffolding (billing impacts were already seeded per §19.5); the final lists remain config-driven with business sign-off pending.
 - **Driver CPF replaces e-mail** (slice 022, issue #28, 2026-07-28): the driver record captures **CPF** (optional, 11 digits, format check only — same posture as CNPJ) instead of e-mail, which the operation never used. The DB `email` column becomes **dormant** (kept with its data for history; no product surface reads it); a future cleanup migration may drop it once the business confirms. CPF uniqueness/check-digit validation deferred until the business asks.
+- **Vehicle registry identifiers** (slice 023, issue #30, 2026-07-28): vehicle records capture **ANTT (RNTRC)**, **Renavam** and **Chassis (VIN)** — optional, non-unique (the plate stays the only unique key). Validation matches each format's certainty (the R7 posture): Renavam = 9–11 digits after stripping punctuation; chassis = 17 standard-VIN characters normalized uppercase; ANTT stays free text (its format varies by era/category). The vehicle form groups Placa/Tipo/Renavam/ANTT and shrinks Capacidade to a half-width cell (the issue's space request). Trailers (which legally also carry these identifiers) are deferred until the business asks.

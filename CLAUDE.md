@@ -67,16 +67,17 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/022-driver-cpf-field/plan.md` (Driver CPF Replaces E-mail — issue #28 [0005]).
-**Contained swap slice**: o form do motorista troca E-mail por CPF. `cpfSchema` no shared (strip pontuação → 11 dígitos,
-espelho do `cnpjSchema`; opcional/`blankable`, sem dígito verificador — postura R7), `driverBase.email` → `cpf`. DB: coluna
-`cpf` nova (migração 0010, só ADD COLUMN); a coluna `email` fica **DORMENTE** — TRAP: ela PERMANECE mapeada no Drizzle
-(`packages/db/schema/drivers.ts`, comentada como dormant) senão o próximo `drizzle-kit generate` emite `DROP COLUMN`
-destruindo dados reais de produção; ela sai apenas de Zod/DTO/serviço/form/i18n. Serviço: `DriverDto`/insert/update
-field-list `email` → `cpf` (audit pega `cpf` genericamente). UI: `driver-form.tsx` (mesmo slot do grid) +
-`driver-detail-client.tsx` + `Resources.drivers.cpf` no pt-BR. PRD emendado (§14 Driver "CPF if available.", RES-002, §30);
-specs shipped (002) NÃO editadas. Fora de escopo: unicidade/dedup por CPF, dígitos verificadores, prefill do CPF pelo
-leitor de CNH (021 — follow-up natural após merge). E-mails existentes são preservados na coluna dormente.
+Active feature plan: `specs/023-vehicle-registry-fields/plan.md` (Vehicle Registry Fields — issue #30 [0007]).
+**Contained add slice** (padrão da 022/driver-CPF): o form de veículo ganha **ANTT (RNTRC)**, **Renavam** e **Chassi**.
+Shared: `renavamSchema` (strip pontuação → 9–11 dígitos; 11 moderno, 9 legado), `chassisSchema` (uppercase, strip
+espaço/hífen → exatamente 17 chars VIN `[A-HJ-NPR-Z0-9]`, sem I/O/Q), ANTT = `optionalText(20)` livre (formato varia por
+época — sem claim de formato); os três opcionais/`blankable` em `vehicleBase`. DB: 3 colunas text nullable em `vehicles`
+(migração aditiva — TRAP: numerada **0009 nesta branch** e o PR #39 [022] TAMBÉM tem 0009; quem mergear em `dev` por
+segundo regenera/renumera a sua no passo de conflitos — NÃO "consertar" antes do merge). Serviço: DTO/insert/update
+field-list + 3 campos (audit genérico). UI `vehicle-form.tsx` — LAYOUT da issue: linhas Placa|Tipo, Renavam|ANTT,
+Chassi|Capacidade (Capacidade deixa de ser full-width) + `vehicle-detail-client.tsx` + `Resources.vehicles.{anttNumber,
+renavam,chassis}` no pt-BR. PRD emendado (§14 Vehicle, RES-004, §30). Fora de escopo: reboques (têm Renavam/Chassi mas a
+issue nomeia veículos), colunas na lista, unicidade, dígitos verificadores, prefill via leitor de CRLV (021 — follow-up).
 
 Previous slice (015) context:
 Collapse Validation Statuses into "Recebida".
