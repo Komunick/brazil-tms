@@ -67,15 +67,15 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/019-fresh-resource-options/plan.md` (Fresh Resource Options — issue #26 [0003]).
-**Read-path freshness slice**: `getTripFilterOptions()` era carregado 1× server-side em NOVE páginas e passado como
-prop estática — as listas de recursos nunca refazem numa aba aberta (motorista novo "demora 10-15 min" = latência de
-F5 humano). Fix: NEW `GET /api/trips/filter-options` (`view_all_trips` — todos os 7 papéis internos) + hook
-`useFilterOptions(initial)` em `lib/trips/client.ts` (key `["filter-options"]`, `initialData` = seed do servidor,
-`refetchInterval` 60s, focus-refetch default). As 9 páginas MANTÊM o load server-side (seed, FR-003 sem flash) e o
-componente client de topo troca a prop estática pelo hook em UM ponto (filhos inalterados). TRAPS: (1) não remover o
-load server-side nem duplicar fetch no mount (initialData resolve); (2) trocar só no componente de topo; (3) rota nova
-usa APENAS `view_all_trips`. Sem Realtime (constituição: polling), sem mudança de schema/permissão/write-path.
+Active feature plan: `specs/020-license-expiry-visibility/plan.md` (License/Document Expiry Visibility — issue #27 [0004]).
+**Presentation-only slice**: a coluna "Validade da CNH" nunca mostra a data (`ok` → "—"; expiring/expired → só badge) e
+"sem data" se confunde com "em dia". Dados já chegam ao client (`DriverDto.licenseExpiry`, `documentExpiryState` — janela
+30 dias, calendário São Paulo). Fix: NEW `components/master-data/expiry-cell.tsx` (4 estados: null → "Não informada"
+muted; ok → formatDate; expiring → data + badge "A vencer"; expired → data vermelha + badge "Vencido") usado nas 3
+listas — drivers (licenseExpiry), vehicles + trailers (documentExpiry) — escopo clarificado 2026-07-27. TRAP: NUNCA
+re-derivar o estado na UI — renderizar `documentExpiryState` como entregue (a mesma computação alimenta a elegibilidade
+de atribuição; duas derivações divergem). Sem mudança de DTO/serviço/form/permissão; extensão do motor de alertas (007)
+para vencimentos é OUT OF SCOPE (slice futura).
 
 Previous slice (015) context, still load-bearing:
 This is a **corrective, cross-cutting** change to the trip status machine that **references** shipped slices 003 (status
