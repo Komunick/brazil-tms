@@ -67,15 +67,19 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/020-license-expiry-visibility/plan.md` (License/Document Expiry Visibility — issue #27 [0004]).
-**Presentation-only slice**: a coluna "Validade da CNH" nunca mostra a data (`ok` → "—"; expiring/expired → só badge) e
-"sem data" se confunde com "em dia". Dados já chegam ao client (`DriverDto.licenseExpiry`, `documentExpiryState` — janela
-30 dias, calendário São Paulo). Fix: NEW `components/master-data/expiry-cell.tsx` (4 estados: null → "Não informada"
-muted; ok → formatDate; expiring → data + badge "A vencer"; expired → data vermelha + badge "Vencido") usado nas 3
-listas — drivers (licenseExpiry), vehicles + trailers (documentExpiry) — escopo clarificado 2026-07-27. TRAP: NUNCA
-re-derivar o estado na UI — renderizar `documentExpiryState` como entregue (a mesma computação alimenta a elegibilidade
-de atribuição; duas derivações divergem). Sem mudança de DTO/serviço/form/permissão; extensão do motor de alertas (007)
-para vencimentos é OUT OF SCOPE (slice futura).
+Active feature plan: `specs/021-ai-document-extraction/plan.md` (AI Document Reading — issue #29 [0006]).
+**Slice com dependência nova justificada**: `@anthropic-ai/sdk` (apps/web) + Claude API (`claude-opus-4-8`, adaptive
+thinking, structured outputs via `messages.parse` + `zodOutputFormat`, visão). NEW `POST /api/master-data/
+extract-document` (`manage_fleet_data`; body {docType cnh|crlv, mediaType, data base64 — caps por tipo: imagem
+≤10MiB CODIFICADA, o limite per-image da Anthropic ≈7,5MiB raw; PDF ≤10MiB raw; acima → 400 sem chamar o provider;
+fonte única em `extractionMaxBytes`/`extractionMaxBase64Chars` no shared}) → CNH pré-preenche
+motorista (name, licenseExpiry), CRLV pré-preenche veículo/reboque (plate, vehicleType do enum existente,
+documentExpiry). Schemas compartilhados nullable em `packages/shared/src/schemas/document-extraction.ts`. TRAPS:
+(1) PREFILL ONLY — nunca chamar create/update com saída da IA (revisão humana obrigatória); (2) imagem EFÊMERA —
+nunca persistir/logar o payload; (3) `ANTHROPIC_API_KEY` server-only (nunca NEXT_PUBLIC), ausente → 503
+EXTRACTION_NOT_CONFIGURED (feature apagada, forms manuais intactos); (4) campo ilegível → null, nunca chute — UI
+lista os campos não lidos. Chamada síncrona no BFF (60s timeout; precedente 016 R1 — sem pg-boss). e2e sem chave
+cobre botão + caminho não-configurado + 403; extração real é verificação manual com chave (quickstart).
 
 Previous slice (015) context, still load-bearing:
 This is a **corrective, cross-cutting** change to the trip status machine that **references** shipped slices 003 (status
