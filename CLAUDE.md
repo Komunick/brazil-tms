@@ -70,7 +70,9 @@ Start with two packages (`shared`, `db`); add more only with justification.
 Active feature plan: `specs/021-ai-document-extraction/plan.md` (AI Document Reading — issue #29 [0006]).
 **Slice com dependência nova justificada**: `@anthropic-ai/sdk` (apps/web) + Claude API (`claude-opus-4-8`, adaptive
 thinking, structured outputs via `messages.parse` + `zodOutputFormat`, visão). NEW `POST /api/master-data/
-extract-document` (`manage_fleet_data`; body {docType cnh|crlv, mediaType, data base64 ≤10MB}) → CNH pré-preenche
+extract-document` (`manage_fleet_data`; body {docType cnh|crlv, mediaType, data base64 — caps por tipo: imagem
+≤10MiB CODIFICADA, o limite per-image da Anthropic ≈7,5MiB raw; PDF ≤10MiB raw; acima → 400 sem chamar o provider;
+fonte única em `extractionMaxBytes`/`extractionMaxBase64Chars` no shared}) → CNH pré-preenche
 motorista (name, licenseExpiry), CRLV pré-preenche veículo/reboque (plate, vehicleType do enum existente,
 documentExpiry). Schemas compartilhados nullable em `packages/shared/src/schemas/document-extraction.ts`. TRAPS:
 (1) PREFILL ONLY — nunca chamar create/update com saída da IA (revisão humana obrigatória); (2) imagem EFÊMERA —

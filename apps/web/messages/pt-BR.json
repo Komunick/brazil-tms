@@ -706,7 +706,7 @@
       "unreadablePrefix": "Não foi possível ler:",
       "nothingRead": "Não foi possível ler o documento. Verifique a imagem e tente novamente.",
       "invalidType": "Formato não suportado. Envie JPEG, PNG, WebP, GIF ou PDF.",
-      "tooLarge": "Arquivo muito grande (máximo 10 MB).",
+      "tooLarge": "Imagem muito grande (máximo 7,5 MB). Para PDF, o máximo é 10 MB.",
       "notConfigured": "Leitura de documentos não configurada. Contate um administrador.",
       "forbidden": "Seu perfil não tem permissão para usar a leitura de documentos.",
       "failed": "Não foi possível ler o documento. Tente novamente."

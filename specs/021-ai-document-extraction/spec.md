@@ -53,7 +53,7 @@ The same flow on the vehicle and trailer forms: a CRLV image prefills plate, veh
 - **Privacy**: the document image is EPHEMERAL — sent from the browser to the BFF and on to the provider, never written to disk, Storage, or the database (the repo/system is public-facing; CNH images are sensitive personal data). Only the extracted field VALUES enter the form, and only if the user saves.
 - **Human review is mandatory**: no code path may create/update a record directly from extraction output (clarification: prefill-only).
 - **Provider outage/error**: a failed extraction shows a friendly retry message; the form remains fully usable manually.
-- **File limits**: images (JPEG/PNG/WebP) and PDF accepted; oversized files (> 10 MB) are refused client-side with a clear message.
+- **File limits**: images (JPEG/PNG/WebP/GIF) and PDF accepted; limits are media-type-aware — images > 7,5 MB raw (Anthropic caps images at 10 MB after base64 encoding) and PDFs > 10 MB raw are refused client-side with a clear message, and the server independently rejects oversized payloads (400) without calling the provider.
 - **Dates**: extracted dates land in the form as calendar dates (São Paulo semantics, `YYYY-MM-DD`), matching the existing expiry fields.
 
 ## Requirements *(mandatory)*

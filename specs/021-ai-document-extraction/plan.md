@@ -15,7 +15,9 @@ Issue #29 [0006]: register drivers/vehicles by sending a document image. Design 
    (unreadable → null, never guessed; FR-003). Dates `YYYY-MM-DD` strings.
 3. **BFF route** `POST /api/master-data/extract-document` — `requireAuth` +
    `requirePermission("manage_fleet_data")`; body `{ docType: "cnh"|"crlv", mediaType, data }`
-   (base64, ≤ 10 MB, image/* or application/pdf). Calls Claude **`claude-opus-4-8`** with adaptive
+   (base64; media-type-aware caps — images ≤ 10 MiB ENCODED, the Anthropic per-image limit
+   ≈ 7,5 MiB raw; PDFs ≤ 10 MiB raw; oversize → 400, never sent to the provider; image/* or
+   application/pdf). Calls Claude **`claude-opus-4-8`** with adaptive
    thinking + **structured outputs** (`client.messages.parse` + `zodOutputFormat`) and the image as
    a vision/document block; pt-BR prompt instructs null-when-unreadable. Response
    `{ fields, unreadable: string[] }`. The image lives only in the request scope (FR-005). Errors:
@@ -65,7 +67,8 @@ apps/web (package.json)            # EDIT — add @anthropic-ai/sdk
 packages/shared/src/schemas/
 └── document-extraction.ts         # NEW — docType, cnh/crlv zod schemas (nullable fields,
                                    #   vehicleType constrained to VEHICLE_TYPE_VALUES), request schema
-                                   #   (base64 ≤10MB, allowed media types) + unit tests.
+                                   #   (base64, media-type-aware caps: image ≤10MiB encoded /
+                                   #   pdf ≤10MiB raw; allowed media types) + unit tests.
 
 apps/web/lib/ai/
 └── extract-document.ts            # NEW ("server-only") — lazy Anthropic client (env key; absent →

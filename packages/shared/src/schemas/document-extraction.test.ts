@@ -3,6 +3,10 @@ import {
   cnhExtractionSchema,
   crlvExtractionSchema,
   extractDocumentRequestSchema,
+  EXTRACTION_MAX_IMAGE_BASE64_CHARS,
+  EXTRACTION_MAX_IMAGE_BYTES,
+  EXTRACTION_MAX_PDF_BASE64_CHARS,
+  EXTRACTION_MAX_PDF_BYTES,
   unreadableFields,
 } from "./document-extraction";
 
@@ -56,6 +60,58 @@ describe("extractDocumentRequestSchema", () => {
     expect(() =>
       extractDocumentRequestSchema.parse({ docType: "crlv", mediaType: "image/png", data: "" }),
     ).toThrow();
+  });
+
+  it("the encoded caps account for base64 padding (4 chars per started 3-byte block)", () => {
+    expect(EXTRACTION_MAX_IMAGE_BASE64_CHARS).toBe(4 * Math.ceil(EXTRACTION_MAX_IMAGE_BYTES / 3));
+    expect(EXTRACTION_MAX_IMAGE_BASE64_CHARS).toBe(10 * 1024 * 1024); // the Anthropic per-image cap
+    expect(EXTRACTION_MAX_PDF_BASE64_CHARS).toBe(4 * Math.ceil(EXTRACTION_MAX_PDF_BYTES / 3));
+    expect(EXTRACTION_MAX_PDF_BYTES).toBe(10 * 1024 * 1024); // the product's raw PDF limit
+  });
+
+  it("images: boundary at the ENCODED (base64) Anthropic cap — at-limit passes, above 400s", () => {
+    const image = (data: string) =>
+      extractDocumentRequestSchema.safeParse({ docType: "cnh", mediaType: "image/jpeg", data });
+
+    expect(image("a".repeat(EXTRACTION_MAX_IMAGE_BASE64_CHARS)).success).toBe(true);
+
+    // +4: base64 grows in whole 4-char blocks, so this is the smallest realistic oversize.
+    const above = image("a".repeat(EXTRACTION_MAX_IMAGE_BASE64_CHARS + 4));
+    expect(above.success).toBe(false);
+    if (!above.success) {
+      expect(above.error.issues[0]?.path).toEqual(["data"]);
+      expect(above.error.issues[0]?.message).toContain("7,5 MB");
+    }
+  });
+
+  it("pdf: boundary at 10 MiB RAW (padded encoding) — at-limit passes, above 400s", () => {
+    const pdf = (data: string) =>
+      extractDocumentRequestSchema.safeParse({ docType: "crlv", mediaType: "application/pdf", data });
+
+    // Exactly 10 MiB of raw bytes encodes (with '==' padding) to exactly this many chars.
+    expect(pdf("a".repeat(EXTRACTION_MAX_PDF_BASE64_CHARS)).success).toBe(true);
+
+    const above = pdf("a".repeat(EXTRACTION_MAX_PDF_BASE64_CHARS + 4));
+    expect(above.success).toBe(false);
+    if (!above.success) expect(above.error.issues[0]?.message).toContain("10 MB");
+  });
+
+  it("is media-type-aware: a payload above the image cap but within the pdf cap flips on mediaType", () => {
+    const between = "a".repeat(EXTRACTION_MAX_IMAGE_BASE64_CHARS + 4);
+    expect(
+      extractDocumentRequestSchema.safeParse({
+        docType: "cnh",
+        mediaType: "image/webp",
+        data: between,
+      }).success,
+    ).toBe(false);
+    expect(
+      extractDocumentRequestSchema.safeParse({
+        docType: "cnh",
+        mediaType: "application/pdf",
+        data: between,
+      }).success,
+    ).toBe(true);
   });
 });
 

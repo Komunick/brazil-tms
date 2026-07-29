@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   EXTRACTION_MEDIA_TYPES,
+  extractionMaxBytes,
   type ExtractionDocType,
   type ExtractionMediaType,
 } from "@brazil-tms/shared";
@@ -11,7 +12,8 @@ import { Button } from "@/components/ui/button";
 
 /**
  * The shared "Ler documento (IA)" affordance (021, issue #29) used by the driver (CNH) and
- * vehicle/trailer (CRLV) forms. Picks an image/PDF (≤ 10 MB), sends it to the extraction endpoint,
+ * vehicle/trailer (CRLV) forms. Picks an image (≤ 7.5 MB raw — Anthropic caps images at 10 MB
+ * AFTER base64 encoding) or PDF (≤ 10 MB raw), sends it to the extraction endpoint,
  * and hands the extracted fields to the host form to PREFILL — the record is still created only
  * when the user reviews and submits (FR-004). The file is read in-memory and sent once; nothing is
  * persisted (FR-005). Unreadable fields are listed to the user instead of silently skipped
@@ -34,8 +36,6 @@ export function DocumentReadButton({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ filled: string[]; unreadable: string[] } | null>(null);
 
-  const MAX_BYTES = 10 * 1024 * 1024;
-
   function labelOf(key: string): string {
     return fieldLabels[key] ?? key;
   }
@@ -47,7 +47,9 @@ export function DocumentReadButton({
       setError(t("invalidType"));
       return;
     }
-    if (file.size > MAX_BYTES) {
+    // Media-type-aware raw cap (shared with the server's encoded cap) — reject BEFORE any
+    // FileReader/fetch work so an oversized pick never leaves the browser.
+    if (file.size > extractionMaxBytes(file.type as ExtractionMediaType)) {
       setError(t("tooLarge"));
       return;
     }

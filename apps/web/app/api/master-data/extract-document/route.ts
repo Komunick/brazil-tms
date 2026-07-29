@@ -13,7 +13,9 @@ export const dynamic = "force-dynamic";
 /**
  * POST /api/master-data/extract-document — AI document reading (021, issue #29). Requires
  * `manage_fleet_data` (the fleet-registration permission). Body: `{ docType: cnh|crlv, mediaType,
- * data }` (base64, ≤ 10 MB). Runs ONE synchronous vision call (60 s cap — 016 R1 precedent; not
+ * data }` (base64; images ≤ 10 MiB ENCODED — the Anthropic per-image cap ≈ 7.5 MiB raw — and PDFs
+ * ≤ 10 MiB raw; oversize → 400 here, never reaching the provider). Runs ONE synchronous vision
+ * call (60 s cap — 016 R1 precedent; not
  * batch work) and returns `{ fields, unreadable }` for the form to PREFILL — creating the record
  * stays on the existing validated paths (FR-004). The payload is EPHEMERAL: never persisted or
  * logged (FR-005). 503 EXTRACTION_NOT_CONFIGURED without a server key (feature dark, FR-007);
