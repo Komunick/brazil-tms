@@ -67,17 +67,16 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/023-vehicle-registry-fields/plan.md` (Vehicle Registry Fields — issue #30 [0007]).
-**Contained add slice** (padrão da 022/driver-CPF): o form de veículo ganha **ANTT (RNTRC)**, **Renavam** e **Chassi**.
-Shared: `renavamSchema` (strip pontuação → 9–11 dígitos; 11 moderno, 9 legado), `chassisSchema` (uppercase, strip
-espaço/hífen → exatamente 17 chars VIN `[A-HJ-NPR-Z0-9]`, sem I/O/Q), ANTT = `optionalText(20)` livre (formato varia por
-época — sem claim de formato); os três opcionais/`blankable` em `vehicleBase`. DB: 3 colunas text nullable em `vehicles`
-(migração aditiva — TRAP: numerada **0009 nesta branch** e o PR #39 [022] TAMBÉM tem 0009; quem mergear em `dev` por
-segundo regenera/renumera a sua no passo de conflitos — NÃO "consertar" antes do merge). Serviço: DTO/insert/update
-field-list + 3 campos (audit genérico). UI `vehicle-form.tsx` — LAYOUT da issue: linhas Placa|Tipo, Renavam|ANTT,
-Chassi|Capacidade (Capacidade deixa de ser full-width) + `vehicle-detail-client.tsx` + `Resources.vehicles.{anttNumber,
-renavam,chassis}` no pt-BR. PRD emendado (§14 Vehicle, RES-004, §30). Fora de escopo: reboques (têm Renavam/Chassi mas a
-issue nomeia veículos), colunas na lista, unicidade, dígitos verificadores, prefill via leitor de CRLV (021 — follow-up).
+Active feature plan: `specs/024-larger-resource-dialogs/plan.md` (Larger Resource Registration Dialogs — issue #31 [0008]).
+**Presentation-only slice** (padrão da 020): os diálogos de criação de Motorista/Veículo/Reboque saem do `max-w-lg`
+base (512px) para **`max-w-4xl` (896px) + `max-h-[90vh]`**, via `className` nos três `DialogContent` de
+`drivers-client.tsx` / `vehicles-client.tsx` / `trailers-client.tsx` (o `cn()` usa tailwind-merge, então o `max-w-*`
+passado sobrescreve o base limpo). TRAPS: (1) NÃO tocar `ui/dialog.tsx` — alargaria TODOS os diálogos do app;
+(2) NÃO tocar os forms — `driver-form.tsx` é do PR #39 [022] e `vehicle-form.tsx` do PR #40 [023]; mexer aqui cria
+conflito desnecessário entre PRs (por isso os pares de campos NÃO são re-agrupados — isso foi a 0007). Outros diálogos
+de master-data (customers/carriers/locations/lanes) e páginas de edição ficam como estão (issue nomeia só os três).
+e2e novo `dialog-size.spec.ts` mede boundingBox ≥ 850px no viewport 1280. Redesign com abas/3 colunas do sistema de
+referência = futuro, se o negócio pedir.
 
 Previous slice (015) context:
 Collapse Validation Statuses into "Recebida".
