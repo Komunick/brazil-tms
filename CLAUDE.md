@@ -67,21 +67,21 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/021-ai-document-extraction/plan.md` (AI Document Reading — issue #29 [0006]).
-**Slice com dependência nova justificada**: `@anthropic-ai/sdk` (apps/web) + Claude API (`claude-opus-4-8`, adaptive
-thinking, structured outputs via `messages.parse` + `zodOutputFormat`, visão). NEW `POST /api/master-data/
-extract-document` (`manage_fleet_data`; body {docType cnh|crlv, mediaType, data base64 — caps por tipo: imagem
-≤10MiB CODIFICADA, o limite per-image da Anthropic ≈7,5MiB raw; PDF ≤10MiB raw; acima → 400 sem chamar o provider;
-fonte única em `extractionMaxBytes`/`extractionMaxBase64Chars` no shared}) → CNH pré-preenche
-motorista (name, licenseExpiry), CRLV pré-preenche veículo/reboque (plate, vehicleType do enum existente,
-documentExpiry). Schemas compartilhados nullable em `packages/shared/src/schemas/document-extraction.ts`. TRAPS:
-(1) PREFILL ONLY — nunca chamar create/update com saída da IA (revisão humana obrigatória); (2) imagem EFÊMERA —
-nunca persistir/logar o payload; (3) `ANTHROPIC_API_KEY` server-only (nunca NEXT_PUBLIC), ausente → 503
-EXTRACTION_NOT_CONFIGURED (feature apagada, forms manuais intactos); (4) campo ilegível → null, nunca chute — UI
-lista os campos não lidos. Chamada síncrona no BFF (60s timeout; precedente 016 R1 — sem pg-boss). e2e sem chave
-cobre botão + caminho não-configurado + 403; extração real é verificação manual com chave (quickstart).
+Active feature plan: `specs/022-driver-cpf-field/plan.md` (Driver CPF Replaces E-mail — issue #28 [0005]).
+**Contained swap slice**: o form do motorista troca E-mail por CPF. `cpfSchema` no shared (strip pontuação → 11 dígitos,
+espelho do `cnpjSchema`; opcional/`blankable`, sem dígito verificador — postura R7), `driverBase.email` → `cpf`. DB: coluna
+`cpf` nova (migração 0010, só ADD COLUMN); a coluna `email` fica **DORMENTE** — TRAP: ela PERMANECE mapeada no Drizzle
+(`packages/db/schema/drivers.ts`, comentada como dormant) senão o próximo `drizzle-kit generate` emite `DROP COLUMN`
+destruindo dados reais de produção; ela sai apenas de Zod/DTO/serviço/form/i18n. Serviço: `DriverDto`/insert/update
+field-list `email` → `cpf` (audit pega `cpf` genericamente). UI: `driver-form.tsx` (mesmo slot do grid) +
+`driver-detail-client.tsx` + `Resources.drivers.cpf` no pt-BR. PRD emendado (§14 Driver "CPF if available.", RES-002, §30);
+specs shipped (002) NÃO editadas. Fora de escopo: unicidade/dedup por CPF, dígitos verificadores, prefill do CPF pelo
+leitor de CNH (021 — follow-up natural após merge). E-mails existentes são preservados na coluna dormente.
 
-Previous slice (015) context, still load-bearing:
+Previous slice (015) context:
+Collapse Validation Statuses into "Recebida".
+For technologies, project structure, BFF/auth patterns, data model, contracts, and setup/test commands,
+read that plan and its `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`.
 This is a **corrective, cross-cutting** change to the trip status machine that **references** shipped slices 003 (status
 machine), 004 (import+validation), 006 (dispatch/assignment), 013 (predefined import template), 014 (auto-validate) — it
 **supersedes 014's born-`validated`** decision and does **not** edit shipped specs; it **amends** `docs/PRD.md`

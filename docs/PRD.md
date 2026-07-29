@@ -497,7 +497,7 @@ MVP computes SLA status from the planned pickup window, planned delivery window,
 | ID | Requirement | Priority |
 |---|---|---|
 | RES-001 | Users can create and edit driver records. | MVP |
-| RES-002 | Driver records include name, phone, license category, document expiry dates, carrier/employer, status, and notes. | MVP |
+| RES-002 | Driver records include name, phone, CPF, license category, document expiry dates, carrier/employer, status, and notes. | MVP |
 | RES-003 | Users can create and edit vehicle records. | MVP |
 | RES-004 | Vehicle records include plate, type, capacity, owner/carrier, document expiry dates, tracker identifier if available, and status. | MVP |
 | RES-005 | Users can create and edit trailer records where applicable. | MVP |
@@ -718,7 +718,7 @@ Fields:
 - Driver ID.
 - Name.
 - Phone.
-- Email if available.
+- CPF if available.
 - License number.
 - License category.
 - License expiration date.
@@ -1677,3 +1677,4 @@ Decisions made to bring this PRD to execution-readiness. Override any of these i
 - **Collapse validation statuses** (slice 015, 2026-06-07): the three early validation states — `Received`, `Validation Error`, `Validated` — are collapsed into a single `Received`, which becomes the first **dispatchable** status (§12, §12.1). Import already validates every row (only Valid/Warning rows are applied), so a separate trip-level validate hop carried no information. The active status machine drops from 18 to 16 values; `Assigned`/`Confirmed` and everything from `Confirmed` onward are unchanged (the confirm step and the confirmation-cutoff SLA are out of scope). This **supersedes slice 014's born-`Validated`** decision: imported trips are now born `Received`, and assign/unassign run `Received → Assigned` / `Assigned → Received`. The `trip_status` DB enum keeps all 18 physical members (Postgres has no `DROP VALUE`); the two removed values become **dormant** (retained only for immutable `trip_events` history) and a one-time data migration backfills any live trip off them. The separate `import_batch_status` enum (which also has `validated`) is untouched.
 - **Freight rate lookup (slice 016, 2026-07-13)**: NEW scope added on the product owner's request — an internal agregados spot-price table ("Tabela de Fretes", 13.14 / 15.13) searchable by route and one-way price, replaced wholesale by uploading the standard spreadsheet (Admin + Finance, mirroring the "Edit rates" precedent in Section 18). Deliberately separate from customer lane pricing (LANE-004): lane rates are contracted per customer; this table is agregado spot pricing maintained outside the system. Vehicle types are free-form labels from the sheet (not the fleet vehicle-type enum) so new labels never require a migration. The spreadsheet holds commercial data and must never enter the (public) repository — tests and seeds are synthetic.
 - **Trip cancellation exposure & Dispatcher "Limited" (slice 017, 2026-07-27)**: the §18 `Cancel trip` action ships in the UI on three surfaces — Trip Detail, the Dispatch board row, and the Control Tower table row — all driving the single justified flow (§19.5: reason + responsible party + billing impact; user and timestamp recorded server-side). The Dispatcher's **"Limited"** cell is defined as: a Dispatcher may cancel only trips still in the **dispatch phase** (`Received`, `Assigned`, `Confirmed`); Admin and Ops Manager may cancel any legally cancellable trip (§12.1). Cancellation is reachable ONLY through the dedicated cancellation flow — the generic status-update path refuses `Cancelled` as a target, closing a §19.5 bypass. Default pt-BR cancellation **reason** options are seeded as labeled scaffolding (billing impacts were already seeded per §19.5); the final lists remain config-driven with business sign-off pending.
+- **Driver CPF replaces e-mail** (slice 022, issue #28, 2026-07-28): the driver record captures **CPF** (optional, 11 digits, format check only — same posture as CNPJ) instead of e-mail, which the operation never used. The DB `email` column becomes **dormant** (kept with its data for history; no product surface reads it); a future cleanup migration may drop it once the business confirms. CPF uniqueness/check-digit validation deferred until the business asks.

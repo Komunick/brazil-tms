@@ -77,6 +77,20 @@ export const cnpjSchema = z
 
 const optionalCnpj = blankable(cnpjSchema);
 
+/**
+ * CPF — punctuated ("390.533.447-05") or bare digits only (FR-002). Strips ONLY the supported
+ * separators (dot/hyphen/space); any other character must FAIL the digit check below, never be
+ * silently discarded ("abc390.533.447-05xyz" is rejected, not coerced). Format check only — no
+ * check digits (R7 posture).
+ */
+export const cpfSchema = z
+  .string()
+  .trim()
+  .transform((s) => s.replace(/[.\-\s]/g, ""))
+  .pipe(z.string().regex(/^\d{11}$/, "CPF deve ter 11 dígitos."));
+
+const optionalCpf = blankable(cpfSchema);
+
 /** BR/Mercosul plate (R11): normalized to uppercase, hyphen/space stripped. */
 export const plateSchema = z
   .string()
@@ -300,7 +314,8 @@ export type UpdateLaneInput = z.infer<typeof updateLaneSchema>;
 const driverBase = z.object({
   name: nameSchema,
   phone: optionalText(40),
-  email: optionalEmail,
+  // Issue #28 [0005]: CPF replaced the driver e-mail; the DB `email` column is dormant.
+  cpf: optionalCpf,
   licenseNumber: optionalText(40),
   licenseCategory: optionalText(8),
   licenseExpiry: optionalDate,

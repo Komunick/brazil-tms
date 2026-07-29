@@ -71,6 +71,13 @@
       "when": 1783974019625,
       "tag": "0009_freight_rates",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785347688617,
+      "tag": "0010_sticky_monster_badoon",
+      "breakpoints": true
     }
   ]
 }
