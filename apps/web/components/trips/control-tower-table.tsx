@@ -37,7 +37,7 @@ import { TripFilters } from "@/components/trips/trip-filters";
 import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
 import { CancelTripDialog } from "@/components/trips/cancel-trip-dialog";
 import { canCancelTrip, type CancelScope } from "@/lib/trips/cancel-scope";
-import { useTripBoard, useTripBoardFilters } from "@/lib/trips/client";
+import { useFilterOptions, useTripBoard, useTripBoardFilters } from "@/lib/trips/client";
 
 /** Board `sort` values that map to a column header (R2 whitelist). */
 type SortKey = TripBoardQuery["sort"];
@@ -51,7 +51,7 @@ type SortKey = TripBoardQuery["sort"];
  * rendered as filterable/sortable columns here.
  */
 export function ControlTowerTable({
-  filterOptions,
+  filterOptions: initialFilterOptions,
   canAssign = false,
   cancelScope = "none",
 }: {
@@ -61,6 +61,8 @@ export function ControlTowerTable({
   /** 017 — how far this user's cancel permission reaches (§18); computed server-side. */
   cancelScope?: CancelScope;
 }) {
+  // 019 — keep filters + quick-assign pickers fresh on an open tab; server data seeds it.
+  const filterOptions = useFilterOptions(initialFilterOptions);
   const t = useTranslations("Trips");
   const tCommon = useTranslations("Common");
   const tVehicle = useTranslations("VehicleTypes");

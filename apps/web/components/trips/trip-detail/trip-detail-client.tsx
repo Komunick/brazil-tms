@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import type { TripFilterOptions } from "@brazil-tms/db";
-import { useTripDetail } from "@/lib/trips/client";
+import { useFilterOptions, useTripDetail } from "@/lib/trips/client";
 import { canCancelTrip, type CancelScope } from "@/lib/trips/cancel-scope";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,7 +31,7 @@ import { PlanEditForm } from "@/components/trips/plan-edit-form";
  */
 export function TripDetailClient({
   id,
-  resourceOptions,
+  resourceOptions: initialResourceOptions,
   cancelScope = "none",
 }: {
   id: string;
@@ -39,6 +39,8 @@ export function TripDetailClient({
   /** 017 — how far this user's cancel permission reaches (§18); computed server-side. */
   cancelScope?: CancelScope;
 }) {
+  // 019 — keep the assignment pickers fresh on an open tab (60s poll + focus refetch); server seed.
+  const resourceOptions = useFilterOptions(initialResourceOptions);
   const t = useTranslations("Trips.detail");
   const tCancel = useTranslations("Trips.cancel");
   const tCommon = useTranslations("Common");

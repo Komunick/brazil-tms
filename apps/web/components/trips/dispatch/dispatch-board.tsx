@@ -17,7 +17,7 @@ import {
 import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
 import { CancelTripDialog } from "@/components/trips/cancel-trip-dialog";
 import { canCancelTrip, type CancelScope } from "@/lib/trips/cancel-scope";
-import { useTripBoard } from "@/lib/trips/client";
+import { useFilterOptions, useTripBoard } from "@/lib/trips/client";
 
 /**
  * The Dispatch Board (006 US5, §15.6): the dispatcher's daily workspace — the unassigned-by-pickup
@@ -41,13 +41,15 @@ import { useTripBoard } from "@/lib/trips/client";
 const DISPATCH_QUERY = "assigned=false&status=received&sort=pickupStart";
 
 export function DispatchBoard({
-  resourceOptions,
+  resourceOptions: initialResourceOptions,
   cancelScope = "none",
 }: {
   resourceOptions: TripFilterOptions;
   /** 017 — how far this user's cancel permission reaches (§18); computed server-side. */
   cancelScope?: CancelScope;
 }) {
+  // 019 — keep the assign pickers fresh on an open tab (60s poll + focus refetch); server seed.
+  const resourceOptions = useFilterOptions(initialResourceOptions);
   const t = useTranslations("Dispatch");
   const tCancel = useTranslations("Trips.cancel");
   const board = useTripBoard(DISPATCH_QUERY);
