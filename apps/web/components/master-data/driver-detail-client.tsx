@@ -93,7 +93,7 @@ export function DriverDetailClient({ driverId, canArchive }: Props) {
     ? {
         name: current.name,
         phone: current.phone ?? "",
-        email: current.email ?? "",
+        cpf: current.cpf ?? "",
         licenseNumber: current.licenseNumber ?? "",
         licenseCategory: current.licenseCategory ?? "",
         licenseExpiry: current.licenseExpiry ?? "",

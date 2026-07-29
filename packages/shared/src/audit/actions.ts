@@ -80,6 +80,8 @@ export type AuditAction =
   | "rate.update"
   | "billing_item.update"
   | "billing.export"
+  // feature 016 — freight rate lookup: the replace-all sheet upload is the single mutation.
+  | "freight_rate.replace"
   // slice 025 — driver/vehicle registry attachments ("Documentos" tab, issue #32). Append-only:
   // one audit row per upload; there is no update/delete surface to audit.
   | "driver.document_upload"
@@ -160,6 +162,7 @@ export const ALL_AUDIT_ACTIONS = [
   "rate.update",
   "billing_item.update",
   "billing.export",
+  "freight_rate.replace",
   "driver.document_upload",
   "vehicle.document_upload",
 ] as const satisfies readonly AuditAction[];
