@@ -1333,6 +1333,7 @@
     "selectCarrier": "Selecione a transportadora (opcional)",
     "noTrailer": "Sem reboque",
     "noCarrier": "Sem transportadora",
+    "searchNoResults": "Nenhum resultado",
     "assignedBy": "Atribuída por",
     "assignedAt": "Atribuída em",
     "confirmedBy": "Confirmada por",

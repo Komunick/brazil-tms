@@ -67,26 +67,17 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/017-trip-cancellation/plan.md` (Trip Cancellation in Control Tower and Dispatch).
-For structure, contracts and manual verification read that plan plus its `research.md`, `data-model.md`,
-`contracts/trip-cancellation-api.md` and `quickstart.md`. **Exposure-only slice** for issue #24 [0001]: the slice-003
-cancellation domain (`cancelTrip` in `packages/db/src/trips/trip-cancellation.ts` — §19.5 five-input enforcement against
-config-driven `cancellation_options`, guarded update, `status_change` event, `trip.cancel` audit, terminal SLA recompute)
-is COMPLETE and TESTED but had no caller. Add: `POST /api/trips/[id]/cancel` (permission `cancel_trip`) +
-`GET /api/cancellation-options`; a single shared `CancelTripDialog` triggered from THREE surfaces (Trip Detail header,
-Dispatch board row, Control Tower table row); hooks `useCancelTrip`/`useCancellationOptions` (invalidate `["trips"]`);
-seed 6 default pt-BR `reason` rows (billing impacts already seeded; sign-off pending — FR-013). **Decisions (user,
-2026-07-27)**: Dispatcher's §18 "Limited" = may cancel only `received|assigned|confirmed` (new shared constant
-`DISPATCH_PHASE_TRIP_STATUSES`; enforced via `cancelTrip`'s new optional `allowedSourceStatuses` →
-409 `NOT_CANCELLABLE_BY_ROLE`; record in PRD §30); seed defaults now; all three surfaces. **Close the loophole (FR-008)**:
-`POST /api/trips/[id]/status` must refuse `toStatus:"cancelled"` (409 `USE_CANCELLATION_ENDPOINT`, mirroring
-`USE_ASSIGNMENT_ENDPOINT`); `disputed` on that route is OUT OF SCOPE — do not touch. The BFF IGNORES client-supplied
-`cancellationTimestamp` (server now(), FR-005). NO schema change/migration/new permission key; status machine untouched
-(`cancelled` edges already legal). `control_tower` role has NO `cancel_trip` — visibility via server-computed
-`cancelScope` (`any` admin/ops_manager · `dispatch_phase` dispatcher · `none`), AND-ed with
-`canTransition(status,"cancelled")`. Traps: `/api/reason-codes` serves EXCEPTION codes — a different table; do NOT reuse
-it for cancellation options. `CANCELLATION_NOT_CONFIGURED` remains a legal state (admins can deactivate rows) — dialog
-needs the FR-011 empty state.
+Active feature plan: `specs/018-searchable-resource-pickers/plan.md` (Searchable Resource Pickers — issue #25 [0002]).
+**Presentation-only slice**: the assignment form's 4 resource pickers (motorista/veículo/reboque/transportadora)
+and the Control Tower's 3 resource filters (assigned driver/vehicle/carrier — clarification 2026-07-27) become a
+single shared searchable combobox: NEW `apps/web/components/ui/searchable-select.tsx` (hand-rolled ARIA combobox —
+NO cmdk/popover dependency) + NEW `apps/web/lib/search-normalize.ts` (`normalizeForSearch(text, "text"|"plate")`:
+strip acentos, lowercase, collapse spaces; plate also strips hífen/espaço). Behavior: filter CONTAINS; texto exato
+que casa com UMA opção → auto-seleção (fluxo de colagem, FR-003); "Nenhum resultado"; ↑/↓/Enter/Esc; item de limpar
+fixo ("Sem reboque"/"Sem transportadora"/"Todos"). TRAPS: (1) write path intocável — valores continuam IDs; check de
+elegibilidade/override/assign idênticos (FR-007/SC-003); (2) os e2e existentes de dispatch dirigem o Select antigo e
+devem ser ATUALIZADOS para a interação de combobox e continuar verdes (são a rede de regressão); (3) sentinela
+`__all__` dos filtros = "sem filtro" — o item "Todos" mapeia para ele. Sem mudança de BFF/db/permissão/i18n-namespace.
 
 Previous slice (015) context, still load-bearing:
 This is a **corrective, cross-cutting** change to the trip status machine that **references** shipped slices 003 (status
