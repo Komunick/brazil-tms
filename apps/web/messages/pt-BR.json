@@ -1352,6 +1352,8 @@
     "boardEmpty": "Nenhuma viagem aguardando atribuição.",
     "boardLoadError": "Não foi possível carregar o quadro de expedição.",
     "queueTitle": "Fila de atribuição",
+    "searchPlaceholder": "Buscar por ID, cliente ou origem/destino",
+    "searchEmpty": "Nenhuma viagem na fila para \"{term}\".",
     "tripLabel": "Viagem",
     "noExternalId": "(sem ID externo)",
     "pickup": "Coleta",

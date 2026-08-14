@@ -1,19 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { formatDateTime } from "@brazil-tms/shared";
 import type { TripBoardRow, TripFilterOptions } from "@brazil-tms/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
 import { CancelTripDialog } from "@/components/trips/cancel-trip-dialog";
 import { canCancelTrip, type CancelScope } from "@/lib/trips/cancel-scope";
@@ -33,12 +29,19 @@ import { useFilterOptions, useTripBoard } from "@/lib/trips/client";
  * it offers can succeed (`received → assigned`). The validation states were collapsed into `received`,
  * which is now the first dispatchable status (slice 015 superseded slice 014's `status=validated` queue).
  *
+ * Queue search: a debounced box feeds the board's own server-side `q` (external trip id, customer,
+ * origin/destination — same matching the Control Tower uses), ANDed with the pinned queue filters, so
+ * searching never widens the queue beyond unassigned `received` trips.
+ *
  * 017 (issue #24): each row also offers "Cancelar viagem" for `cancelScope` holders (the queue is all
  * `received` ⊂ dispatch phase, so any non-`none` scope qualifies) — the shared CancelTripDialog; a
  * cancelled trip leaves the queue on the next poll/invalidation.
  */
 
 const DISPATCH_QUERY = "assigned=false&status=received&sort=pickupStart";
+
+/** How long the queue search waits after the last keystroke before hitting the board endpoint. */
+const SEARCH_DEBOUNCE_MS = 300;
 
 export function DispatchBoard({
   resourceOptions: initialResourceOptions,
@@ -52,7 +55,21 @@ export function DispatchBoard({
   const resourceOptions = useFilterOptions(initialResourceOptions);
   const t = useTranslations("Dispatch");
   const tCancel = useTranslations("Trips.cancel");
-  const board = useTripBoard(DISPATCH_QUERY);
+  const tCommon = useTranslations("Common");
+
+  // Queue search: what the user is typing, and the debounced term actually sent as `q` (the board's
+  // server-side search — external trip id, customer, origin/destination). Debounced so a typed id
+  // costs one request, not one per keystroke; the 30s poll keeps running on the filtered query.
+  const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setAppliedSearch(search.trim()), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const board = useTripBoard(
+    appliedSearch ? `${DISPATCH_QUERY}&q=${encodeURIComponent(appliedSearch)}` : DISPATCH_QUERY,
+  );
 
   // The trip whose assign dialog is open.
   const [assignRow, setAssignRow] = useState<TripBoardRow | null>(null);
@@ -66,7 +83,18 @@ export function DispatchBoard({
       <CardHeader>
         <CardTitle>{t("queueTitle")}</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-4">
+        <div className="max-w-sm">
+          <Input
+            id="dispatch-search"
+            type="search"
+            placeholder={t("searchPlaceholder")}
+            aria-label={tCommon("search")}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </div>
+
         {board.isLoading ? (
           <div className="space-y-3" aria-busy="true">
             <Skeleton className="h-16 w-full" />
@@ -78,7 +106,9 @@ export function DispatchBoard({
             {t("boardLoadError")}
           </p>
         ) : items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t("boardEmpty")}</p>
+          <p className="text-sm text-muted-foreground">
+            {appliedSearch ? t("searchEmpty", { term: appliedSearch }) : t("boardEmpty")}
+          </p>
         ) : (
           <ul className="space-y-3">
             {items.map((row) => (

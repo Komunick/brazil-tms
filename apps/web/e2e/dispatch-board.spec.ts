@@ -220,7 +220,9 @@ test.describe("US5 — Dispatch Board", () => {
     // Slice 015 (INVERTED, FR-006): the `status=received` queue INCLUDES a `received` trip — it is the
     // first dispatchable status, so its "Atribuir" succeeds (`received → assigned`). (Under slice 014's
     // validated-only queue this trip was EXCLUDED; the collapse flips that.)
-    await expect(page.getByRole("link", { name: receivedExternalId })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("link", { name: receivedExternalId })).toBeVisible({
+      timeout: 15_000,
+    });
 
     // The per-row assign action ("Atribuir") opens the shared assignment form dialog.
     const row = page.getByRole("listitem").filter({ hasText: unassignedExternalId });
@@ -229,6 +231,34 @@ test.describe("US5 — Dispatch Board", () => {
     await expect(dialog).toBeVisible();
     // The shared AssignmentForm exposes the driver picker (label "Motorista").
     await expect(dialog.getByText("Motorista", { exact: true })).toBeVisible();
+  });
+
+  test("the queue search narrows it by trip id and never widens it", async ({ page }) => {
+    await login(page, testAccounts.opsManager);
+    await page.goto("/dispatch");
+    await expect(page.getByText("Fila de atribuição")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("link", { name: unassignedExternalId })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Searching one queued id keeps it and drops the other queued trip.
+    const search = page.getByPlaceholder("Buscar por ID, cliente ou origem/destino");
+    await search.fill(unassignedExternalId);
+    await expect(page.getByRole("link", { name: unassignedExternalId })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByRole("link", { name: receivedExternalId })).toHaveCount(0);
+
+    // A term outside the queue matches nothing — the search is ANDed with the pinned queue filters,
+    // so it can never surface an assigned or non-`received` trip.
+    await search.fill("ZZZ-INEXISTENTE-000");
+    await expect(page.getByText(/Nenhuma viagem na fila para/)).toBeVisible({ timeout: 15_000 });
+
+    // Clearing restores the full queue.
+    await search.fill("");
+    await expect(page.getByRole("link", { name: receivedExternalId })).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   test("a complete assignment from the received queue succeeds (received → assigned) (slice 015)", async ({
@@ -268,9 +298,9 @@ test.describe("US5 — Control Tower assignment integration", () => {
     await page.goto("/trips");
 
     // The assignment row-indicator column header is present (fills 005 FR-007).
-    await expect(
-      page.getByRole("columnheader", { name: "Atribuição" }).first(),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("columnheader", { name: "Atribuição" }).first()).toBeVisible({
+      timeout: 15_000,
+    });
 
     // Apply the "Não atribuídas" (Unassigned) quick-view — sets ?assigned=false&scope=active. The same
     // label is used by the assigned tri-state filter AND the quick-view, so scope to the "Visões"
@@ -279,7 +309,9 @@ test.describe("US5 — Control Tower assignment integration", () => {
       .locator("div.space-y-1\\.5")
       .filter({ has: page.getByText("Visões", { exact: true }) });
     await viewsGroup.getByRole("button", { name: "Não atribuídas", exact: true }).click();
-    await page.waitForFunction(() => new URLSearchParams(location.search).get("assigned") === "false");
+    await page.waitForFunction(
+      () => new URLSearchParams(location.search).get("assigned") === "false",
+    );
 
     // The seeded unassigned trip shows in the narrowed list with the "Não atribuídas" row indicator
     // (the `assignedNo` label rendered by the assignment column for an unassigned row).
@@ -317,7 +349,9 @@ test.describe("US5 — Home Dashboard unassigned-trips widget", () => {
 
     // The unassigned widget's "Ver na Torre de Controle" deep-link is the ONLY one carrying the
     // Unassigned-view query (?assigned=false…); the other widget deep-links use different params.
-    const deepLink = page.locator('a[href*="assigned=false"]', { hasText: "Ver na Torre de Controle" });
+    const deepLink = page.locator('a[href*="assigned=false"]', {
+      hasText: "Ver na Torre de Controle",
+    });
     await expect(deepLink).toBeVisible();
     await expect(deepLink).toHaveAttribute("href", /assigned=false/);
   });
