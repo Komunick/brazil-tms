@@ -15,7 +15,12 @@ function env(name: string, fallback?: string): string {
 }
 
 export const testAccounts = {
-  /** Seeded first Admin (must_change_password=true on first login). */
+  /**
+   * The e2e Admin fixture (`db:seed:e2e`) — must_change_password=false so specs can sign straight
+   * in. The forced-change flow is covered by `tempPassword` below, never by this account. Point
+   * E2E_ADMIN_EMAIL at a dedicated address on any environment that also runs the bootstrap
+   * `db:seed`, whose Admin owes a real password change.
+   */
   admin: {
     email: env("E2E_ADMIN_EMAIL", "admin@braziltransports.com.br"),
     password: env("E2E_ADMIN_PASSWORD", "ChangeMe!Admin123"),

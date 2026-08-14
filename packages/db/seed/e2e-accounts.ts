@@ -64,23 +64,42 @@ async function ensureAuthUser(email: string, password: string): Promise<string> 
   throw new Error(`Could not create or find the GoTrue user for ${email}: ${created.error?.message ?? "?"}`);
 }
 
+/**
+ * The bootstrap Admin (`db:seed` / 001-admin.ts) is provisioned with a TEMPORARY password and
+ * must_change_password=true. It shares an e-mail with the admin fixture above by default
+ * (SEED_ADMIN_EMAIL=admin@braziltransports.com.br), so a blind overwrite here would silently clear
+ * that flag — the temp password then becomes permanent and the forced-change flow never triggers.
+ * This fixture therefore never DOWNGRADES the flag on the bootstrap Admin's existing profile.
+ */
+const bootstrapAdminEmail = process.env.SEED_ADMIN_EMAIL?.trim().toLowerCase();
+
 async function main(): Promise<void> {
   for (const account of ACCOUNTS) {
     const id = await ensureAuthUser(account.email, account.password);
+    const existing = await db.select().from(users).where(eq(users.id, id)).limit(1);
+
+    const isBootstrapAdmin = account.email.toLowerCase() === bootstrapAdminEmail;
+    const keepsForcedChange = isBootstrapAdmin && existing[0]?.mustChangePassword === true;
+    const mustChangePassword = keepsForcedChange ? true : account.mustChange;
+    if (keepsForcedChange && !account.mustChange) {
+      console.warn(
+        `warn: ${account.email} is the bootstrap Admin (SEED_ADMIN_EMAIL) and still owes a password change — keeping must_change_password=true. Sign in and set a real password, or use a separate e-mail for the e2e Admin.`,
+      );
+    }
+
     const values = {
       name: account.name,
       email: account.email,
       role: account.role,
       status: account.status,
-      mustChangePassword: account.mustChange,
+      mustChangePassword,
     };
-    const existing = await db.select().from(users).where(eq(users.id, id)).limit(1);
     if (existing[0]) {
       await db.update(users).set({ ...values, updatedAt: new Date() }).where(eq(users.id, id));
     } else {
       await db.insert(users).values({ id, ...values });
     }
-    console.log(`ok: ${account.email} ${account.role} ${account.status} mustChange=${account.mustChange}`);
+    console.log(`ok: ${account.email} ${account.role} ${account.status} mustChange=${mustChangePassword}`);
   }
 }
 

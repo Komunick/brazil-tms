@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { loginSchema, type LoginInput } from "@brazil-tms/shared";
+import { resolvePostLoginTarget } from "@/lib/auth/session-core";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,9 +43,7 @@ function LoginForm() {
 
       if (res.ok) {
         const json = (await res.json()) as { redirectTo: string };
-        const requested = searchParams.get("redirectTo");
-        const target =
-          requested && requested.startsWith("/") ? requested : json.redirectTo;
+        const target = resolvePostLoginTarget(searchParams.get("redirectTo"), json.redirectTo);
         router.push(target);
         router.refresh();
         return;
