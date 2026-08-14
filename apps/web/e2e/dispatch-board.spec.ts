@@ -237,11 +237,9 @@ test.describe("US5 — Dispatch Board", () => {
     await login(page, testAccounts.opsManager);
     await page.goto("/dispatch");
     await expect(page.getByText("Fila de atribuição")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("link", { name: unassignedExternalId })).toBeVisible({
-      timeout: 15_000,
-    });
 
-    // Searching one queued id keeps it and drops the other queued trip.
+    // Assert through the SEARCH, never through "is it on page 1": the queue paginates, so on an
+    // environment carrying a bulk-imported season the seeded rows sit pages deep.
     const search = page.getByPlaceholder("Buscar por ID, cliente ou origem/destino");
     await search.fill(unassignedExternalId);
     await expect(page.getByRole("link", { name: unassignedExternalId })).toBeVisible({
@@ -254,11 +252,67 @@ test.describe("US5 — Dispatch Board", () => {
     await search.fill("ZZZ-INEXISTENTE-000");
     await expect(page.getByText(/Nenhuma viagem na fila para/)).toBeVisible({ timeout: 15_000 });
 
-    // Clearing restores the full queue.
-    await search.fill("");
+    // The other queued trip is reachable by its own id.
+    await search.fill(receivedExternalId);
     await expect(page.getByRole("link", { name: receivedExternalId })).toBeVisible({
       timeout: 15_000,
     });
+  });
+
+  test("the queue paginates and reports the range it is showing", async ({ page }) => {
+    await login(page, testAccounts.opsManager);
+    await page.goto("/dispatch");
+    await expect(page.getByText("Fila de atribuição")).toBeVisible({ timeout: 15_000 });
+
+    // Volume-independent assertion: narrowing to ONE trip must summarise as "1–1 de 1" with both
+    // page buttons disabled (there is no page 0 and no page 2).
+    await page
+      .getByPlaceholder("Buscar por ID, cliente ou origem/destino")
+      .fill(unassignedExternalId);
+    await expect(page.getByText("1–1 de 1")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("button", { name: "Anterior" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Próxima" })).toBeDisabled();
+
+    // With the whole queue, the footer still reports a range (the counts depend on the environment).
+    await page.getByPlaceholder("Buscar por ID, cliente ou origem/destino").fill("");
+    await page.getByRole("button", { name: "Tudo", exact: true }).click();
+    await expect(page.getByText(/\d+–\d+ de \d+/)).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("the pickup-date filter narrows the queue and the presets drive it", async ({ page }) => {
+    await login(page, testAccounts.opsManager);
+    await page.goto("/dispatch");
+    await expect(page.getByText("Fila de atribuição")).toBeVisible({ timeout: 15_000 });
+
+    // Pin the queue to the seeded trip first: the date assertions must hold whatever else the
+    // environment carries (a bulk-imported season would push this row off page 1).
+    await page
+      .getByPlaceholder("Buscar por ID, cliente ou origem/destino")
+      .fill(unassignedExternalId);
+
+    // Its pickup is TODAY (BRT), so the default "de hoje em diante" already shows it.
+    const row = page.getByRole("link", { name: unassignedExternalId });
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    const from = page.locator("#dispatch-pickup-from");
+    const to = page.locator("#dispatch-pickup-to");
+    await expect(from).not.toHaveValue("");
+
+    // A window that closed years ago cannot contain it (the search term stays applied, so the
+    // "no trips for <term>" message is the one that renders).
+    await from.fill("2020-01-01");
+    await to.fill("2020-01-02");
+    await expect(row).toHaveCount(0, { timeout: 15_000 });
+
+    // "Tudo" clears both bounds and brings it back.
+    await page.getByRole("button", { name: "Tudo", exact: true }).click();
+    await expect(from).toHaveValue("");
+    await expect(to).toHaveValue("");
+    await expect(row).toBeVisible({ timeout: 15_000 });
+
+    // "Hoje" pins both ends to the same BRT day — the seeded trip qualifies.
+    await page.getByRole("button", { name: "Hoje", exact: true }).click();
+    await expect(from).toHaveValue(await to.inputValue());
+    await expect(row).toBeVisible({ timeout: 15_000 });
   });
 
   test("a complete assignment from the received queue succeeds (received → assigned) (slice 015)", async ({

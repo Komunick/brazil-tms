@@ -62,6 +62,15 @@ export function dayRangeSaoPaulo(date: string | Date): { from: string; to: strin
 }
 
 /**
+ * Today in São Paulo as `yyyy-MM-dd`, optionally shifted by whole days — the shape every date-range
+ * board filter and `<input type="date">` speaks. Computed in the business zone so a request made
+ * after 21:00 BRT (already "tomorrow" in UTC) still says today.
+ */
+export function saoPauloDate(offsetDays = 0): string {
+  return DateTime.now().setZone(APP_TIME_ZONE).plus({ days: offsetDays }).toISODate() ?? "";
+}
+
+/**
  * Format an integer amount of centavos as BRL currency (pt-BR).
  * Monetary amounts are stored as integer centavos; no money is displayed in feature 001 —
  * this helper exists for later features (FR-022).

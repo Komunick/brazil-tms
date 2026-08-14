@@ -1354,6 +1354,15 @@
     "queueTitle": "Fila de atribuição",
     "searchPlaceholder": "Buscar por ID, cliente ou origem/destino",
     "searchEmpty": "Nenhuma viagem na fila para \"{term}\".",
+    "pickupFrom": "Coleta de",
+    "pickupTo": "até",
+    "dateEmpty": "Nenhuma viagem na fila no período selecionado.",
+    "datePreset": {
+      "today": "Hoje",
+      "next7": "Próximos 7 dias",
+      "fromToday": "De hoje em diante",
+      "all": "Tudo"
+    },
     "tripLabel": "Viagem",
     "noExternalId": "(sem ID externo)",
     "pickup": "Coleta",

@@ -1,10 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { DateTime } from "luxon";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import { APP_TIME_ZONE } from "@brazil-tms/shared";
+import { saoPauloDate } from "@brazil-tms/shared";
 import type { DashboardSummary } from "@brazil-tms/db";
 import { useDashboardSummary } from "@/lib/trips/client";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
@@ -65,12 +64,14 @@ function TripsTodayCard({ byStatus }: { byStatus: DashboardSummary["tripsTodayBy
   const t = useTranslations("Trips.dashboard");
   // The count is over today's São Paulo pickup window, so the deep-link must carry the SAME BRT day
   // (pickupFrom=pickupTo=today) — otherwise it would show all trips of that status, not today's.
-  const today = DateTime.now().setZone(APP_TIME_ZONE).toISODate() ?? "";
+  const today = saoPauloDate();
 
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{t("tripsToday")}</CardTitle>
+        <CardTitle className="text-sm font-medium text-muted-foreground">
+          {t("tripsToday")}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         {byStatus.length === 0 ? (
@@ -169,7 +170,12 @@ export function DashboardWidgets() {
     metric("activeExceptions", summary.activeExceptions, (n) => n, exceptionsHref),
     metric("onTimePickup", summary.onTimePickupPct, pct),
     metric("onTimeArrival", summary.onTimeArrivalPct, pct),
-    metric("completedMissingDocuments", summary.completedMissingDocuments, (n) => n, missingDocsHref),
+    metric(
+      "completedMissingDocuments",
+      summary.completedMissingDocuments,
+      (n) => n,
+      missingDocsHref,
+    ),
   ];
 
   return (

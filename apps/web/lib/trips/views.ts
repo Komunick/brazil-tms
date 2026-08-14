@@ -1,5 +1,4 @@
-import { DateTime } from "luxon";
-import { APP_TIME_ZONE } from "@brazil-tms/shared";
+import { saoPauloDate } from "@brazil-tms/shared";
 
 /**
  * Default Control Tower board views (feature 005). Each view is a named preset that produces a flat
@@ -26,15 +25,9 @@ export interface TripBoardView {
   params: () => Record<string, string>;
 }
 
-/** Today (BRT), as `yyyy-MM-dd`. */
-function today(): string {
-  return DateTime.now().setZone(APP_TIME_ZONE).toISODate() ?? "";
-}
-
-/** Tomorrow (BRT), as `yyyy-MM-dd`. */
-function tomorrow(): string {
-  return DateTime.now().setZone(APP_TIME_ZONE).plus({ days: 1 }).toISODate() ?? "";
-}
+/** Today / tomorrow (BRT) as `yyyy-MM-dd` — the shared helper owns the timezone arithmetic. */
+const today = (): string => saoPauloDate();
+const tomorrow = (): string => saoPauloDate(1);
 
 export const DEFAULT_TRIP_VIEWS: TripBoardView[] = [
   {
