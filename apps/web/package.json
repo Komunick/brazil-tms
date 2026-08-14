@@ -11,7 +11,6 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.115.0",
     "@brazil-tms/db": "workspace:*",
     "@brazil-tms/shared": "workspace:*",
     "@hookform/resolvers": "^3.9.0",
