@@ -78,18 +78,47 @@ export const cnpjSchema = z
 const optionalCnpj = blankable(cnpjSchema);
 
 /**
- * CPF — punctuated ("390.533.447-05") or bare digits only (FR-002). Strips ONLY the supported
- * separators (dot/hyphen/space); any other character must FAIL the digit check below, never be
- * silently discarded ("abc390.533.447-05xyz" is rejected, not coerced). Format check only — no
- * check digits (R7 posture).
+ * Check digits (dígitos verificadores) of an 11-digit CPF, mod-11 as defined by the Receita Federal.
+ * Repdigits ("111.111.111-11") satisfy the arithmetic but are never issued, so they are rejected.
+ */
+const hasValidCpfCheckDigits = (digits: string): boolean => {
+  if (/^(\d)\1{10}$/.test(digits)) return false;
+  const checkDigit = (upTo: number): number => {
+    let sum = 0;
+    for (let i = 0; i < upTo; i += 1) sum += Number(digits[i]) * (upTo + 1 - i);
+    const remainder = (sum * 10) % 11;
+    return remainder === 10 ? 0 : remainder;
+  };
+  return checkDigit(9) === Number(digits[9]) && checkDigit(10) === Number(digits[10]);
+};
+
+/**
+ * CPF — digits only; a pasted punctuated value ("390.533.447-05") is normalized. Strips ONLY the
+ * supported separators (dot/hyphen/space); any other character must FAIL the digit check below,
+ * never be silently discarded ("abc390.533.447-05xyz" is rejected, not coerced). Beyond the format,
+ * the check digits are verified (issue: "CPF tem que estar autenticado") — a well-formed but
+ * non-existent number is refused.
  */
 export const cpfSchema = z
   .string()
   .trim()
   .transform((s) => s.replace(/[.\-\s]/g, ""))
-  .pipe(z.string().regex(/^\d{11}$/, "CPF deve ter 11 dígitos."));
+  .pipe(z.string().regex(/^\d{11}$/, "CPF deve ter 11 dígitos."))
+  .refine(hasValidCpfCheckDigits, "CPF inválido.");
 
 const optionalCpf = blankable(cpfSchema);
+
+/**
+ * Telefone — digits only, DDD required: 10 (fixo) or 11 (celular). A pasted formatted number
+ * ("(11) 99999-8888") is normalized; letters or stray symbols fail rather than being discarded.
+ */
+export const phoneSchema = z
+  .string()
+  .trim()
+  .transform((s) => s.replace(/[()\-\s.]/g, ""))
+  .pipe(z.string().regex(/^\d{10,11}$/, "Telefone deve ter 10 ou 11 dígitos (com DDD)."));
+
+const optionalPhone = blankable(phoneSchema);
 
 /**
  * Renavam — basic format check only (R7 posture): digits after stripping punctuation, 9–11
@@ -111,9 +140,7 @@ export const chassisSchema = z
   .trim()
   .transform((s) => s.toUpperCase().replace(/[\s-]/g, ""))
   .pipe(
-    z
-      .string()
-      .regex(/^[A-HJ-NPR-Z0-9]{17}$/, "Chassi inválido (17 caracteres, sem I, O ou Q)."),
+    z.string().regex(/^[A-HJ-NPR-Z0-9]{17}$/, "Chassi inválido (17 caracteres, sem I, O ou Q)."),
   );
 
 const optionalChassis = blankable(chassisSchema);
@@ -125,16 +152,39 @@ export const plateSchema = z
   .min(1, "Informe a placa.")
   .transform((s) => s.toUpperCase().replace(/[\s-]/g, ""))
   .pipe(
-    z
-      .string()
-      .regex(/^[A-Z]{3}[0-9][0-9A-Z][0-9]{2}$/, "Placa inválida (formato BR/Mercosul)."),
+    z.string().regex(/^[A-Z]{3}[0-9][0-9A-Z][0-9]{2}$/, "Placa inválida (formato BR/Mercosul)."),
   );
 
 /** Brazilian state (UF) — closed 2-letter set. */
 export const ufSchema = z.enum(
   [
-    "AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG",
-    "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO",
+    "AC",
+    "AL",
+    "AP",
+    "AM",
+    "BA",
+    "CE",
+    "DF",
+    "ES",
+    "GO",
+    "MA",
+    "MT",
+    "MS",
+    "MG",
+    "PA",
+    "PB",
+    "PR",
+    "PE",
+    "PI",
+    "RJ",
+    "RN",
+    "RS",
+    "RO",
+    "RR",
+    "SC",
+    "SP",
+    "SE",
+    "TO",
   ],
   { errorMap: () => ({ message: "UF inválida." }) },
 );
@@ -153,7 +203,10 @@ export const dateStringSchema = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida (use AAAA-MM-DD).");
 const optionalDate = blankable(dateStringSchema);
 
-export const latitudeSchema = z.number().min(-90, "Latitude inválida.").max(90, "Latitude inválida.");
+export const latitudeSchema = z
+  .number()
+  .min(-90, "Latitude inválida.")
+  .max(90, "Latitude inválida.");
 export const longitudeSchema = z
   .number()
   .min(-180, "Longitude inválida.")
@@ -331,7 +384,9 @@ const LANE_DEGENERATE_REFINE = {
 export const createLaneSchema = laneBase.refine(laneNotDegenerate, LANE_DEGENERATE_REFINE);
 export type CreateLaneInput = z.infer<typeof createLaneSchema>;
 
-export const updateLaneSchema = laneBase.partial().refine(laneNotDegenerate, LANE_DEGENERATE_REFINE);
+export const updateLaneSchema = laneBase
+  .partial()
+  .refine(laneNotDegenerate, LANE_DEGENERATE_REFINE);
 export type UpdateLaneInput = z.infer<typeof updateLaneSchema>;
 
 // ---------------------------------------------------------------------------
@@ -340,7 +395,8 @@ export type UpdateLaneInput = z.infer<typeof updateLaneSchema>;
 
 const driverBase = z.object({
   name: nameSchema,
-  phone: optionalText(40),
+  // Digits only, DDD required — the driver phone is a dial target for dispatch, not free text.
+  phone: optionalPhone,
   // Issue #28 [0005]: CPF replaced the driver e-mail; the DB `email` column is dormant.
   cpf: optionalCpf,
   licenseNumber: optionalText(40),

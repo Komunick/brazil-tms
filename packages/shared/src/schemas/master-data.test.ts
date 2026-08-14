@@ -164,6 +164,16 @@ describe("ownership/carrier invariant (US3/US4)", () => {
       }).success,
     ).toBe(false);
 
+    // Check digits are verified: 11 digits with a wrong DV, or a repdigit, are not a real CPF.
+    expect(
+      createDriverSchema.safeParse({ name: "João", ownershipType: "owned", cpf: "39053344700" })
+        .success,
+    ).toBe(false);
+    expect(
+      createDriverSchema.safeParse({ name: "João", ownershipType: "owned", cpf: "11111111111" })
+        .success,
+    ).toBe(false);
+
     const cleared = updateDriverSchema.parse({ cpf: "" });
     expect(cleared.cpf).toBeNull();
     const absent = updateDriverSchema.parse({ name: "João" });
@@ -177,6 +187,39 @@ describe("ownership/carrier invariant (US3/US4)", () => {
     });
     expect(withEmail.success).toBe(true);
     if (withEmail.success) expect("email" in withEmail.data).toBe(false);
+  });
+
+  it("driver: phone keeps digits only, DDD required (10–11); blank clears", () => {
+    const formatted = createDriverSchema.safeParse({
+      name: "João",
+      ownershipType: "owned",
+      phone: "(11) 99999-8888",
+    });
+    expect(formatted.success).toBe(true);
+    if (formatted.success) expect(formatted.data.phone).toBe("11999998888");
+
+    const landline = createDriverSchema.safeParse({
+      name: "João",
+      ownershipType: "owned",
+      phone: "1133334444",
+    });
+    expect(landline.success).toBe(true);
+
+    // Missing DDD, and letters around an otherwise-valid number, both fail.
+    expect(
+      createDriverSchema.safeParse({ name: "João", ownershipType: "owned", phone: "999998888" })
+        .success,
+    ).toBe(false);
+    expect(
+      createDriverSchema.safeParse({
+        name: "João",
+        ownershipType: "owned",
+        phone: "ramal 11999998888",
+      }).success,
+    ).toBe(false);
+
+    expect(updateDriverSchema.parse({ phone: "" }).phone).toBeNull();
+    expect("phone" in updateDriverSchema.parse({ name: "João" })).toBe(false);
   });
 
   it("vehicle: Renavam strips punctuation (9–11 digits); chassi normalizes to VIN-17; ANTT free text (issue #30)", () => {
@@ -220,9 +263,9 @@ describe("ownership/carrier invariant (US3/US4)", () => {
     expect(createVehicleSchema.safeParse({ ...base, chassis: "9BWZZZ377VT00425" }).success).toBe(
       false,
     );
-    expect(
-      createVehicleSchema.safeParse({ ...base, chassis: "IBWZZZ377VT004251" }).success,
-    ).toBe(false);
+    expect(createVehicleSchema.safeParse({ ...base, chassis: "IBWZZZ377VT004251" }).success).toBe(
+      false,
+    );
 
     // Blank clears; absent stays omitted (the blankable update contract).
     const cleared = updateVehicleSchema.parse({ renavam: "", chassis: "", anttNumber: "" });
@@ -295,12 +338,12 @@ describe("update schemas — clear vs absent (P2/P1 fixes)", () => {
 describe("carrier schema (US4)", () => {
   it("requires name; validates contract/documentation status sets", () => {
     expect(createCarrierSchema.safeParse({ name: "Transportes X" }).success).toBe(true);
-    expect(
-      createCarrierSchema.safeParse({ name: "X", contractStatus: "active" }).success,
-    ).toBe(true);
-    expect(
-      createCarrierSchema.safeParse({ name: "X", contractStatus: "frozen" }).success,
-    ).toBe(false);
+    expect(createCarrierSchema.safeParse({ name: "X", contractStatus: "active" }).success).toBe(
+      true,
+    );
+    expect(createCarrierSchema.safeParse({ name: "X", contractStatus: "frozen" }).success).toBe(
+      false,
+    );
     expect(
       createCarrierSchema.safeParse({ name: "X", documentationStatus: "complete" }).success,
     ).toBe(true);

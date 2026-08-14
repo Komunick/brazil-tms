@@ -1,6 +1,6 @@
 "use client";
 
-import { useForm, useWatch, type Resolver } from "react-hook-form";
+import { useForm, useWatch, type Resolver, type UseFormRegisterReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { createDriverSchema, type CreateDriverInput } from "@brazil-tms/shared";
@@ -20,6 +20,20 @@ export interface DriverFormProps {
   submitLabel?: string;
   onSubmit: (values: CreateDriverInput) => void;
   onCancel: () => void;
+}
+
+/**
+ * Numeric-only field: strips every non-digit as the user types (and on paste, so a copied
+ * "390.533.447-05" / "(11) 99999-8888" lands normalized) before react-hook-form reads the event.
+ */
+function registerDigits(registration: UseFormRegisterReturn): UseFormRegisterReturn {
+  return {
+    ...registration,
+    onChange: (event: { target: { value?: string } }) => {
+      event.target.value = (event.target.value ?? "").replace(/\D/g, "");
+      return registration.onChange(event);
+    },
+  };
 }
 
 /** Create/edit form for a driver (US3). Validates with the shared `createDriverSchema`. */
@@ -74,10 +88,21 @@ export function DriverForm({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label={t("phone")} htmlFor="phone" error={fieldMessage(errors.phone)}>
-          <Input id="phone" {...register("phone")} />
+          <Input
+            id="phone"
+            inputMode="numeric"
+            autoComplete="tel"
+            placeholder="11999998888"
+            {...registerDigits(register("phone"))}
+          />
         </Field>
         <Field label={t("cpf")} htmlFor="cpf" error={fieldMessage(errors.cpf)}>
-          <Input id="cpf" inputMode="numeric" placeholder="000.000.000-00" {...register("cpf")} />
+          <Input
+            id="cpf"
+            inputMode="numeric"
+            placeholder="00000000000"
+            {...registerDigits(register("cpf"))}
+          />
         </Field>
       </div>
 

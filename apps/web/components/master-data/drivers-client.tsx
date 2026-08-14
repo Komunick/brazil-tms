@@ -23,6 +23,7 @@ import {
   MasterDataError,
   useEntityList,
 } from "@/lib/master-data/client";
+import { normalizeForSearch } from "@/lib/search-normalize";
 import type { DriverDto } from "@/lib/master-data/drivers-service";
 
 export function DriversClient({ canArchive }: { canArchive: boolean }) {
@@ -74,11 +75,15 @@ export function DriversClient({ canArchive }: { canArchive: boolean }) {
 
   const rows = query.data ?? [];
   const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase();
+    // Name matches accent-insensitively; the phone is stored as bare digits, so the typed term is
+    // compared by ITS digits — "(11) 99999" still finds 11999998888.
+    const term = normalizeForSearch(search);
     if (!term) return rows;
+    const digits = normalizeForSearch(search, "digits");
     return rows.filter(
       (d) =>
-        d.name.toLowerCase().includes(term) || (d.phone ?? "").toLowerCase().includes(term),
+        normalizeForSearch(d.name).includes(term) ||
+        (digits.length > 0 && (d.phone ?? "").includes(digits)),
     );
   }, [rows, search]);
 

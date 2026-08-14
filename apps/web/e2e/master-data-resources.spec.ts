@@ -59,18 +59,23 @@ test.describe("US3 — Resources (drivers, vehicles, trailers)", () => {
     await expect(dialog.getByLabel("E-mail")).toHaveCount(0);
 
     await dialog.getByLabel("Nome", { exact: true }).fill(name);
+    // CPF and phone accept digits only: the punctuation is stripped as the value is typed/pasted.
     await dialog.getByLabel("CPF", { exact: true }).fill("390.533.447-05");
+    await expect(dialog.getByLabel("CPF", { exact: true })).toHaveValue("39053344705");
+    await dialog.getByLabel("Telefone", { exact: true }).fill("(11) 99999-8888");
+    await expect(dialog.getByLabel("Telefone", { exact: true })).toHaveValue("11999998888");
     await dialog.getByRole("button", { name: "Criar motorista" }).click();
 
     await expect(page.getByRole("row", { name: new RegExp(name) })).toBeVisible();
 
-    // The punctuated CPF was normalized to 11 digits and round-trips into the edit form.
+    // The normalized CPF/phone round-trip into the edit form.
     await page
       .getByRole("row", { name: new RegExp(name) })
       .getByRole("link", { name: "Editar" })
       .click();
     await page.waitForURL((url) => url.pathname.startsWith("/resources/drivers/"));
     await expect(page.getByLabel("CPF", { exact: true })).toHaveValue("39053344705");
+    await expect(page.getByLabel("Telefone", { exact: true })).toHaveValue("11999998888");
   });
 
   test("admin creates an owned vehicle; a past document expiry shows 'Vencido'", async ({
