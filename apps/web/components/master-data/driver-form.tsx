@@ -23,14 +23,19 @@ export interface DriverFormProps {
 }
 
 /**
- * Numeric-only field: strips every non-digit as the user types (and on paste, so a copied
- * "390.533.447-05" / "(11) 99999-8888" lands normalized) before react-hook-form reads the event.
+ * Numeric-only field: strips every non-digit and caps the length as the user types (and on paste,
+ * so a copied "390.533.447-05" / "(11) 99999-8888" lands normalized) before react-hook-form reads
+ * the event. The cap is applied AFTER stripping — an HTML `maxLength` would instead truncate a
+ * pasted punctuated CPF to "390.533.447" and lose the last digits.
  */
-function registerDigits(registration: UseFormRegisterReturn): UseFormRegisterReturn {
+function registerDigits(
+  registration: UseFormRegisterReturn,
+  maxDigits: number,
+): UseFormRegisterReturn {
   return {
     ...registration,
     onChange: (event: { target: { value?: string } }) => {
-      event.target.value = (event.target.value ?? "").replace(/\D/g, "");
+      event.target.value = (event.target.value ?? "").replace(/\D/g, "").slice(0, maxDigits);
       return registration.onChange(event);
     },
   };
@@ -93,7 +98,7 @@ export function DriverForm({
             inputMode="numeric"
             autoComplete="tel"
             placeholder="11999998888"
-            {...registerDigits(register("phone"))}
+            {...registerDigits(register("phone"), 11)}
           />
         </Field>
         <Field label={t("cpf")} htmlFor="cpf" error={fieldMessage(errors.cpf)}>
@@ -101,7 +106,7 @@ export function DriverForm({
             id="cpf"
             inputMode="numeric"
             placeholder="00000000000"
-            {...registerDigits(register("cpf"))}
+            {...registerDigits(register("cpf"), 11)}
           />
         </Field>
       </div>
