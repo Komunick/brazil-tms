@@ -10,11 +10,7 @@ import {
   locations,
   statusMappings,
 } from "@brazil-tms/db";
-import {
-  VEHICLE_TYPE_VALUES,
-  type MappedRow,
-  type ValidatePayload,
-} from "@brazil-tms/shared";
+import { normalizeVehicleType, type MappedRow, type ValidatePayload } from "@brazil-tms/shared";
 import { setBatchStatus } from "../../lib/batch-progress";
 import { JOB, enqueue, work } from "../../lib/queue";
 
@@ -58,11 +54,6 @@ const REQUIRABLE_FIELDS = new Set<keyof MappedRow>([
   "plannedPalletCount",
   "plannedRouteNotes",
 ]);
-
-/** Case-insensitive normalized lookup of the `vehicle_type` enum members. */
-const VEHICLE_TYPE_BY_LOWER = new Map<string, string>(
-  VEHICLE_TYPE_VALUES.map((v) => [v.toLowerCase(), v]),
-);
 
 /** Parse a jsonb date field (ISO string after round-trip) back to a Date; null when absent/invalid. */
 function toDate(value: unknown): Date | null {
@@ -189,10 +180,11 @@ async function validateRow(
     reasons,
   );
 
-  // vehicle type: case-insensitive map to the fixed enum; unmappable = warning (never blocks).
+  // vehicle type: mapped through the shared pt-BR vocabulary (accents, "3/4", a trailing " - EX"
+  // qualifier); unmappable = warning (never blocks).
   const vehicleRaw = mapped.plannedVehicleType;
   if (!isBlank(vehicleRaw)) {
-    const matched = VEHICLE_TYPE_BY_LOWER.get(String(vehicleRaw).trim().toLowerCase());
+    const matched = normalizeVehicleType(String(vehicleRaw));
     if (matched) {
       mapped.plannedVehicleType = matched;
     } else {
