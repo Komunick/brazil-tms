@@ -22,6 +22,22 @@ describe("normalizeForSearch — text mode (names)", () => {
   });
 });
 
+describe("normalizeForSearch — digits mode (phones)", () => {
+  it("keeps digits only, whatever decoration the term carries", () => {
+    for (const raw of ["(11) 99999-8888", "11 99999 8888", "+55 11 99999-8888 "]) {
+      expect(normalizeForSearch(raw, "digits")).toContain("11999998888");
+    }
+  });
+
+  it("a partial term stays a prefix of the stored phone (substring search)", () => {
+    expect("11999998888".includes(normalizeForSearch("(11) 99999", "digits"))).toBe(true);
+  });
+
+  it("returns empty for a term with no digit (caller then searches the name only)", () => {
+    expect(normalizeForSearch("João", "digits")).toBe("");
+  });
+});
+
 describe("normalizeForSearch — plate mode", () => {
   it("ignores case, hyphens, and spaces", () => {
     for (const raw of ["ABC-1234", "abc 1234", "abc1234", " AbC-12 34 "]) {
@@ -30,8 +46,6 @@ describe("normalizeForSearch — plate mode", () => {
   });
 
   it("distinguishes plates that differ by one character (SC-002)", () => {
-    expect(normalizeForSearch("RTA1B23", "plate")).not.toBe(
-      normalizeForSearch("RTA1B24", "plate"),
-    );
+    expect(normalizeForSearch("RTA1B23", "plate")).not.toBe(normalizeForSearch("RTA1B24", "plate"));
   });
 });

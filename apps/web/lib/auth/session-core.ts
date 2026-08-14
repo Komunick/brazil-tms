@@ -67,6 +67,21 @@ export function isOnboardingIncomplete(user: SessionUser): boolean {
   return user.mustChangePassword || user.status === "pending";
 }
 
+/** The password flow the BFF forces an onboarding-incomplete user into (FR-013a). */
+export const SET_PASSWORD_PATH = "/auth/set-password";
+
+/**
+ * Where to send the browser after a successful sign-in. The server's target wins whenever it is the
+ * forced password flow — a `?redirectTo=` left over from the middleware's login bounce must NEVER
+ * skip the forced change. Otherwise honour the requested path, restricted to same-origin absolute
+ * paths (`//evil.com` and `https://…` are rejected as open redirects).
+ */
+export function resolvePostLoginTarget(requested: string | null, serverTarget: string): string {
+  if (serverTarget === SET_PASSWORD_PATH) return serverTarget;
+  if (requested && requested.startsWith("/") && !requested.startsWith("//")) return requested;
+  return serverTarget;
+}
+
 export type AccessDecision = "allow" | "redirect_login" | "redirect_set_password";
 
 /**

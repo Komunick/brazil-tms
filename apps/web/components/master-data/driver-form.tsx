@@ -1,11 +1,10 @@
 "use client";
 
-import { useForm, useWatch, type Resolver } from "react-hook-form";
+import { useForm, useWatch, type Resolver, type UseFormRegisterReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { createDriverSchema, type CreateDriverInput } from "@brazil-tms/shared";
 import { Input } from "@/components/ui/input";
-import { DocumentReadButton } from "@/components/master-data/document-read-button";
 import { EntityFormShell, Field } from "@/components/master-data/entity-form";
 import {
   ExpiryDateField,
@@ -21,6 +20,25 @@ export interface DriverFormProps {
   submitLabel?: string;
   onSubmit: (values: CreateDriverInput) => void;
   onCancel: () => void;
+}
+
+/**
+ * Numeric-only field: strips every non-digit and caps the length as the user types (and on paste,
+ * so a copied "390.533.447-05" / "(11) 99999-8888" lands normalized) before react-hook-form reads
+ * the event. The cap is applied AFTER stripping — an HTML `maxLength` would instead truncate a
+ * pasted punctuated CPF to "390.533.447" and lose the last digits.
+ */
+function registerDigits(
+  registration: UseFormRegisterReturn,
+  maxDigits: number,
+): UseFormRegisterReturn {
+  return {
+    ...registration,
+    onChange: (event: { target: { value?: string } }) => {
+      event.target.value = (event.target.value ?? "").replace(/\D/g, "").slice(0, maxDigits);
+      return registration.onChange(event);
+    },
+  };
 }
 
 /** Create/edit form for a driver (US3). Validates with the shared `createDriverSchema`. */
@@ -69,35 +87,27 @@ export function DriverForm({
       onCancel={onCancel}
       onSubmit={handleSubmit((values) => onSubmit(values))}
     >
-      {/* 021 (issue #29) — CNH read prefills the mapped fields for REVIEW; saving stays manual. */}
-      <DocumentReadButton
-        docType="cnh"
-        fieldLabels={{
-          name: t("name"),
-          licenseNumber: t("licenseNumber"),
-          licenseCategory: t("licenseCategory"),
-          licenseExpiry: t("licenseExpiry"),
-        }}
-        onExtracted={(fields) => {
-          for (const [key, value] of Object.entries(fields)) {
-            setValue(key as "name" | "licenseNumber" | "licenseCategory" | "licenseExpiry", value, {
-              shouldDirty: true,
-              shouldValidate: true,
-            });
-          }
-        }}
-      />
-
       <Field label={t("name")} htmlFor="name" required error={fieldMessage(errors.name)}>
         <Input id="name" {...register("name")} />
       </Field>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label={t("phone")} htmlFor="phone" error={fieldMessage(errors.phone)}>
-          <Input id="phone" {...register("phone")} />
+          <Input
+            id="phone"
+            inputMode="numeric"
+            autoComplete="tel"
+            placeholder="11999998888"
+            {...registerDigits(register("phone"), 11)}
+          />
         </Field>
         <Field label={t("cpf")} htmlFor="cpf" error={fieldMessage(errors.cpf)}>
-          <Input id="cpf" inputMode="numeric" placeholder="000.000.000-00" {...register("cpf")} />
+          <Input
+            id="cpf"
+            inputMode="numeric"
+            placeholder="00000000000"
+            {...registerDigits(register("cpf"), 11)}
+          />
         </Field>
       </div>
 

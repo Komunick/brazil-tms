@@ -1,0 +1,7 @@
+# Shell scripts run inside Linux containers (e.g. infra/supabase/initdb/*.sh, executed by the
+# Postgres entrypoint). With core.autocrlf=true a Windows checkout writes CRLF and the container
+# fails with `/bin/bash^M: bad interpreter`. Pin them to LF regardless of host settings.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.Dockerfile text eol=lf
+*.Caddyfile text eol=lf

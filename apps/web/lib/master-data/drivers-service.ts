@@ -11,6 +11,7 @@ import {
 } from "@brazil-tms/shared";
 import { writeAudit } from "@/lib/audit/write-audit";
 import { Conflict } from "@/lib/api/respond";
+import { normalizeForSearch } from "@/lib/search-normalize";
 
 /**
  * Driver master-data service (US3/US4; data-model §4, contract §Drivers). Mirrors the customers
@@ -132,8 +133,13 @@ export async function listDrivers(opts: ListDriversOptions = {}): Promise<Driver
   if (opts.carrierId) filters.push(eq(drivers.carrierId, opts.carrierId));
   if (opts.ownership) filters.push(eq(drivers.ownershipType, opts.ownership));
   if (opts.q && opts.q.trim().length > 0) {
-    const term = `%${opts.q.trim()}%`;
-    filters.push(or(ilike(drivers.name, term), ilike(drivers.phone, term)));
+    const raw = opts.q.trim();
+    const conditions = [ilike(drivers.name, `%${raw}%`)];
+    // Phones are stored as bare digits, so the typed term is matched by ITS digits — "(11) 99999"
+    // still finds 11999998888. A term with no digit at all searches the name only.
+    const digits = normalizeForSearch(raw, "digits");
+    if (digits.length > 0) conditions.push(ilike(drivers.phone, `%${digits}%`));
+    filters.push(or(...conditions));
   }
   const rows = await db
     .select()

@@ -78,6 +78,7 @@ const CASES: Case[] = [
   { key: "delete_archive", name: "archive customer", method: "DELETE", path: `/api/master-data/customers/${FAKE}`, holder: "admin", nonHolder: "dispatcher" },
   { key: "manage_users", name: "create user", method: "POST", path: "/api/admin/users", holder: "admin", nonHolder: "finance" },
   { key: "manage_users", name: "update user", method: "PATCH", path: `/api/admin/users/${FAKE}`, holder: "admin", nonHolder: "finance" },
+  { key: "manage_users", name: "delete user", method: "DELETE", path: `/api/admin/users/${FAKE}`, holder: "admin", nonHolder: "finance" },
 ];
 
 async function apiLogin(request: APIRequestContext, account: { email: string; password: string }) {

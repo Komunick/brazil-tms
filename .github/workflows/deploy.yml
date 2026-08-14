@@ -1,0 +1,25 @@
+name: Deploy
+
+on:
+  push:
+    branches: [dev, main]
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-dev:
+    if: github.ref == 'refs/heads/dev'
+    runs-on: self-hosted
+    steps:
+      - name: Deploy tmsdev
+        run: bash /home/ubuntu/komunick/repos/brazil-tms/deploy.sh
+
+  deploy-prod:
+    if: github.ref == 'refs/heads/main'
+    runs-on: self-hosted
+    environment: production
+    steps:
+      - name: Deploy tms (producao)
+        run: bash /opt/brazil-tms/deploy.sh
