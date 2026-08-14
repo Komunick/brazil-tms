@@ -25,6 +25,10 @@ const PT = {
   duplicateEmail: "Já existe um usuário com esse e-mail.",
   lastAdminGuard: "Não é possível desativar ou rebaixar o último administrador ativo.",
   notPending: "O usuário não está pendente.",
+  delete: "Excluir",
+  deleteConfirm: "Excluir definitivamente",
+  userDeleted: "Usuário excluído.",
+  userHasHistory: "Este usuário já possui histórico no sistema. Desative-o em vez de excluir.",
 } as const;
 
 /** Sign in through the login form and land on the authenticated shell. */
@@ -170,6 +174,90 @@ test.describe("US3 — Users & Roles administration", () => {
     });
     await page.getByRole("button", { name: PT.createUser }).click();
     await expect(page.getByText(PT.duplicateEmail)).toBeVisible();
+  });
+});
+
+test.describe("US3 — deleting a user (profile + login)", () => {
+  test("admin deletes a user that never acted", async ({ page }) => {
+    await login(page, testAccounts.admin.email, testAccounts.admin.password);
+    await page.goto(routes.adminUsers);
+
+    const email = uniqueEmail("delete-me");
+    await fillCreateForm(page, { name: "Excluir Teste", email, method: "invite" });
+    await page.getByRole("button", { name: PT.createUser }).click();
+
+    const row = page.getByRole("row", { name: new RegExp(email) });
+    await expect(row).toBeVisible();
+
+    await row.getByRole("button", { name: PT.delete }).click();
+    await page.getByRole("dialog").getByRole("button", { name: PT.deleteConfirm }).click();
+
+    await expect(page.getByText(PT.userDeleted)).toBeVisible();
+    await expect(page.getByRole("row", { name: new RegExp(email) })).toHaveCount(0);
+  });
+
+  test("deleting yourself is rejected (API)", async ({ request }) => {
+    const ctx = await loginViaApi(request, testAccounts.admin.email, testAccounts.admin.password);
+    const list = await ctx.get("/api/admin/users");
+    const { users } = (await list.json()) as { users: Array<{ id: string; email: string }> };
+    const self = users.find((u) => u.email === testAccounts.admin.email);
+    expect(self).toBeTruthy();
+
+    const res = await ctx.delete(`/api/admin/users/${self!.id}`);
+    expect(res.status()).toBe(409);
+    const body = (await res.json()) as { error: { code: string } };
+    expect(body.error.code).toBe("SELF_DELETE");
+  });
+
+  test("a user who has acted cannot be deleted — only disabled (UI + API)", async ({
+    browser,
+    page,
+    request,
+  }) => {
+    // Give a disposable user real history: they sign in and create a driver, which writes an audit
+    // row with them as the actor — the FK that makes the hard delete impossible.
+    const adminCtx = await loginViaApi(
+      request,
+      testAccounts.admin.email,
+      testAccounts.admin.password,
+    );
+    const email = uniqueEmail("has-history");
+    const password = "TempPass!2026";
+    const created = await adminCtx.post("/api/admin/users", {
+      data: {
+        name: "Com Histórico",
+        email,
+        role: "fleet_coordinator",
+        onboarding: { method: "temp_password", tempPassword: password },
+      },
+    });
+    expect(created.status()).toBe(201);
+
+    const userContext = await browser.newContext();
+    const userPage = await userContext.newPage();
+    await login(userPage, email, password);
+    if (userPage.url().includes("/auth/set-password")) {
+      await userPage.getByLabel("Nova senha").fill("NewPass!2026");
+      await userPage.getByLabel("Confirmar senha").fill("NewPass!2026");
+      await userPage.getByRole("button", { name: "Salvar senha" }).click();
+      await userPage.waitForURL((url) => !url.pathname.includes("/auth/set-password"));
+    }
+    const driver = await userPage.request.post("/api/master-data/drivers", {
+      data: { name: `Motorista Histórico ${Date.now()}`, ownershipType: "owned" },
+    });
+    expect(driver.ok()).toBeTruthy();
+    await userContext.close();
+
+    // The admin's delete is refused with the "disable instead" reason, and the row survives.
+    await login(page, testAccounts.admin.email, testAccounts.admin.password);
+    await page.goto(routes.adminUsers);
+    const row = page.getByRole("row", { name: new RegExp(email) });
+    await row.getByRole("button", { name: PT.delete }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("button", { name: PT.deleteConfirm }).click();
+    await expect(dialog.getByText(PT.userHasHistory)).toBeVisible();
+    await dialog.getByRole("button", { name: "Cancelar" }).click();
+    await expect(row).toBeVisible();
   });
 });
 

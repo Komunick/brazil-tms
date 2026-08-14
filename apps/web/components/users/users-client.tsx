@@ -83,6 +83,9 @@ export function UsersClient() {
   const [createError, setCreateError] = useState<string | null>(null);
   const [rowError, setRowError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
+  /** The row awaiting delete confirmation (null = dialog closed), plus its last error. */
+  const [deleteTarget, setDeleteTarget] = useState<UserProfile | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const usersQuery = useQuery({
     queryKey: ["admin-users"],
@@ -153,6 +156,43 @@ export function UsersClient() {
     },
   });
 
+  /** Delete-specific 409s; anything else falls back to the shared mapping. */
+  function messageForDeleteCode(code: string | undefined): string {
+    switch (code) {
+      case "USER_HAS_HISTORY":
+        return t("userHasHistory");
+      case "SELF_DELETE":
+        return t("selfDelete");
+      case "LAST_ADMIN_GUARD":
+        return t("lastAdminDeleteGuard");
+      case "NOT_FOUND":
+        return t("notFound");
+      default:
+        return messageForCode(code);
+    }
+  }
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string): Promise<void> => {
+      const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await readApiError(res);
+        throw new Error(err?.code ?? "save_failed");
+      }
+    },
+    onSuccess: () => {
+      setDeleteTarget(null);
+      setDeleteError(null);
+      setRowError(null);
+      setFeedback(t("userDeleted"));
+      void queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+    // The dialog stays open so the reason (history, last admin, self) is read next to the action.
+    onError: (error: Error) => {
+      setDeleteError(messageForDeleteCode(error.message));
+    },
+  });
+
   const inviteMutation = useMutation({
     mutationFn: async (id: string): Promise<void> => {
       const res = await fetch(`/api/admin/users/${id}/invite`, { method: "POST" });
@@ -180,7 +220,7 @@ export function UsersClient() {
     );
   }, [rows, search]);
 
-  const pending = updateMutation.isPending || inviteMutation.isPending;
+  const pending = updateMutation.isPending || inviteMutation.isPending || deleteMutation.isPending;
 
   return (
     <div className="space-y-6">
@@ -321,6 +361,17 @@ export function UsersClient() {
                           {t("resendInvite")}
                         </Button>
                       ) : null}
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={pending}
+                        onClick={() => {
+                          setDeleteError(null);
+                          setDeleteTarget(user);
+                        }}
+                      >
+                        {t("delete")}
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -342,6 +393,55 @@ export function UsersClient() {
             onCancel={() => setCreateOpen(false)}
             onSubmit={(input) => createMutation.mutate(input)}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("deleteTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("deleteDescription", {
+                name: deleteTarget?.name ?? "",
+                email: deleteTarget?.email ?? "",
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{t("deleteHint")}</p>
+          {deleteError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {deleteError}
+            </p>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                setDeleteTarget(null);
+                setDeleteError(null);
+              }}
+            >
+              {tCommon("cancel")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteMutation.isPending}
+              onClick={() => {
+                if (deleteTarget) deleteMutation.mutate(deleteTarget.id);
+              }}
+            >
+              {t("deleteConfirm")}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

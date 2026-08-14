@@ -272,6 +272,93 @@ export async function updateUser(
   return profile;
 }
 
+/** Postgres foreign-key-violation SQLSTATE — a user still referenced by operational history. */
+const PG_FK_VIOLATION = "23503";
+
+function isForeignKeyViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === PG_FK_VIOLATION
+  );
+}
+
+/**
+ * Delete a user outright — the `public.users` profile AND the GoTrue identity behind it.
+ *
+ * Only for cadastros that never acted (a mistyped invite, a wrong e-mail). Constitution III forbids
+ * hard-deleting auditable records, and every history table (audit_logs, trip_events, documents,
+ * assignments…) references `users.id` with the default RESTRICT — so the profile DELETE simply
+ * fails with 23503 for anyone with history, which we surface as `409 USER_HAS_HISTORY` pointing at
+ * "Desativar". Deleting yourself or the last active admin is refused up front.
+ *
+ * Order matters: the profile row goes first (inside the tx, so the FK guard runs and the audit row
+ * is written atomically), and only after the commit is the auth identity removed — the reverse
+ * would destroy the login of a user we then discover we must keep.
+ */
+export async function deleteUser(id: string, actorUserId: string): Promise<void> {
+  const currentRows = await db.select().from(users).where(eq(users.id, id)).limit(1);
+  const current = currentRows[0];
+  if (!current) throw new Conflict("NOT_FOUND", "Usuário não encontrado.");
+
+  if (id === actorUserId) {
+    throw new Conflict("SELF_DELETE", "Você não pode excluir o próprio usuário.");
+  }
+
+  try {
+    await db.transaction(async (tx) => {
+      if (current.role === "admin" && current.status === "active") {
+        const otherActiveAdmins = await tx
+          .select({ id: users.id })
+          .from(users)
+          .where(and(eq(users.role, "admin"), eq(users.status, "active"), ne(users.id, id)))
+          .for("update");
+        if (otherActiveAdmins.length === 0) {
+          throw new Conflict(
+            "LAST_ADMIN_GUARD",
+            "Não é possível excluir o último administrador ativo.",
+          );
+        }
+      }
+
+      await tx.delete(users).where(eq(users.id, id));
+
+      // `entity_id` is a plain uuid (no FK), so this row outlives the profile it describes.
+      await writeAudit(tx, {
+        entityType: "user",
+        entityId: id,
+        action: "user.delete",
+        previousValue: {
+          name: current.name,
+          email: current.email,
+          role: current.role,
+          status: current.status,
+        },
+        newValue: null,
+        actorUserId,
+      });
+    });
+  } catch (error) {
+    if (isForeignKeyViolation(error)) {
+      throw new Conflict(
+        "USER_HAS_HISTORY",
+        "Este usuário já possui histórico no sistema. Desative-o em vez de excluir.",
+      );
+    }
+    throw error;
+  }
+
+  // Profile gone: drop the login too. Best-effort — a leftover auth identity cannot sign in, since
+  // the session check resolves the profile row that no longer exists.
+  try {
+    const admin = createSupabaseAdminClient();
+    await admin.auth.admin.deleteUser(id);
+  } catch (authError) {
+    console.error("Failed to delete GoTrue identity for user:", id, authError);
+  }
+}
+
 /** Re-send the invite email for a still-pending user (FR-013). */
 export async function resendInvite(
   id: string,
