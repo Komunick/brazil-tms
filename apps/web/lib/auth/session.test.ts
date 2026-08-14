@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  SET_PASSWORD_PATH,
   decideAccess,
   evaluateProfile,
   isOnboardingIncomplete,
+  resolvePostLoginTarget,
   toUserStatus,
   type ProfileRow,
   type SessionResult,
@@ -115,5 +117,27 @@ describe("decideAccess — must_change_password gating (FR-013a)", () => {
       user: { ...baseProfile, status: "pending", mustChangePassword: false },
     };
     expect(decideAccess(pending, { isPasswordFlowRoute: true })).toBe("allow");
+  });
+});
+
+describe("resolvePostLoginTarget — the forced password change wins (FR-013a)", () => {
+  it("a leftover ?redirectTo= never skips the forced password flow", () => {
+    expect(resolvePostLoginTarget("/trips", SET_PASSWORD_PATH)).toBe(SET_PASSWORD_PATH);
+  });
+
+  it("honours the requested path for a user who owes no password change", () => {
+    expect(resolvePostLoginTarget("/trips", "/")).toBe("/trips");
+  });
+
+  it("falls back to the server target when nothing was requested", () => {
+    expect(resolvePostLoginTarget(null, "/")).toBe("/");
+  });
+
+  it("rejects an absolute URL (open redirect)", () => {
+    expect(resolvePostLoginTarget("https://evil.example/x", "/")).toBe("/");
+  });
+
+  it("rejects a protocol-relative URL (open redirect)", () => {
+    expect(resolvePostLoginTarget("//evil.example/x", "/")).toBe("/");
   });
 });

@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { loginSchema } from "@brazil-tms/shared";
 import { db, users } from "@brazil-tms/db";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { SET_PASSWORD_PATH } from "@/lib/auth/session-core";
 import { apiError, handleRouteError } from "@/lib/api/respond";
 
 export const dynamic = "force-dynamic";
@@ -48,7 +49,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       await db.update(users).set({ lastLoginAt: now }).where(eq(users.id, profile.id));
     }
 
-    const redirectTo = profile.mustChangePassword ? "/auth/set-password" : "/";
+    const redirectTo = profile.mustChangePassword ? SET_PASSWORD_PATH : "/";
     return NextResponse.json({ redirectTo });
   } catch (error) {
     return handleRouteError(error);
