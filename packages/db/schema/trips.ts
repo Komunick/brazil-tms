@@ -14,11 +14,7 @@ import type { TripStatus } from "@brazil-tms/shared";
 import { customers } from "./customers";
 import { locations } from "./locations";
 import { lanes } from "./lanes";
-import {
-  cancellationResponsibleParty,
-  tripStatus,
-  vehicleType,
-} from "./enums";
+import { cancellationResponsibleParty, tripStatus, vehicleType } from "./enums";
 
 /**
  * Durable trip — the operations system-of-record (data-model §1; TRIP-006, TRIP-007,
@@ -67,6 +63,14 @@ export const trips = pgTable(
     // `sla_reasons` is the schema's first `.array()` column (text[]). Both written atomically.
     slaReasons: text("sla_reasons").array(),
     originalPlan: jsonb("original_plan").notNull(),
+    /**
+     * Columns the customer's file carries that the TMS has no field for — region, request type,
+     * checklist, CT-e… Kept as `{ rótulo: valor }` so a new column in next week's spreadsheet shows
+     * up on the trip WITHOUT a migration (Constitution V: customer variation is config, not code).
+     * Display-only by design: anything the operation needs to FILTER on gets promoted to a real
+     * column instead. Written by the import (`customer.*` template targets); never by hand.
+     */
+    customerFields: jsonb("customer_fields"),
     plannedPickupWindowStart: timestamp("planned_pickup_window_start", { withTimezone: true }),
     plannedPickupWindowEnd: timestamp("planned_pickup_window_end", { withTimezone: true }),
     plannedDeliveryWindowStart: timestamp("planned_delivery_window_start", { withTimezone: true }),
@@ -86,10 +90,7 @@ export const trips = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    check(
-      "trips_origin_dest_ck",
-      sql`${table.originLocationId} <> ${table.destinationLocationId}`,
-    ),
+    check("trips_origin_dest_ck", sql`${table.originLocationId} <> ${table.destinationLocationId}`),
     // feature 007 — validate sla_status to the four risk states (D4 — text + CHECK, no enum).
     check(
       "trips_sla_status_ck",

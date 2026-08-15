@@ -10,14 +10,17 @@ import {
   updateTripPlan,
   writeAudit,
 } from "@brazil-tms/db";
-import {
-  createTripSchema,
-  type ConfirmPayload,
-  type TripPlanFields,
-} from "@brazil-tms/shared";
+import { createTripSchema, type ConfirmPayload, type TripPlanFields } from "@brazil-tms/shared";
 import { setBatchCounts, setBatchStatus } from "../../lib/batch-progress";
 import { JOB, work } from "../../lib/queue";
 import { runGenerateErrorReport } from "../generate-error-report";
+import {
+  buildResourceIndex,
+  hasResourceRequest,
+  linkResources,
+  resourceRequestFrom,
+  type ResourceIndex,
+} from "./resources";
 
 /**
  * T033 — `import.confirm` job (data-model R8; contract §C/§A). Per row best-effort + idempotent: for
@@ -66,9 +69,7 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 /** The plan-only subset of the parsed create input (what `updateTripPlan` accepts). */
-function planChangesFrom(
-  input: ReturnType<typeof createTripSchema.parse>,
-): TripPlanFields {
+function planChangesFrom(input: ReturnType<typeof createTripSchema.parse>): TripPlanFields {
   return {
     plannedPickupWindowStart: input.plannedPickupWindowStart ?? null,
     plannedPickupWindowEnd: input.plannedPickupWindowEnd ?? null,
@@ -96,6 +97,21 @@ async function findExistingTrip(
   return rows[0] ?? null;
 }
 
+/**
+ * Collect the `customer.<rótulo>` targets the engine stored on the mapped row into the jsonb bag
+ * kept on the trip. Returns null when the template maps none, so trips from other customers keep a
+ * null column instead of an empty object.
+ */
+function customerFieldsFrom(mapped: Record<string, unknown>): Record<string, string> | null {
+  const fields: Record<string, string> = {};
+  for (const [key, value] of Object.entries(mapped)) {
+    if (!key.startsWith("customer.")) continue;
+    if (value === null || value === undefined || String(value).trim() === "") continue;
+    fields[key.slice("customer.".length)] = String(value).trim();
+  }
+  return Object.keys(fields).length ? fields : null;
+}
+
 export async function runConfirm(payload: ConfirmPayload): Promise<void> {
   const { batchId, actorUserId } = payload;
   await setBatchStatus(batchId, "confirming");
@@ -112,12 +128,16 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
     .select()
     .from(importRows)
     .where(
-      and(
-        eq(importRows.importBatchId, batchId),
-        inArray(importRows.outcome, ["valid", "warning"]),
-      ),
+      and(eq(importRows.importBatchId, batchId), inArray(importRows.outcome, ["valid", "warning"])),
     )
     .orderBy(asc(importRows.rowNumber));
+
+  // Registry snapshot for the resource linking below — read once, not per row.
+  const needsResources = pending.some((row) =>
+    hasResourceRequest(resourceRequestFrom((row.mapped ?? {}) as Record<string, unknown>)),
+  );
+  const resourceIndex: ResourceIndex | null = needsResources ? await buildResourceIndex() : null;
+  const linkTally = { assigned: 0, blocked: 0, unresolved: 0 };
 
   for (const row of pending) {
     if (row.appliedAt != null) continue; // idempotency guard: already applied
@@ -182,6 +202,55 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
           ? await findExistingTrip(batch.customerId, externalTripId)
           : null;
         targetTripId = existing?.id ?? null;
+      }
+
+      // The columns the customer's file carries that the TMS has no field for (região, solicitação,
+      // CT-e…) ride along on the trip so they show on its screen — display-only, no migration per
+      // column. Written after the plan write so it applies to created and updated trips alike.
+      const customerFields = customerFieldsFrom(mapped);
+      if (targetTripId && customerFields) {
+        await db
+          .update(trips)
+          .set({ customerFields, updatedAt: new Date() })
+          .where(eq(trips.id, targetTripId));
+      }
+
+      // Link the resources the schedule already names (driver / tractor / trailer). Never fatal to
+      // the row: the trip exists either way, and what could not be linked is reported.
+      const outcome =
+        targetTripId && resourceIndex
+          ? await linkResources(
+              targetTripId,
+              resourceRequestFrom(mapped),
+              resourceIndex,
+              actorUserId,
+              batch.fileName,
+            )
+          : null;
+      if (outcome?.status === "assigned") linkTally.assigned++;
+      if (outcome?.status === "blocked" || outcome?.status === "unresolved") {
+        if (outcome.status === "blocked") linkTally.blocked++;
+        else linkTally.unresolved++;
+        const priorReasons = Array.isArray(row.reasons)
+          ? (row.reasons as { code: string; field?: string; message: string }[])
+          : [];
+        await db
+          .update(importRows)
+          .set({
+            reasons: [
+              ...priorReasons,
+              outcome.status === "blocked"
+                ? {
+                    code: "ASSIGNMENT_BLOCKED",
+                    message: `Recursos não vinculados: ${outcome.detail}`,
+                  }
+                : {
+                    code: "RESOURCE_NOT_FOUND",
+                    message: `Recursos não vinculados — sem cadastro: ${outcome.missing.join(", ")}.`,
+                  },
+            ],
+          })
+          .where(eq(importRows.id, row.id));
       }
 
       await db
@@ -264,7 +333,9 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
     entityId: batchId,
     action: "import.confirm",
     previousValue: null,
-    newValue: { createdCount, updatedCount, errorCount },
+    // The link tallies ride on the same audit row: how many trips the file itself resourced, and how
+    // many it could not (blocked by the eligibility rules, or naming a resource with no registry).
+    newValue: { createdCount, updatedCount, errorCount, ...linkTally },
     actorUserId,
   });
 }

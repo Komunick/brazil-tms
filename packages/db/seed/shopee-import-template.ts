@@ -37,6 +37,7 @@ const SHEET = { name: "SHOPEE", header: 1 };
  * trip PLAN, and resource assignment is a separate slice.
  */
 const COLUMN_MAPPINGS = [
+  // --- the trip plan --------------------------------------------------------------------------
   { source: "LH", target: "externalTripId", required: true },
   { source: "ESTAÇÃO ORIGEM", target: "originCode", required: true },
   { source: "ESTAÇÃO DESTINO", target: "destinationCode", required: true },
@@ -44,6 +45,21 @@ const COLUMN_MAPPINGS = [
   { source: "CPT ORIGEM", target: "plannedPickupWindowEnd" },
   { source: "ETA DESTINO", target: "plannedDeliveryWindowStart" },
   { source: "PERFIL", target: "plannedVehicleType" },
+  // --- who runs it: linked on confirm against the registry (`resource.*`) ----------------------
+  // The CPF column is a VLOOKUP into the MOTORISTAS tab and usually exports empty, so the NAME is
+  // the working key — the same one the spreadsheet itself matches on. CPF is kept for when it does
+  // come filled: it disambiguates two drivers who share a name.
+  { source: "MOTORISTA", target: "resource.driverName" },
+  { source: "CPF", target: "resource.driverCpf" },
+  { source: "CAVALO", target: "resource.vehiclePlate" },
+  { source: "CARRETA", target: "resource.trailerPlate" },
+  // --- the customer's own columns: shown on the trip, no field of their own (`customer.*`) ------
+  { source: "REGIÃO", target: "customer.Região" },
+  { source: "SOLICITAÇÃO", target: "customer.Solicitação" },
+  { source: "CHECKLIST", target: "customer.Checklist" },
+  { source: "SM RASTER", target: "customer.SM Raster" },
+  { source: "CTE", target: "customer.CT-e" },
+  // DOCA, STATUS and STATUS VIAGEM stay out by decision (2026-08-14): the trip lifecycle is the TMS's.
 ];
 
 const PARSING_RULES = {

@@ -48,6 +48,21 @@ export function AssignmentPanel({
           )}
         </section>
 
+        {/* Customer's own columns, straight from the imported file (display-only) ---------- */}
+        {trip.customerFields && Object.keys(trip.customerFields).length > 0 ? (
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold">{t("customerFields")}</h3>
+            <div className="rounded-md border p-3">
+              <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {Object.entries(trip.customerFields).map(([label, value]) => (
+                  <Field key={label} label={label} value={value} />
+                ))}
+              </dl>
+            </div>
+            <p className="text-xs text-muted-foreground">{t("customerFieldsHint")}</p>
+          </section>
+        ) : null}
+
         {/* Assign / reassign / confirm / unassign form ----------------------------------- */}
         {canAssign ? (
           <section className="space-y-2">

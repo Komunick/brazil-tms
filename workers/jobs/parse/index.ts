@@ -2,12 +2,7 @@ import { parse as parseCsv } from "csv-parse/sync";
 import ExcelJS from "exceljs";
 import type { PgBoss } from "pg-boss";
 import { and, eq } from "drizzle-orm";
-import {
-  db,
-  importBatches,
-  importRows,
-  importTemplates,
-} from "@brazil-tms/db";
+import { db, importBatches, importRows, importTemplates } from "@brazil-tms/db";
 import { downloadObject } from "@brazil-tms/db/storage";
 import {
   applyTemplate,
@@ -17,11 +12,7 @@ import {
   type ParsePayload,
   type TemplateConfig,
 } from "@brazil-tms/shared";
-import {
-  setBatchFailed,
-  setBatchStatus,
-  setBatchTotalRows,
-} from "../../lib/batch-progress";
+import { setBatchFailed, setBatchStatus, setBatchTotalRows } from "../../lib/batch-progress";
 import { JOB, enqueue, work } from "../../lib/queue";
 
 /**
@@ -72,19 +63,35 @@ function parseCsvBytes(bytes: Buffer): ParsedRecord[] {
   return rows.map((raw, index) => ({ rowNumber: index + 1, raw }));
 }
 
-/** Stringify an ExcelJS cell value to the same string shape the engine expects from CSV. */
-function cellToString(value: ExcelJS.CellValue): string {
+/**
+ * Stringify an ExcelJS cell value to the same string shape the engine expects from CSV.
+ *
+ * An INVALID date reads as empty, never as the literal "Invalid Date". Real workbooks carry cells
+ * typed as date that hold no usable date — a text column left with a date format, or a formula whose
+ * cached result is a broken date. Stringifying those blindly wrote "Invalid Date" into the imported
+ * data (seen on the Shopee `REGIÃO` column); empty is the honest reading, and the row's required
+ * fields still catch it when the column mattered.
+ */
+export function cellToString(value: ExcelJS.CellValue): string {
   if (value === null || value === undefined) return "";
-  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? "" : value.toISOString();
   if (typeof value === "object") {
     const obj = value as unknown as Record<string, unknown>;
     // ExcelJS rich-text / hyperlink / formula result shapes.
     if (typeof obj.text === "string") return obj.text;
-    if ("result" in obj && obj.result != null) return String(obj.result);
     if (Array.isArray((obj as { richText?: unknown }).richText)) {
       return (obj as { richText: { text: string }[] }).richText.map((r) => r.text).join("");
     }
+    // A formula cell: its cached result, or EMPTY when the export saved none — never the object
+    // itself. Google Sheets and "save as" routinely drop cached values, and stringifying the wrapper
+    // would write "[object Object]" into the imported data.
+    if ("formula" in obj || "sharedFormula" in obj) {
+      return obj.result == null ? "" : cellToString(obj.result as ExcelJS.CellValue);
+    }
+    if ("result" in obj && obj.result != null) return cellToString(obj.result as ExcelJS.CellValue);
     if (typeof obj.hyperlink === "string") return obj.hyperlink;
+    // An unrecognized object shape is not data: better empty than "[object Object]".
+    return "";
   }
   return String(value);
 }

@@ -200,17 +200,21 @@ describe("pt-BR messages", () => {
 
   // ---- slice 013 — predefined import template (FR-007 / FR-012) -----------------------------------
 
-  it("Imports has the provisional notice and the dead template strings are gone", () => {
+  it("Imports has the provisional notice and the template picker strings (INVERTED)", () => {
     const imports = (messages as { Imports: Record<string, unknown> }).Imports;
     // FR-007: the always-visible provisional banner copy.
     expect(typeof imports.provisionalNotice).toBe("string");
     expect(imports.provisionalNotice).not.toBe("");
-    // FR-012: the template control was removed → its orphaned strings must be deleted.
-    expect(imports.template).toBeUndefined();
+    // INVERTED (2026-08-15): 004 shipped the picker hidden and this test asserted its strings were
+    // gone. The picker is back because the input is now the CUSTOMER's own workbook — the standard
+    // format stays the default, offered as one of the options.
+    for (const key of ["template", "templateStandard", "templateHint"]) {
+      expect(typeof imports[key], `Imports.${key}`).toBe("string");
+      expect(imports[key]).not.toBe("");
+    }
+    // Still dead: the strings of the OLD control (a required picker with its own empty state).
     expect(imports.selectTemplate).toBeUndefined();
     expect(imports.noTemplates).toBeUndefined();
-    // The rewritten subtitle no longer names "o modelo de importação".
-    expect(imports.uploadSubtitle).not.toMatch(/modelo/i);
   });
 
   it("Imports.expectedColumns covers every standard-format column (download + panel guidance)", () => {

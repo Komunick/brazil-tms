@@ -116,6 +116,8 @@ export type TripDetailView = TripDetail & {
   destinationName: string;
   laneLabel: string | null;
   importBatchId: string | null;
+  /** Columns the customer's file carries that the TMS has no field for — display-only (see `trips`). */
+  customerFields: Record<string, string> | null;
 };
 
 export interface DashboardSummary {
@@ -509,6 +511,7 @@ export async function getTripDetailView(id: string): Promise<TripDetailView | nu
       destinationName: destLoc.name,
       laneId: trips.laneId,
       importBatchId: trips.importBatchId,
+      customerFields: trips.customerFields,
     })
     .from(trips)
     .leftJoin(customers, eq(trips.customerId, customers.id))
@@ -529,6 +532,7 @@ export async function getTripDetailView(id: string): Promise<TripDetailView | nu
     destinationName: row.destinationName ?? "",
     laneLabel: row.laneId ? `${row.originCode ?? ""} → ${row.destinationCode ?? ""}` : null,
     importBatchId: row.importBatchId,
+    customerFields: (row.customerFields as Record<string, string> | null) ?? null,
   };
 }
 
@@ -559,85 +563,85 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
     arrivalPct,
     missingDocs,
   ] = await Promise.all([
-      db
-        .select({ status: trips.currentStatus, value: count() })
-        .from(trips)
-        .where(
-          and(
-            gte(trips.plannedPickupWindowStart, new Date(from)),
-            lt(trips.plannedPickupWindowStart, new Date(to)),
-          ),
-        )
-        .groupBy(trips.currentStatus),
-      db.select({ value: count() }).from(trips).where(eq(trips.currentStatus, "billing_pending")),
-      // Active trips with NO current assignment (006 — fills the "unassigned trips" widget).
-      db
-        .select({ value: count() })
-        .from(trips)
-        .where(
-          and(
-            inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
-            sql`NOT EXISTS (
+    db
+      .select({ status: trips.currentStatus, value: count() })
+      .from(trips)
+      .where(
+        and(
+          gte(trips.plannedPickupWindowStart, new Date(from)),
+          lt(trips.plannedPickupWindowStart, new Date(to)),
+        ),
+      )
+      .groupBy(trips.currentStatus),
+    db.select({ value: count() }).from(trips).where(eq(trips.currentStatus, "billing_pending")),
+    // Active trips with NO current assignment (006 — fills the "unassigned trips" widget).
+    db
+      .select({ value: count() })
+      .from(trips)
+      .where(
+        and(
+          inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
+          sql`NOT EXISTS (
               SELECT 1 FROM ${tripAssignments}
               WHERE ${tripAssignments.tripId} = ${trips.id} AND ${tripAssignments.isCurrent}
             )`,
-          ),
         ),
-      // Feature 007 — active trips at SLA risk (at_risk|late|breached); terminal stale values excluded.
-      db
-        .select({ value: count() })
-        .from(trips)
-        .where(
-          and(
-            inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
-            inArray(trips.slaStatus, ["at_risk", "late", "breached"]),
-          ),
+      ),
+    // Feature 007 — active trips at SLA risk (at_risk|late|breached); terminal stale values excluded.
+    db
+      .select({ value: count() })
+      .from(trips)
+      .where(
+        and(
+          inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
+          inArray(trips.slaStatus, ["at_risk", "late", "breached"]),
         ),
-      // Feature 007 — open/monitoring exceptions across all trips.
-      db
-        .select({ value: count() })
-        .from(exceptions)
-        .where(inArray(exceptions.status, ["open", "monitoring"])),
-      // Feature 007/009 — on-time pickup %: trips (planned pickup in the last 30 days, window known)
-      // that recorded an origin arrival within the planned pickup window. NULL when no denominator yet.
-      // Sourced from the shared `onTimeExpr` (DRY-for-correctness, R2) — behavior-preserving: same
-      // denom/num the inline CTE produced, now from the single predicate the SLA report also uses.
-      db
-        .select({
-          denom: sql<number>`count(*) FILTER (WHERE ${pickup.actualRecorded})::int`,
-          num: sql<number>`count(*) FILTER (WHERE ${pickup.onTime})::int`,
-        })
-        .from(trips)
-        .where(
-          and(
-            isNotNull(trips.plannedPickupWindowEnd),
-            gte(trips.plannedPickupWindowStart, sql`now() - interval '30 days'`),
-          ),
+      ),
+    // Feature 007 — open/monitoring exceptions across all trips.
+    db
+      .select({ value: count() })
+      .from(exceptions)
+      .where(inArray(exceptions.status, ["open", "monitoring"])),
+    // Feature 007/009 — on-time pickup %: trips (planned pickup in the last 30 days, window known)
+    // that recorded an origin arrival within the planned pickup window. NULL when no denominator yet.
+    // Sourced from the shared `onTimeExpr` (DRY-for-correctness, R2) — behavior-preserving: same
+    // denom/num the inline CTE produced, now from the single predicate the SLA report also uses.
+    db
+      .select({
+        denom: sql<number>`count(*) FILTER (WHERE ${pickup.actualRecorded})::int`,
+        num: sql<number>`count(*) FILTER (WHERE ${pickup.onTime})::int`,
+      })
+      .from(trips)
+      .where(
+        and(
+          isNotNull(trips.plannedPickupWindowEnd),
+          gte(trips.plannedPickupWindowStart, sql`now() - interval '30 days'`),
         ),
-      // Feature 007/009 — on-time arrival %: same, for destination arrival vs the planned delivery window.
-      db
-        .select({
-          denom: sql<number>`count(*) FILTER (WHERE ${arrival.actualRecorded})::int`,
-          num: sql<number>`count(*) FILTER (WHERE ${arrival.onTime})::int`,
-        })
-        .from(trips)
-        .where(
-          and(
-            isNotNull(trips.plannedDeliveryWindowEnd),
-            gte(trips.plannedPickupWindowStart, sql`now() - interval '30 days'`),
-          ),
+      ),
+    // Feature 007/009 — on-time arrival %: same, for destination arrival vs the planned delivery window.
+    db
+      .select({
+        denom: sql<number>`count(*) FILTER (WHERE ${arrival.actualRecorded})::int`,
+        num: sql<number>`count(*) FILTER (WHERE ${arrival.onTime})::int`,
+      })
+      .from(trips)
+      .where(
+        and(
+          isNotNull(trips.plannedDeliveryWindowEnd),
+          gte(trips.plannedPickupWindowStart, sql`now() - interval '30 days'`),
         ),
-      // Feature 008 — billing-phase trips with ≥1 unmet required-for-billing document (R13, COV-001).
-      db
-        .select({ value: count() })
-        .from(trips)
-        .where(
-          and(
-            inArray(trips.currentStatus, [...BILLING_PHASE_STATUSES]),
-            missingBillingDocumentsSql(),
-          ),
+      ),
+    // Feature 008 — billing-phase trips with ≥1 unmet required-for-billing document (R13, COV-001).
+    db
+      .select({ value: count() })
+      .from(trips)
+      .where(
+        and(
+          inArray(trips.currentStatus, [...BILLING_PHASE_STATUSES]),
+          missingBillingDocumentsSql(),
         ),
-    ]);
+      ),
+  ]);
 
   const pct = (rows: Array<{ denom: number; num: number }>): number | null => {
     const r = rows[0];
@@ -696,7 +700,12 @@ export interface ResourceOption {
 export interface TripFilterOptions {
   customers: { id: string; name: string }[];
   locations: { id: string; code: string; name: string }[];
-  lanes: { id: string; customerId: string; originLocationId: string; destinationLocationId: string }[];
+  lanes: {
+    id: string;
+    customerId: string;
+    originLocationId: string;
+    destinationLocationId: string;
+  }[];
   // Feature 006 — the active fleet lists the assignment pickers / dispatch filters select from
   // (data-model.md §5). NON-ARCHIVED only — NOT filtered by status, so a dispatcher can still pick a
   // resource that will only WARN. `label` = driver name / vehicle plate / trailer plate / carrier name.
@@ -823,7 +832,9 @@ export async function queryExceptions(filters: ExceptionFilter): Promise<Excepti
   if (filters.reasonCodeId) conditions.push(eq(exceptions.reasonCodeId, filters.reasonCodeId));
   if (filters.ownerUserId) conditions.push(eq(exceptions.ownerUserId, filters.ownerUserId));
   if (filters.minAgeHours != null) {
-    conditions.push(lte(exceptions.openedAt, new Date(Date.now() - filters.minAgeHours * 3_600_000)));
+    conditions.push(
+      lte(exceptions.openedAt, new Date(Date.now() - filters.minAgeHours * 3_600_000)),
+    );
   }
 
   const rows = await db
@@ -1056,7 +1067,8 @@ export async function queryExportBatches(
 ): Promise<ExportBatchRow[]> {
   const conditions: SQL[] = [];
   if (filters.customerId) conditions.push(eq(exportBatches.customerId, filters.customerId));
-  if (filters.billingPeriod) conditions.push(eq(exportBatches.billingPeriod, filters.billingPeriod));
+  if (filters.billingPeriod)
+    conditions.push(eq(exportBatches.billingPeriod, filters.billingPeriod));
 
   const rows = await db
     .select({
@@ -1119,9 +1131,7 @@ const rateOriginLoc = alias(locations, "rate_origin_loc");
 const rateDestLoc = alias(locations, "rate_dest_loc");
 
 /** All rates with customer name + derived lane label (rate admin list). */
-export async function queryRates(
-  filters: { customerId?: string } = {},
-): Promise<RateRowView[]> {
+export async function queryRates(filters: { customerId?: string } = {}): Promise<RateRowView[]> {
   const conditions: SQL[] = [];
   if (filters.customerId) conditions.push(eq(rates.customerId, filters.customerId));
 
