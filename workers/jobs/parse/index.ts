@@ -6,6 +6,7 @@ import { db, importBatches, importRows, importTemplates } from "@brazil-tms/db";
 import { downloadObject } from "@brazil-tms/db/storage";
 import {
   applyTemplate,
+  expandStackedRow,
   inferFileType,
   STANDARD_IMPORT_TEMPLATE,
   templateConfigSchema,
@@ -203,34 +204,52 @@ export async function runParse(payload: ParsePayload): Promise<void> {
   await db.delete(importRows).where(eq(importRows.importBatchId, batchId));
 
   // Stage each row. A per-row mapping throw is recorded (not fatal): mapped null + MAPPING_ERROR.
+  // A row that stacks a milk run inside its cells becomes one staged record per leg, all keeping the
+  // SOURCE line number so the operator's own file remains the reference (`expandStackedRow`).
+  let stagedCount = 0;
   for (const { rowNumber, raw } of records) {
-    let mapped: unknown = null;
-    let outcome: "error" | null = null;
-    let reasons: { code: string; field?: string; message: string }[] = [];
-    try {
-      mapped = applyTemplate(raw, template);
-    } catch (err) {
-      mapped = null;
-      outcome = "error";
-      reasons = [
-        {
-          code: "MAPPING_ERROR",
-          message: `Falha ao interpretar a linha: ${(err as Error).message}`,
-        },
-      ];
-    }
+    const legs = expandStackedRow(raw, template);
+    stagedCount += legs.length;
+    for (const [index, legRaw] of legs.entries()) {
+      const legNumber = index + 1;
+      let mapped: Record<string, unknown> | null = null;
+      let outcome: "error" | null = null;
+      let reasons: { code: string; field?: string; message: string }[] = [];
+      try {
+        mapped = applyTemplate(legRaw, template) as unknown as Record<string, unknown>;
+        // Stamp the leg only when the source line really held several: a lone movement must stay
+        // indistinguishable from every other row (leg 1 implicit) for the downstream comparison.
+        if (legs.length > 1) mapped.legNumber = legNumber;
+      } catch (err) {
+        mapped = null;
+        outcome = "error";
+        reasons = [
+          {
+            code: "MAPPING_ERROR",
+            message:
+              legs.length > 1
+                ? `Falha ao interpretar a perna ${legNumber} da linha: ${(err as Error).message}`
+                : `Falha ao interpretar a linha: ${(err as Error).message}`,
+          },
+        ];
+      }
 
-    await db.insert(importRows).values({
-      importBatchId: batchId,
-      rowNumber,
-      raw,
-      mapped: mapped as object | null,
-      outcome,
-      reasons,
-    });
+      await db.insert(importRows).values({
+        importBatchId: batchId,
+        rowNumber,
+        legNumber,
+        raw: legRaw,
+        mapped: mapped as object | null,
+        outcome,
+        reasons,
+      });
+    }
   }
 
-  await setBatchTotalRows(batchId, records.length);
+  // Staged records, not source lines: every other tally on the batch (created/updated/duplicate/
+  // error) counts records, and the confirm progress divides by this. They differ only when a row
+  // stacked several movements — 3.828 lines staged 3.866 records in the first real file.
+  await setBatchTotalRows(batchId, stagedCount);
 }
 
 export async function registerParse(boss: PgBoss): Promise<void> {

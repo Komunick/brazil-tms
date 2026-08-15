@@ -47,7 +47,7 @@ export async function runGenerateErrorReport(payload: GenerateErrorReportPayload
     .select()
     .from(importRows)
     .where(eq(importRows.importBatchId, batchId))
-    .orderBy(asc(importRows.rowNumber));
+    .orderBy(asc(importRows.rowNumber), asc(importRows.legNumber));
 
   const failed = errorRows.filter((r) => r.outcome === "error");
 

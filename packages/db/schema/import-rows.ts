@@ -1,12 +1,4 @@
-import {
-  index,
-  integer,
-  jsonb,
-  pgTable,
-  timestamp,
-  uniqueIndex,
-  uuid,
-} from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { importBatches } from "./import-batches";
 import { trips } from "./trips";
 import { importRowOutcome, importRowMatch } from "./enums";
@@ -27,6 +19,13 @@ export const importRows = pgTable(
       .notNull()
       .references(() => importBatches.id, { onDelete: "cascade" }),
     rowNumber: integer("row_number").notNull(),
+    /**
+     * Which leg of the source line this record is (default 1 — one line, one movement). A milk run
+     * written stacked inside ONE row (`expandStackedRow`) produces several records that all keep the
+     * SOURCE line number, so every message still points the operator at the line they can see in
+     * their own file, and the uniqueness that protects re-parse moves to (batch, row, leg).
+     */
+    legNumber: integer("leg_number").notNull().default(1),
     raw: jsonb("raw").notNull(),
     mapped: jsonb("mapped"),
     outcome: importRowOutcome("outcome"),
@@ -37,7 +36,11 @@ export const importRows = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("import_rows_batch_row_uq").on(table.importBatchId, table.rowNumber),
+    uniqueIndex("import_rows_batch_row_uq").on(
+      table.importBatchId,
+      table.rowNumber,
+      table.legNumber,
+    ),
     index("import_rows_batch_outcome_idx").on(table.importBatchId, table.outcome),
   ],
 );

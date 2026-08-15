@@ -159,14 +159,21 @@ export async function runDetectDuplicates(payload: DetectDuplicatesPayload): Pro
     .select()
     .from(importRows)
     .where(eq(importRows.importBatchId, batchId))
-    .orderBy(asc(importRows.rowNumber));
+    .orderBy(asc(importRows.rowNumber), asc(importRows.legNumber));
 
   // SHARED-ID pass (FR-017a, revised 2026-08-15). Rows sharing a non-empty external id used to be
   // refused wholesale. They are now classified, because a real file mixes three situations under one
   // id: a copy-pasted row (keep one), the legs of a milk run (keep all, numbered), and a genuine
   // conflict (still refused — but now the message names the twin row and what differs).
+  // Legs the PARSE already split out of one stacked source line are not "rows sharing an id" — the
+  // file said they belong together and in what order. They are excluded from the grouping (and any
+  // group that touches such a line is left alone), so the classifier never re-decides a settled
+  // question, and the two same-numbered records never collide in the row-keyed maps below.
+  const stackedLines = new Set(rows.filter((r) => r.legNumber > 1).map((r) => r.rowNumber));
+
   const sharedIdRows = new Map<string, SharedIdRow[]>();
   for (const r of rows) {
+    if (stackedLines.has(r.rowNumber)) continue;
     const mapped = (r.mapped ?? {}) as Record<string, unknown>;
     const ext = mapped.externalTripId == null ? "" : String(mapped.externalTripId).trim();
     if (!ext) continue;
@@ -276,8 +283,9 @@ export async function runDetectDuplicates(payload: DetectDuplicatesPayload): Pro
     const externalTripId = mapped.externalTripId;
 
     // Milk run: stamp which leg this row is, so the confirm writes it on the trip and matches the
-    // right leg on the next import. A row with no twin is leg 1 — the overwhelming majority.
-    const legNumber = legByRow.get(row.rowNumber) ?? 1;
+    // right leg on the next import. A row with no twin is leg 1 — the overwhelming majority. A leg
+    // the parse already split off a stacked line keeps ITS number: that reading came from the file.
+    const legNumber = row.legNumber > 1 ? row.legNumber : (legByRow.get(row.rowNumber) ?? 1);
     if (legNumber !== 1 || legByRow.has(row.rowNumber)) {
       mapped.legNumber = legNumber;
       await db.update(importRows).set({ mapped }).where(eq(importRows.id, row.id));

@@ -16,20 +16,49 @@ function escapeRegExp(literal: string): string {
 }
 
 /**
+ * Typing noise around an otherwise well-formed date, removed before matching the configured formats.
+ * These are the shapes a real hand-maintained schedule produces, and each is unambiguous — nothing
+ * about WHICH instant the cell means is being guessed:
+ *
+ *   "14-07-2026 00:00)"     stray bracket/parenthesis left from an edit
+ *   "15/07/2026 08:00:00,"  trailing comma or semicolon
+ *   ": 01-08-2026 03:00"    a leading colon or dash
+ *   "01-07-202613:00"       the space between date and time lost on a paste
+ *
+ * A cell that is ambiguous after this — "06/088/2026", or a bare "0" — still throws. Cleaning
+ * punctuation is not the same as deciding what someone meant, and only the first is safe here.
+ */
+function stripTypingNoise(value: string): string {
+  let s = value.replace(/^[\s:;,\-–—]+/, "").replace(/[\s)\]}.,;]+$/, "");
+  // A 4-digit year immediately followed by a time, with the separating space lost.
+  s = s.replace(/(\d{4})(\d{1,2}:\d{2})/, "$1 $2");
+  return s.trim();
+}
+
+/**
  * Parse a raw cell into a UTC instant using ONLY the template's configured formats.
  * Trims first; empty or no-format-matches throws. The matched DateTime is interpreted in the
  * template timezone (so "01/02/2026 08:00" in America/Sao_Paulo yields the correct UTC instant)
  * and converted to a UTC JS Date for storage.
+ *
+ * The cell is tried VERBATIM first; only if no configured format matches is `stripTypingNoise`
+ * applied and the formats tried again. A file that is clean therefore behaves exactly as before.
  */
 export function normalizeDate(value: string, rules: ParsingRules): Date {
   const trimmed = value.trim();
   if (trimmed === "") {
     throw new Error(`UNPARSEABLE_DATE: ${value}`);
   }
-  for (const fmt of rules.dateFormats) {
-    const dt = DateTime.fromFormat(trimmed, fmt, { zone: rules.timezone });
-    if (dt.isValid) {
-      return dt.toUTC().toJSDate();
+  const candidates = [trimmed];
+  const cleaned = stripTypingNoise(trimmed);
+  if (cleaned !== trimmed && cleaned !== "") candidates.push(cleaned);
+
+  for (const candidate of candidates) {
+    for (const fmt of rules.dateFormats) {
+      const dt = DateTime.fromFormat(candidate, fmt, { zone: rules.timezone });
+      if (dt.isValid) {
+        return dt.toUTC().toJSDate();
+      }
     }
   }
   // No configured format matched (or dateFormats is empty). Never fall back to implicit parsing.

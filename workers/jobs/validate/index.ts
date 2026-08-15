@@ -218,6 +218,19 @@ async function validateRow(
     });
   }
 
+  // A leg the parse split out of a stacked line (`legNumber` stamped) MUST carry its own pickup
+  // time. Leg 1's time is never copied down — so when the source line typed only one, the later leg
+  // arrives with none, and a trip with no planned pickup would slip past the dispatch date filter
+  // and be seen by nobody. Refuse it and say exactly what to fill in.
+  const legNumber = mapped.legNumber;
+  if (typeof legNumber === "number" && legNumber > 1 && isBlank(mapped.plannedPickupWindowStart)) {
+    reasons.push({
+      code: "MISSING_REQUIRED_FIELD",
+      field: "plannedPickupWindowStart",
+      message: `Perna ${legNumber} sem horário de coleta: a linha empilha ${legNumber} viagens mas informa um horário só. Preencha o horário de cada perna.`,
+    });
+  }
+
   // required fields (template.requiredOverrides) must be non-null in mapped.
   for (const field of requiredOverrides) {
     if (!REQUIRABLE_FIELDS.has(field as keyof MappedRow)) continue;
@@ -371,11 +384,18 @@ export async function runValidate(payload: ValidatePayload): Promise<void> {
       knownStatusLabels,
     );
 
+    // A row parse could not map keeps PARSE's reason: it names the value and, for a stacked line,
+    // the leg ("perna 2 … UNPARSEABLE_DATE: 06/088/2026"). Overwriting it with the generic sentence
+    // costs the operator the one detail that says what to fix.
+    const parseReasons = Array.isArray(row.reasons) ? (row.reasons as Reason[]) : [];
+    const reasons =
+      result.mapped == null && parseReasons.length > 0 ? parseReasons : result.reasons;
+
     await db
       .update(importRows)
       .set({
         outcome: result.outcome,
-        reasons: result.reasons,
+        reasons,
         mapped: result.mapped as object | null,
       })
       .where(eq(importRows.id, row.id));

@@ -155,7 +155,7 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
     .where(
       and(eq(importRows.importBatchId, batchId), inArray(importRows.outcome, ["valid", "warning"])),
     )
-    .orderBy(asc(importRows.rowNumber));
+    .orderBy(asc(importRows.rowNumber), asc(importRows.legNumber));
 
   // Registry snapshot for the resource linking below — read once, not per row.
   const needsResources = pending.some((row) =>
@@ -396,7 +396,7 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
     .select({ matchDecision: importRows.matchDecision })
     .from(importRows)
     .where(and(eq(importRows.importBatchId, batchId), isNotNull(importRows.appliedAt)))
-    .orderBy(asc(importRows.rowNumber));
+    .orderBy(asc(importRows.rowNumber), asc(importRows.legNumber));
 
   // A `potential_duplicate` row that applied also created a NEW trip, so it counts toward created.
   const createdCount = applied.filter(
