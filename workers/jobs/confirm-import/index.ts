@@ -139,6 +139,17 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
   const resourceIndex: ResourceIndex | null = needsResources ? await buildResourceIndex() : null;
   const linkTally = { assigned: 0, blocked: 0, unresolved: 0 };
 
+  /**
+   * Live progress. Confirming a real customer file means thousands of rows, each one a trip write
+   * plus an eligibility-checked assignment — minutes of work. Publishing the running tallies every
+   * `PROGRESS_EVERY` rows lets the screen show movement instead of a frozen "confirmando"; the
+   * authoritative recount still happens at the end.
+   */
+  const PROGRESS_EVERY = 50;
+  let appliedNew = 0;
+  let appliedUpdated = 0;
+  let processed = 0;
+
   for (const row of pending) {
     if (row.appliedAt != null) continue; // idempotency guard: already applied
 
@@ -257,6 +268,17 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
         .update(importRows)
         .set({ targetTripId, appliedAt: new Date() })
         .where(eq(importRows.id, row.id));
+
+      if (row.matchDecision === "new" || row.matchDecision === "potential_duplicate") appliedNew++;
+      else if (row.matchDecision === "update") appliedUpdated++;
+      processed++;
+      if (processed % PROGRESS_EVERY === 0) {
+        await setBatchCounts(batchId, {
+          createdCount: appliedNew,
+          updatedCount: appliedUpdated,
+          errorCount: batch.errorCount,
+        });
+      }
     } catch (err) {
       // Per-row failure: record + continue (never abort the batch). Two distinct kinds:
       //  - REVIEW_REQUIRED (the trip is past `confirmed`): TERMINAL for import — a re-run hits the same

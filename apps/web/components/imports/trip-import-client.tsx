@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -101,6 +102,14 @@ const TERMINAL_STATUSES: ReadonlySet<ImportBatchStatus> = new Set([
   "validated",
   "completed",
   "failed",
+]);
+
+/** Statuses where the worker is doing the work and the screen must show it is not stuck. */
+const WORKING_STATUSES: ReadonlySet<ImportBatchStatus> = new Set([
+  "received",
+  "parsing",
+  "validating",
+  "confirming",
 ]);
 
 function statusBadgeVariant(
@@ -555,6 +564,29 @@ export function TripImportClient() {
           <CardContent className="space-y-4">
             {batchQuery.isLoading && !batch ? (
               <p className="text-sm text-muted-foreground">{t("loadingProgress")}</p>
+            ) : null}
+
+            {/* Working card. A real customer file is thousands of rows: reading and validating take
+                a while, and confirming writes a trip AND an eligibility-checked assignment per row.
+                Without this the screen looked frozen on a badge. During `confirming` the worker
+                publishes running tallies, so this shows real movement, not a spinner. */}
+            {status && WORKING_STATUSES.has(status) ? (
+              <div className="space-y-3 rounded-md border p-4" aria-busy="true" role="status">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium">{t(`working.${status}`)}</p>
+                  {status === "confirming" && batch ? (
+                    <p className="text-sm tabular-nums text-muted-foreground">
+                      {t("workingApplied", {
+                        done: batch.createdCount + batch.updatedCount,
+                        total: Math.max(batch.totalRows - batch.errorCount, 0),
+                      })}
+                    </p>
+                  ) : null}
+                </div>
+                <p className="text-xs text-muted-foreground">{t("workingHint")}</p>
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-2/3" />
+              </div>
             ) : null}
 
             {batch?.errorMessage ? (

@@ -659,6 +659,14 @@
     "customer": "Cliente",
     "selectCustomer": "Selecione um cliente",
     "customersLoadError": "Não foi possível carregar os clientes.",
+    "working": {
+      "received": "Arquivo recebido, entrando na fila...",
+      "parsing": "Lendo a planilha...",
+      "validating": "Validando as linhas...",
+      "confirming": "Criando as viagens e vinculando os recursos..."
+    },
+    "workingApplied": "{done} de {total} aplicadas",
+    "workingHint": "Pode levar alguns minutos em arquivos grandes. A tela se atualiza sozinha — você pode sair e voltar depois.",
     "template": "Modelo de importação",
     "templateStandard": "Formato padrão",
     "templateHint": "O modelo do cliente lê a planilha dele como ela é. O formato padrão espera as colunas do modelo de exemplo.",
