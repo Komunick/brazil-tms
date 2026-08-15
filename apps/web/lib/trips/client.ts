@@ -110,7 +110,10 @@ export async function readApiError(res: Response): Promise<ParsedApiError> {
  */
 export class TripsError extends Error {
   readonly findings?: Finding[];
-  constructor(readonly code: string, findings?: Finding[]) {
+  constructor(
+    readonly code: string,
+    findings?: Finding[],
+  ) {
     super(code);
     this.name = "TripsError";
     this.findings = findings;
@@ -200,7 +203,8 @@ export function useTripDetail(id: string): UseQueryResult<{ item: TripDetailView
 export function useDashboardSummary(): UseQueryResult<{ summary: DashboardSummary }> {
   return useQuery({
     queryKey: dashboardKey(),
-    queryFn: async () => asJson<{ summary: DashboardSummary }>(await fetch(`/api/dashboard/summary`)),
+    queryFn: async () =>
+      asJson<{ summary: DashboardSummary }>(await fetch(`/api/dashboard/summary`)),
     refetchInterval: DASHBOARD_POLL_MS,
   });
 }
@@ -450,7 +454,13 @@ export function useCreateException(id: string) {
 export function useUpdateException() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ exceptionId, input }: { exceptionId: string; input: UpdateExceptionInput }) => {
+    mutationFn: async ({
+      exceptionId,
+      input,
+    }: {
+      exceptionId: string;
+      input: UpdateExceptionInput;
+    }) => {
       const res = await fetch(`/api/exceptions/${exceptionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -494,7 +504,8 @@ export function useTransitionException() {
 export function useExceptions(search: string): UseQueryResult<{ items: ExceptionListItem[] }> {
   return useQuery({
     queryKey: [...EXCEPTIONS_ROOT, "list", search],
-    queryFn: async () => asJson<{ items: ExceptionListItem[] }>(await fetch(`/api/exceptions?${search}`)),
+    queryFn: async () =>
+      asJson<{ items: ExceptionListItem[] }>(await fetch(`/api/exceptions?${search}`)),
     refetchInterval: CONTROL_TOWER_POLL_MS,
   });
 }
@@ -532,6 +543,28 @@ export function useAcknowledgeAlert() {
   return useMutation({
     mutationFn: async (alertId: string) => {
       const res = await fetch(`/api/alerts/${alertId}/acknowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      return asJson<{ item: AlertListItem }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ALERTS_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/**
+ * Undo an acknowledgement (POST /api/alerts/:id/unacknowledge) — the alert returns to the active
+ * surface. Same invalidations as acknowledging: the two are one toggle from the operator's side.
+ */
+export function useUnacknowledgeAlert() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (alertId: string) => {
+      const res = await fetch(`/api/alerts/${alertId}/unacknowledge`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "{}",

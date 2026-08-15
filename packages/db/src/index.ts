@@ -59,6 +59,7 @@ export {
   generateAlert,
   autoResolveAlert,
   acknowledgeAlert,
+  unacknowledgeAlert,
   listAlerts,
   type AlertCase,
   type AlertSeverity,
