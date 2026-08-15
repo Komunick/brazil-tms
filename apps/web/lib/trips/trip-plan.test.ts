@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { auditLogs, customers, db, locations, tripEvents, trips, users } from "@brazil-tms/db";
-import { Conflict } from "@/lib/api/respond";
+import { NotFound } from "@/lib/api/respond";
 import { createTrip } from "./trips-service";
 import { updateTripPlan } from "./trip-plan";
 
@@ -216,6 +216,6 @@ describe.skipIf(!hasDb)("trip-plan updateTripPlan (integration)", () => {
         {},
         actorId,
       ),
-    ).rejects.toBeInstanceOf(Conflict);
+    ).rejects.toBeInstanceOf(NotFound);
   });
 });

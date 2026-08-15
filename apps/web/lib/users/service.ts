@@ -4,7 +4,7 @@ import { db, users } from "@brazil-tms/db";
 import type { CreateUserInput, Role, UpdateUserInput } from "@brazil-tms/shared";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { writeAudit } from "@/lib/audit/write-audit";
-import { Conflict } from "@/lib/api/respond";
+import { Conflict, NotFound } from "@/lib/api/respond";
 
 /** API response shape for a user profile (timestamps as ISO strings). */
 export interface UserProfile {
@@ -191,7 +191,7 @@ export async function updateUser(
 ): Promise<UserProfile> {
   const currentRows = await db.select().from(users).where(eq(users.id, id)).limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Usuário não encontrado.");
+  if (!current) throw new NotFound("NOT_FOUND", "Usuário não encontrado.");
 
   const nextRole = input.role ?? (current.role as Role);
   const nextStatus = input.status ?? current.status;
@@ -228,7 +228,7 @@ export async function updateUser(
       .where(eq(users.id, id))
       .returning();
     const row = updated[0];
-    if (!row) throw new Conflict("NOT_FOUND", "Usuário não encontrado.");
+    if (!row) throw new NotFound("NOT_FOUND", "Usuário não encontrado.");
 
     if (roleChanged) {
       await writeAudit(tx, {
@@ -300,7 +300,7 @@ function isForeignKeyViolation(error: unknown): boolean {
 export async function deleteUser(id: string, actorUserId: string): Promise<void> {
   const currentRows = await db.select().from(users).where(eq(users.id, id)).limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Usuário não encontrado.");
+  if (!current) throw new NotFound("NOT_FOUND", "Usuário não encontrado.");
 
   if (id === actorUserId) {
     throw new Conflict("SELF_DELETE", "Você não pode excluir o próprio usuário.");
@@ -367,7 +367,7 @@ export async function resendInvite(
 ): Promise<void> {
   const rows = await db.select().from(users).where(eq(users.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new Conflict("NOT_FOUND", "Usuário não encontrado.");
+  if (!row) throw new NotFound("NOT_FOUND", "Usuário não encontrado.");
   if (row.status !== "pending") {
     throw new Conflict("NOT_PENDING", "O usuário não está pendente.");
   }

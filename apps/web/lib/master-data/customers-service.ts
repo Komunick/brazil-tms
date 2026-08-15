@@ -3,7 +3,7 @@ import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
 import { customers, db } from "@brazil-tms/db";
 import type { Contact, CreateCustomerInput, UpdateCustomerInput } from "@brazil-tms/shared";
 import { writeAudit } from "@/lib/audit/write-audit";
-import { Conflict } from "@/lib/api/respond";
+import { Conflict, NotFound } from "@/lib/api/respond";
 
 /** API response shape for a customer (contract: bff-endpoints.md §Customers; timestamps ISO). */
 export interface CustomerDto {
@@ -106,7 +106,7 @@ export async function listCustomers(opts: ListCustomersOptions = {}): Promise<Cu
 export async function getCustomer(id: string): Promise<CustomerDto> {
   const rows = await db.select().from(customers).where(eq(customers.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new Conflict("NOT_FOUND", "Cliente não encontrado.");
+  if (!row) throw new NotFound("NOT_FOUND", "Cliente não encontrado.");
   return toDto(row);
 }
 
@@ -152,7 +152,7 @@ export async function updateCustomer(
 ): Promise<CustomerDto> {
   const currentRows = await db.select().from(customers).where(eq(customers.id, id)).limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Cliente não encontrado.");
+  if (!current) throw new NotFound("NOT_FOUND", "Cliente não encontrado.");
 
   // Build the partial update + before/after snapshots from only the provided fields.
   const set: Record<string, unknown> = { updatedAt: new Date() };
@@ -181,7 +181,7 @@ export async function updateCustomer(
         .where(eq(customers.id, id))
         .returning();
       const row = updated[0];
-      if (!row) throw new Conflict("NOT_FOUND", "Cliente não encontrado.");
+      if (!row) throw new NotFound("NOT_FOUND", "Cliente não encontrado.");
       await writeAudit(tx, {
         entityType: "customer",
         entityId: id,
@@ -202,7 +202,7 @@ export async function updateCustomer(
 export async function archiveCustomer(id: string, actorUserId: string): Promise<CustomerDto> {
   const currentRows = await db.select().from(customers).where(eq(customers.id, id)).limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Cliente não encontrado.");
+  if (!current) throw new NotFound("NOT_FOUND", "Cliente não encontrado.");
   if (current.archivedAt) return toDto(current); // already archived — idempotent, no new audit
 
   return db.transaction(async (tx) => {
@@ -213,7 +213,7 @@ export async function archiveCustomer(id: string, actorUserId: string): Promise<
       .where(eq(customers.id, id))
       .returning();
     const row = updated[0];
-    if (!row) throw new Conflict("NOT_FOUND", "Cliente não encontrado.");
+    if (!row) throw new NotFound("NOT_FOUND", "Cliente não encontrado.");
     await writeAudit(tx, {
       entityType: "customer",
       entityId: id,

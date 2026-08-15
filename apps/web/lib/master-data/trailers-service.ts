@@ -11,7 +11,7 @@ import {
   type UpdateTrailerInput,
 } from "@brazil-tms/shared";
 import { writeAudit } from "@/lib/audit/write-audit";
-import { Conflict } from "@/lib/api/respond";
+import { Conflict, NotFound } from "@/lib/api/respond";
 
 /**
  * Trailer master-data service (US3/US4; data-model §6, contract §Trailers). Same shape as vehicles
@@ -149,7 +149,7 @@ export async function listTrailers(opts: ListTrailersOptions = {}): Promise<Trai
 export async function getTrailer(id: string): Promise<TrailerDto> {
   const rows = await db.select().from(trailers).where(eq(trailers.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new Conflict("NOT_FOUND", "Reboque não encontrado.");
+  if (!row) throw new NotFound("NOT_FOUND", "Reboque não encontrado.");
   return toDto(row);
 }
 
@@ -198,7 +198,7 @@ export async function updateTrailer(
 ): Promise<TrailerDto> {
   const currentRows = await db.select().from(trailers).where(eq(trailers.id, id)).limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Reboque não encontrado.");
+  if (!current) throw new NotFound("NOT_FOUND", "Reboque não encontrado.");
 
   // Build the partial update + before/after snapshots from only the provided fields.
   const set: Record<string, unknown> = { updatedAt: new Date() };
@@ -240,7 +240,7 @@ export async function updateTrailer(
     return await db.transaction(async (tx) => {
       const updated = await tx.update(trailers).set(set).where(eq(trailers.id, id)).returning();
       const row = updated[0];
-      if (!row) throw new Conflict("NOT_FOUND", "Reboque não encontrado.");
+      if (!row) throw new NotFound("NOT_FOUND", "Reboque não encontrado.");
       await writeAudit(tx, {
         entityType: "trailer",
         entityId: id,
@@ -270,7 +270,7 @@ export async function updateTrailer(
 export async function archiveTrailer(id: string, actorUserId: string): Promise<TrailerDto> {
   const currentRows = await db.select().from(trailers).where(eq(trailers.id, id)).limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Reboque não encontrado.");
+  if (!current) throw new NotFound("NOT_FOUND", "Reboque não encontrado.");
   if (current.archivedAt) return toDto(current); // already archived — idempotent, no new audit
 
   return db.transaction(async (tx) => {
@@ -281,7 +281,7 @@ export async function archiveTrailer(id: string, actorUserId: string): Promise<T
       .where(eq(trailers.id, id))
       .returning();
     const row = updated[0];
-    if (!row) throw new Conflict("NOT_FOUND", "Reboque não encontrado.");
+    if (!row) throw new NotFound("NOT_FOUND", "Reboque não encontrado.");
     await writeAudit(tx, {
       entityType: "trailer",
       entityId: id,

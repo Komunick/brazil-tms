@@ -8,7 +8,7 @@ import {
   type UpdateBillingItemInput,
 } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
-import { Conflict, NotFound } from "../errors";
+import { NotFound } from "../errors";
 import { resolveRate } from "./rates";
 import { loadChecklistStatus, type ChecklistStatus, type DocRef, type TripScope } from "../documents/requirements";
 
@@ -96,7 +96,7 @@ export async function ensureBillingItem(tx: TxLike, tripId: string): Promise<voi
     .where(eq(trips.id, tripId))
     .limit(1);
   const trip = tripRows[0];
-  if (!trip) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+  if (!trip) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
 
   const rate = await resolveRate(trip, tx);
 

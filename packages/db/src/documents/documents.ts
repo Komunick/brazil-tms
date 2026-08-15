@@ -43,7 +43,7 @@ export async function assertUploadable(tripId: string, documentTypeId: string): 
 
 async function reload(tx: Parameters<typeof loadTripDetail>[0], tripId: string): Promise<TripDetail> {
   const detail = await loadTripDetail(tx, tripId);
-  if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+  if (!detail) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
   return detail;
 }
 
@@ -121,7 +121,7 @@ export async function verifyDocument(
     .where(eq(documents.id, documentId))
     .limit(1);
   const row = rows[0];
-  if (!row) throw new Conflict("NOT_FOUND", "Documento não encontrado.");
+  if (!row) throw new NotFound("NOT_FOUND", "Documento não encontrado.");
 
   return db.transaction(async (tx) => {
     await tx
@@ -156,7 +156,7 @@ export async function archiveDocument(documentId: string, actorUserId: string): 
     .where(eq(documents.id, documentId))
     .limit(1);
   const row = rows[0];
-  if (!row) throw new Conflict("NOT_FOUND", "Documento não encontrado.");
+  if (!row) throw new NotFound("NOT_FOUND", "Documento não encontrado.");
 
   return db.transaction(async (tx) => {
     await tx

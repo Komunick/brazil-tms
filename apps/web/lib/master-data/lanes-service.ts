@@ -3,7 +3,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { customers, db, lanes, locations } from "@brazil-tms/db";
 import type { CreateLaneInput, UpdateLaneInput } from "@brazil-tms/shared";
 import { writeAudit } from "@/lib/audit/write-audit";
-import { Conflict } from "@/lib/api/respond";
+import { Conflict, NotFound } from "@/lib/api/respond";
 
 /** API response shape for a lane (contract: bff-endpoints.md §Lanes; money centavos, timestamps ISO). */
 export interface LaneDto {
@@ -124,7 +124,7 @@ export async function listLanes(opts: ListLanesOptions = {}): Promise<LaneDto[]>
 export async function getLane(id: string): Promise<LaneDto> {
   const rows = await db.select().from(lanes).where(eq(lanes.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new Conflict("NOT_FOUND", "Rota não encontrada.");
+  if (!row) throw new NotFound("NOT_FOUND", "Rota não encontrada.");
   return toDto(row);
 }
 
@@ -175,7 +175,7 @@ export async function updateLane(
 ): Promise<LaneDto> {
   const currentRows = await db.select().from(lanes).where(eq(lanes.id, id)).limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Rota não encontrada.");
+  if (!current) throw new NotFound("NOT_FOUND", "Rota não encontrada.");
 
   // Re-validate the (possibly changed) reference triple against the merged values (FR-009, R5).
   await assertValidReferences(
@@ -213,7 +213,7 @@ export async function updateLane(
   return db.transaction(async (tx) => {
     const updated = await tx.update(lanes).set(set).where(eq(lanes.id, id)).returning();
     const row = updated[0];
-    if (!row) throw new Conflict("NOT_FOUND", "Rota não encontrada.");
+    if (!row) throw new NotFound("NOT_FOUND", "Rota não encontrada.");
     await writeAudit(tx, {
       entityType: "lane",
       entityId: id,
@@ -230,7 +230,7 @@ export async function updateLane(
 export async function archiveLane(id: string, actorUserId: string): Promise<LaneDto> {
   const currentRows = await db.select().from(lanes).where(eq(lanes.id, id)).limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Rota não encontrada.");
+  if (!current) throw new NotFound("NOT_FOUND", "Rota não encontrada.");
   if (current.archivedAt) return toDto(current); // already archived — idempotent, no new audit
 
   return db.transaction(async (tx) => {
@@ -241,7 +241,7 @@ export async function archiveLane(id: string, actorUserId: string): Promise<Lane
       .where(eq(lanes.id, id))
       .returning();
     const row = updated[0];
-    if (!row) throw new Conflict("NOT_FOUND", "Rota não encontrada.");
+    if (!row) throw new NotFound("NOT_FOUND", "Rota não encontrada.");
     await writeAudit(tx, {
       entityType: "lane",
       entityId: id,

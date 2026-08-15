@@ -1,7 +1,7 @@
 import "server-only";
 import { and, eq, isNull } from "drizzle-orm";
 import {
-  Conflict,
+  Conflict, NotFound,
   db,
   importBatches,
   locationAliases,
@@ -71,7 +71,7 @@ export async function resolveLocation(
     .where(eq(importBatches.id, batchId))
     .limit(1);
   const batch = batchRows[0];
-  if (!batch) throw new Conflict("NOT_FOUND", "Lote não encontrado.");
+  if (!batch) throw new NotFound("NOT_FOUND", "Lote não encontrado.");
 
   // 2) Reference-integrity: the target location must exist, be active, and belong to this customer.
   const locationRows = await db

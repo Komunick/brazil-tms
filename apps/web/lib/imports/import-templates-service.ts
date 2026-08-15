@@ -4,7 +4,7 @@ import { db, importTemplates } from "@brazil-tms/db";
 import { templateConfigSchema, type TemplateConfig } from "@brazil-tms/shared";
 import type { ColumnMapping, ParsingRules } from "@brazil-tms/shared";
 import { writeAudit } from "@/lib/audit/write-audit";
-import { Conflict } from "@/lib/api/respond";
+import { Conflict, NotFound } from "@/lib/api/respond";
 
 /** API response shape for an import template (contract: bff-endpoints.md §import-templates; timestamps ISO). */
 export interface ImportTemplateDto {
@@ -111,7 +111,7 @@ export async function getTemplate(id: string): Promise<ImportTemplateDto> {
     .where(eq(importTemplates.id, id))
     .limit(1);
   const row = rows[0];
-  if (!row) throw new Conflict("NOT_FOUND", "Modelo de importação não encontrado.");
+  if (!row) throw new NotFound("NOT_FOUND", "Modelo de importação não encontrado.");
   return toDto(row);
 }
 
@@ -169,7 +169,7 @@ export async function updateTemplate(
     .where(eq(importTemplates.id, id))
     .limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Modelo de importação não encontrado.");
+  if (!current) throw new NotFound("NOT_FOUND", "Modelo de importação não encontrado.");
 
   // Build the partial update + before/after snapshots from only the provided config fields.
   const set: Record<string, unknown> = { updatedAt: new Date() };
@@ -210,7 +210,7 @@ export async function updateTemplate(
         .where(eq(importTemplates.id, id))
         .returning();
       const row = updated[0];
-      if (!row) throw new Conflict("NOT_FOUND", "Modelo de importação não encontrado.");
+      if (!row) throw new NotFound("NOT_FOUND", "Modelo de importação não encontrado.");
       await writeAudit(tx, {
         entityType: "import_template",
         entityId: id,

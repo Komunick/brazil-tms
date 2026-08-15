@@ -8,7 +8,7 @@ import {
   type UpdateExceptionInput,
 } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
-import { Conflict } from "../errors";
+import { Conflict, NotFound } from "../errors";
 import { autoResolveAlert, generateAlert } from "./alerts";
 import { recomputeTripSla } from "./sla";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
@@ -58,7 +58,7 @@ export async function createException(
   actorUserId: string,
 ): Promise<TripDetail> {
   const tripRows = await db.select({ id: trips.id }).from(trips).where(eq(trips.id, tripId)).limit(1);
-  if (!tripRows[0]) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+  if (!tripRows[0]) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
 
   const codeRows = await db
     .select({
@@ -109,7 +109,7 @@ export async function createException(
     await recomputeTripSla(tx, tripId);
 
     const detail = await loadTripDetail(tx, tripId);
-    if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+    if (!detail) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
     return detail;
   });
 }
@@ -129,7 +129,7 @@ export async function updateException(
     .where(eq(exceptions.id, exceptionId))
     .limit(1);
   const existing = rows[0];
-  if (!existing) throw new Conflict("NOT_FOUND", "Exceção não encontrada.");
+  if (!existing) throw new NotFound("NOT_FOUND", "Exceção não encontrada.");
   if (existing.status === "resolved" || existing.status === "cancelled") {
     throw new Conflict("STALE_EXCEPTION", "A exceção já foi encerrada.");
   }
@@ -162,7 +162,7 @@ export async function updateException(
     await recomputeTripSla(tx, existing.tripId);
 
     const detail = await loadTripDetail(tx, existing.tripId);
-    if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+    if (!detail) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
     return detail;
   });
 }
@@ -184,7 +184,7 @@ export async function transitionException(
     .where(eq(exceptions.id, exceptionId))
     .limit(1);
   const existing = rows[0];
-  if (!existing) throw new Conflict("NOT_FOUND", "Exceção não encontrada.");
+  if (!existing) throw new NotFound("NOT_FOUND", "Exceção não encontrada.");
 
   if (!canTransitionException(input.expectedFromStatus, input.toStatus)) {
     throw new Conflict("ILLEGAL_EXCEPTION_TRANSITION", "Transição de exceção não permitida.");
@@ -229,7 +229,7 @@ export async function transitionException(
     await recomputeTripSla(tx, existing.tripId);
 
     const detail = await loadTripDetail(tx, existing.tripId);
-    if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+    if (!detail) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
     return detail;
   });
 }

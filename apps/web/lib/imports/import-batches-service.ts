@@ -1,7 +1,7 @@
 import "server-only";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import {
-  Conflict,
+  Conflict, NotFound,
   customers,
   db,
   importBatchStatus,
@@ -248,7 +248,7 @@ export async function confirmBatch(
     .where(eq(importBatches.id, batchId))
     .limit(1);
   const row = rows[0];
-  if (!row) throw new Conflict("NOT_FOUND", "Lote não encontrado.");
+  if (!row) throw new NotFound("NOT_FOUND", "Lote não encontrado.");
   if (!CONFIRMABLE_STATUSES.has(row.status)) {
     throw new Conflict(
       "NOT_CONFIRMABLE",

@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { auditLogs, customers, db, lanes, locations, users } from "@brazil-tms/db";
-import { Conflict } from "@/lib/api/respond";
+import { NotFound } from "@/lib/api/respond";
 import { archiveLane, createLane, listLanes, updateLane } from "./lanes-service";
 
 /**
@@ -227,6 +227,6 @@ describe.skipIf(!hasDb)("lanes-service (integration)", () => {
         { expectedTransitMinutes: 60 },
         actorId,
       ),
-    ).rejects.toBeInstanceOf(Conflict);
+    ).rejects.toBeInstanceOf(NotFound);
   });
 });

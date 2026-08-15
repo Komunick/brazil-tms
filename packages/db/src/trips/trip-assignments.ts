@@ -25,7 +25,7 @@ import {
   type VehicleType,
 } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
-import { Conflict } from "../errors";
+import { Conflict, NotFound } from "../errors";
 import { recomputeTripSla } from "./sla";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
 
@@ -125,7 +125,7 @@ export async function gatherEligibilityContext(
     .where(eq(trips.id, tripId))
     .limit(1);
   const trip = tripRows[0];
-  if (!trip) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+  if (!trip) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
 
   const windowStart = trip.windowStart;
   const windowEnd = trip.windowEnd;
@@ -439,7 +439,7 @@ export async function assignTrip(
     await recomputeTripSla(tx, tripId);
 
     const detail = await loadTripDetail(tx, tripId);
-    if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+    if (!detail) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
     return { trip: detail, findings: warns };
   });
 }
@@ -591,7 +591,7 @@ export async function reassignTrip(
     await recomputeTripSla(tx, tripId);
 
     const detail = await loadTripDetail(tx, tripId);
-    if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+    if (!detail) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
     return { trip: detail, findings: warns };
   });
 }
@@ -620,7 +620,7 @@ export async function unassignTrip(
     .where(eq(trips.id, tripId))
     .limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+  if (!current) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
 
   // Legality against the status machine — `assigned→received` is the unassign edge (slice 015; was
   // `assigned→validated`).
@@ -669,7 +669,7 @@ export async function unassignTrip(
     await recomputeTripSla(tx, tripId);
 
     const detail = await loadTripDetail(tx, tripId);
-    if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+    if (!detail) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
     return { trip: detail, findings: [] };
   });
 }
@@ -699,7 +699,7 @@ export async function confirmTripAssignment(
     .from(trips)
     .where(eq(trips.id, tripId))
     .limit(1);
-  if (!tripRows[0]) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+  if (!tripRows[0]) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
 
   // Load the CURRENT assignment's resources to re-evaluate eligibility (drift check).
   const currentAssignmentRows = await db
@@ -775,7 +775,7 @@ export async function confirmTripAssignment(
     await recomputeTripSla(tx, tripId);
 
     const detail = await loadTripDetail(tx, tripId);
-    if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+    if (!detail) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
     return { trip: detail, findings: [] };
   });
 }

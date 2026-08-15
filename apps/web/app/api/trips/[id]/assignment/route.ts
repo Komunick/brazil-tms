@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { assignTripSchema, confirmAssignmentSchema } from "@brazil-tms/shared";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
-import { apiError, Conflict, handleRouteError } from "@/lib/api/respond";
+import { handleRouteError } from "@/lib/api/respond";
 import {
   assignTrip,
   reassignTrip,
@@ -37,11 +37,8 @@ export async function POST(
 
     return NextResponse.json({ item: result.trip, findings: result.findings });
   } catch (error) {
-    // A missing trip is 404 NOT_FOUND (contract §1/§2), not the generic 409 handleRouteError maps
-    // Conflict to (mirrors apps/web/app/api/imports/[id]/confirm/route.ts).
-    if (error instanceof Conflict && error.code === "NOT_FOUND") {
-      return apiError(404, "NOT_FOUND", error.message);
-    }
+    // A missing trip is 404 (contract §1/§2) — now straight from `handleRouteError`, because the
+    // service throws `NotFound`. The local remap this route carried is gone with its cause.
     return handleRouteError(error);
   }
 }
@@ -67,11 +64,8 @@ export async function DELETE(
     const result = await unassignTrip(id, input, ctx.userId);
     return NextResponse.json({ item: result.trip });
   } catch (error) {
-    // A missing trip is 404 NOT_FOUND (contract §1/§2), not the generic 409 handleRouteError maps
-    // Conflict to (mirrors apps/web/app/api/imports/[id]/confirm/route.ts).
-    if (error instanceof Conflict && error.code === "NOT_FOUND") {
-      return apiError(404, "NOT_FOUND", error.message);
-    }
+    // A missing trip is 404 (contract §1/§2) — now straight from `handleRouteError`, because the
+    // service throws `NotFound`. The local remap this route carried is gone with its cause.
     return handleRouteError(error);
   }
 }
