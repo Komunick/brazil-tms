@@ -7,11 +7,17 @@ import {
   importBatches,
   importRows,
   importTemplates,
+  statusMappings,
   trips,
   updateTripPlan,
   writeAudit,
 } from "@brazil-tms/db";
-import { createTripSchema, type ConfirmPayload, type TripPlanFields } from "@brazil-tms/shared";
+import {
+  createTripSchema,
+  type ConfirmPayload,
+  type TripPlanFields,
+  type TripStatus,
+} from "@brazil-tms/shared";
 import { setBatchCounts, setBatchStatus } from "../../lib/batch-progress";
 import { JOB, work } from "../../lib/queue";
 import { runGenerateErrorReport } from "../generate-error-report";
@@ -22,7 +28,7 @@ import {
   resourceRequestFrom,
   type ResourceIndex,
 } from "./resources";
-import { closeTripFromSource, isClosedAtSource } from "./close-at-source";
+import { advanceTripFromSource, closeTripFromSource, isClosedAtSource } from "./source-status";
 
 /**
  * T033 — `import.confirm` job (data-model R8; contract §C/§A). Per row best-effort + idempotent: for
@@ -31,8 +37,10 @@ import { closeTripFromSource, isClosedAtSource } from "./close-at-source";
  * audit. Newly created trips are born `received` (slice 015, superseding slice 014's born-`validated`):
  * the validation states were collapsed into `received`, which is itself the first dispatchable status,
  * so a passing imported row is a `received` trip — `createTrip` is called with no status argument. Import
- * never changes an EXISTING trip's status: the `updateTripPlan` paths (update + unique-race fallback)
- * and `no_op` are status-neutral, so an already-`assigned`/`in_transit` trip keeps its status (FR-002).
+ * writes no status through the PLAN paths: `updateTripPlan` (update + unique-race fallback) and `no_op`
+ * are status-neutral (FR-002). A trip's status moves only through the customer's own status column, and
+ * only for a customer that has the words configured (`status_mappings`): closing it when the file
+ * reports it over, advancing it — forward only, never unmanned — when the file reports it underway.
  *
  * IDEMPOTENCY: a row's `applied_at`/`target_trip_id` guard makes a re-run skip already-applied rows,
  * so re-running creates 0 new trips. The trips partial unique index `(customer_id, external_trip_id)`
@@ -125,6 +133,36 @@ function customerFieldsFrom(mapped: Record<string, unknown>): Record<string, str
   return Object.keys(fields).length ? fields : null;
 }
 
+/** Accent/case-folded label, so "EM VIAGEM", "Em viagem" and "em  viagem" are one key. */
+function foldLabel(value: unknown): string {
+  if (value == null) return "";
+  return String(value)
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * The customer's active status vocabulary: file label → internal `trip_status` (data-model §4). This
+ * is the config that lets the import say where a trip IS, not just that it ended — one engine, the
+ * words live in the database (Constitution V).
+ */
+async function loadStatusMappings(customerId: string): Promise<Map<string, TripStatus>> {
+  const rows = await db
+    .select({ label: statusMappings.customerLabel, status: statusMappings.internalStatus })
+    .from(statusMappings)
+    .where(
+      and(
+        eq(statusMappings.customerId, customerId),
+        eq(statusMappings.active, true),
+        isNull(statusMappings.archivedAt),
+      ),
+    );
+  return new Map(rows.map((r) => [foldLabel(r.label), r.status]));
+}
+
 /** The template's `closedStatusLabels`, or none when the batch used the built-in standard format. */
 async function closedStatusLabelsFor(templateId: string | null): Promise<string[]> {
   if (!templateId) return [];
@@ -168,6 +206,11 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
   // behaviour every other customer keeps.
   const closedLabels = await closedStatusLabelsFor(batch.templateId);
   const closedTally = { skipped: 0, closed: 0 };
+
+  // The customer's words for where a RUNNING trip is (`status_mappings` config — no per-customer
+  // code). Empty for a customer with no mappings, and then nothing below ever fires.
+  const statusByLabel = await loadStatusMappings(batch.customerId);
+  const statusTally = { advanced: 0, noResource: 0, behind: 0 };
 
   /**
    * Live progress. Confirming a real customer file means thousands of rows, each one a trip write
@@ -346,6 +389,25 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
           .where(eq(importRows.id, row.id));
       }
 
+      /**
+       * Where the customer says this trip IS. Runs AFTER the resource linking on purpose: the file
+       * names the driver, `linkResources` assigns, and only then can the trip honestly be reported
+       * underway. `advanceTripFromSource` refuses anything backwards or unmanned by itself.
+       */
+      const sourceStatus = statusByLabel.get(foldLabel(mapped.statusLabel));
+      if (targetTripId && sourceStatus) {
+        const moved = await advanceTripFromSource(
+          targetTripId,
+          sourceStatus,
+          String(mapped.statusLabel),
+          actorUserId,
+          batch.fileName,
+        );
+        if (moved === "advanced") statusTally.advanced++;
+        else if (moved === "no_resource") statusTally.noResource++;
+        else if (moved === "backwards") statusTally.behind++;
+      }
+
       await db
         .update(importRows)
         .set({ targetTripId, appliedAt: new Date() })
@@ -439,7 +501,14 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
     previousValue: null,
     // The link tallies ride on the same audit row: how many trips the file itself resourced, and how
     // many it could not (blocked by the eligibility rules, or naming a resource with no registry).
-    newValue: { createdCount, updatedCount, errorCount, ...linkTally, ...closedTally },
+    newValue: {
+      createdCount,
+      updatedCount,
+      errorCount,
+      ...linkTally,
+      ...closedTally,
+      ...statusTally,
+    },
     actorUserId,
   });
 }

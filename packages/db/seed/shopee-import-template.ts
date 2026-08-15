@@ -1,7 +1,16 @@
 import "dotenv/config";
 import ExcelJS from "exceljs";
 import { and, eq } from "drizzle-orm";
-import { customers, db, importTemplates, locationAliases, locations, users } from "../src";
+import type { TripStatus } from "@brazil-tms/shared";
+import {
+  customers,
+  db,
+  importTemplates,
+  locationAliases,
+  locations,
+  statusMappings,
+  users,
+} from "../src";
 
 /**
  * The Shopee trip-import template + the location aliases its file values need (feature 004; R8,
@@ -21,9 +30,14 @@ import { customers, db, importTemplates, locationAliases, locations, users } fro
  *     wall-clock in that string is São Paulo local time, so `dateFormats` lists the ISO shapes
  *     FIRST and `timezone` pins the interpretation — without it the whole schedule shifts 3 hours.
  *
- * Status: `STATUS VIAGEM` IS mapped, but only as the "already over at the source" signal (see
- * `closedStatusLabels`). It never translates into a TMS status — a trip that does get imported is
- * still born `received` and the TMS machine owns its lifecycle. `STATUS` and `DOCA` stay ignored.
+ * Status: `STATUS VIAGEM` drives the trip's lifecycle in TWO ways, both config, both here.
+ *  - `closedStatusLabels` (on the template) names the words that mean "over": FINALIZADA, CANCELADA,
+ *    NO SHOW, INFRUTÍFERA. Those rows are skipped or close the trip they match.
+ *  - `STATUS_MAPPINGS` (rows in `status_mappings`) names where a RUNNING trip is. Reading the column
+ *    only to close left 54 trips showing "Atribuída" — and raising a missed-arrival alert — while the
+ *    file said `EM VIAGEM` and the truck was on the road. The import moves such a trip FORWARD only,
+ *    and never past `received` unless it actually has a driver (see `advanceTripFromSource`).
+ * Together these cover the WHOLE vocabulary the real file uses; `STATUS` and `DOCA` stay ignored.
  */
 
 const DEFAULT_PATH = "C:/Users/Victor/Downloads/PROGRAMAÇÃO 2026 _ BRAZIL TRANSPORTS.xlsx";
@@ -65,6 +79,24 @@ const COLUMN_MAPPINGS = [
 
 /** The customer's words for "this trip is over" (accent/case-insensitive at match time). */
 const CLOSED_STATUS_LABELS = ["FINALIZADA", "FINALIZADO", "CANCELADA", "NO SHOW", "INFRUTÍFERA"];
+
+/**
+ * The customer's words for where a trip currently IS → the internal status. Every label the real
+ * file carries that does NOT mean "over"; a blank cell maps to nothing and leaves the trip alone.
+ *
+ * "ATRIBUÍDO NO SPX" is the customer's own system saying the driver is set — which is `assigned`
+ * here, and it is reached only when the file also named a driver we could link. "ETA ORIGEM"/"ETA
+ * DESTINO" mean the truck reached that end; the walk passes through the declared intermediate
+ * states, so a trip that jumps from `assigned` to `ETA DESTINO` still records confirmed → at_origin
+ * → in_transit → at_destination rather than teleporting.
+ */
+const STATUS_MAPPINGS: { label: string; status: TripStatus }[] = [
+  { label: "FALTA ATRIBUIR", status: "received" },
+  { label: "ATRIBUÍDO NO SPX", status: "assigned" },
+  { label: "ETA ORIGEM", status: "at_origin" },
+  { label: "EM VIAGEM", status: "in_transit" },
+  { label: "ETA DESTINO", status: "at_destination" },
+];
 
 const PARSING_RULES = {
   // ISO first (native Excel dates), then the hand-typed shapes the file actually contains.
@@ -148,6 +180,32 @@ async function main(): Promise<void> {
       .returning({ id: importTemplates.id });
     console.log(`template "${TEMPLATE_NAME}" criado (${inserted[0]!.id})`);
   }
+
+  // ---- status vocabulary (status_mappings) -----------------------------------------------------
+  let statusCreated = 0;
+  let statusUpdated = 0;
+  for (const { label, status } of STATUS_MAPPINGS) {
+    const existing = await db
+      .select({ id: statusMappings.id })
+      .from(statusMappings)
+      .where(
+        and(eq(statusMappings.customerId, customerId), eq(statusMappings.customerLabel, label)),
+      )
+      .limit(1);
+    if (existing[0]) {
+      await db
+        .update(statusMappings)
+        .set({ internalStatus: status, active: true, archivedAt: null, updatedAt: new Date() })
+        .where(eq(statusMappings.id, existing[0].id));
+      statusUpdated++;
+    } else {
+      await db
+        .insert(statusMappings)
+        .values({ customerId, customerLabel: label, internalStatus: status, active: true });
+      statusCreated++;
+    }
+  }
+  console.log(`status do cliente: ${statusCreated} criados, ${statusUpdated} atualizados`);
 
   // ---- location aliases ----------------------------------------------------------------------
   const workbook = new ExcelJS.Workbook();

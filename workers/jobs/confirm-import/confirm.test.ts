@@ -11,6 +11,7 @@ import {
   importRows,
   importTemplates,
   locations,
+  statusMappings,
   tripAssignments,
   tripEvents,
   trips,
@@ -84,6 +85,7 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
           { source: "destination", target: "destinationCode" },
           { source: "pickup_start", target: "plannedPickupWindowStart" },
           { source: "vehicle", target: "plannedVehicleType" },
+          { source: "status", target: "statusLabel" },
         ],
         parsingRules: {
           dateFormats: ["yyyy-MM-dd HH:mm"],
@@ -95,6 +97,12 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
       })
       .returning();
     templateId = template[0]!.id;
+
+    // The customer's word for "on the road" (`status_mappings` — the config that lets the import say
+    // where a trip IS, not just that it ended).
+    await db
+      .insert(statusMappings)
+      .values({ customerId, customerLabel: "EM VIAGEM", internalStatus: "in_transit" });
 
     // Resources for the in-test assignment (owned ⇒ no carrier required; far-future expiries ⇒ no
     // documentation finding; `truck` matches the CSV `Truck` vehicle so no type-mismatch BLOCK).
@@ -147,6 +155,7 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
     }
     for (const cid of createdCustomerIds) {
       await db.delete(importTemplates).where(eq(importTemplates.customerId, cid));
+      await db.delete(statusMappings).where(eq(statusMappings.customerId, cid));
       await db.delete(locations).where(eq(locations.customerId, cid));
       await db.delete(auditLogs).where(eq(auditLogs.entityId, cid));
       await db.delete(customers).where(eq(customers.id, cid));
@@ -198,10 +207,7 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
 
     await runConfirm({ batchId, actorUserId: actorId });
 
-    const created = await db
-      .select()
-      .from(trips)
-      .where(eq(trips.importBatchId, batchId));
+    const created = await db.select().from(trips).where(eq(trips.importBatchId, batchId));
     for (const t of created) createdTripIds.push(t.id);
 
     expect(created).toHaveLength(2);
@@ -215,10 +221,7 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
     expect(externalIds).toEqual([extA, extB].sort());
 
     // Rows are linked + applied.
-    const rows = await db
-      .select()
-      .from(importRows)
-      .where(eq(importRows.importBatchId, batchId));
+    const rows = await db.select().from(importRows).where(eq(importRows.importBatchId, batchId));
     for (const r of rows) {
       expect(r.appliedAt).not.toBeNull();
       expect(r.targetTripId).not.toBeNull();
@@ -376,7 +379,12 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
 
     const { trip: assigned } = await assignTrip(
       tripId,
-      { driverId, vehicleId, expectedFromStatus: "received", overrideReason: "Slice 015 — US2 setup" },
+      {
+        driverId,
+        vehicleId,
+        expectedFromStatus: "received",
+        overrideReason: "Slice 015 — US2 setup",
+      },
       actorId,
     );
     expect(assigned.currentStatus).toBe("assigned");
@@ -419,7 +427,12 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
     createdTripIds.push(trip.id);
     await assignTrip(
       trip.id,
-      { driverId, vehicleId, expectedFromStatus: "received", overrideReason: "Slice 015 — race setup" },
+      {
+        driverId,
+        vehicleId,
+        expectedFromStatus: "received",
+        overrideReason: "Slice 015 — race setup",
+      },
       actorId,
     );
 
@@ -464,5 +477,55 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
     expect(after.id).toBe(trip.id);
     expect(after.currentStatus).toBe("assigned"); // never reverted to received.
     expect(after.plannedRouteNotes).toBe("RACE-UPDATED");
+  });
+
+  it("the customer's status column moves an assigned trip to in_transit (status_mappings)", async () => {
+    const ext = uniq("SH-STATUS");
+    // Batch 1 — the trip is created and assigned: it has a driver, so "on the road" is honest.
+    const csv1 = [
+      "trip_id,origin,destination,pickup_start,vehicle,status",
+      `${ext},ORIG,DEST,2026-08-11 07:00,Truck,FALTA ATRIBUIR`,
+    ].join("\n");
+    const batch1 = await seedBatchWithCsv(csv1);
+    await runParse({ batchId: batch1, storageKey: originalStorageKey(batch1) });
+    await runValidate({ batchId: batch1 });
+    await runDetectDuplicates({ batchId: batch1 });
+    await runConfirm({ batchId: batch1, actorUserId: actorId });
+    const trip = (await db.select().from(trips).where(eq(trips.importBatchId, batch1)))[0]!;
+    createdTripIds.push(trip.id);
+    // An unmapped label ("FALTA ATRIBUIR" is not configured here) moves nothing.
+    expect(trip.currentStatus).toBe("received");
+    await assignTrip(
+      trip.id,
+      {
+        driverId,
+        vehicleId,
+        expectedFromStatus: "received",
+        overrideReason: "Status vindo da origem — preparação",
+      },
+      actorId,
+    );
+
+    // Batch 2 — the same trip, now reported EM VIAGEM by the customer's own system.
+    const csv2 = [
+      "trip_id,origin,destination,pickup_start,vehicle,status",
+      `${ext},ORIG,DEST,2026-08-11 07:00,Truck,EM VIAGEM`,
+    ].join("\n");
+    const batch2 = await seedBatchWithCsv(csv2);
+    await runParse({ batchId: batch2, storageKey: originalStorageKey(batch2) });
+    await runValidate({ batchId: batch2 });
+    await runDetectDuplicates({ batchId: batch2 });
+    await runConfirm({ batchId: batch2, actorUserId: actorId });
+
+    const after = (await db.select().from(trips).where(eq(trips.id, trip.id)).limit(1))[0]!;
+    expect(after.currentStatus).toBe("in_transit");
+
+    // The trip carries the intermediate hops, all sourced `import` and none with an invented time.
+    const events = await db.select().from(tripEvents).where(eq(tripEvents.tripId, trip.id));
+    const fromImport = events.filter((e) => e.source === "import");
+    expect(fromImport.map((e) => e.statusAfter)).toEqual(
+      expect.arrayContaining(["confirmed", "at_origin", "in_transit"]),
+    );
+    expect(fromImport.every((e) => e.eventTimestamp === null)).toBe(true);
   });
 });
