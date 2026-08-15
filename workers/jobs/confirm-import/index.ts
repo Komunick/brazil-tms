@@ -28,7 +28,12 @@ import {
   resourceRequestFrom,
   type ResourceIndex,
 } from "./resources";
-import { advanceTripFromSource, closeTripFromSource, isClosedAtSource } from "./source-status";
+import {
+  advanceTripFromSource,
+  closeTripFromSource,
+  isCancellationLabel,
+  isClosedAtSource,
+} from "./source-status";
 
 /**
  * T033 — `import.confirm` job (data-model R8; contract §C/§A). Per row best-effort + idempotent: for
@@ -41,6 +46,9 @@ import { advanceTripFromSource, closeTripFromSource, isClosedAtSource } from "./
  * are status-neutral (FR-002). A trip's status moves only through the customer's own status column, and
  * only for a customer that has the words configured (`status_mappings`): closing it when the file
  * reports it over, advancing it — forward only, never unmanned — when the file reports it underway.
+ * A row the file reports CANCELLED that the TMS never had is created and cancelled (2026-08-15, at
+ * the operation's request): "why didn't this one run?" has to have an answer in the TMS. One that
+ * simply ran to the end is still skipped — historical deliveries nobody can act on.
  *
  * IDEMPOTENCY: a row's `applied_at`/`target_trip_id` guard makes a re-run skip already-applied rows,
  * so re-running creates 0 new trips. The trips partial unique index `(customer_id, external_trip_id)`
@@ -205,7 +213,7 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
   // The customer's "this is over" labels, from the template. Empty → status is ignored, which is the
   // behaviour every other customer keeps.
   const closedLabels = await closedStatusLabelsFor(batch.templateId);
-  const closedTally = { skipped: 0, closed: 0 };
+  const closedTally = { skipped: 0, closed: 0, cancelledCreated: 0 };
 
   // The customer's words for where a RUNNING trip is (`status_mappings` config — no per-customer
   // code). Empty for a customer with no mappings, and then nothing below ever fires.
@@ -234,11 +242,16 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
       const legNumber = typeof mapped.legNumber === "number" ? mapped.legNumber : 1;
 
       /**
-       * The row says the trip is already over. Two halves, and both are needed:
-       *  - the TMS does not know it → SKIP. Creating it would put a finished trip in the dispatch
-       *    queue with a pickup in the past, which is exactly what floods the SLA alerts;
+       * The row says the trip is already over. Three outcomes, and the difference between the last
+       * two is a business decision (2026-08-15), not a technicality:
        *  - the TMS already has it (imported last week, still open here) → CLOSE it to match, so it
-       *    stops being an open trip forever.
+       *    stops being an open trip forever;
+       *  - the TMS does not know it and the customer CALLED IT OFF → CREATE it and cancel it. The
+       *    operation has to be able to answer "why didn't this one run?", and a row that never
+       *    existed in the TMS answers nothing. It is born terminal, so it never reaches the
+       *    dispatch queue and never raises an alert;
+       *  - the TMS does not know it and it simply RAN to the end → SKIP. Thousands of historical
+       *    deliveries would be created with a pickup in the past for no one to act on.
        */
       if (isClosedAtSource(mapped.statusLabel, closedLabels)) {
         const externalId = mapped.externalTripId ? String(mapped.externalTripId) : "";
@@ -246,6 +259,7 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
           ? await findExistingTrip(batch.customerId, externalId, legNumber)
           : null;
         const label = String(mapped.statusLabel);
+        const cancelled = isCancellationLabel(label);
 
         if (existing) {
           const outcome = await closeTripFromSource(
@@ -256,6 +270,36 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
           );
           if (outcome === "closed") closedTally.closed++;
           targetTripId = existing.id;
+        } else if (cancelled && mapped.originLocationId && mapped.destinationLocationId) {
+          // Same write path as any other imported trip — created `received`, then walked to
+          // `cancelled` through the declared transition, carrying the customer's own reason label.
+          const trip = await createTrip(
+            createTripSchema.parse({
+              customerId: batch.customerId,
+              externalTripId: mapped.externalTripId ?? null,
+              legNumber,
+              importBatchId: batchId,
+              originLocationId: mapped.originLocationId,
+              destinationLocationId: mapped.destinationLocationId,
+              plannedPickupWindowStart: mapped.plannedPickupWindowStart ?? null,
+              plannedPickupWindowEnd: mapped.plannedPickupWindowEnd ?? null,
+              plannedDeliveryWindowStart: mapped.plannedDeliveryWindowStart ?? null,
+              plannedDeliveryWindowEnd: mapped.plannedDeliveryWindowEnd ?? null,
+              plannedVehicleType: mapped.plannedVehicleType ?? null,
+              plannedRouteNotes: mapped.plannedRouteNotes ?? null,
+            }),
+            actorUserId,
+          );
+          const customerFields = customerFieldsFrom(mapped);
+          if (customerFields) {
+            await db
+              .update(trips)
+              .set({ customerFields, updatedAt: new Date() })
+              .where(eq(trips.id, trip.id));
+          }
+          await closeTripFromSource(trip.id, label, actorUserId, batch.fileName);
+          closedTally.cancelledCreated++;
+          targetTripId = trip.id;
         } else {
           closedTally.skipped++;
         }
@@ -274,7 +318,9 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
                 code: "CLOSED_AT_SOURCE",
                 message: existing
                   ? `O cliente reporta "${label}": viagem encerrada no TMS.`
-                  : `O cliente reporta "${label}": linha não importada (viagem já encerrada na origem).`,
+                  : targetTripId
+                    ? `O cliente reporta "${label}": viagem importada já cancelada, para consulta.`
+                    : `O cliente reporta "${label}": linha não importada (viagem já encerrada na origem).`,
               },
             ],
           })

@@ -37,12 +37,20 @@ export function isClosedAtSource(label: unknown, closedLabels: string[]): boolea
   return wanted.has(fold(String(label)));
 }
 
+/**
+ * Does this label mean the trip was CALLED OFF (as opposed to run to the end)? The distinction
+ * decides more than the target status: a trip the customer cancelled is imported and cancelled so
+ * the operation keeps the record ("por que essa não rodou?"), while one that simply finished long
+ * ago is skipped — the TMS gains nothing from thousands of historical deliveries.
+ */
+export function isCancellationLabel(label: unknown): boolean {
+  const v = fold(String(label ?? ""));
+  return v.includes("CANCEL") || v.includes("NO SHOW") || v.includes("INFRUTIFERA");
+}
+
 /** Cancelled-like labels close as `cancelled`; anything else in the list closes as `completed`. */
 function targetStatusFor(label: string): TripStatus {
-  const v = fold(label);
-  return v.includes("CANCEL") || v.includes("NO SHOW") || v.includes("INFRUTIFERA")
-    ? "cancelled"
-    : "completed";
+  return isCancellationLabel(label) ? "cancelled" : "completed";
 }
 
 /**

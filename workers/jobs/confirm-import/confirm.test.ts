@@ -94,6 +94,8 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
           thousandSeparator: ".",
         },
         requiredOverrides: [],
+        // The customer's words for "this one is over" — the config the closing/cancelling path reads.
+        closedStatusLabels: ["FINALIZADA", "CANCELADA"],
       })
       .returning();
     templateId = template[0]!.id;
@@ -477,6 +479,43 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
     expect(after.id).toBe(trip.id);
     expect(after.currentStatus).toBe("assigned"); // never reverted to received.
     expect(after.plannedRouteNotes).toBe("RACE-UPDATED");
+  });
+
+  it("a CANCELLED row the TMS never had is imported and cancelled; a FINISHED one is skipped", async () => {
+    const cancelled = uniq("SH-CANC");
+    const finished = uniq("SH-FIN");
+    const csv = [
+      "trip_id,origin,destination,pickup_start,vehicle,status",
+      `${cancelled},ORIG,DEST,2026-08-12 07:00,Truck,CANCELADA`,
+      `${finished},ORIG,DEST,2026-08-12 08:00,Truck,FINALIZADA`,
+    ].join("\n");
+    const batchId = await seedBatchWithCsv(csv);
+    await runParse({ batchId, storageKey: originalStorageKey(batchId) });
+    await runValidate({ batchId });
+    await runDetectDuplicates({ batchId });
+    await runConfirm({ batchId, actorUserId: actorId });
+
+    // The cancelled one EXISTS, so the operation can answer "why didn't this run?" …
+    const canc = await db
+      .select()
+      .from(trips)
+      .where(and(eq(trips.customerId, customerId), eq(trips.externalTripId, cancelled)));
+    expect(canc).toHaveLength(1);
+    createdTripIds.push(canc[0]!.id);
+    expect(canc[0]!.currentStatus).toBe("cancelled");
+    expect(canc[0]!.cancellationReasonCode).toBe("CANCELADA");
+    expect(canc[0]!.cancelledAt).not.toBeNull();
+    // … born terminal: it never sat in the queue, and the walk is recorded as coming from the import.
+    const events = await db.select().from(tripEvents).where(eq(tripEvents.tripId, canc[0]!.id));
+    expect(events.every((e) => e.source === "import" && e.eventTimestamp === null)).toBe(true);
+    expect(events.some((e) => e.statusAfter === "cancelled")).toBe(true);
+
+    // … while a trip that simply ran to the end is NOT created: nobody can act on it.
+    const fin = await db
+      .select()
+      .from(trips)
+      .where(and(eq(trips.customerId, customerId), eq(trips.externalTripId, finished)));
+    expect(fin).toHaveLength(0);
   });
 
   it("the customer's status column moves an assigned trip to in_transit (status_mappings)", async () => {
