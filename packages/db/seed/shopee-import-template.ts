@@ -220,11 +220,20 @@ async function main(): Promise<void> {
   const originCol = headers.indexOf("ESTAÇÃO ORIGEM");
   const destCol = headers.indexOf("ESTAÇÃO DESTINO");
 
+  /**
+   * One alias per STATION, not per cell. A milk run written inside one row stacks both stations in
+   * the same cell with Alt+Enter ("SOC-RJ2 | …\nHUB-LMG-50 | …"), and the parser splits that row
+   * into one movement per line — so the value that reaches the resolver is a single line. Teaching
+   * the blob as one alias taught nothing: the second station of every stacked row stayed unknown
+   * (6 rows of the first real file failed on stations that were registered all along).
+   */
   const fileValues = new Set<string>();
   for (let r = SHEET.header + 1; r <= sheet.rowCount; r++) {
     for (const col of [originCol, destCol]) {
-      const v = cellText(sheet.getRow(r).getCell(col).value).trim();
-      if (v) fileValues.add(v);
+      for (const line of cellText(sheet.getRow(r).getCell(col).value).split(/\r?\n/)) {
+        const v = line.trim();
+        if (v) fileValues.add(v);
+      }
     }
   }
 
