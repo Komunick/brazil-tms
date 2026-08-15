@@ -253,6 +253,9 @@ export const vehicleTypeSchema = z.enum(
     "toco",
     "truck",
     "bitruck",
+    // A tractor unit is its own registry entry — the fleet owns cavalos, and a customer schedule
+    // names the COMPOSITION it wants (carreta/truck/…), which is a different question.
+    "cavalo",
     "carreta",
     "carreta_ls",
     "bitrem",

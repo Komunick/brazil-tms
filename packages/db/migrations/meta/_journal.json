@@ -92,6 +92,13 @@
       "when": 1785348913786,
       "tag": "0012_tough_wither",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786792243901,
+      "tag": "0013_narrow_the_hood",
+      "breakpoints": true
     }
   ]
 }

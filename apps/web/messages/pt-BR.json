@@ -630,6 +630,26 @@
       "archivedMsg": "Rota arquivada."
     }
   },
+  "RegistryImport": {
+    "title": "Importar cadastro (motoristas, veículos e reboques)",
+    "subtitle": "Envie a planilha de programação: as abas MOTORISTAS e VEÍCULOSCARRETAS alimentam os cadastros de frota.",
+    "fileLabel": "Planilha (.xlsx)",
+    "import": "Importar cadastro",
+    "importing": "Importando cadastro...",
+    "importingHint": "Lendo as abas e gravando. Pode levar alguns segundos em planilhas grandes — não feche a página.",
+    "mappingHint": "MOTORISTA → Nome · CPF → CPF · TELEFONE → Telefone · VENCIMENTO CNH → Validade da CNH · PLACA → Placa · TIPO → Tipo · TECNOLOGIA → Rastreador · CARRETA e CARRETA 2 → Reboques. Reenviar a planilha corrigida atualiza os cadastros; nada é duplicado.",
+    "counts": "{created} criados · {updated} atualizados · {unchanged} sem mudança",
+    "entity": {
+      "drivers": "Motoristas",
+      "vehicles": "Veículos",
+      "trailers": "Reboques"
+    },
+    "row": "linha {row}",
+    "warnings": "{count} avisos",
+    "warningsHint": "Importado assim mesmo — confira e corrija na origem.",
+    "missingSheets": "Abas não encontradas na planilha: {sheets}.",
+    "genericError": "Não foi possível importar o cadastro."
+  },
   "Imports": {
     "title": "Importar Viagens",
     "subtitle": "Importe viagens pré-planejadas dos clientes a partir de arquivos CSV ou XLSX.",
@@ -879,6 +899,7 @@
     "toco": "Toco",
     "truck": "Truck",
     "bitruck": "Bitruck",
+    "cavalo": "Cavalo",
     "carreta": "Carreta",
     "carreta_ls": "Carreta LS",
     "bitrem": "Bitrem",

@@ -44,6 +44,9 @@ export const vehicleType = pgEnum("vehicle_type", [
   "carreta_ls",
   "bitrem",
   "rodotrem",
+  // Appended (never inserted mid-list): Postgres only supports ADD VALUE, and the fleet registry
+  // needs the tractor unit as its own type.
+  "cavalo",
 ]);
 
 export const trailerType = pgEnum("trailer_type", [
@@ -110,11 +113,7 @@ export const tripEventType = pgEnum("trip_event_type", [
   "note",
 ]);
 
-export const tripEventSource = pgEnum("trip_event_source", [
-  "system",
-  "operator_manual",
-  "import",
-]);
+export const tripEventSource = pgEnum("trip_event_source", ["system", "operator_manual", "import"]);
 
 export const cancellationResponsibleParty = pgEnum("cancellation_responsible_party", [
   "customer_caused",
