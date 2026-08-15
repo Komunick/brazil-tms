@@ -327,6 +327,7 @@
     "trailer_status_change": "Status do reboque alterado",
     "trip_create": "Viagem criada",
     "trip_plan_update": "Plano da viagem atualizado",
+    "trip_fields_update": "Dados da operação atualizados",
     "trip_status_change": "Status da viagem alterado",
     "trip_cancel": "Viagem cancelada",
     "trip_assign": "Viagem atribuída",
@@ -939,6 +940,15 @@
   "Trips": {
     "title": "Torre de Controle",
     "subtitle": "Acompanhe, busque e filtre todas as viagens.",
+    "operationalFields": {
+      "title": "Dados da operação",
+      "hint": "Preenchidos por vocês, aqui. A importação nunca sobrescreve o que for digitado neste bloco.",
+      "save": "Salvar",
+      "saving": "Salvando…",
+      "saved": "Salvo.",
+      "errorClosed": "A viagem está encerrada: estes campos não podem mais ser alterados.",
+      "errorGeneric": "Não foi possível salvar. Tente novamente."
+    },
     "status": {
       "received": "Recebida",
       "assigned": "Atribuída",
@@ -1126,6 +1136,7 @@
       "trip": {
         "create": "Viagem criada",
         "plan_update": "Plano atualizado",
+        "fields_update": "Dados da operação atualizados",
         "status_change": "Status alterado",
         "cancel": "Viagem cancelada",
         "assign": "Viagem atribuída",

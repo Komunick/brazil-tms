@@ -7,6 +7,7 @@ export * from "./domain/trip-status";
 export * from "./domain/assignment-eligibility";
 export * from "./domain/sla-risk";
 export * from "./domain/exceptions";
+export * from "./domain/operational-fields";
 export * from "./sla/jobs";
 // feature 008 — documents, completion, billing readiness, rates & export.
 export * from "./domain/documents";

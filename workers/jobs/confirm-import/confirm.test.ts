@@ -15,6 +15,7 @@ import {
   tripAssignments,
   tripEvents,
   trips,
+  updateOperationalFields,
   users,
   vehicles,
 } from "@brazil-tms/db";
@@ -479,6 +480,42 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
     expect(after.id).toBe(trip.id);
     expect(after.currentStatus).toBe("assigned"); // never reverted to received.
     expect(after.plannedRouteNotes).toBe("RACE-UPDATED");
+  });
+
+  it("a re-import NEVER overwrites what the operation typed (the reason the spreadsheet can die)", async () => {
+    const ext = uniq("SH-OPFIELDS");
+    const csv = [
+      "trip_id,origin,destination,pickup_start,vehicle,status",
+      `${ext},ORIG,DEST,2026-08-20 07:00,Truck,`,
+    ].join("\n");
+    const batch1 = await seedBatchWithCsv(csv);
+    await runParse({ batchId: batch1, storageKey: originalStorageKey(batch1) });
+    await runValidate({ batchId: batch1 });
+    await runDetectDuplicates({ batchId: batch1 });
+    await runConfirm({ batchId: batch1, actorUserId: actorId });
+
+    const trip = (await db.select().from(trips).where(eq(trips.importBatchId, batch1)))[0]!;
+    createdTripIds.push(trip.id);
+
+    // The operation fills in its own fields here, in the TMS.
+    await updateOperationalFields(trip.id, { smRaster: "SM-4477", cte: "35260812" }, actorId);
+
+    // Next week's file arrives with the same trip, a corrected pickup, and no idea those exist.
+    const csv2 = [
+      "trip_id,origin,destination,pickup_start,vehicle,status",
+      `${ext},ORIG,DEST,2026-08-20 09:30,Truck,`,
+    ].join("\n");
+    const batch2 = await seedBatchWithCsv(csv2);
+    await runParse({ batchId: batch2, storageKey: originalStorageKey(batch2) });
+    await runValidate({ batchId: batch2 });
+    await runDetectDuplicates({ batchId: batch2 });
+    await runConfirm({ batchId: batch2, actorUserId: actorId });
+
+    const after = (await db.select().from(trips).where(eq(trips.id, trip.id)).limit(1))[0]!;
+    // The plan followed the file …
+    expect(after.plannedPickupWindowStart).not.toEqual(trip.plannedPickupWindowStart);
+    // … and the operation's own entries were left exactly alone.
+    expect(after.operationalFields).toEqual({ smRaster: "SM-4477", cte: "35260812" });
   });
 
   it("a CANCELLED row the TMS never had is imported and cancelled; a FINISHED one is skipped", async () => {

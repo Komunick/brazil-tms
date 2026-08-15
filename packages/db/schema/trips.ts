@@ -80,6 +80,15 @@ export const trips = pgTable(
      * column instead. Written by the import (`customer.*` template targets); never by hand.
      */
     customerFields: jsonb("customer_fields"),
+    /**
+     * The operational annotations the TEAM owns — solicitação, checklist, SM Raster, CT-e, doca.
+     * Same `{ rótulo: valor }` shape as `customer_fields` and deliberately a SEPARATE column: those
+     * are what the customer's file says, these are what our operation decided, and an import must
+     * never overwrite a person's entry. They exist so the fields that today live only in a
+     * hand-maintained spreadsheet have a home here — the step that lets that spreadsheet be
+     * switched off (2026-08-15). Written only through `updateOperationalFields`.
+     */
+    operationalFields: jsonb("operational_fields"),
     plannedPickupWindowStart: timestamp("planned_pickup_window_start", { withTimezone: true }),
     plannedPickupWindowEnd: timestamp("planned_pickup_window_end", { withTimezone: true }),
     plannedDeliveryWindowStart: timestamp("planned_delivery_window_start", { withTimezone: true }),

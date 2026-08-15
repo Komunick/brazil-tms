@@ -118,6 +118,8 @@ export type TripDetailView = TripDetail & {
   importBatchId: string | null;
   /** Columns the customer's file carries that the TMS has no field for — display-only (see `trips`). */
   customerFields: Record<string, string> | null;
+  /** The operation's own annotations (solicitação, checklist, SM Raster, CT-e, doca). */
+  operationalFields: Record<string, string> | null;
   /**
    * The other legs of the same customer programming (milk run), newest-leg-last and EXCLUDING this
    * trip. Empty for the ordinary one-leg trip, which is almost all of them.
@@ -524,6 +526,7 @@ export async function getTripDetailView(id: string): Promise<TripDetailView | nu
       laneId: trips.laneId,
       importBatchId: trips.importBatchId,
       customerFields: trips.customerFields,
+      operationalFields: trips.operationalFields,
     })
     .from(trips)
     .leftJoin(customers, eq(trips.customerId, customers.id))
@@ -586,6 +589,7 @@ export async function getTripDetailView(id: string): Promise<TripDetailView | nu
     laneLabel: row.laneId ? `${row.originCode ?? ""} → ${row.destinationCode ?? ""}` : null,
     importBatchId: row.importBatchId,
     customerFields: (row.customerFields as Record<string, string> | null) ?? null,
+    operationalFields: (row.operationalFields as Record<string, string> | null) ?? null,
   };
 }
 

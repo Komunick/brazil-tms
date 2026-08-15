@@ -272,6 +272,27 @@ export function useUpdateTripPlan(id: string) {
   });
 }
 
+/**
+ * Save the operation's own annotations (PATCH /api/trips/:id/operational-fields) — solicitação,
+ * checklist, SM Raster, CT-e, doca. Only the changed fields are sent; blank clears one.
+ */
+export function useUpdateOperationalFields(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: Record<string, string>) => {
+      const res = await fetch(`/api/trips/${id}/operational-fields`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
 // --- Execution write hooks (007, US1; milestones + free-form notes via the BFF) -------------------
 
 /**

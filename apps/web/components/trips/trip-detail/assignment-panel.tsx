@@ -7,6 +7,7 @@ import { formatDateTime } from "@brazil-tms/shared";
 import type { TripAssignmentDto, TripDetailView, TripFilterOptions } from "@brazil-tms/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
+import { OperationalFieldsForm } from "@/components/trips/trip-detail/operational-fields-form";
 
 /**
  * Trip-Detail assignment panel (006 US1/US3/US4) — fills slice 005's `AssignmentPlaceholder`. Shows
@@ -95,6 +96,10 @@ export function AssignmentPanel({
             <p className="text-sm text-muted-foreground">{t("noCurrentAssignment")}</p>
           )}
         </section>
+
+        {/* The operation's own annotations — editable here, never overwritten by an import. These
+            five fields are the reason the planning spreadsheet still existed. */}
+        <OperationalFieldsForm trip={trip} />
 
         {/* Customer's own columns, straight from the imported file (display-only) ---------- */}
         {trip.customerFields && Object.keys(trip.customerFields).length > 0 ? (

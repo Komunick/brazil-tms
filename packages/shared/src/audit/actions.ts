@@ -37,6 +37,7 @@ export type AuditAction =
   // lifecycle action writes exactly one immutable audit row (SC-003).
   | "trip.create" // newValue = original_plan summary + initial status
   | "trip.plan_update" // accepted customer update to live planned_* fields (per-field prev/new)
+  | "trip.fields_update" // the operation's own annotations (solicitação, checklist, SM Raster, CT-e, doca)
   | "trip.status_change" // prev/new current_status (also recorded as a trip_event)
   | "trip.cancel" // reason_code, responsible_party, billing_impact, cancelled_at
   // feature 004 — trip import (data-model.md §Audit actions). Batch upload + confirm, plus the
@@ -135,6 +136,7 @@ export const ALL_AUDIT_ACTIONS = [
   "trailer.status_change",
   "trip.create",
   "trip.plan_update",
+  "trip.fields_update",
   "trip.status_change",
   "trip.cancel",
   "import.create",
