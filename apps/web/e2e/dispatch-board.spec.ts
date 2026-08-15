@@ -259,24 +259,31 @@ test.describe("US5 — Dispatch Board", () => {
     });
   });
 
-  test("the queue paginates and reports the range it is showing", async ({ page }) => {
+  test("the queue paginates at BOTH ends and reports the range it is showing", async ({ page }) => {
     await login(page, testAccounts.opsManager);
     await page.goto("/dispatch");
     await expect(page.getByText("Fila de atribuição")).toBeVisible({ timeout: 15_000 });
 
     // Volume-independent assertion: narrowing to ONE trip must summarise as "1–1 de 1" with both
-    // page buttons disabled (there is no page 0 and no page 2).
+    // page buttons disabled (there is no page 0 and no page 2). The control is rendered TWICE —
+    // pinned above the list and repeated after the last row — so a page turn never costs a scroll
+    // down and back up. Both copies are asserted: a disabled twin is as important as a disabled one.
     await page
       .getByPlaceholder("Buscar por ID, cliente ou origem/destino")
       .fill(unassignedExternalId);
-    await expect(page.getByText("1–1 de 1")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("button", { name: "Anterior" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Próxima" })).toBeDisabled();
+    await expect(page.getByText("1–1 de 1")).toHaveCount(2, { timeout: 15_000 });
+    for (const label of ["Anterior", "Próxima"]) {
+      const buttons = page.getByRole("button", { name: label });
+      await expect(buttons).toHaveCount(2);
+      await expect(buttons.first()).toBeDisabled();
+      await expect(buttons.last()).toBeDisabled();
+    }
 
-    // With the whole queue, the footer still reports a range (the counts depend on the environment).
+    // With the whole queue, both copies still report a range (the counts depend on the environment).
     await page.getByPlaceholder("Buscar por ID, cliente ou origem/destino").fill("");
     await page.getByRole("button", { name: "Tudo", exact: true }).click();
-    await expect(page.getByText(/\d+–\d+ de \d+/)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/\d+–\d+ de \d+/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/\d+–\d+ de \d+/)).toHaveCount(2);
   });
 
   test("the pickup-date filter narrows the queue and the presets drive it", async ({ page }) => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { formatDateTime, saoPauloDate } from "@brazil-tms/shared";
@@ -36,8 +36,10 @@ import { useFilterOptions, useTripBoard } from "@/lib/trips/client";
  * set those inputs. Everything is ANDed with the pinned queue filters, so no filter can widen the
  * queue beyond unassigned `received` trips. The board OPENS on "de hoje em diante": the queue sorts
  * by pickup ASC, so an unbounded first page would open on the oldest rows of a bulk-imported season.
- * The queue pages server-side (50/page) with the Control Tower's footer, and any filter change resets
- * to page 1.
+ * The queue pages server-side (50/page) with the Control Tower's wording, and any filter change resets
+ * to page 1. The control sits at BOTH ends — pinned above the list and repeated after the last row —
+ * and turning a page scrolls back to the first row of the new one: with it only at the far end, a page
+ * turn cost a scroll down and a scroll back up to read the result.
  *
  * 017 (issue #24): each row also offers "Cancelar viagem" for `cancelScope` holders (the queue is all
  * `received` ⊂ dispatch phase, so any non-`none` scope qualifies) — the shared CancelTripDialog; a
@@ -114,6 +116,23 @@ export function DispatchBoard({
   useEffect(() => {
     setOffset(0);
   }, [appliedSearch, pickupFrom, pickupTo]);
+
+  /**
+   * Turning a page puts you at the START of the new one. Paging from the top control used to leave
+   * the viewport wherever it was — halfway down a list whose contents had silently changed under it.
+   * `smooth` is skipped for users who asked for less motion.
+   */
+  const listTopRef = useRef<HTMLDivElement>(null);
+  function goToOffset(next: number): void {
+    setOffset(next);
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    listTopRef.current?.scrollIntoView({
+      block: "start",
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
+  }
 
   const query = [
     DISPATCH_QUERY,
@@ -194,6 +213,24 @@ export function DispatchBoard({
           ))}
         </div>
 
+        {/* Paging bar, pinned. The queue runs to hundreds of trips, and with the control only at the
+            far end, turning a page meant scrolling to the bottom and back up to read the new one.
+            Sticking it above the list keeps it a click away wherever you are; the twin at the bottom
+            stays for whoever reads to the end. */}
+        {total > 0 ? (
+          <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center justify-between gap-2 border-b bg-card px-1 py-2 text-sm text-muted-foreground">
+            <span>{tBoard("paginationSummary", { from: firstShown, to: lastShown, total })}</span>
+            <PageControls
+              offset={offset}
+              total={total}
+              onChange={goToOffset}
+              labels={{ previous: tBoard("previous"), next: tBoard("next") }}
+            />
+          </div>
+        ) : null}
+
+        <div ref={listTopRef} className="scroll-mt-4" />
+
         {board.isLoading ? (
           <div className="space-y-3" aria-busy="true">
             <Skeleton className="h-16 w-full" />
@@ -258,26 +295,12 @@ export function DispatchBoard({
         {total > 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-sm text-muted-foreground">
             <span>{tBoard("paginationSummary", { from: firstShown, to: lastShown, total })}</span>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={offset === 0}
-                onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-              >
-                {tBoard("previous")}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={offset + PAGE_SIZE >= total}
-                onClick={() => setOffset(offset + PAGE_SIZE)}
-              >
-                {tBoard("next")}
-              </Button>
-            </div>
+            <PageControls
+              offset={offset}
+              total={total}
+              onChange={goToOffset}
+              labels={{ previous: tBoard("previous"), next: tBoard("next") }}
+            />
           </div>
         ) : null}
       </CardContent>
@@ -313,5 +336,45 @@ export function DispatchBoard({
         />
       ) : null}
     </Card>
+  );
+}
+
+/**
+ * Previous / next, rendered at BOTH ends of the queue (pinned above it and after the last row) so a
+ * page turn never costs a scroll. Local to this file on purpose: it is two usages of one control,
+ * not a shared abstraction (PRINCIPLES — the ≥3 rule).
+ */
+function PageControls({
+  offset,
+  total,
+  onChange,
+  labels,
+}: {
+  offset: number;
+  total: number;
+  onChange: (next: number) => void;
+  labels: { previous: string; next: string };
+}) {
+  return (
+    <div className="flex gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={offset === 0}
+        onClick={() => onChange(Math.max(0, offset - PAGE_SIZE))}
+      >
+        {labels.previous}
+      </Button>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={offset + PAGE_SIZE >= total}
+        onClick={() => onChange(offset + PAGE_SIZE)}
+      >
+        {labels.next}
+      </Button>
+    </div>
   );
 }
