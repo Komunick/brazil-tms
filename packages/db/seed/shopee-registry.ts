@@ -13,7 +13,7 @@ import { carriers, customers, db, drivers, locations, trailers, vehicles } from 
  *   VEÍCULOSCARRETAS  → vehicles  (CAVALO/TRUCK/TOCO/VUC) + trailers (CARRETA, CARRETA 2)
  *
  * Run (path defaults to the value below; pass another as argv[2]):
- *   pnpm --filter @brazil-tms/db db:seed:shopee -- "C:/caminho/PROGRAMAÇÃO 2026.xlsx"
+ *   pnpm --filter @brazil-tms/db db:seed:shopee "C:/caminho/PROGRAMAÇÃO 2026.xlsx"
  *
  * IDEMPOTENT: every entity is keyed on its natural key (location = customer+code, driver = CPF or
  * name, vehicle/trailer = plate) and updated in place on re-run, so re-loading a corrected workbook

@@ -38,6 +38,11 @@ export const createTripSchema = z
   .object({
     customerId: uuid("Cliente"),
     externalTripId: z.string().trim().min(1).max(200).nullable().optional(),
+    /**
+     * Which leg of the customer's programming this is (default 1). A milk run shares ONE customer id
+     * across chained movements, so the id alone no longer identifies a trip — see `trips.leg_number`.
+     */
+    legNumber: z.number().int().min(1).max(50).optional(),
     importBatchId: uuid("Lote de importação").nullable().optional(),
     originLocationId: uuid("Local de origem"),
     destinationLocationId: uuid("Local de destino"),

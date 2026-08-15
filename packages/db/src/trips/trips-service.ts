@@ -3,12 +3,7 @@ import { db } from "../client";
 import { trips } from "../../schema";
 import { TRIP_STATUSES, type CreateTripInput, type TripStatus } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
-import {
-  loadTripDetail,
-  toTripSummary,
-  type TripDetail,
-  type TripSummary,
-} from "./trip-dto";
+import { loadTripDetail, toTripSummary, type TripDetail, type TripSummary } from "./trip-dto";
 
 /**
  * Durable-trip service (US1; FR-001..FR-004, FR-006, FR-007). Creates the operations
@@ -32,10 +27,7 @@ export type { TripDetail, TripSummary } from "./trip-dto";
  * so the required assignment rows, `status_change` events, billing/cancellation side effects, and
  * transition audit actually happen — `createTrip` writes ONLY the trip row + its `trip.create` audit.
  */
-export async function createTrip(
-  input: CreateTripInput,
-  actorUserId: string,
-): Promise<TripDetail> {
+export async function createTrip(input: CreateTripInput, actorUserId: string): Promise<TripDetail> {
   // The immutable snapshot of the imported/seeded plan (data-model §1, R4). Written once.
   const originalPlan = {
     customerId: input.customerId,
@@ -62,6 +54,8 @@ export async function createTrip(
       .values({
         customerId: input.customerId,
         externalTripId: input.externalTripId ?? null,
+        // Leg of the customer's programming; 1 unless the import found a chained milk run.
+        legNumber: input.legNumber ?? 1,
         importBatchId: input.importBatchId ?? null,
         originLocationId: input.originLocationId,
         destinationLocationId: input.destinationLocationId,

@@ -47,6 +47,15 @@ export const trips = pgTable(
       .notNull()
       .references(() => customers.id),
     externalTripId: text("external_trip_id"),
+    /**
+     * Which leg of the customer's programming this trip is (1 when there is only one).
+     *
+     * The customer's id names an OPERATION, which can be more than one movement: a milk run ends a
+     * leg and departs from that same site on the next. Each leg is its own trip — it has its own
+     * pickup, delivery, proof and SLA — so the identifier alone can no longer be unique; the unique
+     * key is (customer, external id, leg). The id itself is stored exactly as the customer wrote it.
+     */
+    legNumber: integer("leg_number").notNull().default(1),
     importBatchId: uuid("import_batch_id"),
     originLocationId: uuid("origin_location_id")
       .notNull()
@@ -97,8 +106,10 @@ export const trips = pgTable(
       sql`${table.slaStatus} IS NULL OR ${table.slaStatus} IN ('on_track','at_risk','late','breached')`,
     ),
     // A customer's own trip id is unique within that customer when present (import matching/updates).
+    // The no-duplicate guarantee, now leg-aware: re-importing a file still cannot create a second
+    // copy of the same movement, and a milk run's legs coexist under one customer id.
     uniqueIndex("trips_customer_external_id_uq")
-      .on(table.customerId, table.externalTripId)
+      .on(table.customerId, table.externalTripId, table.legNumber)
       .where(sql`${table.externalTripId} IS NOT NULL`),
     index("trips_customer_idx").on(table.customerId),
     index("trips_status_idx").on(table.currentStatus),

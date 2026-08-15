@@ -169,7 +169,9 @@ describe("pt-BR messages", () => {
   it("Reports.categoryValue covers every reason-code category (no raw token in the exception report)", () => {
     const cat = (messages as { Reports: { categoryValue: Record<string, string> } }).Reports
       .categoryValue;
-    const missing = REASON_CODE_CATEGORIES.filter((c) => typeof cat[c] !== "string" || cat[c] === "");
+    const missing = REASON_CODE_CATEGORIES.filter(
+      (c) => typeof cat[c] !== "string" || cat[c] === "",
+    );
     expect(missing).toEqual([]);
   });
 

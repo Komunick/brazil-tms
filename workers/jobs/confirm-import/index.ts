@@ -6,6 +6,7 @@ import {
   db,
   importBatches,
   importRows,
+  importTemplates,
   trips,
   updateTripPlan,
   writeAudit,
@@ -21,6 +22,7 @@ import {
   resourceRequestFrom,
   type ResourceIndex,
 } from "./resources";
+import { closeTripFromSource, isClosedAtSource } from "./close-at-source";
 
 /**
  * T033 — `import.confirm` job (data-model R8; contract §C/§A). Per row best-effort + idempotent: for
@@ -84,15 +86,26 @@ function planChangesFrom(input: ReturnType<typeof createTripSchema.parse>): Trip
   };
 }
 
-/** Find an existing trip by the match key (customer, external_trip_id); null when absent. */
+/**
+ * Find an existing trip by the match key (customer, external_trip_id, leg); null when absent.
+ * The leg keeps a milk run's second movement from overwriting its first — they share the customer's
+ * id on purpose.
+ */
 async function findExistingTrip(
   customerId: string,
   externalTripId: string,
+  legNumber = 1,
 ): Promise<{ id: string } | null> {
   const rows = await db
     .select({ id: trips.id })
     .from(trips)
-    .where(and(eq(trips.customerId, customerId), eq(trips.externalTripId, externalTripId)))
+    .where(
+      and(
+        eq(trips.customerId, customerId),
+        eq(trips.externalTripId, externalTripId),
+        eq(trips.legNumber, legNumber),
+      ),
+    )
     .limit(1);
   return rows[0] ?? null;
 }
@@ -110,6 +123,18 @@ function customerFieldsFrom(mapped: Record<string, unknown>): Record<string, str
     fields[key.slice("customer.".length)] = String(value).trim();
   }
   return Object.keys(fields).length ? fields : null;
+}
+
+/** The template's `closedStatusLabels`, or none when the batch used the built-in standard format. */
+async function closedStatusLabelsFor(templateId: string | null): Promise<string[]> {
+  if (!templateId) return [];
+  const rows = await db
+    .select({ config: importTemplates.closedStatusLabels })
+    .from(importTemplates)
+    .where(eq(importTemplates.id, templateId))
+    .limit(1);
+  const value = rows[0]?.config;
+  return Array.isArray(value) ? (value as string[]) : [];
 }
 
 export async function runConfirm(payload: ConfirmPayload): Promise<void> {
@@ -139,6 +164,11 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
   const resourceIndex: ResourceIndex | null = needsResources ? await buildResourceIndex() : null;
   const linkTally = { assigned: 0, blocked: 0, unresolved: 0 };
 
+  // The customer's "this is over" labels, from the template. Empty → status is ignored, which is the
+  // behaviour every other customer keeps.
+  const closedLabels = await closedStatusLabelsFor(batch.templateId);
+  const closedTally = { skipped: 0, closed: 0 };
+
   /**
    * Live progress. Confirming a real customer file means thousands of rows, each one a trip write
    * plus an eligibility-checked assignment — minutes of work. Publishing the running tallies every
@@ -157,9 +187,61 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
     let targetTripId: string | null = null;
 
     try {
+      // Which leg of the customer's programming this row is (detect-duplicates stamped it).
+      const legNumber = typeof mapped.legNumber === "number" ? mapped.legNumber : 1;
+
+      /**
+       * The row says the trip is already over. Two halves, and both are needed:
+       *  - the TMS does not know it → SKIP. Creating it would put a finished trip in the dispatch
+       *    queue with a pickup in the past, which is exactly what floods the SLA alerts;
+       *  - the TMS already has it (imported last week, still open here) → CLOSE it to match, so it
+       *    stops being an open trip forever.
+       */
+      if (isClosedAtSource(mapped.statusLabel, closedLabels)) {
+        const externalId = mapped.externalTripId ? String(mapped.externalTripId) : "";
+        const existing = externalId
+          ? await findExistingTrip(batch.customerId, externalId, legNumber)
+          : null;
+        const label = String(mapped.statusLabel);
+
+        if (existing) {
+          const outcome = await closeTripFromSource(
+            existing.id,
+            label,
+            actorUserId,
+            batch.fileName,
+          );
+          if (outcome === "closed") closedTally.closed++;
+          targetTripId = existing.id;
+        } else {
+          closedTally.skipped++;
+        }
+
+        const priorReasons = Array.isArray(row.reasons)
+          ? (row.reasons as { code: string; field?: string; message: string }[])
+          : [];
+        await db
+          .update(importRows)
+          .set({
+            targetTripId,
+            appliedAt: new Date(),
+            reasons: [
+              ...priorReasons,
+              {
+                code: "CLOSED_AT_SOURCE",
+                message: existing
+                  ? `O cliente reporta "${label}": viagem encerrada no TMS.`
+                  : `O cliente reporta "${label}": linha não importada (viagem já encerrada na origem).`,
+              },
+            ],
+          })
+          .where(eq(importRows.id, row.id));
+        continue;
+      }
       const input = createTripSchema.parse({
         customerId: batch.customerId,
         externalTripId: mapped.externalTripId ?? null,
+        legNumber,
         importBatchId: batchId,
         originLocationId: mapped.originLocationId,
         destinationLocationId: mapped.destinationLocationId,
@@ -188,7 +270,7 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
         } catch (err) {
           // Race backstop: a concurrent insert won the partial-unique index → re-resolve as update.
           if (isUniqueViolation(err) && externalTripId) {
-            const existing = await findExistingTrip(batch.customerId, externalTripId);
+            const existing = await findExistingTrip(batch.customerId, externalTripId, legNumber);
             if (!existing) throw err;
             await updateTripPlan(existing.id, planChanges, {}, actorUserId);
             targetTripId = existing.id;
@@ -198,7 +280,7 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
         }
       } else if (row.matchDecision === "update") {
         const existing = externalTripId
-          ? await findExistingTrip(batch.customerId, externalTripId)
+          ? await findExistingTrip(batch.customerId, externalTripId, legNumber)
           : null;
         if (existing) {
           await updateTripPlan(existing.id, planChanges, {}, actorUserId);
@@ -210,7 +292,7 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
         }
       } else if (row.matchDecision === "no_op") {
         const existing = externalTripId
-          ? await findExistingTrip(batch.customerId, externalTripId)
+          ? await findExistingTrip(batch.customerId, externalTripId, legNumber)
           : null;
         targetTripId = existing?.id ?? null;
       }
@@ -357,7 +439,7 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
     previousValue: null,
     // The link tallies ride on the same audit row: how many trips the file itself resourced, and how
     // many it could not (blocked by the eligibility rules, or naming a resource with no registry).
-    newValue: { createdCount, updatedCount, errorCount, ...linkTally },
+    newValue: { createdCount, updatedCount, errorCount, ...linkTally, ...closedTally },
     actorUserId,
   });
 }

@@ -28,8 +28,7 @@
     "db:seed:buckets": "tsx ./seed/storage-buckets.ts",
     "db:seed:shopee": "tsx ./seed/shopee-registry.ts",
     "db:seed:shopee-template": "tsx ./seed/shopee-import-template.ts",
-    "db:seed:shopee-assign": "tsx ./seed/shopee-assignments.ts",
-    "db:seed:shopee-close": "tsx ./seed/shopee-close-historical.ts"
+    "db:seed:shopee-assign": "tsx ./seed/shopee-assignments.ts"
   },
   "dependencies": {
     "@brazil-tms/shared": "workspace:*",

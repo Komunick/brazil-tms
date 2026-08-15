@@ -8,7 +8,7 @@ import { assignTrip } from "../src/trips/trip-assignments";
  * Apply the resources the customer's own schedule already names: for every LH in the SHOPEE sheet,
  * assign the driver (MOTORISTA), tractor (CAVALO) and semi-trailer (CARRETA) to the matching trip.
  * Run AFTER the trips are imported and `db:seed:shopee` has loaded the fleet:
- *   pnpm --filter @brazil-tms/db db:seed:shopee-assign -- "C:/caminho/PROGRAMAÇÃO 2026.xlsx"
+ *   pnpm --filter @brazil-tms/db db:seed:shopee-assign "C:/caminho/PROGRAMAÇÃO 2026.xlsx"
  *
  * It goes through `assignTrip`, the SAME domain function the Dispatch screen calls — never a raw
  * INSERT. That means every bulk assignment runs the real eligibility evaluation and writes the

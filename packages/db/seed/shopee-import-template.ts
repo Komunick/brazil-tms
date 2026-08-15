@@ -7,7 +7,7 @@ import { customers, db, importTemplates, locationAliases, locations, users } fro
  * The Shopee trip-import template + the location aliases its file values need (feature 004; R8,
  * Constitution V — config, never per-customer code). Run AFTER `db:seed:shopee` (which loads the
  * customer, the sites and the fleet):
- *   pnpm --filter @brazil-tms/db db:seed:shopee-template -- "C:/caminho/PROGRAMAÇÃO 2026.xlsx"
+ *   pnpm --filter @brazil-tms/db db:seed:shopee-template "C:/caminho/PROGRAMAÇÃO 2026.xlsx"
  *
  * Two things the workbook forces us to configure:
  *
@@ -21,9 +21,9 @@ import { customers, db, importTemplates, locationAliases, locations, users } fro
  *     wall-clock in that string is São Paulo local time, so `dateFormats` lists the ISO shapes
  *     FIRST and `timezone` pins the interpretation — without it the whole schedule shifts 3 hours.
  *
- * Status is deliberately NOT mapped (business call 2026-08-14): the customer's STATUS / STATUS
- * VIAGEM / DOCA columns are ignored, so every imported trip is born `received` and the TMS status
- * machine owns the lifecycle from there. No `status_mappings` rows are needed.
+ * Status: `STATUS VIAGEM` IS mapped, but only as the "already over at the source" signal (see
+ * `closedStatusLabels`). It never translates into a TMS status — a trip that does get imported is
+ * still born `received` and the TMS machine owns its lifecycle. `STATUS` and `DOCA` stay ignored.
  */
 
 const DEFAULT_PATH = "C:/Users/Victor/Downloads/PROGRAMAÇÃO 2026 _ BRAZIL TRANSPORTS.xlsx";
@@ -31,11 +31,7 @@ const CUSTOMER_CODE = "SHOPEE";
 const TEMPLATE_NAME = "Programação Shopee";
 const SHEET = { name: "SHOPEE", header: 1 };
 
-/**
- * The columns we consume. Everything else in the file (STATUS, STATUS VIAGEM, DOCA, CTE, CHECKLIST,
- * SM RASTER, MOTORISTA/CPF/CAVALO/CARRETA…) is intentionally absent: the engine's targets are the
- * trip PLAN, and resource assignment is a separate slice.
- */
+/** The columns we consume: the plan, who runs it, the customer's own fields, and its lifecycle. */
 const COLUMN_MAPPINGS = [
   // --- the trip plan --------------------------------------------------------------------------
   { source: "LH", target: "externalTripId", required: true },
@@ -59,8 +55,16 @@ const COLUMN_MAPPINGS = [
   { source: "CHECKLIST", target: "customer.Checklist" },
   { source: "SM RASTER", target: "customer.SM Raster" },
   { source: "CTE", target: "customer.CT-e" },
-  // DOCA, STATUS and STATUS VIAGEM stay out by decision (2026-08-14): the trip lifecycle is the TMS's.
+  // --- the customer's lifecycle: used ONLY to skip/close, never to drive the TMS status ----------
+  // Reversal of the 2026-08-14 "ignore status" call, agreed 2026-08-15: the schedule is cumulative,
+  // so 3.265 of 3.724 rows describe trips that already ended. Reading the label lets the confirm skip
+  // those and close the ones the TMS already has, instead of flooding the queue and the SLA alerts.
+  { source: "STATUS VIAGEM", target: "statusLabel" },
+  // DOCA and STATUS (the other status column) stay out: one lifecycle source is enough.
 ];
+
+/** The customer's words for "this trip is over" (accent/case-insensitive at match time). */
+const CLOSED_STATUS_LABELS = ["FINALIZADA", "FINALIZADO", "CANCELADA", "NO SHOW", "INFRUTÍFERA"];
 
 const PARSING_RULES = {
   // ISO first (native Excel dates), then the hand-typed shapes the file actually contains.
@@ -127,6 +131,7 @@ async function main(): Promise<void> {
     columnMappings: COLUMN_MAPPINGS,
     parsingRules: PARSING_RULES,
     requiredOverrides: [] as string[],
+    closedStatusLabels: CLOSED_STATUS_LABELS,
     active: true,
   };
 

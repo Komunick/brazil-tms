@@ -118,6 +118,18 @@ export type TripDetailView = TripDetail & {
   importBatchId: string | null;
   /** Columns the customer's file carries that the TMS has no field for — display-only (see `trips`). */
   customerFields: Record<string, string> | null;
+  /**
+   * The other legs of the same customer programming (milk run), newest-leg-last and EXCLUDING this
+   * trip. Empty for the ordinary one-leg trip, which is almost all of them.
+   */
+  siblingLegs: {
+    id: string;
+    legNumber: number;
+    originCode: string;
+    destinationCode: string;
+    plannedPickupWindowStart: string | null;
+    currentStatus: TripStatus;
+  }[];
 };
 
 export interface DashboardSummary {
@@ -523,8 +535,49 @@ export async function getTripDetailView(id: string): Promise<TripDetailView | nu
   const row = enrichment[0];
   if (!row) return null;
 
+  /**
+   * A milk run keeps ONE customer id across chained movements, so a trip may have siblings. Looked
+   * up only when the trip carries an external id; the query is a cheap index hit on
+   * (customer_id, external_trip_id) and returns nothing for the ordinary single-leg trip.
+   */
+  const siblingLegs = detail.externalTripId
+    ? (
+        await db
+          .select({
+            id: trips.id,
+            legNumber: trips.legNumber,
+            originCode: originLoc.code,
+            destinationCode: destLoc.code,
+            plannedPickupWindowStart: trips.plannedPickupWindowStart,
+            currentStatus: trips.currentStatus,
+          })
+          .from(trips)
+          .leftJoin(originLoc, eq(trips.originLocationId, originLoc.id))
+          .leftJoin(destLoc, eq(trips.destinationLocationId, destLoc.id))
+          .where(
+            and(
+              eq(trips.customerId, detail.customerId),
+              eq(trips.externalTripId, detail.externalTripId),
+            ),
+          )
+          .orderBy(asc(trips.legNumber))
+      )
+        .filter((leg) => leg.id !== id)
+        .map((leg) => ({
+          id: leg.id,
+          legNumber: leg.legNumber,
+          originCode: leg.originCode ?? "",
+          destinationCode: leg.destinationCode ?? "",
+          plannedPickupWindowStart: leg.plannedPickupWindowStart
+            ? leg.plannedPickupWindowStart.toISOString()
+            : null,
+          currentStatus: leg.currentStatus,
+        }))
+    : [];
+
   return {
     ...detail,
+    siblingLegs,
     customerName: row.customerName ?? "",
     originCode: row.originCode ?? "",
     originName: row.originName ?? "",

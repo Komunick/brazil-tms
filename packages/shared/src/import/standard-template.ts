@@ -34,4 +34,7 @@ export const STANDARD_IMPORT_TEMPLATE: TemplateConfig = {
     thousandSeparator: ".",
   },
   requiredOverrides: [],
+  // The standard format ignores the customer's status entirely: the TMS owns the lifecycle. A
+  // customer whose file is cumulative sets these in ITS own template (see `closedStatusLabels`).
+  closedStatusLabels: [],
 };

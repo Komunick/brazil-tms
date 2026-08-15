@@ -85,7 +85,8 @@ async function validateRow(
   customerId: string,
   rawMapped: Record<string, unknown> | null,
   requiredOverrides: string[],
-  knownStatusLabels: Set<string>,
+  /** null when the template uses the status only to close trips — then no unmapped warning. */
+  knownStatusLabels: Set<string> | null,
 ): Promise<ValidationResult> {
   if (rawMapped == null) {
     return {
@@ -205,7 +206,11 @@ async function validateRow(
   // never blocks): the customer's status vocabulary is config (`status_mappings`), BLOCKED on real
   // files (PRD §29), so an unmapped label is surfaced for an operator to map rather than silently kept.
   const statusLabel = mapped.statusLabel;
-  if (!isBlank(statusLabel) && !knownStatusLabels.has(String(statusLabel).trim().toLowerCase())) {
+  if (
+    knownStatusLabels !== null &&
+    !isBlank(statusLabel) &&
+    !knownStatusLabels.has(String(statusLabel).trim().toLowerCase())
+  ) {
     reasons.push({
       code: "UNMAPPED_STATUS",
       field: "statusLabel",
@@ -326,8 +331,18 @@ export async function runValidate(payload: ValidatePayload): Promise<void> {
   // Template overrides for required fields (the batch may have no template — then none).
   const requiredOverrides = await loadRequiredOverrides(batch.templateId);
 
-  // The customer's configured status vocabulary (active mappings) — used to flag unmapped labels (R10).
-  const knownStatusLabels = await loadStatusLabels(batch.customerId);
+  /**
+   * The customer's configured status vocabulary (active mappings) — used to flag unmapped labels (R10).
+   *
+   * Skipped entirely when the template declares `closedStatusLabels`: there the label is read ONLY to
+   * decide "already over at the source", never to translate into a TMS status, so warning that it is
+   * unmapped is noise. On the first real file it fired on 3.483 of 3.828 rows, burying the reasons
+   * that actually needed a human.
+   */
+  const usesStatusForClosingOnly = (await loadClosedStatusLabels(batch.templateId)).length > 0;
+  const knownStatusLabels = usesStatusForClosingOnly
+    ? null
+    : await loadStatusLabels(batch.customerId);
 
   const rows = await db
     .select()
@@ -383,6 +398,18 @@ async function loadStatusLabels(customerId: string): Promise<Set<string>> {
 }
 
 /** Read the template's `requiredOverrides` (string[]) for the batch, or [] when none. */
+/** The template's closed-status labels; empty when there is no template or none configured. */
+async function loadClosedStatusLabels(templateId: string | null): Promise<string[]> {
+  if (!templateId) return [];
+  const rows = await db
+    .select({ labels: importTemplates.closedStatusLabels })
+    .from(importTemplates)
+    .where(eq(importTemplates.id, templateId))
+    .limit(1);
+  const raw = rows[0]?.labels;
+  return Array.isArray(raw) ? (raw as string[]) : [];
+}
+
 async function loadRequiredOverrides(templateId: string | null): Promise<string[]> {
   if (!templateId) return [];
   const rows = await db
