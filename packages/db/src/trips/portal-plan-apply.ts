@@ -91,6 +91,46 @@ function planFrom(leg: PortalLeg, vehicleLabel: string | null) {
   };
 }
 
+/**
+ * WHO the customer put on this trip — driver and plate, as the portal states them (2026-08-16).
+ *
+ * The portal names the driver and the vehicle; the TMS was throwing both away, so opening a trip
+ * showed no plate and no driver even though the customer knew perfectly well who was going. These
+ * are the CUSTOMER's words, not a TMS assignment: they land in `customer_fields` (display-only,
+ * shown under the assignment panel) exactly like the spreadsheet's extra columns. Matching them to
+ * the registered fleet is a separate, harder question — a name is not a driver record.
+ *
+ * Returns whether anything actually changed, so an unchanged plan with a NEW driver still counts as
+ * an update instead of being reported as a quiet no-op.
+ */
+async function writeCustomerFields(
+  tripId: string,
+  portal: PortalTrip,
+  current?: unknown,
+): Promise<boolean> {
+  const fields: Record<string, string> = {};
+  if (portal.driverLabel) fields["Motorista (portal)"] = portal.driverLabel;
+  if (portal.plateLabel) fields["Placa (portal)"] = portal.plateLabel;
+  if (portal.operatorLabel) fields["Operador (portal)"] = portal.operatorLabel;
+  if (Object.keys(fields).length === 0) return false;
+
+  // Keep whatever else the trip already carries (an operator name, a spreadsheet column) and only
+  // overwrite what the portal actually states.
+  const existing = (current ?? null) as Record<string, string> | null;
+  const merged = { ...(existing ?? {}), ...fields };
+  const same =
+    existing != null &&
+    Object.keys(merged).length === Object.keys(existing).length &&
+    Object.entries(merged).every(([k, v]) => existing[k] === v);
+  if (same) return false;
+
+  await db
+    .update(trips)
+    .set({ customerFields: merged, updatedAt: new Date() })
+    .where(eq(trips.id, tripId));
+  return true;
+}
+
 /** True when the stored plan already says exactly this — then the import writes nothing. */
 function samePlan(
   current: {
@@ -173,6 +213,7 @@ export async function applyPortalPlanTrip(
           },
           actorUserId,
         );
+        await writeCustomerFields(created.id, portal);
         if (isCancelledAtPortal(portal.status)) {
           await closeTripFromSource(created.id, "CANCELADA", actorUserId, sourceLabel);
           outcomes.push({ ...base, status: "cancelled" });
@@ -182,9 +223,14 @@ export async function applyPortalPlanTrip(
         continue;
       }
 
+      // Who the CUSTOMER put on this trip. Written on every pass, not only on create: the portal
+      // assigns a driver hours after planning the trip, so a create-only write would miss almost
+      // every one of them.
+      const fieldsChanged = await writeCustomerFields(existing.id, portal, existing.customerFields);
+
       // An existing trip keeps its status: the plan is updated, the lifecycle is not touched here.
       if (samePlan(existing, plan)) {
-        outcomes.push({ ...base, status: "unchanged" });
+        outcomes.push({ ...base, status: fieldsChanged ? "updated" : "unchanged" });
         continue;
       }
       await updateTripPlan(existing.id, plan, { authorizedReview: false }, actorUserId);
