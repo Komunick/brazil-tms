@@ -14,6 +14,7 @@ import { createTrip } from "./trips-service";
 import { updateTripPlan } from "./trip-plan";
 import { applyPortalTrip, loadStationMap, type PortalApplyOutcome } from "./portal-execution-apply";
 import { closeTripFromSource } from "./source-status";
+import { linkFleetFromPortal, type FleetLinkResult } from "./portal-fleet-link";
 
 /**
  * The PLAN, taken from the customer's portal instead of a hand-typed spreadsheet (2026-08-16).
@@ -48,6 +49,13 @@ export interface PortalPlanSummary {
   failed: number;
   /** Milestones applied on top, when the same file already carries real times. */
   milestones: number;
+  /** Trips whose driver/vehicle the portal named and the TMS matched to its own registered fleet. */
+  linked: number;
+  /** The portal named someone the fleet does not have registered — reported, never invented. */
+  linkNoMatch: number;
+  /** The TMS's own rules refused the customer's choice (expired licence, wrong vehicle type…). */
+  linkBlocked: number;
+  linkBlockedReasons: string[];
   outcomes: PortalPlanOutcome[];
 }
 
@@ -163,8 +171,10 @@ export async function applyPortalPlanTrip(
   stationMap: Map<string, string>,
   actorUserId: string,
   sourceLabel: string,
-): Promise<{ outcomes: PortalPlanOutcome[]; milestones: number }> {
+): Promise<{ outcomes: PortalPlanOutcome[]; milestones: number; links: FleetLinkResult[] }> {
   const outcomes: PortalPlanOutcome[] = [];
+  // O que o vínculo automático com a frota conseguiu (ou não) fazer, por perna.
+  const links: FleetLinkResult[] = [];
 
   for (const leg of portal.legs) {
     const base = { externalTripId: portal.externalTripId, legNumber: leg.legNumber };
@@ -218,6 +228,7 @@ export async function applyPortalPlanTrip(
           await closeTripFromSource(created.id, "CANCELADA", actorUserId, sourceLabel);
           outcomes.push({ ...base, status: "cancelled" });
         } else {
+          links.push(await linkFleetFromPortal(created.id, portal, actorUserId));
           outcomes.push({ ...base, status: "created" });
         }
         continue;
@@ -227,6 +238,10 @@ export async function applyPortalPlanTrip(
       // assigns a driver hours after planning the trip, so a create-only write would miss almost
       // every one of them.
       const fieldsChanged = await writeCustomerFields(existing.id, portal, existing.customerFields);
+
+      // And the same words, matched to the registered fleet. Attempted on every pass because the
+      // driver usually appears LATER than the trip: a create-only attempt would find nobody.
+      links.push(await linkFleetFromPortal(existing.id, portal, actorUserId));
 
       // An existing trip keeps its status: the plan is updated, the lifecycle is not touched here.
       if (samePlan(existing, plan)) {
@@ -249,7 +264,7 @@ export async function applyPortalPlanTrip(
   const applied = await applyPortalTrip(customerId, portal, stationMap, actorUserId, sourceLabel);
   const milestones = applied.filter((o) => o.status === "applied").length;
 
-  return { outcomes, milestones };
+  return { outcomes, milestones, links };
 }
 
 export async function applyPortalPlan(
@@ -260,6 +275,7 @@ export async function applyPortalPlan(
 ): Promise<PortalPlanSummary> {
   const stationMap = await loadStationMap(customerId);
   const outcomes: PortalPlanOutcome[] = [];
+  const links: FleetLinkResult[] = [];
   let milestones = 0;
 
   for (const portal of portalTrips) {
@@ -271,11 +287,14 @@ export async function applyPortalPlan(
       sourceLabel,
     );
     outcomes.push(...result.outcomes);
+    links.push(...result.links);
     milestones += result.milestones;
   }
 
   const count = (s: PortalPlanOutcome["status"]): number =>
     outcomes.filter((o) => o.status === s).length;
+  const links_ = (o: FleetLinkResult["outcome"]): number =>
+    links.filter((l) => l.outcome === o).length;
 
   return {
     created: count("created"),
@@ -285,6 +304,15 @@ export async function applyPortalPlan(
     unknownStation: count("unknown_station"),
     failed: count("failed"),
     milestones,
+    // O vínculo com a frota registrada. `blocked` é o que precisa de gente: o cliente pôs alguém
+    // que as regras do TMS recusam (documento vencido, tipo de veículo, subcontratação sem
+    // transportadora), e as razões vão junto para aparecerem no histórico.
+    linked: links_("linked"),
+    linkNoMatch: links_("no_match"),
+    linkBlocked: links_("blocked"),
+    linkBlockedReasons: [
+      ...new Set(links.filter((l) => l.outcome === "blocked" && l.detail).map((l) => l.detail!)),
+    ].slice(0, 20),
     outcomes,
   };
 }
