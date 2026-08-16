@@ -51,8 +51,12 @@ export interface PortalPlanSummary {
   milestones: number;
   /** Trips whose driver/vehicle the portal named and the TMS matched to its own registered fleet. */
   linked: number;
+  /** Destas, quantas passaram com avisos aceitos (o motivo fica gravado na atribuição). */
+  linkedWithWarnings: number;
   /** The portal named someone the fleet does not have registered — reported, never invented. */
   linkNoMatch: number;
+  /** O portal ainda não designou ninguém para a viagem — não é pendência de cadastro. */
+  linkNotStated: number;
   /** The TMS's own rules refused the customer's choice (expired licence, wrong vehicle type…). */
   linkBlocked: number;
   linkBlockedReasons: string[];
@@ -307,8 +311,10 @@ export async function applyPortalPlan(
     // O vínculo com a frota registrada. `blocked` é o que precisa de gente: o cliente pôs alguém
     // que as regras do TMS recusam (documento vencido, tipo de veículo, subcontratação sem
     // transportadora), e as razões vão junto para aparecerem no histórico.
-    linked: links_("linked"),
+    linked: links_("linked") + links_("linked_with_warnings"),
+    linkedWithWarnings: links_("linked_with_warnings"),
     linkNoMatch: links_("no_match"),
+    linkNotStated: links_("not_stated"),
     linkBlocked: links_("blocked"),
     linkBlockedReasons: [
       ...new Set(links.filter((l) => l.outcome === "blocked" && l.detail).map((l) => l.detail!)),

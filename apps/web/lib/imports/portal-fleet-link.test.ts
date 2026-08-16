@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import {
   auditLogs,
+  carriers,
   customers,
   db,
   drivers,
@@ -30,6 +31,7 @@ describe.skipIf(!hasDb)("vínculo com a frota (integration)", () => {
   let customerCode = "";
   const token = `FL${Date.now()}${Math.floor(Math.random() * 1e6)}`;
   const criados: string[] = [];
+  const carrierIds: string[] = [];
 
   beforeAll(async () => {
     customerCode = `FLEET-${token}`;
@@ -100,6 +102,7 @@ describe.skipIf(!hasDb)("vínculo com a frota (integration)", () => {
     await db.delete(customers).where(eq(customers.id, customerId));
     await db.delete(drivers).where(inArray(drivers.id, criados));
     await db.delete(vehicles).where(inArray(vehicles.id, criados));
+    if (carrierIds.length) await db.delete(carriers).where(inArray(carriers.id, carrierIds));
   });
 
   function payload(over: Record<string, unknown>) {
@@ -159,6 +162,140 @@ describe.skipIf(!hasDb)("vínculo com a frota (integration)", () => {
       .where(eq(tripAssignments.tripId, trip.id));
     expect(atrib).toHaveLength(1);
     expect(atrib[0]!.isCurrent).toBe(true);
+  });
+
+  it("vincula recurso SUBCONTRATADO usando a transportadora do próprio cadastro", async () => {
+    // 883 dos 982 motoristas desta frota são subcontratados, e o TMS exige transportadora nesse
+    // caso. Ela não é decisão nova: já está no recurso. Sem isso, a primeira rodada real bloqueou
+    // 48 e vinculou zero.
+    const transportadora = (
+      await db
+        .insert(carriers)
+        .values({
+          name: `Transportadora ${token}`,
+          taxId: String(Date.now()).slice(0, 14),
+          documentationStatus: "complete",
+        })
+        .returning({ id: carriers.id })
+    )[0]!;
+    const d = (
+      await db
+        .insert(drivers)
+        .values({
+          name: `MOTORISTA TERCEIRO ${token}`,
+          ownershipType: "subcontracted",
+          carrierId: transportadora.id,
+          status: "active",
+          licenseExpiry: "2030-01-01",
+        })
+        .returning({ id: drivers.id })
+    )[0]!;
+    const v = (
+      await db
+        .insert(vehicles)
+        .values({
+          plate: `BBB${Math.floor(Math.random() * 9000 + 1000)}`,
+          vehicleType: "carreta",
+          ownershipType: "subcontracted",
+          carrierId: transportadora.id,
+          status: "active",
+          documentExpiry: "2030-01-01",
+        })
+        .returning({ id: vehicles.id, plate: vehicles.plate })
+    )[0]!;
+    criados.push(d.id, v.id);
+    carrierIds.push(transportadora.id);
+
+    const ext = `LH-TERC-${token}`;
+    const r = await ingestPortalFeed({
+      payload: payload({
+        trip_number: ext,
+        driver_name: `Motorista Terceiro ${token}`,
+        vehicle_number: v.plate,
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    // Objeto inteiro na asserção: se falhar, a mensagem já diz POR QUE não vinculou.
+    expect({
+      linked: r.planSummary?.linked,
+      bloqueadas: r.planSummary?.linkBlockedReasons,
+      semCadastro: r.planSummary?.linkNoMatch,
+    }).toEqual({ linked: 1, bloqueadas: [], semCadastro: 0 });
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    const atrib = (
+      await db.select().from(tripAssignments).where(eq(tripAssignments.tripId, trip.id))
+    )[0]!;
+    expect(atrib.carrierId).toBe(transportadora.id);
+  });
+
+  it("vincula com AVISO quando falta a data do documento, e grava o motivo", async () => {
+    // O caso real: 901 dos 902 veículos não têm validade de documento cadastrada. Isso é aviso, não
+    // impedimento — e exigir uma pessoa por viagem faria ninguém ser atribuído nunca. Vincula, e o
+    // motivo fica gravado na atribuição, auditável.
+    const v = (
+      await db
+        .insert(vehicles)
+        .values({
+          plate: `CCC${Math.floor(Math.random() * 9000 + 1000)}`,
+          vehicleType: "carreta",
+          ownershipType: "owned",
+          status: "active",
+          // sem documentExpiry — é o que dispara o aviso
+        })
+        .returning({ id: vehicles.id, plate: vehicles.plate })
+    )[0]!;
+    // Motorista PRÓPRIO deste caso: reusar o do primeiro teste, na mesma janela, dispararia
+    // conflito de agenda — que é bloqueio por decisão, e mascararia o que se quer verificar aqui.
+    const d = (
+      await db
+        .insert(drivers)
+        .values({
+          name: `MOTORISTA DOIS ${token}`,
+          ownershipType: "owned",
+          status: "active",
+          licenseExpiry: "2030-01-01",
+        })
+        .returning({ id: drivers.id })
+    )[0]!;
+    criados.push(v.id, d.id);
+
+    const ext = `LH-AVISO-${token}`;
+    const r = await ingestPortalFeed({
+      payload: payload({
+        trip_number: ext,
+        driver_name: `Motorista Dois ${token}`,
+        vehicle_number: v.plate,
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    expect(r.planSummary?.linked).toBe(1);
+    expect(r.planSummary?.linkedWithWarnings).toBe(1);
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    expect(trip.currentStatus).toBe("assigned");
+    const atrib = (
+      await db.select().from(tripAssignments).where(eq(tripAssignments.tripId, trip.id))
+    )[0]!;
+    // O motivo diz que é espelho do cliente E quais avisos foram aceitos — nada passa calado.
+    expect(atrib.overrideReason).toMatch(/espelho.*portal/i);
+    expect(atrib.overrideReason).toMatch(/doc_missing/);
+  });
+
+  it("viagem sem motorista designado no portal não conta como pendência de cadastro", async () => {
+    const r = await ingestPortalFeed({
+      payload: payload({
+        trip_number: `LH-VAZIO-${token}`,
+        driver_name: null,
+        vehicle_number: null,
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    expect(r.planSummary?.linkNotStated).toBe(1);
+    expect(r.planSummary?.linkNoMatch).toBe(0);
   });
 
   it("não inventa recurso: nome que a frota não tem é reportado", async () => {
