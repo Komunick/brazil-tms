@@ -13,7 +13,7 @@ import {
   trips,
   users,
 } from "@brazil-tms/db";
-import { ingestPortalFeed } from "./portal-feed";
+import { ingestPortalDetail, ingestPortalFeed } from "./portal-feed";
 
 /**
  * The robot's path end to end: the portal's own API payload → trips, milestones and a history line.
@@ -388,6 +388,66 @@ describe.skipIf(!hasDb)("portal feed (integration)", () => {
     expect((depois.customerFields as Record<string, string>)["Motorista (portal)"]).toBe(
       "Cicrano de Souza",
     );
+  });
+
+  it("só pede o detalhe de quem tem motorista, e para de pedir depois de gravado", async () => {
+    // O portal só nomeia o operador de atribuição onde houve atribuição. Pedir detalhe de viagem sem
+    // motorista gastava a cota com quem nunca teria o dado — na primeira rodada real, zero gravados.
+    const comMotorista = `LH-DET-${token}`;
+    const semMotorista = `LH-SEMDET-${token}`;
+
+    const r1 = await ingestPortalFeed({
+      payload: payload({
+        trip_number: comMotorista,
+        driver_name: "Beltrano",
+        vehicle_number: "AAA1B22",
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    if (r1.batchId) createdBatchIds.push(r1.batchId);
+    const r2 = await ingestPortalFeed({
+      payload: payload({ trip_number: semMotorista, driver_name: null, vehicle_number: null }),
+      mode: "plan",
+      customerCode,
+    });
+    if (r2.batchId) createdBatchIds.push(r2.batchId);
+
+    expect(r1.needDetail).toContain(comMotorista);
+    expect(r2.needDetail).not.toContain(semMotorista);
+
+    // O detalhe chega e grava quem atribuiu.
+    const gravado = await ingestPortalDetail({
+      payload: {
+        retcode: 0,
+        data: {
+          trip_number: comMotorista,
+          trip_station: [{ assign_operator: "fulano@braziltransports.com.br" }, {}],
+        },
+      },
+      customerCode,
+    });
+    expect(gravado.recorded).toBe(true);
+
+    const trip = (
+      await db.select().from(trips).where(eq(trips.externalTripId, comMotorista)).limit(1)
+    )[0]!;
+    expect((trip.customerFields as Record<string, string>)["Operador de atribuição (portal)"]).toBe(
+      "fulano@braziltransports.com.br",
+    );
+
+    // E o TMS para de pedir: a lista encolhe sozinha até zerar.
+    const r3 = await ingestPortalFeed({
+      payload: payload({
+        trip_number: comMotorista,
+        driver_name: "Beltrano",
+        vehicle_number: "AAA1B22",
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    if (r3.batchId) createdBatchIds.push(r3.batchId);
+    expect(r3.needDetail).not.toContain(comMotorista);
   });
 
   it("refuses a portal error page instead of reading it as a quiet day", async () => {
