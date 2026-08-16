@@ -198,6 +198,68 @@ describe.skipIf(!hasDb)("portal feed (integration)", () => {
     expect(chegada.eventTimestamp?.toISOString()).toBe("2026-08-13T12:10:00.000Z");
   });
 
+  it("records the loading steps the portal times, not just arrival and departure", async () => {
+    // The timeline the customer's own screen shows: chegou 05:04, começou a carregar 06:50,
+    // carregado 07:16, partiu 07:16. The TMS used to jump straight from at_origin to in_transit.
+    const ext = `LH-CARGA-${token}`;
+    const comCarregamento = payload({
+      trip_number: ext,
+      trip_status: 90,
+      trip_station: [
+        {
+          sequence_number: 1,
+          station: 910001,
+          station_name: "Origem feed",
+          sta: NOVE,
+          std: NOVE + 2 * HORA,
+          ata: NOVE + 10 * 60,
+          loading_time: NOVE + HORA,
+          loaded_time: NOVE + 2 * HORA - 15 * 60,
+          atd: NOVE + 2 * HORA,
+        },
+        {
+          sequence_number: 2,
+          station: 910002,
+          station_name: "Destino feed",
+          sta: NOVE + 9 * HORA,
+          std: 0,
+          ata: NOVE + 9 * HORA,
+          atd: 0,
+        },
+      ],
+    });
+
+    const plano = await ingestPortalFeed({ payload: comCarregamento, mode: "plan", customerCode });
+    if (plano.batchId) createdBatchIds.push(plano.batchId);
+    const exec = await ingestPortalFeed({
+      payload: comCarregamento,
+      mode: "execution",
+      customerCode,
+    });
+    if (exec.batchId) createdBatchIds.push(exec.batchId);
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    const eventos = await db
+      .select()
+      .from(tripEvents)
+      .where(eq(tripEvents.tripId, trip.id))
+      .orderBy(tripEvents.eventTimestamp);
+
+    const percorrido = eventos
+      .filter((e) => e.eventType === "status_change" && e.statusAfter)
+      .map((e) => e.statusAfter);
+    expect(percorrido).toContain("loading");
+    expect(percorrido).toContain("loaded");
+    expect(percorrido).toContain("in_transit");
+
+    const carregando = eventos.find(
+      (e) => e.eventType === "status_change" && e.statusAfter === "loading",
+    )!;
+    expect(carregando.eventTimestamp?.toISOString()).toBe("2026-08-13T13:00:00.000Z");
+    // `loaded` also earns its own typed event, since the vocabulary has one.
+    expect(eventos.some((e) => e.eventType === "loaded")).toBe(true);
+  });
+
   it("refuses a portal error page instead of reading it as a quiet day", async () => {
     await expect(
       ingestPortalFeed({
