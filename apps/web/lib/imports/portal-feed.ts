@@ -23,6 +23,38 @@ import {
  * it is a manual chore and testing it is impossible. Every judgement lives here, under test.
  */
 
+/**
+ * Qual das TRÊS listagens do portal chegou (2026-08-16).
+ *
+ * O modo de importação do TMS tem dois valores — quem pode criar viagem e quem não pode — e isso
+ * continua certo. Mas o robô lê três abas, e duas delas podem criar:
+ *
+ *   Planejado ("plan")        → a viagem antes de sair. Cria.
+ *   Aceito    ("in_progress") → a viagem NA ESTRADA agora. Cria também, e é por isso que este modo
+ *                               existe: medido no portal, 49 das 73 viagens em curso não existiam no
+ *                               TMS. Elas foram aceitas antes de o robô começar a olhar o Planejado,
+ *                               nunca passaram por lá enquanto olhávamos, e iam rodar e terminar sem
+ *                               o sistema saber que existiram — porque o caminho de execução, por
+ *                               regra, nunca cria.
+ *   Concluído ("execution")   → o que já acabou. NUNCA cria: aplicar isto como plano fabricaria
+ *                               milhares de viagens encerradas que ninguém pode tocar.
+ *
+ * O modo separado (em vez de mandar a aba "Aceito" como `plan`) é o que mantém o histórico de
+ * importação legível: quem abrir a lista vê "Robô · Em curso" e sabe de onde aquilo veio.
+ */
+export type PortalFeedMode = "plan" | "in_progress" | "execution";
+
+/** O que cada aba pode fazer. Só o Concluído é proibido de criar. */
+function importModeFor(mode: PortalFeedMode): PortalImportMode {
+  return mode === "execution" ? "execution" : "plan";
+}
+
+const FEED_LABEL: Record<PortalFeedMode, { fileName: string; source: string }> = {
+  plan: { fileName: "portal (plano)", source: "portal_robot_plan" },
+  in_progress: { fileName: "portal (em curso)", source: "portal_robot_in_progress" },
+  execution: { fileName: "portal (execução)", source: "portal_robot_execution" },
+};
+
 export interface PortalFeedResult extends PortalImportResult {
   /** The batch this run recorded, or null when it changed nothing (see `worthRecording`). */
   batchId: string | null;
@@ -86,7 +118,7 @@ async function feedActorId(): Promise<string> {
 
 export async function ingestPortalFeed(input: {
   payload: PortalApiEnvelope;
-  mode: PortalImportMode;
+  mode: PortalFeedMode;
   customerCode: string;
 }): Promise<PortalFeedResult> {
   // The portal answers `retcode: 0` on success. Anything else means the script forwarded an error
@@ -106,7 +138,7 @@ export async function ingestPortalFeed(input: {
   const result = await applyParsedPortalTrips({
     customerId,
     actorUserId,
-    mode: input.mode,
+    mode: importModeFor(input.mode),
     // What a trip's history will say moved it. "portal" — not a file name, because there is no file.
     sourceLabel: "portal",
     rows: Array.isArray(input.payload?.data?.list) ? input.payload.data!.list!.length : 0,
@@ -118,19 +150,20 @@ export async function ingestPortalFeed(input: {
   if (!worthRecording(result)) return { ...result, batchId: null, needDetail };
 
   const batchId = crypto.randomUUID();
+  const label = FEED_LABEL[input.mode];
   await db.insert(importBatches).values({
     id: batchId,
     customerId,
-    fileName: input.mode === "plan" ? "portal (plano)" : "portal (execução)",
+    fileName: label.fileName,
     // There is no uploaded file to keep: the payload is re-readable from the portal at any time, and
     // storing every poll would fill the bucket with copies of the same 500 trips.
     storageKey: "",
     uploadedBy: actorUserId,
-    source: input.mode === "plan" ? "portal_robot_plan" : "portal_robot_execution",
+    source: label.source,
     status: "confirming",
     totalRows: result.rows,
   });
-  await closePortalBatch(batchId, input.mode, result);
+  await closePortalBatch(batchId, importModeFor(input.mode), result);
 
   return { ...result, batchId, needDetail };
 }

@@ -20,8 +20,8 @@ export const dynamic = "force-dynamic";
  * accepts data and returns a summary, nothing else.
  *
  * What the caller CANNOT do: choose what happens to a trip. The body is the portal's own payload,
- * treated as data; the mode (plan/execution) selects which of the two existing import behaviours
- * runs, exactly as the operator's toggle does on the upload screen.
+ * treated as data; the mode says only WHICH LISTING it came from — Planejado, Aceito ou Concluído —
+ * e o TMS decide o que cada uma pode fazer (`PortalFeedMode`).
  */
 export async function POST(request: Request): Promise<NextResponse> {
   try {
@@ -37,10 +37,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     const mode = body.mode;
-    if (mode !== "plan" && mode !== "execution" && mode !== "detail") {
+    if (
+      mode !== "plan" &&
+      mode !== "in_progress" &&
+      mode !== "execution" &&
+      mode !== "detail"
+    ) {
       throw new Conflict(
         "MODE_REQUIRED",
-        "Informe 'plan' (aba Planejado), 'execution' (aba Concluído) ou 'detail' (uma viagem).",
+        "Informe 'plan' (aba Planejado), 'in_progress' (aba Aceito), 'execution' (aba Concluído) ou 'detail' (uma viagem).",
       );
     }
     if (!body.payload || typeof body.payload !== "object") {

@@ -794,6 +794,7 @@
       "portal_plan": "Portal · Planejado",
       "portal_execution": "Portal · Execução",
       "portal_robot_plan": "Robô · Planejado",
+      "portal_robot_in_progress": "Robô · Em curso",
       "portal_robot_execution": "Robô · Execução"
     },
     "summaryPlan": "{created} criadas · {updated} atualizadas · {unchanged} sem mudança · {cancelled} canceladas",

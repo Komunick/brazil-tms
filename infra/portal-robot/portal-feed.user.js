@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.4.0
+// @version      1.5.0
 // @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -65,7 +65,9 @@
      * isso, o TMS achava que 73 caminhões nunca tinham chegado para carregar — e alertava por isso,
      * embora o portal registrasse chegada, carga e partida de cada um.
      *
-     * Entra como EXECUÇÃO: nunca cria viagem, só grava o que já aconteceu.
+     * Entra como `in_progress` (1.5.0). Entrava como execução, e aí o TMS não podia criar viagem a
+     * partir daqui: 49 das 73 nem existiam nele, porque foram aceitas antes de alguém olhar o
+     * Planejado. Iam rodar e terminar fora do sistema.
      */
     intervaloEmCursoMs: 5 * 60 * 1000,
     emCursoDiasAtras: 3,
@@ -285,10 +287,15 @@
     }),
   );
 
-  // A aba "Aceito": o que está na estrada agora. Mesmo endpoint do plano, outro `query_type`, e
-  // entregue como execução — o TMS nunca cria viagem a partir daqui.
+  // A aba "Aceito": o que está na estrada agora. Mesmo endpoint do plano, outro `query_type`.
+  //
+  // Vai como `in_progress` desde a 1.5.0, e não mais como execução. Ia como execução por prudência —
+  // "o robô nunca cria viagem" — e o preço apareceu na medição: 49 das 73 viagens em curso não
+  // existiam no TMS. Foram aceitas antes de o robô começar a olhar o Planejado, então nunca passaram
+  // por lá enquanto olhávamos, e o caminho de execução, por regra, não cria. Iam rodar e terminar
+  // fora do sistema. Quem decide o que cada aba pode fazer é o TMS; aqui só se diz de onde veio.
   repetir("em curso", CONFIG.intervaloEmCursoMs, () =>
-    ciclo("execution", "/api/line_haul/agency/trip/list", {
+    ciclo("in_progress", "/api/line_haul/agency/trip/list", {
       query_type: 2,
       sta: `${agora() - CONFIG.emCursoDiasAtras * DIA},${agora() + CONFIG.emCursoDiasAdiante * DIA}`,
     }),
