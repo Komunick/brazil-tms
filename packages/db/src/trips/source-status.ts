@@ -3,6 +3,7 @@ import { TRANSITIONS, TRIP_STATUSES, type TripStatus } from "@brazil-tms/shared"
 import { db } from "../client";
 import { tripAssignments, tripEvents, trips } from "../../schema";
 import { writeAudit } from "../audit/write-audit";
+import { recomputeTripSla } from "./sla";
 
 /**
  * Moving a trip to match the status the CUSTOMER's file reports.
@@ -152,6 +153,15 @@ async function walkFromSource(
       actorUserId,
       reason: `Importação: o cliente reporta "${label}" (${sourceLabel}).`,
     });
+
+    // Fechar a viagem tem que apagar o risco e os alertas dela — o ramo terminal de
+    // `recomputeTripSla` faz as duas coisas (2026-08-16).
+    //
+    // Sem isto, uma viagem encerrada pelo CLIENTE ficava alertando para sempre: "sem atribuição na
+    // janela" e "chegada perdida" numa viagem cancelada, que ninguém pode resolver porque não há o
+    // que fazer. O cancelamento feito por uma PESSOA (`cancelTrip`) já limpava; o vindo do import e
+    // do robô, não — e é esse o caminho de quase todo cancelamento aqui.
+    await recomputeTripSla(tx, tripId);
   });
 }
 

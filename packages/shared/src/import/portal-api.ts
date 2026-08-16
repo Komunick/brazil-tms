@@ -150,6 +150,7 @@ export function mapPortalApiTrips(payload: PortalApiEnvelope): PortalParseResult
       status: statusCode == null ? null : (TRIP_STATUS_LABEL[statusCode] ?? `Status ${statusCode}`),
       driverLabel: trimmed(raw.driver_name),
       operatorLabel: trimmed(raw.operator),
+      priceCents: portalPriceCents(raw.cost_unit),
       vehicleLabel: trimmed(raw.vehicle_type_name),
       plateLabel: trimmed(raw.vehicle_number),
       stops,
@@ -191,4 +192,20 @@ export function mapPortalApiDetail(payload: {
     stops.map((s) => trimmed(s?.assign_operator)).find((v) => v != null) ?? null;
 
   return { externalTripId, assignOperator };
+}
+
+/**
+ * "Valor da Viagem" → centavos. É o que a Brazil Transports recebe por aquela viagem (confirmado
+ * com o cliente em 2026-08-16), publicado pelo portal como texto com centavos ("2471.53").
+ *
+ * Só existe enquanto a viagem está no Planejado: das concluídas, 2 em 50 ainda o traziam. Por isso
+ * é lido no ciclo do plano — esperar a viagem terminar é perder o número.
+ */
+export function portalPriceCents(value: unknown): number | null {
+  if (typeof value === "number")
+    return Number.isFinite(value) && value > 0 ? Math.round(value * 100) : null;
+  const text = trimmed(value);
+  if (!text) return null;
+  const parsed = Number(text.replace(/\s/g, "").replace(",", "."));
+  return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed * 100) : null;
 }

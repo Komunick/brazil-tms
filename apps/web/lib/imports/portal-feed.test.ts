@@ -450,6 +450,51 @@ describe.skipIf(!hasDb)("portal feed (integration)", () => {
     expect(r3.needDetail).not.toContain(comMotorista);
   });
 
+  it("guarda o valor da viagem do portal e usa como base do faturamento", async () => {
+    // O portal publica "Valor da Viagem" — o que a Brazil Transports recebe. Sem isso, as viagens
+    // chegavam ao faturamento sem preço e paravam ali, porque não existe tabela de tarifas.
+    const ext = `LH-VALOR-${token}`;
+    const comValor = payload({
+      trip_number: ext,
+      trip_status: 90,
+      cost_unit: "2471.53",
+      trip_station: [
+        {
+          sequence_number: 1,
+          station: 910001,
+          station_name: "Origem feed",
+          sta: NOVE,
+          std: NOVE + HORA,
+          ata: NOVE + 10 * 60,
+          atd: NOVE + HORA,
+        },
+        {
+          sequence_number: 2,
+          station: 910002,
+          station_name: "Destino feed",
+          sta: NOVE + 7 * HORA,
+          std: 0,
+          ata: NOVE + 7 * HORA,
+          unseal_time: NOVE + 7 * HORA + 15 * 60,
+          unloaded_time: NOVE + 8 * HORA,
+          atd: 0,
+        },
+      ],
+    });
+
+    const r = await ingestPortalFeed({ payload: comValor, mode: "plan", customerCode });
+    if (r.batchId) createdBatchIds.push(r.batchId);
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    // Centavos inteiros, sem ponto flutuante rondando dinheiro.
+    expect(trip.customerPriceCents).toBe(247153);
+    // A viagem completou no mesmo ciclo (o payload já prova a descarga) e levou o preço consigo.
+    expect(trip.currentStatus).toBe("billing_pending");
+
+    const item = (await db.select().from(billingItems).where(eq(billingItems.tripId, trip.id)))[0]!;
+    expect(item.baseFreightCents).toBe(247153);
+  });
+
   it("refuses a portal error page instead of reading it as a quiet day", async () => {
     await expect(
       ingestPortalFeed({

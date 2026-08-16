@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { TripStatus } from "@brazil-tms/shared";
 import {
+  alerts,
   auditLogs,
   customers,
   db,
@@ -94,6 +95,7 @@ describe.skipIf(!hasDb)("closeTripFromSource (integration)", () => {
 
   afterAll(async () => {
     if (tripIds.length) {
+      await db.delete(alerts).where(inArray(alerts.tripId, tripIds));
       await db.delete(tripEvents).where(inArray(tripEvents.tripId, tripIds));
       await db.delete(auditLogs).where(inArray(auditLogs.entityId, tripIds));
       await db.delete(trips).where(inArray(trips.id, tripIds));
@@ -123,6 +125,32 @@ describe.skipIf(!hasDb)("closeTripFromSource (integration)", () => {
     const audit = await db.select().from(auditLogs).where(eq(auditLogs.entityId, tripId));
     expect(audit[0]?.action).toBe("trip.status_change");
     expect(audit[0]?.reason).toContain("FINALIZADA");
+  });
+
+  it("apaga os alertas da viagem ao encerrá-la — cancelada não alerta", async () => {
+    // No tmsdev, 12 alertas viviam em viagens canceladas: "sem atribuição na janela" numa viagem que
+    // não vai acontecer. Ninguém consegue resolver isso, então fica no painel para sempre. Cancelar
+    // pela mão de uma pessoa já limpava; cancelar pelo import — que é como quase todo cancelamento
+    // chega aqui — não limpava.
+    const tripId = await makeTrip();
+    await db.insert(alerts).values({
+      tripId,
+      alertCase: "unassigned_within_window",
+      severity: "medium",
+      state: "active",
+    });
+
+    expect(await closeTripFromSource(tripId, "CANCELADA", actorId, "portal")).toBe("closed");
+
+    const abertos = await db
+      .select()
+      .from(alerts)
+      .where(and(eq(alerts.tripId, tripId), inArray(alerts.state, ["active", "acknowledged"])));
+    expect(abertos).toHaveLength(0);
+    // O alerta não some do banco: é resolvido, e a história permanece.
+    const todos = await db.select().from(alerts).where(eq(alerts.tripId, tripId));
+    expect(todos).toHaveLength(1);
+    expect(todos[0]!.state).toBe("resolved");
   });
 
   it("cancels — with the customer's own reason code — when the label is a cancellation", async () => {
@@ -227,6 +255,7 @@ describe.skipIf(!hasDb)("advanceTripFromSource (integration)", () => {
       await db.delete(tripAssignments).where(inArray(tripAssignments.id, assignmentIds));
     }
     if (tripIds.length) {
+      await db.delete(alerts).where(inArray(alerts.tripId, tripIds));
       await db.delete(tripEvents).where(inArray(tripEvents.tripId, tripIds));
       await db.delete(auditLogs).where(inArray(auditLogs.entityId, tripIds));
       await db.delete(trips).where(inArray(trips.id, tripIds));
