@@ -544,6 +544,60 @@ describe.skipIf(!hasDb)("portal feed (integration)", () => {
     expect(item.rateId).not.toBeNull();
   });
 
+  it("a viagem EM CURSO ganha motorista, placa e o status real — sem esperar terminar", async () => {
+    // A aba "Aceito" do portal: 73 viagens estavam vivas lá e invisíveis aqui. A viagem sai do
+    // Planejado quando é aceita e só reaparece no Concluído quando acaba — no meio, o TMS achava que
+    // o caminhão nunca tinha chegado para carregar, e alertava por isso.
+    const ext = `LH-CURSO-${token}`;
+    const planejada = payload({ trip_number: ext, driver_name: null, vehicle_number: null });
+    const r1 = await ingestPortalFeed({ payload: planejada, mode: "plan", customerCode });
+    if (r1.batchId) createdBatchIds.push(r1.batchId);
+
+    // Agora ela está na estrada: chegou, carregou e partiu — e só a aba "Aceito" sabe disso.
+    const emCurso = payload({
+      trip_number: ext,
+      trip_status: 40,
+      driver_name: "Sicrano Rodrigues",
+      vehicle_number: "QRS4T56",
+      trip_station: [
+        {
+          sequence_number: 1,
+          station: 910001,
+          station_name: "Origem feed",
+          sta: NOVE,
+          std: NOVE + 2 * HORA,
+          ata: NOVE + 15 * 60,
+          loading_time: NOVE + HORA,
+          loaded_time: NOVE + 2 * HORA - 10 * 60,
+          atd: NOVE + 2 * HORA,
+        },
+        {
+          sequence_number: 2,
+          station: 910002,
+          station_name: "Destino feed",
+          sta: NOVE + 9 * HORA,
+          std: 0,
+          ata: 0,
+          atd: 0,
+        },
+      ],
+    });
+    const r2 = await ingestPortalFeed({ payload: emCurso, mode: "execution", customerCode });
+    if (r2.batchId) createdBatchIds.push(r2.batchId);
+    expect(r2.summary?.applied).toBe(1);
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    // Está EM TRÂNSITO — não mais parada em "Recebida" como se nada tivesse acontecido.
+    expect(trip.currentStatus).toBe("in_transit");
+    // E o motorista veio junto, mesmo tendo aparecido só depois do planejamento.
+    const campos = trip.customerFields as Record<string, string>;
+    expect(campos["Motorista (portal)"]).toBe("Sicrano Rodrigues");
+    expect(campos["Placa (portal)"]).toBe("QRS4T56");
+
+    // Um status que ninguém mapeou não pode encerrar viagem: 40 passa adiante sem fechar nada.
+    expect(trip.cancelledAt).toBeNull();
+  });
+
   it("refuses a portal error page instead of reading it as a quiet day", async () => {
     await expect(
       ingestPortalFeed({
