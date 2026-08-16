@@ -53,6 +53,21 @@ describe.skipIf(!hasDb)("POST /api/imports/portal-feed", () => {
     });
   });
 
+  it("aceita o modo in_progress (aba Aceito) e o trata como plano", async () => {
+    // O robô manda de onde veio; quem decide o que a aba pode fazer é o TMS. A aba "Aceito" PODE
+    // criar viagem — foi por não poder que 49 viagens em curso não existiam aqui.
+    const res = await POST(
+      post({ mode: "in_progress", payload: { retcode: 0, data: { list: [] } } }),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    // `plan` preenchido e `execution` nulo é a prova de que caiu no caminho que cria.
+    expect({ temPlano: body.plan !== null, temExecucao: body.execution !== null }).toEqual({
+      temPlano: true,
+      temExecucao: false,
+    });
+  });
+
   it("sem token não passa, e um modo inventado é recusado", async () => {
     const semToken = await POST(post({ mode: "plan", payload: {} }, "errado"));
     expect(semToken.status).toBe(401);
