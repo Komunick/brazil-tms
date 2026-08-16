@@ -12,6 +12,7 @@ import {
 import {
   ACTIVE_TRIP_STATUSES,
   DEFAULT_ASSIGNMENT_POLICY,
+  TRIP_STATUSES,
   canTransition,
   evaluateAssignmentEligibility,
   requiredResourcesFor,
@@ -22,6 +23,7 @@ import {
   type Finding,
   type OwnershipType,
   type ResourceStatus,
+  type TripStatus,
   type VehicleType,
 } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
@@ -436,6 +438,154 @@ export async function assignTrip(
 
     // Feature 007 — assignment/confirmation changes clear/fire the missing_assignment /
     // missed_confirmation SLA reasons immediately (read-only inputs to the evaluator, FR-017/FR-019).
+    await recomputeTripSla(tx, tripId);
+
+    const detail = await loadTripDetail(tx, tripId);
+    if (!detail) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
+    return { trip: detail, findings: warns };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// mirrorAssignmentFromPortal — record who is ALREADY driving, no status change
+// ---------------------------------------------------------------------------
+
+/**
+ * A viagem que já saiu: em curso desde "assigned" até "unloaded". Fora disso, ou ela ainda pode ser
+ * atribuída pelo caminho normal (`received`), ou já encerrou e o dinheiro está em jogo.
+ */
+const MIRRORABLE_STATUSES: readonly TripStatus[] = TRIP_STATUSES.slice(
+  TRIP_STATUSES.indexOf("assigned"),
+  TRIP_STATUSES.indexOf("unloaded") + 1,
+);
+
+/**
+ * Registrar quem o cliente já pôs na estrada, numa viagem que já está andando (2026-08-16).
+ *
+ * O buraco que isto tapa: uma viagem só chega ao TMS depois de aceita no portal, e nesse momento ela
+ * já está em curso. `assignTrip` só aceita `received` e `reassignTrip` recusa viagem em execução por
+ * decisão explícita — então o motorista aparecia no card do portal, com nome e placa, e o painel de
+ * Atribuições ficava vazio para sempre. Não é backlog: acontece com toda viagem aceita entre dois
+ * ciclos do robô.
+ *
+ * E a ausência é que era a anomalia, não o contrário. O modelo já diz que uma viagem em `in_transit`
+ * passou por `assigned`; o que faltava era a linha provando com QUEM. Sem ela o motorista não tem a
+ * viagem no histórico, o conflito de agenda não enxerga que ele está ocupado, e o pagamento do
+ * subcontratado não tem recurso preso à viagem.
+ *
+ * Três limites, e cada um existe porque o contrário seria mentira:
+ *
+ *  - NÃO MEXE NO STATUS. Nada de `trip_events`: nada aconteceu agora, só estamos registrando o que já
+ *    era. Voltar uma viagem em trânsito para `assigned` seria reescrever a operação.
+ *  - NÃO SUBSTITUI NINGUÉM. Só grava onde não há atribuição atual — a escolha de uma pessoa nunca é
+ *    sobrescrita por espelho. O índice parcial `(trip_id) WHERE is_current` é a garantia atômica.
+ *  - AS REGRAS CONTINUAM VALENDO. Mesmo avaliador: CNH vencida bloqueia, aviso exige motivo gravado.
+ *    Uma viagem que já rodou com motorista impedido é exatamente o que a operação precisa enxergar.
+ *
+ * A nota da atribuição diz que foi registrada com a viagem já em curso, e em qual status — quem ler
+ * depois não confunde isto com um despacho feito a tempo.
+ */
+export async function mirrorAssignmentFromPortal(
+  tripId: string,
+  input: AssignTripInput,
+  actorUserId: string,
+): Promise<{ trip: TripDetail; findings: Finding[] }> {
+  const expected = input.expectedFromStatus as TripStatus;
+  if (!MIRRORABLE_STATUSES.includes(expected)) {
+    throw new Conflict(
+      "ILLEGAL_TRANSITION",
+      "O espelho retroativo só vale para viagem em curso (de atribuída a descarregada).",
+    );
+  }
+
+  const candidate: Candidate = {
+    driverId: input.driverId,
+    vehicleId: input.vehicleId,
+    trailerId: input.trailerId,
+    carrierId: input.carrierId,
+  };
+
+  const { context, ownership } = await gatherEligibilityContext(db, tripId, candidate);
+
+  const required = requiredResourcesFor(deriveOwnership(ownership.driver, ownership.vehicle));
+  if (!input.driverId || !input.vehicleId || (required.carrier && !input.carrierId)) {
+    throw new Conflict(
+      "INCOMPLETE_ASSIGNMENT",
+      "Atribuição incompleta: motorista e veículo são obrigatórios; transportadora é obrigatória para recursos subcontratados.",
+    );
+  }
+
+  const findings = evaluateAssignmentEligibility(context, DEFAULT_ASSIGNMENT_POLICY);
+  const { blocks, warns } = partitionFindings(findings);
+  if (blocks.length > 0) {
+    throw new Conflict(
+      "ASSIGNMENT_BLOCKED",
+      "Atribuição bloqueada por restrições de elegibilidade.",
+      blocks,
+    );
+  }
+  if (warns.length > 0 && !input.overrideReason) {
+    throw new Conflict(
+      "OVERRIDE_REQUIRED",
+      "Há avisos de elegibilidade; informe o motivo da exceção para prosseguir.",
+      warns,
+    );
+  }
+
+  return db.transaction(async (tx) => {
+    const now = new Date();
+
+    // Pino de status sem efeito (mesma forma de `reassignTrip`): trava a linha e confirma que a
+    // viagem AINDA está onde o chamador leu, numa instrução só. Se ela andou — ou encerrou — perdemos.
+    const pinned = await tx
+      .update(trips)
+      .set({ updatedAt: now })
+      .where(and(eq(trips.id, tripId), eq(trips.currentStatus, expected)))
+      .returning({ id: trips.id });
+    if (pinned.length === 0) {
+      throw new Conflict("STALE_TRANSITION", "A viagem já mudou de status.");
+    }
+
+    // Sob o mesmo lock: se alguém atribuiu enquanto avaliávamos, a decisão dessa pessoa fica.
+    const jaTem = await tx
+      .select({ id: tripAssignments.id })
+      .from(tripAssignments)
+      .where(and(eq(tripAssignments.tripId, tripId), eq(tripAssignments.isCurrent, true)))
+      .limit(1);
+    if (jaTem[0]) {
+      throw new Conflict("STALE_TRANSITION", "A viagem já tem atribuição atual.");
+    }
+
+    await tx.insert(tripAssignments).values({
+      tripId,
+      driverId: input.driverId,
+      vehicleId: input.vehicleId,
+      trailerId: input.trailerId ?? null,
+      carrierId: input.carrierId ?? null,
+      assignedByUserId: actorUserId,
+      notes: input.notes ?? null,
+      overrideReason: input.overrideReason ?? null,
+      isCurrent: true,
+    });
+
+    // Auditado como `trip.assign`, com o status IGUAL nos dois lados: é o que separa este registro de
+    // um despacho feito na hora, sem inventar uma ação nova no vocabulário de auditoria.
+    await writeAudit(tx, {
+      entityType: "trip",
+      entityId: tripId,
+      action: "trip.assign",
+      previousValue: { currentStatus: expected },
+      newValue: {
+        currentStatus: expected,
+        driverId: input.driverId,
+        vehicleId: input.vehicleId,
+        trailerId: input.trailerId ?? null,
+        carrierId: input.carrierId ?? null,
+      },
+      actorUserId,
+      reason: input.overrideReason ?? null,
+    });
+
     await recomputeTripSla(tx, tripId);
 
     const detail = await loadTripDetail(tx, tripId);

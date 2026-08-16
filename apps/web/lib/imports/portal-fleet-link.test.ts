@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import {
+  alerts,
   auditLogs,
   carriers,
   customers,
@@ -92,6 +93,8 @@ describe.skipIf(!hasDb)("vínculo com a frota (integration)", () => {
       await db.select({ id: trips.id }).from(trips).where(eq(trips.customerId, customerId))
     ).map((t) => t.id);
     if (ids.length) {
+      // Uma viagem que anda com a janela vencida gera aviso, e o aviso segura a viagem por FK.
+      await db.delete(alerts).where(inArray(alerts.tripId, ids));
       await db.delete(tripAssignments).where(inArray(tripAssignments.tripId, ids));
       await db.delete(tripEvents).where(inArray(tripEvents.tripId, ids));
       await db.delete(auditLogs).where(inArray(auditLogs.entityId, ids));
@@ -361,6 +364,99 @@ describe.skipIf(!hasDb)("vínculo com a frota (integration)", () => {
     // O motivo diz que é espelho do cliente E quais avisos foram aceitos — nada passa calado.
     expect(atrib.overrideReason).toMatch(/espelho.*portal/i);
     expect(atrib.overrideReason).toMatch(/doc_missing/);
+  });
+
+  it("viagem que chega JÁ EM CURSO registra o motorista sem mexer no status", async () => {
+    // A viagem só aparece no portal depois de aceita: quando o robô a vê, o caminhão já saiu. Isto
+    // recusava o vínculo por não estar em "Recebida", e o motorista ficava visível no card do portal
+    // com o painel de Atribuições vazio — que foi o que o usuário encontrou em LT1Q8G02ECV41.
+    const d = (
+      await db
+        .insert(drivers)
+        .values({
+          name: `MOTORISTA EM CURSO ${token}`,
+          ownershipType: "owned",
+          status: "active",
+          licenseExpiry: "2030-01-01",
+        })
+        .returning({ id: drivers.id })
+    )[0]!;
+    const v = (
+      await db
+        .insert(vehicles)
+        .values({
+          plate: `EEE${Math.floor(Math.random() * 9000 + 1000)}`,
+          vehicleType: "carreta",
+          ownershipType: "owned",
+          status: "active",
+          documentExpiry: "2030-01-01",
+        })
+        .returning({ id: vehicles.id, plate: vehicles.plate })
+    )[0]!;
+    criados.push(d.id, v.id);
+
+    // Dois ciclos, que é como acontece de verdade: no primeiro a viagem já vem andando e SEM
+    // motorista (o portal ainda não o publicou), e os horários reais a levam até "em trânsito".
+    const ext = `LH-CURSO-${token}`;
+    const andando = [
+      {
+        sequence_number: 1,
+        station: 920001,
+        station_name: "Origem",
+        sta: NOVE,
+        std: NOVE + HORA,
+        ata: NOVE,
+        atd: NOVE + HORA,
+      },
+      {
+        sequence_number: 2,
+        station: 920002,
+        station_name: "Destino",
+        sta: NOVE + 7 * HORA,
+        std: 0,
+        ata: 0,
+        atd: 0,
+      },
+    ];
+    const primeiro = await ingestPortalFeed({
+      payload: payload({
+        trip_number: ext,
+        driver_name: null,
+        vehicle_number: null,
+        trip_station: andando,
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    expect({ vinculadas: primeiro.planSummary?.linked }).toEqual({ vinculadas: 0 });
+
+    // No segundo o portal já diz quem está dirigindo — e a viagem passou de "Recebida" há muito.
+    const r = await ingestPortalFeed({
+      payload: payload({
+        trip_number: ext,
+        driver_name: `Motorista Em Curso ${token}`,
+        vehicle_number: v.plate,
+        trip_station: andando,
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    expect({
+      vinculadas: r.planSummary?.linked,
+      bloqueadas: r.planSummary?.linkBlockedReasons,
+    }).toEqual({ vinculadas: 1, bloqueadas: [] });
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    // O status é o que a operação diz, não o que a atribuição gostaria: nada foi rebobinado.
+    expect(trip.currentStatus).toBe("in_transit");
+
+    const atrib = (
+      await db.select().from(tripAssignments).where(eq(tripAssignments.tripId, trip.id))
+    )[0]!;
+    expect(atrib.isCurrent).toBe(true);
+    expect(atrib.driverId).toBe(d.id);
+    // A nota diz que o registro é retroativo — ninguém confunde isto com um despacho feito a tempo.
+    expect(atrib.notes).toMatch(/já em curso/i);
   });
 
   it("viagem sem motorista designado no portal não conta como pendência de cadastro", async () => {

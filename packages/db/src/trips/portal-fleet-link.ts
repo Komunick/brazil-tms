@@ -1,9 +1,22 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
-import type { PortalTrip } from "@brazil-tms/shared";
+import type { PortalTrip, TripStatus } from "@brazil-tms/shared";
 import { db } from "../client";
 import { drivers, trailers, tripAssignments, trips, vehicles } from "../../schema";
-import { assignTrip } from "./trip-assignments";
+import { assignTrip, mirrorAssignmentFromPortal } from "./trip-assignments";
 import { Conflict } from "../errors";
+
+/** Viagem já em curso: o registro é retroativo, sem mexer no status (ver `mirrorAssignmentFromPortal`). */
+const MIRROR_STATUSES = new Set<TripStatus>([
+  "assigned",
+  "confirmed",
+  "at_origin",
+  "loading",
+  "loaded",
+  "in_transit",
+  "at_destination",
+  "unloading",
+  "unloaded",
+]);
 
 /**
  * Turning the customer's words into a real assignment (2026-08-16).
@@ -18,13 +31,16 @@ import { Conflict } from "../errors";
  * the automation carries almost everything and the handful left over are visible on the trip's own
  * screen (the portal card sits right above the empty form).
  *
- * Three deliberate refusals:
- *   - It assigns only a trip still in `received`. A trip already running was not assigned by us and
- *     back-dating one would be fiction.
- *   - It never overrides a warning. `assignTrip` blocks on an expired licence or a vehicle type
- *     mismatch, and that refusal is the POINT: the customer put someone on the road the TMS would
- *     have stopped, and a robot must not wave that through.
+ * Two deliberate refusals:
+ *   - It never overrides a warning silently. `assignTrip` blocks on an expired licence or a vehicle
+ *     type mismatch, and that refusal is the POINT: the customer put someone on the road the TMS
+ *     would have stopped, and a robot must not wave that through.
  *   - It never invents a resource. A driver the fleet does not have is reported, not created.
+ *
+ * Uma terceira recusa caiu (2026-08-16): "só atribui viagem em `received`". A viagem só aparece no
+ * portal depois de aceita, então boa parte delas chega aqui já andando, e a regra deixava o motorista
+ * visível no card e o painel de Atribuições vazio para sempre. Agora a viagem em curso é registrada
+ * onde está, sem mexer no status — ver `mirrorAssignmentFromPortal`.
  */
 
 export type FleetLinkOutcome =
@@ -76,9 +92,19 @@ export async function linkFleetFromPortal(
       .limit(1)
   )[0];
   if (!trip) return { outcome: "not_assignable", detail: "viagem não encontrada" };
-  // Only a trip nobody has assigned or moved yet. `assignTrip` itself guards this, but checking here
-  // keeps the common case quiet instead of raising an exception per trip on every cycle.
-  if (trip.currentStatus !== "received") {
+
+  /**
+   * Em qual dos dois caminhos esta viagem entra (2026-08-16).
+   *
+   * `received` é o caso normal: atribui e move para "Atribuída". Qualquer status em curso é a viagem
+   * que chegou aqui já andando — o portal só a mostra depois de aceita — e aí o registro é retroativo,
+   * sem tocar no status. Encerrada não recebe nada.
+   *
+   * Isto era uma recusa seca em tudo que não fosse `received`, e o efeito era o motorista aparecer no
+   * card do portal enquanto o painel de Atribuições ficava vazio para sempre.
+   */
+  const emCurso = trip.currentStatus !== "received";
+  if (emCurso && !MIRROR_STATUSES.has(trip.currentStatus as TripStatus)) {
     return { outcome: "not_assignable", detail: trip.currentStatus };
   }
 
@@ -182,6 +208,16 @@ export async function linkFleetFromPortal(
     subcontratado && driver.carrierId && vehicle.carrierId && driver.carrierId !== vehicle.carrierId,
   );
 
+  const nota = [
+    "Atribuição espelhada do portal do cliente.",
+    emCurso ? `Registrada com a viagem já em curso (${trip.currentStatus}).` : null,
+    carrierDiverges
+      ? "Transportadora tomada do motorista; o veículo está cadastrado sob outra."
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   const base = {
     driverId: driver.id,
     vehicleId: vehicle.id,
@@ -189,15 +225,17 @@ export async function linkFleetFromPortal(
     carrierId: subcontratado ? carrierId : undefined,
     // The optimistic guard: if a dispatcher assigned this trip a second ago, our write loses
     // rather than overwriting a person's decision.
-    expectedFromStatus: "received" as const,
-    notes: carrierDiverges
-      ? "Atribuição espelhada do portal do cliente. Transportadora tomada do motorista; o veículo está cadastrado sob outra."
-      : "Atribuição espelhada do portal do cliente.",
+    expectedFromStatus: trip.currentStatus as TripStatus,
+    notes: nota,
   };
+
+  // Viagem parada em "Recebida" é atribuída de verdade e avança; viagem já andando é registrada onde
+  // está. Os dois passam pelo MESMO avaliador — só o efeito no status difere.
+  const atribuir = emCurso ? mirrorAssignmentFromPortal : assignTrip;
 
   try {
     // Strict first: if nothing is wrong, the assignment carries no excuse attached to it.
-    await assignTrip(tripId, base, actorUserId);
+    await atribuir(tripId, base, actorUserId);
     return { outcome: "linked" };
   } catch (error) {
     if (!(error instanceof Conflict)) throw error;
@@ -218,7 +256,7 @@ export async function linkFleetFromPortal(
     // document date on file, so demanding a human for each would mean nobody is ever assigned. The
     // mirror proceeds, and the reason says exactly what was accepted and why, on the record.
     try {
-      await assignTrip(
+      await atribuir(
         tripId,
         {
           ...base,
