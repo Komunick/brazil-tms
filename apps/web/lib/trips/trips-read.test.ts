@@ -153,7 +153,7 @@ describe.skipIf(!hasDb)("trips-read (integration)", () => {
 
     const vehicle = await db
       .insert(vehicles)
-      .values({ plate: `RT${seedToken}`.slice(0, 12), vehicleType: "truck", ownershipType: "owned", status: "active" })
+      .values({ plate: `RT${Math.random().toString(36).slice(2, 11).toUpperCase()}`, vehicleType: "truck", ownershipType: "owned", status: "active" })
       .returning({ id: vehicles.id });
     asgVehicleId = vehicle[0]!.id;
     createdVehicleIds.push(asgVehicleId);

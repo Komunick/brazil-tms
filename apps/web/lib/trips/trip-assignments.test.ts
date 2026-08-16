@@ -158,7 +158,7 @@ describe.skipIf(!hasDb)("trip-assignments (integration)", () => {
     const vehicle = await db
       .insert(vehicles)
       .values({
-        plate: code("PLT").slice(0, 12),
+        plate: `PLT${Math.random().toString(36).slice(2, 11).toUpperCase()}`,
         vehicleType: "truck",
         ownershipType: "owned",
         status: "active",

@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { eq } from "drizzle-orm";
-import { customers, db, linkStationIds } from "../src";
+import { customers, db, linkStationIds, locations } from "../src";
 
 /**
  * Teach the TMS which of its Shopee locations is which station in the CUSTOMER's own system — the
@@ -32,8 +32,9 @@ async function main(): Promise<void> {
     .map((line) => line.trim())
     .filter(Boolean)
     .map((line) => {
-      const [stationId, code] = line.split(/\s+/);
-      return { stationId: stationId!, code: code! };
+      // "<id> <CÓDIGO> <nome com espaços>" — o nome é opcional e só serve para criar o local novo.
+      const [stationId, code, ...rest] = line.split(/\s+/);
+      return { stationId: stationId!, code: code!, name: rest.join(" ").trim() || null };
     })
     .filter((p) => p.stationId && p.code);
 
@@ -47,9 +48,48 @@ async function main(): Promise<void> {
 
   const { linked, unknownCode } = await linkStationIds(customerId, pairs);
   console.log(`estações vinculadas: ${linked} de ${pairs.length}`);
-  if (unknownCode.length) {
-    console.log(`códigos sem local no TMS (${unknownCode.length}): ${unknownCode.join(", ")}`);
+
+  // A code the TMS has never seen is not a mapping problem — it is a site nobody registered, because
+  // the planning spreadsheet only ever named the routes already being run. The customer's own
+  // catalogue is the authority for both the code and the name, so the site is created from it and
+  // the import stops being blocked on data entry that has no other source.
+  const missing = pairs.filter((p) => unknownCode.includes(p.code));
+  let created = 0;
+  for (const { stationId, code, name } of missing) {
+    if (!name) continue;
+    await db.insert(locations).values({
+      customerId,
+      code,
+      name,
+      externalStationId: stationId,
+      state: ufFromCode(code),
+    });
+    created++;
   }
+  if (created > 0) console.log(`locais criados a partir do catálogo do cliente: ${created}`);
+
+  const stillMissing = missing.filter((p) => !p.name).map((p) => p.code);
+  if (stillMissing.length) {
+    console.log(
+      `códigos sem local e sem nome no arquivo (${stillMissing.length}): ${stillMissing.join(", ")}`,
+    );
+  }
+}
+
+/**
+ * UF from the operational code — `HUB-LSP-64` → SP, `XPT-LMG-96` → MG. The customer's codes carry
+ * the state in their middle segment, optionally prefixed with the network letter (`LSP` = L + SP).
+ * Returns null when the segment is not a state, rather than guessing.
+ */
+const UF = new Set(
+  "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" "),
+);
+function ufFromCode(code: string): string | null {
+  for (const part of code.toUpperCase().split(/[-_]/)) {
+    if (UF.has(part)) return part;
+    if (part.length === 3 && UF.has(part.slice(1))) return part.slice(1);
+  }
+  return null;
 }
 
 main()

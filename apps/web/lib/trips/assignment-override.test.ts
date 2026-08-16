@@ -128,7 +128,7 @@ describe.skipIf(!hasDb)("assignment-override (integration)", () => {
     const van = await db
       .insert(vehicles)
       .values({
-        plate: `OVR${Date.now().toString(36).slice(-6)}`,
+        plate: `OVR${Math.random().toString(36).slice(2, 11).toUpperCase()}`,
         vehicleType: "van",
         ownershipType: "owned",
         status: "active",

@@ -117,7 +117,7 @@ describe.skipIf(!hasDb)("trip-unassign (integration)", () => {
     const vehicle = await db
       .insert(vehicles)
       .values({
-        plate: `UNA${Date.now().toString(36).slice(-6)}`,
+        plate: `UNA${Math.random().toString(36).slice(2, 11).toUpperCase()}`,
         vehicleType: "truck",
         ownershipType: "owned",
         status: "active",
