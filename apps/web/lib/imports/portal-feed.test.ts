@@ -9,6 +9,7 @@ import {
   lanes,
   linkStationIds,
   locations,
+  rates,
   tripEvents,
   trips,
   users,
@@ -78,6 +79,7 @@ describe.skipIf(!hasDb)("portal feed (integration)", () => {
       await db.delete(auditLogs).where(inArray(auditLogs.entityId, ids));
       await db.delete(trips).where(inArray(trips.id, ids));
     }
+    await db.delete(rates).where(eq(rates.customerId, customerId));
     if (createdBatchIds.length) {
       await db.delete(importBatches).where(inArray(importBatches.id, createdBatchIds));
     }
@@ -493,6 +495,53 @@ describe.skipIf(!hasDb)("portal feed (integration)", () => {
 
     const item = (await db.select().from(billingItems).where(eq(billingItems.tripId, trip.id)))[0]!;
     expect(item.baseFreightCents).toBe(247153);
+  });
+
+  it("uma tarifa genérica cadastrada NÃO sobrepõe o valor daquela viagem", async () => {
+    // O caso real: existe uma tarifa de R$ 1.500 que vale para qualquer rota, e ela estava sendo
+    // aplicada às 243 viagens — a de 66 horas pelo mesmo preço da transferência curta. O valor que o
+    // cliente declara viagem a viagem manda; a tarifa fica de reserva.
+    await db.insert(rates).values({ customerId, baseAmountCents: 150000, active: true });
+
+    const ext = `LH-TARIFA-${token}`;
+    const r = await ingestPortalFeed({
+      payload: payload({
+        trip_number: ext,
+        trip_status: 90,
+        cost_unit: "1935.19",
+        trip_station: [
+          {
+            sequence_number: 1,
+            station: 910001,
+            station_name: "Origem feed",
+            sta: NOVE,
+            std: NOVE + HORA,
+            ata: NOVE + 10 * 60,
+            atd: NOVE + HORA,
+          },
+          {
+            sequence_number: 2,
+            station: 910002,
+            station_name: "Destino feed",
+            sta: NOVE + 7 * HORA,
+            std: 0,
+            ata: NOVE + 7 * HORA,
+            unseal_time: NOVE + 7 * HORA + 900,
+            unloaded_time: NOVE + 8 * HORA,
+            atd: 0,
+          },
+        ],
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    if (r.batchId) createdBatchIds.push(r.batchId);
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    const item = (await db.select().from(billingItems).where(eq(billingItems.tripId, trip.id)))[0]!;
+    expect(item.baseFreightCents).toBe(193519);
+    // A tarifa foi encontrada e fica registrada no item — mas não é ela que define o valor.
+    expect(item.rateId).not.toBeNull();
   });
 
   it("refuses a portal error page instead of reading it as a quiet day", async () => {

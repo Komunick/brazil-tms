@@ -111,15 +111,20 @@ export async function ensureBillingItem(tx: TxLike, tripId: string): Promise<voi
     customerId: trip.customerId,
     rateId: rate?.id ?? null,
     /**
-     * A tabela de tarifas primeiro; o preço que o CLIENTE declarou por esta viagem depois
-     * (2026-08-16).
+     * O preço que o CLIENTE declarou POR ESTA VIAGEM primeiro; a tabela de tarifas como reserva
+     * (decisão do usuário, 2026-08-16).
      *
-     * A ordem importa: uma tarifa cadastrada é o preço NEGOCIADO, e prevalece. Mas essa tabela não
-     * existe hoje — 243 viagens chegaram ao faturamento sem preço nenhum e travaram ali, porque
-     * "Pronta para faturar" exige valor. O portal do cliente publica quanto paga por cada viagem, e
-     * usar esse número é mais honesto que um campo vazio ou um valor inventado.
+     * A ordem parece contra-intuitiva — tarifa cadastrada soa mais autoritativa — e foi invertida
+     * por um fato medido: as 243 viagens em faturamento estavam TODAS com R$ 1.500,00, porque existe
+     * uma tarifa genérica que vale para qualquer rota. Uma transferência curta e uma viagem de 66
+     * horas saíam pelo mesmo valor, e uma que o portal diz valer R$ 19.351 estava registrada como
+     * R$ 1.500. O portal informa o valor viagem a viagem, e é o que a Brazil Transports realmente
+     * recebe.
+     *
+     * A tarifa continua servindo para o que ela é boa: quando o portal não precifica (viagem ainda
+     * não fechada), o valor cadastrado entra no lugar em vez de deixar o item sem preço.
      */
-    baseFreightCents: rate?.baseAmountCents ?? trip.customerPriceCents ?? null,
+    baseFreightCents: trip.customerPriceCents ?? rate?.baseAmountCents ?? null,
     billingPeriod: billingPeriodSaoPaulo(new Date()),
   });
 }

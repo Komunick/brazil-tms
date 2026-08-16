@@ -6,6 +6,7 @@ import {
   customers,
   db,
   drivers,
+  importBatches,
   lanes,
   linkStationIds,
   locations,
@@ -96,6 +97,8 @@ describe.skipIf(!hasDb)("vínculo com a frota (integration)", () => {
       await db.delete(auditLogs).where(inArray(auditLogs.entityId, ids));
       await db.delete(trips).where(inArray(trips.id, ids));
     }
+    // O vínculo conta como mudança, então o feed passou a registrar lote no histórico deste cliente.
+    await db.delete(importBatches).where(eq(importBatches.customerId, customerId));
     await db.delete(lanes).where(eq(lanes.customerId, customerId));
     await db.delete(locations).where(eq(locations.customerId, customerId));
     await db.delete(auditLogs).where(eq(auditLogs.entityId, customerId));
