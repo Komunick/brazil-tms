@@ -30,7 +30,8 @@
     "db:seed:shopee-template": "tsx ./seed/shopee-import-template.ts",
     "db:seed:shopee-assign": "tsx ./seed/shopee-assignments.ts",
     "db:seed:shopee-stations": "tsx ./seed/shopee-station-ids.ts",
-    "db:lanes:transit": "tsx ./seed/lane-transit.ts"
+    "db:lanes:transit": "tsx ./seed/lane-transit.ts",
+    "db:seed:service-account": "tsx ./seed/service-account.ts"
   },
   "dependencies": {
     "@brazil-tms/shared": "workspace:*",
