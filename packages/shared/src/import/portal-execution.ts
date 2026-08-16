@@ -52,11 +52,15 @@ export interface PortalStop {
   actualArrival: string | number | null;
   actualDeparture: string | number | null;
   /**
-   * The two loading steps, when the source states them. The portal's API does; the spreadsheet
-   * export has no such column and simply leaves them absent, producing no loading milestone.
+   * The loading and unloading steps, when the source states them. The portal's API does; the
+   * spreadsheet export has no such columns and simply leaves them absent, producing no milestone.
+   * Loading is read on a leg's ORIGIN, unloading on its DESTINATION.
    */
   loadingStarted?: string | number | null;
   loadedAt?: string | number | null;
+  /** Breaking the seal — the truck was opened to be unloaded here. */
+  unsealedAt?: string | number | null;
+  unloadedAt?: string | number | null;
 }
 
 /** One movement: from one stop to the next, with the plan and what actually happened. */

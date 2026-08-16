@@ -95,10 +95,13 @@ function toStop(raw: Record<string, unknown>, index: number): PortalStop {
     plannedDeparture: positive(raw.std),
     actualArrival: positive(raw.ata),
     actualDeparture: positive(raw.atd),
-    // The two loading steps. The API times them per stop; the spreadsheet export has no such column,
-    // which is why `loading`/`loaded` sat unused in the status machine until now.
+    // The loading and unloading steps. The API times them per stop; the spreadsheet export has no
+    // such columns, which is why `loading`/`loaded`/`unloading`/`unloaded` sat unused in the status
+    // machine until now — a trip arrived at its destination and stayed there for good.
     loadingStarted: positive(raw.loading_time),
     loadedAt: positive(raw.loaded_time),
+    unsealedAt: positive(raw.unseal_time),
+    unloadedAt: positive(raw.unloaded_time),
   };
 }
 

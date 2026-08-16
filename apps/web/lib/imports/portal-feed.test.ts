@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import {
   auditLogs,
+  billingItems,
   customers,
   db,
   importBatches,
@@ -72,6 +73,7 @@ describe.skipIf(!hasDb)("portal feed (integration)", () => {
       .where(eq(trips.customerId, customerId));
     const ids = seeded.map((t) => t.id);
     if (ids.length) {
+      await db.delete(billingItems).where(inArray(billingItems.tripId, ids));
       await db.delete(tripEvents).where(inArray(tripEvents.tripId, ids));
       await db.delete(auditLogs).where(inArray(auditLogs.entityId, ids));
       await db.delete(trips).where(inArray(trips.id, ids));
@@ -258,6 +260,96 @@ describe.skipIf(!hasDb)("portal feed (integration)", () => {
     expect(carregando.eventTimestamp?.toISOString()).toBe("2026-08-13T13:00:00.000Z");
     // `loaded` also earns its own typed event, since the vocabulary has one.
     expect(eventos.some((e) => e.eventType === "loaded")).toBe(true);
+  });
+
+  it("closes the trip the portal reports finished, and puts it in the billing queue", async () => {
+    // The 244-trip problem: a delivered trip used to stop at `at_destination` forever — still
+    // demanding a resource assignment, and never reaching the money.
+    const ext = `LH-FIM-${token}`;
+    const inteira = payload({
+      trip_number: ext,
+      trip_status: 90,
+      trip_station: [
+        {
+          sequence_number: 1,
+          station: 910001,
+          station_name: "Origem feed",
+          sta: NOVE,
+          std: NOVE + 2 * HORA,
+          ata: NOVE + 10 * 60,
+          loading_time: NOVE + HORA,
+          loaded_time: NOVE + 2 * HORA - 15 * 60,
+          atd: NOVE + 2 * HORA,
+        },
+        {
+          sequence_number: 2,
+          station: 910002,
+          station_name: "Destino feed",
+          sta: NOVE + 9 * HORA,
+          std: 0,
+          ata: NOVE + 9 * HORA,
+          unseal_time: NOVE + 9 * HORA + 20 * 60,
+          unloaded_time: NOVE + 10 * HORA,
+          atd: 0,
+        },
+      ],
+    });
+
+    // The real sequence: the plan lands first, while the trip has not moved yet…
+    const aindaParada = payload({
+      trip_number: ext,
+      trip_status: 4,
+      trip_station: [
+        {
+          sequence_number: 1,
+          station: 910001,
+          station_name: "Origem feed",
+          sta: NOVE,
+          std: NOVE + 2 * HORA,
+          ata: 0,
+          atd: 0,
+        },
+        {
+          sequence_number: 2,
+          station: 910002,
+          station_name: "Destino feed",
+          sta: NOVE + 9 * HORA,
+          std: 0,
+          ata: 0,
+          atd: 0,
+        },
+      ],
+    });
+    const plano = await ingestPortalFeed({ payload: aindaParada, mode: "plan", customerCode });
+    if (plano.batchId) createdBatchIds.push(plano.batchId);
+
+    // …and the execution arrives later, once the truck has been and gone.
+    const exec = await ingestPortalFeed({ payload: inteira, mode: "execution", customerCode });
+    if (exec.batchId) createdBatchIds.push(exec.batchId);
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    // Completion auto-advances to `billing_pending` — that IS the billing queue.
+    expect(trip.currentStatus).toBe("billing_pending");
+    expect(exec.summary?.completed).toBe(1);
+
+    // The whole journey is on the record, nothing skipped and nothing invented.
+    const eventos = await db.select().from(tripEvents).where(eq(tripEvents.tripId, trip.id));
+    const percorrido = eventos
+      .filter((e) => e.eventType === "status_change")
+      .map((e) => e.statusAfter);
+    for (const passo of [
+      "loading",
+      "loaded",
+      "in_transit",
+      "at_destination",
+      "unloading",
+      "unloaded",
+    ]) {
+      expect(percorrido).toContain(passo);
+    }
+    // And the item that lets it be invoiced exists.
+    const itens = await db.select().from(billingItems).where(eq(billingItems.tripId, trip.id));
+    expect(itens).toHaveLength(1);
   });
 
   it("refuses a portal error page instead of reading it as a quiet day", async () => {

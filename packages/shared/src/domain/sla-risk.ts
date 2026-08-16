@@ -164,13 +164,25 @@ export function evaluateSlaRisk(
       ? minusMinutes(ctx.plannedPickupWindowStart, policy.confirmationCutoffMinutes)
       : null;
 
+  // Both assignment alarms only make sense BEFORE the truck leaves (2026-08-16). Asking "who is
+  // driving this?" about a trip that already departed — or already delivered — is noise about a
+  // decision whose moment has passed: on tmsdev that was 244 alerts, every one of them on a trip that
+  // had arrived at its destination. What the trip needs then is its record closed, not a driver.
+  const beforeDeparture = idx < STATUS_INDEX("in_transit");
+
   // missing_assignment (At Risk) — no current assignment past the lead-time point (FR-017).
-  if (!ctx.assignmentPresent && confirmationDeadline != null && ctx.now >= confirmationDeadline) {
+  if (
+    beforeDeparture &&
+    !ctx.assignmentPresent &&
+    confirmationDeadline != null &&
+    ctx.now >= confirmationDeadline
+  ) {
     fired.add("missing_assignment");
   }
 
   // missed_confirmation (At Risk) — assigned but not confirmed by the lead-time point (FR-017).
   if (
+    beforeDeparture &&
     ctx.assignmentPresent &&
     ctx.confirmedAt == null &&
     confirmationDeadline != null &&
