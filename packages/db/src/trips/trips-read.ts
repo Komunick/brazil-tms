@@ -106,6 +106,11 @@ export interface TripBoardRow {
 export interface TripBoardResult {
   rows: TripBoardRow[];
   total: number;
+  /**
+   * How many trips each status holds under the current filters, ignoring the status filter itself —
+   * what the board's status chips display. Absent key = zero (the chip is hidden).
+   */
+  statusCounts: Partial<Record<TripStatus, number>>;
 }
 
 export type TripDetailView = TripDetail & {
@@ -464,6 +469,28 @@ function boardSelect() {
     .leftJoin(boardCarrier, eq(boardAsg.carrierId, boardCarrier.id));
 }
 
+/**
+ * The same joins, grouped by `current_status` — one row per status present under the CURRENT filters
+ * (customer, lane, date range, search…) with the status filter itself removed and the active-scope
+ * default suppressed. That is exactly the set `buildWhere` produces when a status chip is clicked (an
+ * explicit `status` list suppresses the active default), so each chip's number is a promise: click me
+ * and you get this many rows. Statuses with no rows are simply absent from the result.
+ */
+function boardStatusCounts(where: SQL | undefined) {
+  return db
+    .select({ status: trips.currentStatus, value: count() })
+    .from(trips)
+    .leftJoin(customers, eq(trips.customerId, customers.id))
+    .leftJoin(originLoc, eq(trips.originLocationId, originLoc.id))
+    .leftJoin(destLoc, eq(trips.destinationLocationId, destLoc.id))
+    .leftJoin(boardAsg, and(eq(boardAsg.tripId, trips.id), eq(boardAsg.isCurrent, true)))
+    .leftJoin(boardDriver, eq(boardAsg.driverId, boardDriver.id))
+    .leftJoin(boardVehicle, eq(boardAsg.vehicleId, boardVehicle.id))
+    .leftJoin(boardCarrier, eq(boardAsg.carrierId, boardCarrier.id))
+    .where(where)
+    .groupBy(trips.currentStatus);
+}
+
 /** A `count()` over the same joins (the where/q references the joined names + current assignment). */
 function boardCount(where: SQL | undefined) {
   return db
@@ -492,14 +519,24 @@ export async function queryTripBoard(query: TripBoardQuery): Promise<TripBoardRe
   const where = buildWhere(query);
   const orderBy = buildOrderBy(query);
 
-  const [rows, totalRows] = await Promise.all([
+  // The facet where-clause drops the status filter (a chip must count itself, not be counted through
+  // itself) and pins the scope to `all` (the active default would zero every closed status, hiding
+  // the very rows the chip exists to reach).
+  const facetWhere = buildWhere({ ...query, status: undefined, scope: "all" });
+
+  const [rows, totalRows, statusRows] = await Promise.all([
     boardSelect().where(where).orderBy(orderBy).limit(query.limit).offset(query.offset),
     boardCount(where),
+    boardStatusCounts(facetWhere),
   ]);
+
+  const statusCounts: Partial<Record<TripStatus, number>> = {};
+  for (const row of statusRows) statusCounts[row.status] = row.value;
 
   return {
     rows: rows.map(toBoardRow),
     total: totalRows[0]?.value ?? 0,
+    statusCounts,
   };
 }
 

@@ -50,12 +50,19 @@ export function TripFilters({
   reset,
   search,
   options,
+  statusCounts,
 }: {
   query: TripBoardQuery;
   setFilters: (next: Partial<Record<string, FilterValue>>) => void;
   reset: () => void;
   search: string;
   options: TripFilterOptions;
+  /**
+   * How many trips each status holds under the CURRENT filters (from the board response, so it moves
+   * with them). Undefined on first paint, before the board answers — then every chip is shown, since
+   * "no count yet" must never be read as "no trips".
+   */
+  statusCounts?: Partial<Record<TripStatus, number>>;
 }) {
   const t = useTranslations("Trips");
   const tCommon = useTranslations("Common");
@@ -73,6 +80,19 @@ export function TripFilters({
   const codeOf = new Map(locationList.map((l) => [l.id, l.code]));
 
   const statusSet = new Set<TripStatus>(query.status ?? []);
+
+  // With 16 statuses the chip row is long enough that the one you want hides in the middle of the
+  // ones you never use. A status with no trips under the current filters is dead weight, so it is
+  // folded away behind a counter — unless it is selected (you must always be able to unselect it).
+  const [showEmptyStatuses, setShowEmptyStatuses] = useState(false);
+  const visibleStatuses = TRIP_STATUSES.filter(
+    (status) =>
+      showEmptyStatuses ||
+      statusCounts === undefined ||
+      (statusCounts[status] ?? 0) > 0 ||
+      statusSet.has(status),
+  );
+  const hiddenStatusCount = TRIP_STATUSES.length - visibleStatuses.length;
 
   function toggleStatus(status: TripStatus) {
     const next = new Set(statusSet);
@@ -312,7 +332,7 @@ export function TripFilters({
                 <SelectItem value="__all__">{t("board.all")}</SelectItem>
                 {options.lanes.map((lane) => (
                   <SelectItem key={lane.id} value={lane.id}>
-                    {(codeOf.get(lane.originLocationId) ?? "?")} →{" "}
+                    {codeOf.get(lane.originLocationId) ?? "?"} →{" "}
                     {codeOf.get(lane.destinationLocationId) ?? "?"}
                   </SelectItem>
                 ))}
@@ -389,9 +409,10 @@ export function TripFilters({
         {/* Status multi-select (toggle chips) ---------------------------------------------- */}
         <div className="space-y-1.5">
           <Label>{t("board.filterStatus")}</Label>
-          <div className="flex flex-wrap gap-1.5">
-            {TRIP_STATUSES.map((status) => {
+          <div className="flex flex-wrap items-center gap-1.5">
+            {visibleStatuses.map((status) => {
               const active = statusSet.has(status);
+              const chipCount = statusCounts?.[status];
               return (
                 <button
                   key={status}
@@ -399,14 +420,36 @@ export function TripFilters({
                   onClick={() => toggleStatus(status)}
                   aria-pressed={active}
                   className={cn(
-                    "rounded-full transition-opacity",
-                    active ? "opacity-100 ring-2 ring-ring ring-offset-1" : "opacity-60 hover:opacity-100",
+                    "flex items-center gap-1 rounded-full transition-opacity",
+                    active
+                      ? "opacity-100 ring-2 ring-ring ring-offset-1"
+                      : "opacity-60 hover:opacity-100",
                   )}
                 >
                   <TripStatusBadge status={status} />
+                  {chipCount === undefined ? null : (
+                    <span className="pr-1 text-xs tabular-nums text-muted-foreground">
+                      {chipCount}
+                    </span>
+                  )}
                 </button>
               );
             })}
+            {/* An empty status is hidden, not deleted: the count is a fact about the current filters,
+                not about the machine, so the operator can always bring the rest back. */}
+            {hiddenStatusCount > 0 || showEmptyStatuses ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={() => setShowEmptyStatuses((prev) => !prev)}
+              >
+                {showEmptyStatuses
+                  ? t("board.filterStatusEmptyHide")
+                  : t("board.filterStatusEmptyShow", { count: hiddenStatusCount })}
+              </Button>
+            ) : null}
           </div>
         </div>
 

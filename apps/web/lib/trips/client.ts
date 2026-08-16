@@ -33,6 +33,7 @@ import {
   type ExceptionReport,
   type BillingReadinessReport,
   type AuditLogPage,
+  type TripStatus,
 } from "@brazil-tms/shared";
 import type {
   TripBoardRow,
@@ -154,6 +155,8 @@ const AUDIT_ROOT = ["audit-logs"] as const;
 export interface TripBoardResponse {
   items: TripBoardRow[];
   total: number;
+  /** Per-status match counts for the filter chips (absent key = zero). Ignores the status filter. */
+  statusCounts: Partial<Record<TripStatus, number>>;
   limit: number;
   offset: number;
 }

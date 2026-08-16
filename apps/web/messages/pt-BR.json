@@ -1039,6 +1039,8 @@
       "filterSlaStatus": "Risco de SLA",
       "filterCustomer": "Cliente",
       "filterStatus": "Status",
+      "filterStatusEmptyShow": "+{count} sem viagens",
+      "filterStatusEmptyHide": "Ocultar status sem viagens",
       "filterBillingStatus": "Faturamento",
       "filterOrigin": "Origem",
       "filterDestination": "Destino",
