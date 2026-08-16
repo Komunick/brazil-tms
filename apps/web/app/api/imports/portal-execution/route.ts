@@ -32,12 +32,24 @@ export async function POST(request: Request): Promise<NextResponse> {
       );
     }
 
+    // WHICH tab of the portal this file came from — and therefore whether it may create trips.
+    // Refused rather than defaulted: guessing wrong in the `plan` direction manufactures thousands
+    // of finished trips, and guessing wrong the other way silently imports nothing.
+    const mode = String(form.get("mode") ?? "");
+    if (mode !== "plan" && mode !== "execution") {
+      throw new Conflict(
+        "MODE_REQUIRED",
+        "Informe se o arquivo é da aba Planejado (plano) ou Concluído (execução).",
+      );
+    }
+
     const customerCode = String(form.get("customerCode") ?? "SHOPEE");
     const result = await importPortalExecution({
       fileName: file.name,
       bytes: Buffer.from(await file.arrayBuffer()),
       customerCode,
       actorUserId: ctx.userId,
+      mode,
     });
 
     return NextResponse.json({ result });

@@ -12,7 +12,7 @@ import {
   trips,
   users,
 } from "@brazil-tms/db";
-import { advanceTripFromSource, closeTripFromSource, isClosedAtSource } from "./source-status";
+import { advanceTripFromSource, closeTripFromSource, isClosedAtSource } from "@brazil-tms/db";
 
 /**
  * Closing a trip because the CUSTOMER's file says it is over.

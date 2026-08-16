@@ -1,6 +1,8 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { TRANSITIONS, TRIP_STATUSES, type TripStatus } from "@brazil-tms/shared";
-import { db, tripAssignments, tripEvents, trips, writeAudit } from "@brazil-tms/db";
+import { db } from "../client";
+import { tripAssignments, tripEvents, trips } from "../../schema";
+import { writeAudit } from "../audit/write-audit";
 
 /**
  * Moving a trip to match the status the CUSTOMER's file reports.

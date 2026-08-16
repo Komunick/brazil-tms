@@ -79,10 +79,18 @@ describe("normalizeVehicleType", () => {
     expect(normalizeVehicleType("tres quartos")).toBe("tres_quartos");
   });
 
-  it('drops a trailing commercial qualifier ("- EX")', () => {
+  it('drops a trailing commercial qualifier ("- EX", "- EXPRESSA")', () => {
     expect(normalizeVehicleType("CARRETA - EX")).toBe("carreta");
     expect(normalizeVehicleType("TRUCK - EX")).toBe("truck");
     expect(normalizeVehicleType("TRUCK-EX")).toBe("truck");
+    // The customer's PORTAL spells the same arrangement out in full — 362 rows of one export.
+    expect(normalizeVehicleType("CARRETA - EXPRESSA")).toBe("carreta");
+    expect(normalizeVehicleType("TRUCK - EXPRESSA")).toBe("truck");
+  });
+
+  it("does not mistake a real type for a qualifier", () => {
+    // "carreta ls" is its own vehicle, and there is no dash to drop.
+    expect(normalizeVehicleType("CARRETA LS")).toBe("carreta_ls");
   });
 
   it('maps the yard shorthands "3/4" and "cavalo"', () => {

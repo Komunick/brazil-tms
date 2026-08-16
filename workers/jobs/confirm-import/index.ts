@@ -1,9 +1,13 @@
 import type { PgBoss } from "pg-boss";
 import { and, asc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import {
+  advanceTripFromSource,
+  closeTripFromSource,
   Conflict,
   createTrip,
   db,
+  isCancellationLabel,
+  isClosedAtSource,
   importBatches,
   importRows,
   importTemplates,
@@ -28,12 +32,6 @@ import {
   resourceRequestFrom,
   type ResourceIndex,
 } from "./resources";
-import {
-  advanceTripFromSource,
-  closeTripFromSource,
-  isCancellationLabel,
-  isClosedAtSource,
-} from "./source-status";
 
 /**
  * T033 — `import.confirm` job (data-model R8; contract §C/§A). Per row best-effort + idempotent: for

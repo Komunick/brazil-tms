@@ -6,7 +6,14 @@ import {
   type PortalParseResult,
   type PortalStopRow,
 } from "@brazil-tms/shared";
-import { applyPortalExecution, customers, db, type PortalApplySummary } from "@brazil-tms/db";
+import {
+  applyPortalExecution,
+  applyPortalPlan,
+  customers,
+  db,
+  type PortalApplySummary,
+  type PortalPlanSummary,
+} from "@brazil-tms/db";
 import { Conflict } from "@/lib/api/respond";
 
 /**
@@ -18,12 +25,22 @@ import { Conflict } from "@/lib/api/respond";
  * one pass, and the summary the screen shows IS the result rather than a promise of one.
  */
 
+/**
+ * WHICH export was uploaded, and therefore what it is allowed to do. The portal has two tabs and
+ * they mean different things: "Planejado" is the plan (it may create trips), "Concluído" is what
+ * already happened (it may never create — running it as a plan would manufacture thousands of
+ * finished trips nobody can act on). The operator picks; the TMS does not guess from the contents.
+ */
+export type PortalImportMode = "plan" | "execution";
+
 export interface PortalImportResult {
   fileName: string;
+  mode: PortalImportMode;
   rows: number;
   trips: number;
   legs: number;
-  summary: PortalApplySummary;
+  summary: PortalApplySummary | null;
+  planSummary: PortalPlanSummary | null;
   rejected: PortalParseResult["rejected"];
   /** The stations the file names that no TMS location claims — the operator's to-do list. */
   unknownStations: string[];
@@ -48,6 +65,7 @@ export async function importPortalExecution(input: {
   bytes: Buffer;
   customerCode: string;
   actorUserId: string;
+  mode: PortalImportMode;
 }): Promise<PortalImportResult> {
   let rows: PortalStopRow[];
   try {
@@ -75,16 +93,21 @@ export async function importPortalExecution(input: {
 
   const customerId = await shopeeCustomerId(input.customerCode);
   const parsed = parsePortalExecution(rows);
-  const summary = await applyPortalExecution(
-    customerId,
-    parsed.trips,
-    input.actorUserId,
-    input.fileName,
-  );
+
+  // The plan mode creates trips and then records anything the same file already proves; the
+  // execution mode only records. The difference is the operator's choice, never a guess.
+  const planSummary =
+    input.mode === "plan"
+      ? await applyPortalPlan(customerId, parsed.trips, input.actorUserId, input.fileName)
+      : null;
+  const summary =
+    input.mode === "execution"
+      ? await applyPortalExecution(customerId, parsed.trips, input.actorUserId, input.fileName)
+      : null;
 
   const unknownStations = [
     ...new Set(
-      summary.outcomes
+      [...(summary?.outcomes ?? []), ...(planSummary?.outcomes ?? [])]
         .filter((o) => o.status === "unknown_station" && o.detail)
         .map((o) => o.detail!),
     ),
@@ -92,10 +115,12 @@ export async function importPortalExecution(input: {
 
   return {
     fileName: input.fileName,
+    mode: input.mode,
     rows: rows.length,
     trips: parsed.trips.length,
     legs: parsed.trips.reduce((n, t) => n + t.legs.length, 0),
     summary,
+    planSummary,
     rejected: parsed.rejected,
     unknownStations,
   };

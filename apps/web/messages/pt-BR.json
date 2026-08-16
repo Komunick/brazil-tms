@@ -635,6 +635,23 @@
     "title": "Execução do portal",
     "subtitle": "Registra os horários reais das viagens que já existem no TMS — chegada, saída e chegada no destino, como o portal do cliente registrou.",
     "fileLabel": "Arquivo do portal (.csv)",
+    "modeLabel": "De qual aba do portal é este arquivo?",
+    "mode": {
+      "execution": "Concluído (execução)",
+      "plan": "Planejado (plano)"
+    },
+    "modeHint": {
+      "execution": "Registra os horários reais nas viagens que já existem. Nunca cria viagem.",
+      "plan": "Cria as viagens do período e atualiza o plano das que já existem."
+    },
+    "planApplied": "{created} viagens criadas · {updated} planos atualizados",
+    "planMilestones": "{count} pernas já vieram com horário real e foram registradas.",
+    "cancelledAtPortal": "Criadas já canceladas",
+    "cancelledAtPortalHint": "O portal reporta cancelada — entram para consulta.",
+    "unchanged": "Sem mudança",
+    "unchangedHint": "O plano no TMS já era esse.",
+    "failed": "Falharam",
+    "failedHint": "Reportadas com o motivo; o resto do arquivo entrou.",
     "hint": "Use o export da aba \"Concluído\" do portal. Esta importação nunca cria viagem: ela só marca o que aconteceu nas viagens que o TMS já tem.",
     "import": "Importar execução",
     "importing": "Registrando a execução…",

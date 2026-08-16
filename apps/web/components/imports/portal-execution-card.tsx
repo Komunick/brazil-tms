@@ -23,8 +23,11 @@ import { Skeleton } from "@/components/ui/skeleton";
  * what was applied and follows with what was not.
  */
 
+type Mode = "plan" | "execution";
+
 interface PortalResult {
   fileName: string;
+  mode: Mode;
   rows: number;
   trips: number;
   legs: number;
@@ -35,7 +38,16 @@ interface PortalResult {
     noMilestones: number;
     unknownStation: number;
     closed: number;
-  };
+  } | null;
+  planSummary: {
+    created: number;
+    updated: number;
+    unchanged: number;
+    cancelled: number;
+    unknownStation: number;
+    failed: number;
+    milestones: number;
+  } | null;
   rejected: { row: number; externalTripId: string; reason: string }[];
   unknownStations: string[];
 }
@@ -44,6 +56,7 @@ export function PortalExecutionCard() {
   const t = useTranslations("PortalImport");
   const queryClient = useQueryClient();
 
+  const [mode, setMode] = useState<Mode>("execution");
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<PortalResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +66,7 @@ export function PortalExecutionCard() {
     mutationFn: async (chosen: File): Promise<PortalResult> => {
       const body = new FormData();
       body.append("file", chosen);
+      body.append("mode", mode);
       const res = await fetch("/api/imports/portal-execution", { method: "POST", body });
       const json = (await res.json().catch(() => null)) as {
         result?: PortalResult;
@@ -83,6 +97,7 @@ export function PortalExecutionCard() {
   }
 
   const summary = result?.summary;
+  const plan = result?.planSummary;
 
   return (
     <Card>
@@ -91,6 +106,27 @@ export function PortalExecutionCard() {
         <CardDescription>{t("subtitle")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* WHICH tab the file came from. The operator says it; the TMS never guesses, because the
+            two files look identical and only one of them may create trips. */}
+        <div className="space-y-1.5">
+          <Label>{t("modeLabel")}</Label>
+          <div className="flex flex-wrap gap-1.5">
+            {(["execution", "plan"] as const).map((option) => (
+              <Button
+                key={option}
+                type="button"
+                size="sm"
+                variant={mode === option ? "default" : "outline"}
+                disabled={upload.isPending}
+                onClick={() => setMode(option)}
+              >
+                {t(`mode.${option}`)}
+              </Button>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground">{t(`modeHint.${mode}`)}</p>
+        </div>
+
         <form onSubmit={onSubmit} className="flex flex-wrap items-end gap-3">
           <div className="min-w-[18rem] flex-1 space-y-1.5">
             <Label htmlFor="portal-file">{t("fileLabel")}</Label>
@@ -125,11 +161,15 @@ export function PortalExecutionCard() {
           </p>
         ) : null}
 
-        {result && summary ? (
+        {result ? (
           <div className="space-y-3">
             {/* What it DID, first and alone: everything else on this panel is a reason it did not. */}
             <div className="rounded-md border p-3">
-              <p className="text-sm font-medium">{t("applied", { count: summary.applied })}</p>
+              <p className="text-sm font-medium">
+                {plan
+                  ? t("planApplied", { created: plan.created, updated: plan.updated })
+                  : t("applied", { count: summary?.applied ?? 0 })}
+              </p>
               <p className="text-xs text-muted-foreground">
                 {t("readSummary", {
                   rows: result.rows,
@@ -137,21 +177,48 @@ export function PortalExecutionCard() {
                   legs: result.legs,
                 })}
               </p>
+              {plan && plan.milestones > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {t("planMilestones", { count: plan.milestones })}
+                </p>
+              ) : null}
             </div>
 
             <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Untouched label={t("notFound")} value={summary.notFound} hint={t("notFoundHint")} />
-              <Untouched label={t("closed")} value={summary.closed} hint={t("closedHint")} />
-              <Untouched
-                label={t("alreadyAhead")}
-                value={summary.alreadyAhead}
-                hint={t("alreadyAheadHint")}
-              />
-              <Untouched
-                label={t("noMilestones")}
-                value={summary.noMilestones}
-                hint={t("noMilestonesHint")}
-              />
+              {plan ? (
+                <>
+                  <Untouched
+                    label={t("cancelledAtPortal")}
+                    value={plan.cancelled}
+                    hint={t("cancelledAtPortalHint")}
+                  />
+                  <Untouched
+                    label={t("unchanged")}
+                    value={plan.unchanged}
+                    hint={t("unchangedHint")}
+                  />
+                  <Untouched label={t("failed")} value={plan.failed} hint={t("failedHint")} />
+                </>
+              ) : summary ? (
+                <>
+                  <Untouched
+                    label={t("notFound")}
+                    value={summary.notFound}
+                    hint={t("notFoundHint")}
+                  />
+                  <Untouched label={t("closed")} value={summary.closed} hint={t("closedHint")} />
+                  <Untouched
+                    label={t("alreadyAhead")}
+                    value={summary.alreadyAhead}
+                    hint={t("alreadyAheadHint")}
+                  />
+                  <Untouched
+                    label={t("noMilestones")}
+                    value={summary.noMilestones}
+                    hint={t("noMilestonesHint")}
+                  />
+                </>
+              ) : null}
             </dl>
 
             {result.unknownStations.length > 0 ? (

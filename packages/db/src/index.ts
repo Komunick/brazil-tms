@@ -7,6 +7,13 @@ export { createTrip, getTrip, listTrips } from "./trips/trips-service";
 export { updateTripPlan } from "./trips/trip-plan";
 export { updateOperationalFields } from "./trips/trip-operational-fields";
 export {
+  advanceTripFromSource,
+  closeTripFromSource,
+  isCancellationLabel,
+  isClosedAtSource,
+} from "./trips/source-status";
+export type { AdvanceOutcome, CloseOutcome } from "./trips/source-status";
+export {
   applyPortalExecution,
   applyPortalTrip,
   existingTripIds,
@@ -14,6 +21,8 @@ export {
   loadStationMap,
 } from "./trips/portal-execution-apply";
 export type { PortalApplyOutcome, PortalApplySummary } from "./trips/portal-execution-apply";
+export { applyPortalPlan, applyPortalPlanTrip } from "./trips/portal-plan-apply";
+export type { PortalPlanOutcome, PortalPlanSummary } from "./trips/portal-plan-apply";
 export { transitionTripStatus } from "./trips/trip-transitions";
 export {
   cancelTrip,

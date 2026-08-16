@@ -107,8 +107,11 @@ export function normalizeVehicleType(value: string): string | null {
     .trim()
     .replace(/\s+/g, " ");
   if (folded === "") return null;
-  // "carreta - ex" / "truck-ex" → the base type; the suffix is a commercial marker.
-  const base = folded.replace(/\s*-\s*[a-z0-9]{1,3}$/, "").trim();
+  // A trailing qualifier after a dash is a COMMERCIAL arrangement, never a different vehicle:
+  // "carreta - ex" in the spreadsheet and "carreta - expressa" in the portal are both a carreta.
+  // The word is dropped whole (it used to be capped at 3 chars, which read "- EX" and choked on
+  // "- EXPRESSA" — 362 rows of the customer's own portal export).
+  const base = folded.replace(/\s*-\s*[a-z0-9]+$/, "").trim();
   return VEHICLE_TYPE_SYNONYMS[folded] ?? VEHICLE_TYPE_SYNONYMS[base] ?? null;
 }
 
