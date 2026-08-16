@@ -8,3 +8,4 @@ export * from "./shared-external-id";
 export * from "./stacked-row";
 export * from "./portal-execution";
 export * from "./portal-milestones";
+export * from "./portal-api";
