@@ -255,6 +255,7 @@ export function ControlTowerTable({
         reset={reset}
         search={search}
         options={filterOptions}
+        statusCounts={board.data?.statusCounts}
       />
 
       <div className="rounded-md border">

@@ -18,8 +18,14 @@ export async function GET(request: Request): Promise<NextResponse> {
 
     const url = new URL(request.url);
     const query = tripBoardQueryFromParams(url.searchParams);
-    const { rows, total } = await queryTripBoard(query);
-    return NextResponse.json({ items: rows, total, limit: query.limit, offset: query.offset });
+    const { rows, total, statusCounts } = await queryTripBoard(query);
+    return NextResponse.json({
+      items: rows,
+      total,
+      statusCounts,
+      limit: query.limit,
+      offset: query.offset,
+    });
   } catch (error) {
     return handleRouteError(error);
   }
