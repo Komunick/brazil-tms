@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.2.0
+// @version      1.3.0
 // @description  Lê as duas listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -144,22 +144,47 @@
     // entre os dois está na própria página que acabou de ser lida.
     const idPorNumero = new Map((lista ?? []).map((t) => [t.trip_number, t.id]));
     let feitos = 0;
+    // Toda falha aqui é CONTADA e dita no fim. A primeira versão engolia tudo em silêncio, e o
+    // resultado foi um "zero gravados" sem nenhuma pista de onde a corrente arrebentava.
+    const falhas = { semId: 0, httpDoPortal: 0, retcodeDoPortal: 0, aoEntregar: 0 };
+    let ultimoErro = "";
     for (const numero of numerosLH) {
       const id = idPorNumero.get(numero);
-      if (!id) continue;
+      if (!id) {
+        falhas.semId += 1;
+        continue;
+      }
       try {
         const u = new URL("/api/line_haul/agency/trip/detail", location.origin);
         u.searchParams.set("trip_id", String(id));
         u.searchParams.set("agency_current_station_id", estacao());
         const r = await fetch(u.toString(), { credentials: "include" });
-        if (!r.ok) continue;
+        if (!r.ok) {
+          falhas.httpDoPortal += 1;
+          ultimoErro = `portal HTTP ${r.status}`;
+          continue;
+        }
         const payload = await r.json();
-        if (payload?.retcode !== 0) continue;
+        if (payload?.retcode !== 0) {
+          falhas.retcodeDoPortal += 1;
+          ultimoErro = `portal retcode ${payload?.retcode}`;
+          continue;
+        }
         await entregar("detail", payload);
         feitos += 1;
-      } catch {
-        // Um detalhe que falha não custa o ciclo: o TMS pede de novo no próximo.
+      } catch (e) {
+        falhas.aoEntregar += 1;
+        ultimoErro = String(e?.message ?? e).slice(0, 160);
       }
+    }
+    const totalFalhas =
+      falhas.semId + falhas.httpDoPortal + falhas.retcodeDoPortal + falhas.aoEntregar;
+    if (totalFalhas > 0) {
+      erro(
+        `detalhe: ${feitos} ok, ${totalFalhas} falharam ` +
+          `(sem id ${falhas.semId}, http ${falhas.httpDoPortal}, retcode ${falhas.retcodeDoPortal}, ` +
+          `entrega ${falhas.aoEntregar}) — último: ${ultimoErro}`,
+      );
     }
     return feitos;
   }
@@ -184,7 +209,10 @@
 
       // O TMS diz quais viagens ainda estão sem o operador de atribuição; só essas custam uma
       // chamada extra, e a lista some sozinha conforme elas são preenchidas.
-      if (resumo?.needDetail?.length) detalhes += await detalharViagens(resumo.needDetail, lista);
+      if (resumo?.needDetail?.length) {
+        log(`${modo}: TMS pediu detalhe de ${resumo.needDetail.length} viagem(ns)`);
+        detalhes += await detalharViagens(resumo.needDetail, lista);
+      }
 
       // Última página: o portal já disse quantas existem no total.
       const total = payload?.data?.total ?? 0;
