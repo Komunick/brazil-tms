@@ -123,7 +123,10 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
     const vehicle = await db
       .insert(vehicles)
       .values({
-        plate: uniq("PLT").slice(0, 12),
+        // Unique WITHIN the 12 chars a plate allows: `uniq(...)` puts its randomness at the end, so
+        // slicing the front kept only the timestamp and two runs in the same second collided on
+        // `vehicles_plate_unique` — a flake that only showed up when the suite ran back to back.
+        plate: `PLT${Math.random().toString(36).slice(2, 11).toUpperCase()}`,
         vehicleType: "truck",
         ownershipType: "owned",
         status: "active",

@@ -70,6 +70,14 @@ const CASES: Case[] = [
     nonHolder: "finance",
   },
   {
+    key: "import_trips",
+    name: "import portal execution",
+    method: "POST",
+    path: "/api/imports/portal-execution",
+    holder: "opsManager",
+    nonHolder: "finance",
+  },
+  {
     key: "manage_trips",
     name: "edit trip plan",
     method: "PATCH",

@@ -631,6 +631,30 @@
       "archivedMsg": "Rota arquivada."
     }
   },
+  "PortalImport": {
+    "title": "Execução do portal",
+    "subtitle": "Registra os horários reais das viagens que já existem no TMS — chegada, saída e chegada no destino, como o portal do cliente registrou.",
+    "fileLabel": "Arquivo do portal (.csv)",
+    "hint": "Use o export da aba \"Concluído\" do portal. Esta importação nunca cria viagem: ela só marca o que aconteceu nas viagens que o TMS já tem.",
+    "import": "Importar execução",
+    "importing": "Registrando a execução…",
+    "importingHint": "Uma linha por parada; cada viagem é atualizada com os horários que o cliente registrou.",
+    "genericError": "Não foi possível importar o arquivo.",
+    "applied": "{count} pernas atualizadas com horário real",
+    "readSummary": "{rows} linhas lidas · {trips} viagens · {legs} pernas",
+    "notFound": "Sem viagem no TMS",
+    "notFoundHint": "A viagem não foi importada da programação.",
+    "closed": "Já encerradas",
+    "closedHint": "Concluídas ou canceladas — não alteradas.",
+    "alreadyAhead": "TMS já à frente",
+    "alreadyAheadHint": "O arquivo não traz nada novo.",
+    "noMilestones": "Sem horário ainda",
+    "noMilestonesHint": "O portal ainda não registrou a chegada.",
+    "unknownStations": "{count} estações não reconhecidas",
+    "unknownStationsHint": "Estas pernas não foram atualizadas. Cadastre o local ou vincule o código da estação.",
+    "rejected": "{count} linhas não utilizadas",
+    "rejectedRow": "linha {row} · {id}"
+  },
   "RegistryImport": {
     "title": "Importar cadastro (motoristas, veículos e reboques)",
     "subtitle": "Envie a planilha de programação: as abas MOTORISTAS e VEÍCULOSCARRETAS alimentam os cadastros de frota.",
