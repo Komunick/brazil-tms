@@ -30,12 +30,26 @@ export interface PortalMilestone {
 }
 
 /**
- * `13/08/2026 09:47` in São Paulo → a UTC instant. The portal writes wall-clock local time with no
- * zone, exactly like the planning spreadsheet, so it is read the same way. Returns null for a blank
- * or unparseable cell — the caller reports it, never guesses.
+ * `13/08/2026 09:47` in São Paulo → a UTC instant. The portal's EXPORT writes wall-clock local time
+ * with no zone, exactly like the planning spreadsheet, so it is read the same way. Returns null for a
+ * blank or unparseable cell — the caller reports it, never guesses.
+ *
+ * Its API states the same instants as **epoch seconds** instead (2026-08-16). A number is therefore
+ * accepted verbatim: an epoch already IS the instant, with no zone to interpret and nothing to get
+ * wrong. `0` means "not yet" in that API — every unreached milestone comes back as zero, not null —
+ * so it reads as absent, exactly like a blank cell.
  */
-export function parsePortalInstant(value: string | null, offsetMinutes = -180): Date | null {
+export function parsePortalInstant(
+  value: string | number | null,
+  offsetMinutes = -180,
+): Date | null {
   if (value == null) return null;
+  if (typeof value === "number") {
+    if (!Number.isFinite(value) || value <= 0) return null;
+    // Seconds, not milliseconds: the portal's own `sta`/`mtime` query params are 10-digit epochs.
+    const instant = new Date(value * 1000);
+    return Number.isNaN(instant.getTime()) ? null : instant;
+  }
   const match = /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(value.trim());
   if (!match) return null;
   const [, dd, mm, yyyy, hh, mi, ss] = match;

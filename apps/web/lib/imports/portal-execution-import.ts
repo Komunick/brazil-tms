@@ -114,15 +114,47 @@ export async function importPortalExecution(input: {
     totalRows: rows.length,
   });
 
+  const result = await applyParsedPortalTrips({
+    customerId,
+    actorUserId: input.actorUserId,
+    mode: input.mode,
+    sourceLabel: input.fileName,
+    rows: rows.length,
+    parsed,
+  });
+
+  await closePortalBatch(batchId, input.mode, result);
+  return result;
+}
+
+/**
+ * Apply already-parsed portal trips — the half the uploaded file and the robot's feed share.
+ *
+ * Both arrive at the same `PortalTrip[]` (one from a spreadsheet export, one from the portal's API),
+ * so everything after that point MUST be one implementation: plan-apply, milestones, unresolved
+ * stations, the counts. Two copies of this would drift, and the drift would be invisible until the
+ * two paths disagreed about a real trip.
+ */
+export async function applyParsedPortalTrips(input: {
+  customerId: string;
+  actorUserId: string;
+  mode: PortalImportMode;
+  /** What to write in the trip's history as the origin of the change ("arquivo.csv", "portal"). */
+  sourceLabel: string;
+  rows: number;
+  parsed: PortalParseResult;
+}): Promise<PortalImportResult> {
+  const { customerId, parsed } = input;
+
   // The plan mode creates trips and then records anything the same file already proves; the
   // execution mode only records. The difference is the operator's choice, never a guess.
   const planSummary =
     input.mode === "plan"
-      ? await applyPortalPlan(customerId, parsed.trips, input.actorUserId, input.fileName)
+      ? await applyPortalPlan(customerId, parsed.trips, input.actorUserId, input.sourceLabel)
       : null;
   const summary =
     input.mode === "execution"
-      ? await applyPortalExecution(customerId, parsed.trips, input.actorUserId, input.fileName)
+      ? await applyPortalExecution(customerId, parsed.trips, input.actorUserId, input.sourceLabel)
       : null;
 
   const unknownStations = [
@@ -133,10 +165,10 @@ export async function importPortalExecution(input: {
     ),
   ];
 
-  const result: PortalImportResult = {
-    fileName: input.fileName,
+  return {
+    fileName: input.sourceLabel,
     mode: input.mode,
-    rows: rows.length,
+    rows: input.rows,
     trips: parsed.trips.length,
     legs: parsed.trips.reduce((n, t) => n + t.legs.length, 0),
     summary,
@@ -144,10 +176,19 @@ export async function importPortalExecution(input: {
     rejected: parsed.rejected,
     unknownStations,
   };
+}
 
-  // Close the record with what actually happened. The five count columns carry what the history
-  // table shows at a glance; `summary` keeps the rest — including the station list, which is the
-  // only part of this an operator has to act on.
+/**
+ * Close an import's record with what actually happened. The five count columns carry what the
+ * history table shows at a glance; `summary` keeps the rest — including the station list, which is
+ * the only part of this an operator has to act on.
+ */
+export async function closePortalBatch(
+  batchId: string,
+  mode: PortalImportMode,
+  result: PortalImportResult,
+): Promise<void> {
+  const { planSummary, summary } = result;
   await db
     .update(importBatches)
     .set({
@@ -155,19 +196,18 @@ export async function importPortalExecution(input: {
       createdCount: planSummary?.created ?? summary?.applied ?? 0,
       updatedCount: planSummary?.updated ?? 0,
       duplicateCount: planSummary?.unchanged ?? summary?.alreadyAhead ?? 0,
-      errorCount: (planSummary?.failed ?? 0) + unknownStations.length + parsed.rejected.length,
+      errorCount:
+        (planSummary?.failed ?? 0) + result.unknownStations.length + result.rejected.length,
       summary: {
-        mode: input.mode,
+        mode,
         trips: result.trips,
         legs: result.legs,
         plan: planSummary ? { ...planSummary, outcomes: undefined } : null,
         execution: summary ? { ...summary, outcomes: undefined } : null,
-        unknownStations,
-        rejected: parsed.rejected.slice(0, 50),
+        unknownStations: result.unknownStations,
+        rejected: result.rejected.slice(0, 50),
       },
       updatedAt: new Date(),
     })
     .where(eq(importBatches.id, batchId));
-
-  return result;
 }

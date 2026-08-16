@@ -46,10 +46,11 @@ export interface PortalStop {
   stationId: string | null;
   /** The station name without the bracketed id — what matches a TMS location name. */
   stationName: string;
-  plannedArrival: string | null;
-  plannedDeparture: string | null;
-  actualArrival: string | null;
-  actualDeparture: string | null;
+  /** A label ("13/08/2026 09:47") from the export, or an epoch-second instant from the API. */
+  plannedArrival: string | number | null;
+  plannedDeparture: string | number | null;
+  actualArrival: string | number | null;
+  actualDeparture: string | number | null;
 }
 
 /** One movement: from one stop to the next, with the plan and what actually happened. */
