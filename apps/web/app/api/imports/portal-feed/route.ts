@@ -73,6 +73,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       execution: result.summary ? { ...result.summary, outcomes: undefined } : null,
       unknownStations: result.unknownStations,
       rejected: result.rejected.length,
+      // Quais viagens ainda estão sem o operador de atribuição. O robô busca o detalhe SÓ dessas —
+      // sem este campo na resposta ele nunca pede nada, que foi exatamente o que aconteceu.
+      needDetail: result.needDetail,
     });
   } catch (error) {
     return handleRouteError(error);
