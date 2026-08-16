@@ -110,6 +110,55 @@ describe("hopsToApply", () => {
     expect(hopsToApply("received", [])).toEqual([]);
   });
 
+  it("walks THROUGH loading and loaded instead of shortcutting to the furthest milestone", () => {
+    // The machine allows at_origin → in_transit directly, so aiming at the furthest milestone alone
+    // would silently drop the two loading steps — the very hours this exists to make visible.
+    const hops = hopsToApply(
+      "at_origin",
+      milestonesFor(
+        leg(
+          {
+            actualArrival: "13/08/2026 05:04",
+            loadingStarted: "13/08/2026 06:50",
+            loadedAt: "13/08/2026 07:16",
+            actualDeparture: "13/08/2026 07:16",
+          },
+          { actualArrival: "13/08/2026 18:30" },
+        ),
+      ),
+    );
+    expect(hops.map((h) => h.status)).toEqual([
+      "loading",
+      "loaded",
+      "in_transit",
+      "at_destination",
+    ]);
+    // Each carries the customer's own instant, and `loading` carries no typed event (by design).
+    expect(hops[0]!.at?.toISOString()).toBe("2026-08-13T09:50:00.000Z");
+    expect(hops[0]!.eventType).toBeNull();
+    expect(hops[1]!.eventType).toBe("loaded");
+  });
+
+  it("a trip that only started loading stops at loading — nothing beyond is invented", () => {
+    const hops = hopsToApply(
+      "at_origin",
+      milestonesFor(
+        leg({ actualArrival: "13/08/2026 05:04", loadingStarted: "13/08/2026 06:50" }, {}),
+      ),
+    );
+    expect(hops.map((h) => h.status)).toEqual(["loading"]);
+  });
+
+  it("the spreadsheet export states no loading times, so it produces no loading hops", () => {
+    const hops = hopsToApply(
+      "at_origin",
+      milestonesFor(
+        leg({ actualArrival: "13/08/2026 05:04", actualDeparture: "13/08/2026 07:16" }, {}),
+      ),
+    );
+    expect(hops.map((h) => h.status)).toEqual(["in_transit"]);
+  });
+
   it("never routes through cancelled to reach a live status", () => {
     const m = milestonesFor(leg({ actualArrival: "12/08/2026 22:31" }, {}));
     expect(hopsToApply("received", m).some((h) => h.status === "cancelled")).toBe(false);

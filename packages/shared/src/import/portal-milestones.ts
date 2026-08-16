@@ -5,13 +5,15 @@ import type { PortalLeg } from "./portal-execution";
  * From what the truck DID to what the trip IS — the pure half of writing the portal's execution
  * into the TMS (2026-08-16).
  *
- * The portal records four instants per leg. Each one, once it exists, means the trip has passed a
+ * The portal records several instants per leg. Each one, once it exists, means the trip has passed a
  * point of the lifecycle:
  *
- *     origin  ATA  → chegou na origem      at_origin
- *     origin  ATD  → saiu, está na estrada  in_transit
- *     dest    ATA  → chegou no destino      at_destination
- *     (the portal calls the trip Completed)  completed
+ *     origin  ATA           → chegou na origem       at_origin
+ *     origin  loading_time  → começou a carregar     loading          (só na API)
+ *     origin  loaded_time   → carregado              loaded           (só na API)
+ *     origin  ATD           → saiu, está na estrada  in_transit
+ *     dest    ATA           → chegou no destino      at_destination
+ *     (the portal calls the trip Completed)          completed
  *
  * `milestonesFor` turns a leg into that list, in order, each carrying its REAL timestamp. Nothing
  * is inferred: a missing instant produces no milestone, and a trip that is halfway simply stops
@@ -25,8 +27,8 @@ export interface PortalMilestone {
   status: TripStatus;
   /** When it actually happened, per the customer's own record. Never invented. */
   at: Date;
-  /** The event the TMS records alongside the status change. */
-  eventType: "origin_arrived" | "departed" | "destination_arrived";
+  /** The event the TMS records alongside the status change; null when the step has none. */
+  eventType: "origin_arrived" | "loaded" | "departed" | "destination_arrived" | null;
 }
 
 /**
@@ -69,11 +71,20 @@ export function parsePortalInstant(
 export function milestonesFor(leg: PortalLeg): PortalMilestone[] {
   const out: PortalMilestone[] = [];
   const originArrival = parsePortalInstant(leg.origin.actualArrival);
+  const loadingStarted = parsePortalInstant(leg.origin.loadingStarted ?? null);
+  const loadedAt = parsePortalInstant(leg.origin.loadedAt ?? null);
   const originDeparture = parsePortalInstant(leg.origin.actualDeparture);
   const destinationArrival = parsePortalInstant(leg.destination.actualArrival);
 
   if (originArrival)
     out.push({ status: "at_origin", at: originArrival, eventType: "origin_arrived" });
+  // The two loading steps (2026-08-16). The portal's API states them per stop and the TMS status
+  // machine already had `loading`/`loaded` with nothing ever filling them — so a trip jumped from
+  // "arrived at origin" to "in transit" and the two hours in between were invisible. `loading` has no
+  // member in the event vocabulary (by design — it is a status_change, R6), so it carries no typed
+  // event; `loaded` has one. The spreadsheet export states neither, and simply produces neither.
+  if (loadingStarted) out.push({ status: "loading", at: loadingStarted, eventType: null });
+  if (loadedAt) out.push({ status: "loaded", at: loadedAt, eventType: "loaded" });
   if (originDeparture)
     out.push({ status: "in_transit", at: originDeparture, eventType: "departed" });
   if (destinationArrival) {
@@ -133,22 +144,27 @@ export function hopsToApply(current: TripStatus, milestones: PortalMilestone[]):
   const timed = new Map<TripStatus, PortalMilestone>();
   for (const m of milestones) timed.set(m.status, m);
 
-  const furthest = milestones.reduce<TripStatus | null>(
-    (best, m) => (best == null || progressOf(m.status) > progressOf(best) ? m.status : best),
-    null,
-  );
-  if (furthest == null) return [];
-  if (progressOf(furthest) <= progressOf(current)) return [];
+  // Every milestone the trip has not reached yet, in lifecycle order. The walk goes THROUGH each of
+  // them rather than straight to the furthest: the shortest path from `at_origin` to `in_transit` is
+  // a single hop, so aiming at the furthest alone would silently drop `loading` and `loaded` — the
+  // two steps whose whole point is that the hours between arriving and departing stop being invisible.
+  const pending = [...timed.values()]
+    .filter((m) => progressOf(m.status) > progressOf(current))
+    .sort((a, b) => progressOf(a.status) - progressOf(b.status));
+  if (pending.length === 0) return [];
 
-  const path = pathBetween(current, furthest);
-  if (!path) return [];
-
-  return path.map((status) => {
-    const milestone = timed.get(status);
-    return {
-      status,
-      at: milestone?.at ?? null,
-      eventType: milestone?.eventType ?? null,
-    };
-  });
+  const hops: PlannedHop[] = [];
+  let from = current;
+  for (const milestone of pending) {
+    const path = pathBetween(from, milestone.status);
+    // Unreachable from here (the machine has no route): keep what is already proven and stop, rather
+    // than losing the earlier milestones too.
+    if (!path) break;
+    for (const status of path) {
+      const step = timed.get(status);
+      hops.push({ status, at: step?.at ?? null, eventType: step?.eventType ?? null });
+    }
+    from = milestone.status;
+  }
+  return hops;
 }

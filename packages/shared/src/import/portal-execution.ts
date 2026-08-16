@@ -37,7 +37,7 @@ export interface PortalStopRow {
   ATD?: string;
 }
 
-/** A stop, after parsing: the station and the four times it carries. */
+/** A stop, after parsing: the station and the times it carries. */
 export interface PortalStop {
   sequence: number;
   /** The raw station cell, e.g. "[8300]SoC_RJ_Duque de Caxias" — the caller resolves it. */
@@ -51,6 +51,12 @@ export interface PortalStop {
   plannedDeparture: string | number | null;
   actualArrival: string | number | null;
   actualDeparture: string | number | null;
+  /**
+   * The two loading steps, when the source states them. The portal's API does; the spreadsheet
+   * export has no such column and simply leaves them absent, producing no loading milestone.
+   */
+  loadingStarted?: string | number | null;
+  loadedAt?: string | number | null;
 }
 
 /** One movement: from one stop to the next, with the plan and what actually happened. */

@@ -95,6 +95,10 @@ function toStop(raw: Record<string, unknown>, index: number): PortalStop {
     plannedDeparture: positive(raw.std),
     actualArrival: positive(raw.ata),
     actualDeparture: positive(raw.atd),
+    // The two loading steps. The API times them per stop; the spreadsheet export has no such column,
+    // which is why `loading`/`loaded` sat unused in the status machine until now.
+    loadingStarted: positive(raw.loading_time),
+    loadedAt: positive(raw.loaded_time),
   };
 }
 
