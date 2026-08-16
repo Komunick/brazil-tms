@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.3.0
-// @description  Lê as duas listagens do portal do cliente e entrega ao TMS. Somente leitura.
+// @version      1.4.0
+// @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
 // @connect      tms.braziltransports.com.br
@@ -19,8 +19,9 @@
  *
  * Três regras que este arquivo NÃO pode quebrar:
  *
- *   1. SOMENTE LEITURA. Só existe GET, e só para as duas listagens. Nenhum clique, nenhum POST ao
- *      portal, nada de atribuir ou aceitar. Se um dia precisar escrever, não é aqui.
+ *   1. SOMENTE LEITURA. Só existe GET, e só para as três listagens — planejado, em curso e
+ *      concluído. Nenhum clique, nenhum POST ao portal, nada de atribuir ou aceitar. Se um dia
+ *      precisar escrever, não é aqui.
  *   2. BURRO DE PROPÓSITO. Nenhuma regra de negócio: não interpreta status, não decide o que é
  *      atraso, não filtra viagem. Atualizar script em VM é trabalho manual e não tem teste; a
  *      inteligência mora no TMS (`portal-api.ts`, sob teste).
@@ -56,6 +57,19 @@
     /** Janela do plano: de ontem até uma semana à frente. */
     planoDiasAtras: 1,
     planoDiasAdiante: 7,
+    /**
+     * A aba "Aceito" — as viagens que estão ACONTECENDO agora (2026-08-16).
+     *
+     * O portal tem três abas e o robô lia duas. As 73 viagens em curso ficavam invisíveis: elas saem
+     * do Planejado assim que são aceitas e só reaparecem no Concluído quando terminam. Enquanto
+     * isso, o TMS achava que 73 caminhões nunca tinham chegado para carregar — e alertava por isso,
+     * embora o portal registrasse chegada, carga e partida de cada um.
+     *
+     * Entra como EXECUÇÃO: nunca cria viagem, só grava o que já aconteceu.
+     */
+    intervaloEmCursoMs: 5 * 60 * 1000,
+    emCursoDiasAtras: 3,
+    emCursoDiasAdiante: 7,
     /** Janela da execução: o que mudou nas últimas horas (o portal filtra por mtime). */
     execucaoHorasAtras: 6,
     /**
@@ -268,6 +282,15 @@
     ciclo("plan", "/api/line_haul/agency/trip/list", {
       query_type: 1,
       sta: `${agora() - CONFIG.planoDiasAtras * DIA},${agora() + CONFIG.planoDiasAdiante * DIA}`,
+    }),
+  );
+
+  // A aba "Aceito": o que está na estrada agora. Mesmo endpoint do plano, outro `query_type`, e
+  // entregue como execução — o TMS nunca cria viagem a partir daqui.
+  repetir("em curso", CONFIG.intervaloEmCursoMs, () =>
+    ciclo("execution", "/api/line_haul/agency/trip/list", {
+      query_type: 2,
+      sta: `${agora() - CONFIG.emCursoDiasAtras * DIA},${agora() + CONFIG.emCursoDiasAdiante * DIA}`,
     }),
   );
 

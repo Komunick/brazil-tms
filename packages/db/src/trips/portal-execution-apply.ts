@@ -5,6 +5,8 @@ import { locations, tripEvents, trips } from "../../schema";
 import { writeAudit } from "../audit/write-audit";
 import { recomputeTripSla } from "./sla";
 import { markCompleted } from "./completion";
+import { writePortalFacts } from "./portal-trip-facts";
+import { linkFleetFromPortal } from "./portal-fleet-link";
 
 /**
  * Writing the customer's portal execution onto trips the TMS already has (2026-08-16).
@@ -107,7 +109,12 @@ export async function applyPortalTrip(
 
     const existing = (
       await db
-        .select({ id: trips.id, currentStatus: trips.currentStatus })
+        .select({
+          id: trips.id,
+          currentStatus: trips.currentStatus,
+          customerFields: trips.customerFields,
+          customerPriceCents: trips.customerPriceCents,
+        })
         .from(trips)
         .where(
           and(
@@ -123,10 +130,30 @@ export async function applyPortalTrip(
       out.push({ ...base, status: "not_found" });
       continue;
     }
+
+    // Uma viagem encerrada não recebe mais nada: nem marco, nem motorista, nem vínculo.
     if (TERMINAL.has(existing.currentStatus as TripStatus)) {
       out.push({ ...base, status: "closed", detail: existing.currentStatus });
       continue;
     }
+
+    /**
+     * Quem está nesta viagem, ANTES de movê-la (2026-08-16).
+     *
+     * A ordem não é detalhe: `assignTrip` só aceita viagem em "Recebida", então aplicar os marcos
+     * primeiro fecharia a porta do vínculo para sempre. E isto precisa acontecer aqui, não só no
+     * plano, porque uma viagem some do Planejado assim que é aceita — a aba "Aceito" é execução, e é
+     * onde as 73 viagens em curso viviam invisíveis, sem motorista e sem placa no TMS.
+     *
+     * Nada disso cria viagem: só preenche o que o cliente diz sobre uma que já existe.
+     */
+    await writePortalFacts(
+      existing.id,
+      portal,
+      existing.customerFields,
+      existing.customerPriceCents,
+    );
+    await linkFleetFromPortal(existing.id, portal, actorUserId);
 
     let reachedUnloaded = false;
     let tripId: string | null = null;
