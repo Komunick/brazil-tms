@@ -1,11 +1,4 @@
-import {
-  index,
-  integer,
-  pgTable,
-  text,
-  timestamp,
-  uuid,
-} from "drizzle-orm/pg-core";
+import { index, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { customers } from "./customers";
 import { importTemplates } from "./import-templates";
 import { users } from "./users";
@@ -31,6 +24,20 @@ export const importBatches = pgTable(
       .notNull()
       .references(() => users.id),
     status: importBatchStatus("status").notNull().default("received"),
+    /**
+     * WHERE this import came from (2026-08-16). The spreadsheet path streams through the worker;
+     * the two portal paths apply synchronously and used to leave no trace at all — the operator saw
+     * the result once and lost it on the next click, which for a daily routine means "12 estações
+     * não resolvidas" is read by one person and then gone. Recording them here puts every import,
+     * whatever its shape, on the same history screen.
+     */
+    source: text("source").notNull().default("spreadsheet"),
+    /**
+     * The full outcome of a portal import, verbatim from the service — the counts the five columns
+     * below cannot express (already-ahead legs, unresolved stations, milestones) plus the station
+     * list an operator needs to act on. Null for spreadsheet batches, which the columns describe.
+     */
+    summary: jsonb("summary"),
     totalRows: integer("total_rows").notNull().default(0),
     createdCount: integer("created_count").notNull().default(0),
     updatedCount: integer("updated_count").notNull().default(0),

@@ -788,6 +788,15 @@
     "manualError": "Não foi possível criar a viagem. Verifique os dados e tente novamente.",
     "historyTitle": "Histórico de Importações",
     "historySubtitle": "Lotes de importação enviados, do mais recente ao mais antigo.",
+    "historySource": "Origem",
+    "source": {
+      "spreadsheet": "Planilha",
+      "portal_plan": "Portal · Planejado",
+      "portal_execution": "Portal · Execução"
+    },
+    "summaryPlan": "{created} criadas · {updated} atualizadas · {unchanged} sem mudança · {cancelled} canceladas",
+    "summaryExecution": "{applied} com horário real · {notFound} sem viagem · {ahead} já à frente",
+    "historyUnknownStations": "{count} estações não reconhecidas",
     "historyFileName": "Arquivo",
     "historyTime": "Data/Hora",
     "historyCounts": "Resumo",

@@ -1,7 +1,8 @@
 import "server-only";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import {
-  Conflict, NotFound,
+  Conflict,
+  NotFound,
   customers,
   db,
   importBatchStatus,
@@ -37,6 +38,8 @@ interface ImportBatchRow {
   errorCount: number;
   errorReportStorageKey: string | null;
   errorMessage: string | null;
+  source: string;
+  summary: unknown;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -56,6 +59,13 @@ export interface ImportBatchSummary {
   createdAt: string;
   /** True once the error report exists in Storage (downloadable) — drives the "Baixar erros" affordance. */
   hasErrorReport: boolean;
+  /** Which import produced the row: the spreadsheet path, or one of the two portal exports. */
+  source: string;
+  /**
+   * A portal import's own detail — unresolved stations, per-outcome counts. Null for a spreadsheet
+   * batch, which the five count columns already describe.
+   */
+  summary: unknown;
 }
 
 /** Polled progress shape (contract: bff-endpoints.md `ImportBatchDetail`). */
@@ -77,6 +87,8 @@ function toSummary(row: ImportBatchRow): ImportBatchSummary {
     duplicateCount: row.duplicateCount,
     errorCount: row.errorCount,
     uploadedBy: row.uploadedBy,
+    source: row.source,
+    summary: row.summary ?? null,
     createdAt: row.createdAt.toISOString(),
     // A report only exists after generate-error-report has run; gate the download UI on this, not on
     // error_count (which is set earlier, while the report may still be generating or absent).
@@ -196,11 +208,7 @@ export async function createBatch(
 
 /** Polled progress endpoint (GET /api/imports/{id}). Returns null when the batch does not exist. */
 export async function getBatch(batchId: string): Promise<ImportBatchDetail | null> {
-  const rows = await db
-    .select()
-    .from(importBatches)
-    .where(eq(importBatches.id, batchId))
-    .limit(1);
+  const rows = await db.select().from(importBatches).where(eq(importBatches.id, batchId)).limit(1);
   const row = rows[0];
   return row ? toDetail(row) : null;
 }
@@ -215,10 +223,7 @@ export interface ListBatchesOptions {
 export async function listBatches(opts: ListBatchesOptions = {}): Promise<ImportBatchSummary[]> {
   const filters = [];
   if (opts.customerId) filters.push(eq(importBatches.customerId, opts.customerId));
-  if (
-    opts.status &&
-    (importBatchStatus.enumValues as readonly string[]).includes(opts.status)
-  ) {
+  if (opts.status && (importBatchStatus.enumValues as readonly string[]).includes(opts.status)) {
     filters.push(
       eq(importBatches.status, opts.status as (typeof importBatchStatus.enumValues)[number]),
     );
@@ -238,22 +243,12 @@ export async function listBatches(opts: ListBatchesOptions = {}): Promise<Import
  * worker, idempotently — R8). Throws `NOT_FOUND` when missing, `NOT_CONFIRMABLE` unless the preview is
  * ready (`validated`/`completed`).
  */
-export async function confirmBatch(
-  batchId: string,
-  actorUserId: string,
-): Promise<{ id: string }> {
-  const rows = await db
-    .select()
-    .from(importBatches)
-    .where(eq(importBatches.id, batchId))
-    .limit(1);
+export async function confirmBatch(batchId: string, actorUserId: string): Promise<{ id: string }> {
+  const rows = await db.select().from(importBatches).where(eq(importBatches.id, batchId)).limit(1);
   const row = rows[0];
   if (!row) throw new NotFound("NOT_FOUND", "Lote não encontrado.");
   if (!CONFIRMABLE_STATUSES.has(row.status)) {
-    throw new Conflict(
-      "NOT_CONFIRMABLE",
-      "O lote não está pronto para confirmação.",
-    );
+    throw new Conflict("NOT_CONFIRMABLE", "O lote não está pronto para confirmação.");
   }
 
   await db.transaction(async (tx) => {

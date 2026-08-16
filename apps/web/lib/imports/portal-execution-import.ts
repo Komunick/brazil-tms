@@ -11,9 +11,11 @@ import {
   applyPortalPlan,
   customers,
   db,
+  importBatches,
   type PortalApplySummary,
   type PortalPlanSummary,
 } from "@brazil-tms/db";
+import { putOriginal } from "@/lib/supabase/storage";
 import { Conflict } from "@/lib/api/respond";
 
 /**
@@ -94,6 +96,24 @@ export async function importPortalExecution(input: {
   const customerId = await shopeeCustomerId(input.customerCode);
   const parsed = parsePortalExecution(rows);
 
+  /**
+   * The import is recorded BEFORE it applies, and the original file is kept, so a run that dies
+   * halfway still leaves a trace of what was attempted. The result used to live only on the screen
+   * of whoever clicked — one interruption and "12 estações não resolvidas" was gone for good.
+   */
+  const batchId = crypto.randomUUID();
+  const storageKey = await putOriginal(batchId, input.bytes, "text/csv");
+  await db.insert(importBatches).values({
+    id: batchId,
+    customerId,
+    fileName: input.fileName,
+    storageKey,
+    uploadedBy: input.actorUserId,
+    source: input.mode === "plan" ? "portal_plan" : "portal_execution",
+    status: "confirming",
+    totalRows: rows.length,
+  });
+
   // The plan mode creates trips and then records anything the same file already proves; the
   // execution mode only records. The difference is the operator's choice, never a guess.
   const planSummary =
@@ -113,7 +133,7 @@ export async function importPortalExecution(input: {
     ),
   ];
 
-  return {
+  const result: PortalImportResult = {
     fileName: input.fileName,
     mode: input.mode,
     rows: rows.length,
@@ -124,4 +144,30 @@ export async function importPortalExecution(input: {
     rejected: parsed.rejected,
     unknownStations,
   };
+
+  // Close the record with what actually happened. The five count columns carry what the history
+  // table shows at a glance; `summary` keeps the rest — including the station list, which is the
+  // only part of this an operator has to act on.
+  await db
+    .update(importBatches)
+    .set({
+      status: "completed",
+      createdCount: planSummary?.created ?? summary?.applied ?? 0,
+      updatedCount: planSummary?.updated ?? 0,
+      duplicateCount: planSummary?.unchanged ?? summary?.alreadyAhead ?? 0,
+      errorCount: (planSummary?.failed ?? 0) + unknownStations.length + parsed.rejected.length,
+      summary: {
+        mode: input.mode,
+        trips: result.trips,
+        legs: result.legs,
+        plan: planSummary ? { ...planSummary, outcomes: undefined } : null,
+        execution: summary ? { ...summary, outcomes: undefined } : null,
+        unknownStations,
+        rejected: parsed.rejected.slice(0, 50),
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(importBatches.id, batchId));
+
+  return result;
 }
