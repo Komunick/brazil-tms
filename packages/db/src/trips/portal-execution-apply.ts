@@ -1,14 +1,10 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import {
-  hopsToApply,
-  milestonesFor,
-  type PortalTrip,
-  type TripStatus,
-} from "@brazil-tms/shared";
+import { hopsToApply, milestonesFor, type PortalTrip, type TripStatus } from "@brazil-tms/shared";
 import { db } from "../client";
 import { locations, tripEvents, trips } from "../../schema";
 import { writeAudit } from "../audit/write-audit";
 import { recomputeTripSla } from "./sla";
+import { markCompleted } from "./completion";
 
 /**
  * Writing the customer's portal execution onto trips the TMS already has (2026-08-16).
@@ -39,7 +35,10 @@ export interface PortalApplyOutcome {
     | "already_ahead"
     | "no_milestones"
     | "unknown_station"
-    | "closed";
+    | "closed"
+    // The customer reported the trip finished and the TMS closed it — or could not, and says why.
+    | "completed"
+    | "completion_blocked";
   detail?: string;
   hops?: TripStatus[];
 }
@@ -51,6 +50,8 @@ export interface PortalApplySummary {
   noMilestones: number;
   unknownStation: number;
   closed: number;
+  completed: number;
+  completionBlocked: number;
   outcomes: PortalApplyOutcome[];
 }
 
@@ -127,6 +128,8 @@ export async function applyPortalTrip(
       continue;
     }
 
+    let reachedUnloaded = false;
+    let tripId: string | null = null;
     const hops = hopsToApply(existing.currentStatus as TripStatus, milestones);
     if (hops.length === 0) {
       out.push({ ...base, status: "already_ahead", detail: existing.currentStatus });
@@ -210,10 +213,40 @@ export async function applyPortalTrip(
 
       await recomputeTripSla(tx, existing.id);
       out.push({ ...base, status: "applied", hops: written });
+      reachedUnloaded = written[written.length - 1] === "unloaded";
+      tripId = existing.id;
     });
+
+    // The customer says the trip is over, and the TMS agrees it is unloaded: close it (2026-08-16).
+    //
+    // Left open, a trip sat at `at_destination` forever — on tmsdev that was 244 of them, each still
+    // demanding a resource assignment weeks after it had been delivered, and NONE of them in the
+    // billing queue. Completion is what puts a delivered trip in front of the money: `markCompleted`
+    // runs the real gate (documents), advances to `billing_pending` and creates the billing item.
+    // Nothing is invoiced by this — the next step (Billing Ready) needs pricing and stays human.
+    //
+    // Called outside the transaction because it opens its own, and never fatally: a trip that cannot
+    // complete (a document missing, someone moved it meanwhile) is reported, and the rest go on.
+    if (tripId && reachedUnloaded && isCompletedAtPortal(portal.status)) {
+      try {
+        await markCompleted(tripId, {}, actorUserId);
+        out.push({ ...base, status: "completed" });
+      } catch (error) {
+        out.push({
+          ...base,
+          status: "completion_blocked",
+          detail: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
   }
 
   return out;
+}
+
+/** The portal's own word for "this one ran to the end". Anything else is not a completion. */
+function isCompletedAtPortal(status: string | null): boolean {
+  return (status ?? "").trim().toLowerCase() === "completed";
 }
 
 /** Apply a whole export, trip by trip, and tally what happened. */
@@ -242,6 +275,8 @@ export async function applyPortalExecution(
     noMilestones: count("no_milestones"),
     unknownStation: count("unknown_station"),
     closed: count("closed"),
+    completed: count("completed"),
+    completionBlocked: count("completion_blocked"),
     outcomes,
   };
 }

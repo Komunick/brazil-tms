@@ -28,7 +28,7 @@ export interface PortalMilestone {
   /** When it actually happened, per the customer's own record. Never invented. */
   at: Date;
   /** The event the TMS records alongside the status change; null when the step has none. */
-  eventType: "origin_arrived" | "loaded" | "departed" | "destination_arrived" | null;
+  eventType: "origin_arrived" | "loaded" | "departed" | "destination_arrived" | "unloaded" | null;
 }
 
 /**
@@ -94,6 +94,13 @@ export function milestonesFor(leg: PortalLeg): PortalMilestone[] {
       eventType: "destination_arrived",
     });
   }
+  // The unloading half, same story as loading: the API times it, and without it a trip arrived at
+  // its destination and stayed there forever — outside the billing queue, and still generating
+  // "unassigned" alerts weeks later. Breaking the seal IS the start of unloading.
+  const unsealed = parsePortalInstant(leg.destination.unsealedAt ?? null);
+  const unloaded = parsePortalInstant(leg.destination.unloadedAt ?? null);
+  if (unsealed) out.push({ status: "unloading", at: unsealed, eventType: null });
+  if (unloaded) out.push({ status: "unloaded", at: unloaded, eventType: "unloaded" });
   return out;
 }
 

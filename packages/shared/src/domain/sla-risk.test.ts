@@ -231,6 +231,40 @@ describe("evaluateSlaRisk — branches", () => {
   });
 });
 
+describe("as duas cobranças de atribuição param quando o caminhão sai", () => {
+  const semAtribuicao = {
+    assignmentPresent: false,
+    confirmedAt: null,
+    plannedPickupWindowStart: new Date(NOW.getTime() - 5 * HOUR),
+  } as const;
+
+  it("cobra antes de sair", () => {
+    const r = evaluateSlaRisk(baseCtx({ ...semAtribuicao, currentStatus: "confirmed" }));
+    expect(r.reasons).toContain("missing_assignment");
+  });
+
+  it("cala depois de sair — a decisão já passou", () => {
+    // O caso real: 244 alertas dizendo "sem atribuição" para viagens JÁ ENTREGUES.
+    for (const status of ["in_transit", "at_destination", "unloaded"] as TripStatus[]) {
+      const r = evaluateSlaRisk(baseCtx({ ...semAtribuicao, currentStatus: status }));
+      expect(r.reasons).not.toContain("missing_assignment");
+      expect(r.reasons).not.toContain("missed_confirmation");
+    }
+  });
+
+  it("o mesmo vale para a confirmação pendente", () => {
+    const antes = evaluateSlaRisk(
+      baseCtx({
+        assignmentPresent: true,
+        confirmedAt: null,
+        currentStatus: "assigned",
+        plannedPickupWindowStart: new Date(NOW.getTime() - 5 * HOUR),
+      }),
+    );
+    expect(antes.reasons).toContain("missed_confirmation");
+  });
+});
+
 describe("deliveryDeadline — where the destination deadline comes from", () => {
   const DEPARTURE = new Date(NOW.getTime() - 4 * HOUR);
 
