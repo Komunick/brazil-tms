@@ -6,6 +6,14 @@ export * from "./trips/trip-dto";
 export { createTrip, getTrip, listTrips } from "./trips/trips-service";
 export { updateTripPlan } from "./trips/trip-plan";
 export { updateOperationalFields } from "./trips/trip-operational-fields";
+export {
+  applyPortalExecution,
+  applyPortalTrip,
+  existingTripIds,
+  linkStationIds,
+  loadStationMap,
+} from "./trips/portal-execution-apply";
+export type { PortalApplyOutcome, PortalApplySummary } from "./trips/portal-execution-apply";
 export { transitionTripStatus } from "./trips/trip-transitions";
 export {
   cancelTrip,

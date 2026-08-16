@@ -1,0 +1,2 @@
+ALTER TABLE "locations" ADD COLUMN "external_station_id" text;--> statement-breakpoint
+ALTER TABLE "locations" ADD CONSTRAINT "locations_customer_external_station_unique" UNIQUE("customer_id","external_station_id");
