@@ -162,16 +162,25 @@ export async function linkFleetFromPortal(
   const subcontratado =
     driver.ownershipType === "subcontracted" || vehicle.ownershipType === "subcontracted";
   const carrierId = driver.carrierId ?? vehicle.carrierId ?? undefined;
-  if (
-    subcontratado &&
-    driver.carrierId &&
-    vehicle.carrierId &&
-    driver.carrierId !== vehicle.carrierId
-  ) {
-    // Motorista de uma transportadora com veículo de outra: é uma escolha real, não um detalhe a
-    // adivinhar. Fica para uma pessoa.
-    return { outcome: "blocked", detail: "motorista e veículo são de transportadoras diferentes" };
-  }
+
+  /**
+   * Motorista e veículo cadastrados sob transportadoras diferentes (decisão 2026-08-16).
+   *
+   * Isto começou recusando o vínculo, por um raciocínio que continua válido em tese: juntar gente de
+   * uma transportadora com caminhão de outra é uma escolha comercial, não um detalhe a adivinhar.
+   *
+   * Só que a divergência medida aqui não carrega escolha nenhuma. A frota entrou por planilha e caiu
+   * em dois baldes: 878 motoristas em "Agregados", 575 veículos em "Transportes Parceiros (Demo)".
+   * Não há um par que discorde — há uma importação que arquivou os dois lados em lugares diferentes,
+   * e a regra estava recusando 40 das 57 viagens vivas por causa disso.
+   *
+   * Então vale a transportadora do MOTORISTA: é com a pessoa que o contrato existe, o veículo segue
+   * quem dirige, e nenhum dos dois lados é inventado. A divergência não é engolida — vai escrita na
+   * atribuição, que é onde alguém olha quando o pagamento do subcontratado não bate.
+   */
+  const carrierDiverges = Boolean(
+    subcontratado && driver.carrierId && vehicle.carrierId && driver.carrierId !== vehicle.carrierId,
+  );
 
   const base = {
     driverId: driver.id,
@@ -181,7 +190,9 @@ export async function linkFleetFromPortal(
     // The optimistic guard: if a dispatcher assigned this trip a second ago, our write loses
     // rather than overwriting a person's decision.
     expectedFromStatus: "received" as const,
-    notes: "Atribuição espelhada do portal do cliente.",
+    notes: carrierDiverges
+      ? "Atribuição espelhada do portal do cliente. Transportadora tomada do motorista; o veículo está cadastrado sob outra."
+      : "Atribuição espelhada do portal do cliente.",
   };
 
   try {

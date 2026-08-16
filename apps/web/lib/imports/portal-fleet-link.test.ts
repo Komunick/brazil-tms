@@ -233,6 +233,82 @@ describe.skipIf(!hasDb)("vínculo com a frota (integration)", () => {
     expect(atrib.carrierId).toBe(transportadora.id);
   });
 
+  it("transportadoras diferentes: vale a do motorista, e a divergência fica escrita", async () => {
+    // Isto recusava o vínculo, e recusava 40 das 57 viagens vivas — porque a frota entrou por
+    // planilha em dois baldes (motoristas numa transportadora, veículos noutra), não porque alguém
+    // tenha juntado gente de uma com caminhão de outra. Vale a do motorista, e a atribuição diz que
+    // o veículo está sob outra: quem confere pagamento de subcontratado encontra o motivo.
+    const [doMotorista, doVeiculo] = await Promise.all([
+      db
+        .insert(carriers)
+        .values({
+          name: `Transp Motorista ${token}`,
+          taxId: String(Date.now() + 1).slice(0, 14),
+          documentationStatus: "complete",
+        })
+        .returning({ id: carriers.id }),
+      db
+        .insert(carriers)
+        .values({
+          name: `Transp Veiculo ${token}`,
+          taxId: String(Date.now() + 2).slice(0, 14),
+          documentationStatus: "complete",
+        })
+        .returning({ id: carriers.id }),
+    ]);
+    const carrierMotorista = doMotorista[0]!.id;
+    const carrierVeiculo = doVeiculo[0]!.id;
+
+    const d = (
+      await db
+        .insert(drivers)
+        .values({
+          name: `MOTORISTA DIVERGE ${token}`,
+          ownershipType: "subcontracted",
+          carrierId: carrierMotorista,
+          status: "active",
+          licenseExpiry: "2030-01-01",
+        })
+        .returning({ id: drivers.id })
+    )[0]!;
+    const v = (
+      await db
+        .insert(vehicles)
+        .values({
+          plate: `DDD${Math.floor(Math.random() * 9000 + 1000)}`,
+          vehicleType: "carreta",
+          ownershipType: "subcontracted",
+          carrierId: carrierVeiculo,
+          status: "active",
+          documentExpiry: "2030-01-01",
+        })
+        .returning({ id: vehicles.id, plate: vehicles.plate })
+    )[0]!;
+    criados.push(d.id, v.id);
+    carrierIds.push(carrierMotorista, carrierVeiculo);
+
+    const ext = `LH-DIVERGE-${token}`;
+    const r = await ingestPortalFeed({
+      payload: payload({
+        trip_number: ext,
+        driver_name: `Motorista Diverge ${token}`,
+        vehicle_number: v.plate,
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    expect({ linked: r.planSummary?.linked, bloqueadas: r.planSummary?.linkBlockedReasons }).toEqual(
+      { linked: 1, bloqueadas: [] },
+    );
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    const atrib = (
+      await db.select().from(tripAssignments).where(eq(tripAssignments.tripId, trip.id))
+    )[0]!;
+    expect(atrib.carrierId).toBe(carrierMotorista);
+    expect(atrib.notes).toMatch(/veículo está cadastrado sob outra/i);
+  });
+
   it("vincula com AVISO quando falta a data do documento, e grava o motivo", async () => {
     // O caso real: 901 dos 902 veículos não têm validade de documento cadastrada. Isso é aviso, não
     // impedimento — e exigir uma pessoa por viagem faria ninguém ser atribuído nunca. Vincula, e o
