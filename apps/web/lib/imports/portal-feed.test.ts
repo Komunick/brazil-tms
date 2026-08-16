@@ -352,6 +352,44 @@ describe.skipIf(!hasDb)("portal feed (integration)", () => {
     expect(itens).toHaveLength(1);
   });
 
+  it("guarda motorista e placa que o portal informa", async () => {
+    // Abrir a viagem no TMS mostrava nem placa nem motorista, embora o cliente soubesse os dois.
+    const ext = `LH-QUEM-${token}`;
+    const comMotorista = payload({
+      trip_number: ext,
+      driver_name: "Beltrano da Silva",
+      vehicle_number: "XYZ9K88",
+    });
+
+    const primeiro = await ingestPortalFeed({ payload: comMotorista, mode: "plan", customerCode });
+    if (primeiro.batchId) createdBatchIds.push(primeiro.batchId);
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    const campos = trip.customerFields as Record<string, string>;
+    expect(campos["Motorista (portal)"]).toBe("Beltrano da Silva");
+    expect(campos["Placa (portal)"]).toBe("XYZ9K88");
+
+    // Trocar o motorista no portal (acontece o tempo todo) conta como mudança, não como ciclo quieto.
+    const trocou = await ingestPortalFeed({
+      payload: payload({
+        trip_number: ext,
+        driver_name: "Cicrano de Souza",
+        vehicle_number: "XYZ9K88",
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    if (trocou.batchId) createdBatchIds.push(trocou.batchId);
+    expect(trocou.planSummary?.updated).toBe(1);
+
+    const depois = (
+      await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1)
+    )[0]!;
+    expect((depois.customerFields as Record<string, string>)["Motorista (portal)"]).toBe(
+      "Cicrano de Souza",
+    );
+  });
+
   it("refuses a portal error page instead of reading it as a quiet day", async () => {
     await expect(
       ingestPortalFeed({

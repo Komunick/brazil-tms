@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { Conflict, handleRouteError } from "@/lib/api/respond";
 import { Unauthorized } from "@/lib/auth/require-auth";
-import { ingestPortalFeed } from "@/lib/imports/portal-feed";
+import { ingestPortalDetail, ingestPortalFeed } from "@/lib/imports/portal-feed";
 
 export const dynamic = "force-dynamic";
 
@@ -37,14 +37,25 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     const mode = body.mode;
-    if (mode !== "plan" && mode !== "execution") {
+    if (mode !== "plan" && mode !== "execution" && mode !== "detail") {
       throw new Conflict(
         "MODE_REQUIRED",
-        "Informe 'plan' (aba Planejado) ou 'execution' (aba Concluído).",
+        "Informe 'plan' (aba Planejado), 'execution' (aba Concluído) ou 'detail' (uma viagem).",
       );
     }
     if (!body.payload || typeof body.payload !== "object") {
       throw new Conflict("NO_PAYLOAD", "Envie a resposta do portal em 'payload'.");
+    }
+
+    // The per-trip detail: fills who assigned the trip, nothing else. Answered separately because it
+    // is a different portal endpoint with a different shape — and because it must never be able to
+    // create or move a trip.
+    if (mode === "detail") {
+      const recorded = await ingestPortalDetail({
+        payload: body.payload as { retcode?: number; data?: Record<string, unknown> },
+        customerCode: body.customerCode?.trim() || "SHOPEE",
+      });
+      return NextResponse.json(recorded);
     }
 
     const result = await ingestPortalFeed({

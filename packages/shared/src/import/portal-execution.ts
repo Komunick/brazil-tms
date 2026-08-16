@@ -76,6 +76,8 @@ export interface PortalTrip {
   /** The portal's own word: "Completed", "Cancelled", … — the caller decides what it means. */
   status: string | null;
   driverLabel: string | null;
+  /** Quem o portal nomeia como operador da viagem (nome, não e-mail). */
+  operatorLabel?: string | null;
   vehicleLabel: string | null;
   plateLabel: string | null;
   stops: PortalStop[];

@@ -149,6 +149,7 @@ export function mapPortalApiTrips(payload: PortalApiEnvelope): PortalParseResult
       tripName: trimmed(raw.trip_name),
       status: statusCode == null ? null : (TRIP_STATUS_LABEL[statusCode] ?? `Status ${statusCode}`),
       driverLabel: trimmed(raw.driver_name),
+      operatorLabel: trimmed(raw.operator),
       vehicleLabel: trimmed(raw.vehicle_type_name),
       plateLabel: trimmed(raw.vehicle_number),
       stops,
@@ -157,4 +158,37 @@ export function mapPortalApiTrips(payload: PortalApiEnvelope): PortalParseResult
   });
 
   return { trips, rejected };
+}
+
+/**
+ * The trip DETAIL payload — a second endpoint, one call per trip.
+ *
+ * It carries what the listings do not: `assign_operator`, the person who put a driver on this trip
+ * (an e-mail, per stop). Fetching it for every trip on every cycle would be ~500 calls; the TMS
+ * therefore names the few trips still missing it and the robot asks only for those.
+ *
+ *   GET /api/line_haul/agency/trip/detail?trip_id=<id>&agency_current_station_id=<station>
+ *   → { retcode, message, data: { trip_number, trip_station: [ { assign_operator, … } ] } }
+ */
+export interface PortalApiDetail {
+  externalTripId: string;
+  /** Who assigned the driver, per the portal. Null when it does not say. */
+  assignOperator: string | null;
+}
+
+export function mapPortalApiDetail(payload: {
+  retcode?: number;
+  data?: Record<string, unknown>;
+}): PortalApiDetail | null {
+  const d = payload?.data ?? {};
+  const externalTripId = trimmed(d.trip_number);
+  if (!externalTripId) return null;
+
+  // Per stop, and the origin is the one that matters — that is where the assignment happens. Falls
+  // back to the first stop that names anyone, rather than reporting nothing over an ordering detail.
+  const stops = Array.isArray(d.trip_station) ? (d.trip_station as Record<string, unknown>[]) : [];
+  const assignOperator =
+    stops.map((s) => trimmed(s?.assign_operator)).find((v) => v != null) ?? null;
+
+  return { externalTripId, assignOperator };
 }

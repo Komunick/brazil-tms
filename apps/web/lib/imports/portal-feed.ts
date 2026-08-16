@@ -1,7 +1,7 @@
 import "server-only";
-import { eq, isNull, and } from "drizzle-orm";
-import { mapPortalApiTrips, type PortalApiEnvelope } from "@brazil-tms/shared";
-import { customers, db, importBatches, users } from "@brazil-tms/db";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { mapPortalApiDetail, mapPortalApiTrips, type PortalApiEnvelope } from "@brazil-tms/shared";
+import { customers, db, importBatches, trips, users } from "@brazil-tms/db";
 import { Conflict, NotFound } from "@/lib/api/respond";
 import {
   applyParsedPortalTrips,
@@ -26,6 +26,8 @@ import {
 export interface PortalFeedResult extends PortalImportResult {
   /** The batch this run recorded, or null when it changed nothing (see `worthRecording`). */
   batchId: string | null;
+  /** Trips whose assignment operator is still unknown — the robot fetches these in detail. */
+  needDetail: string[];
 }
 
 /**
@@ -111,7 +113,9 @@ export async function ingestPortalFeed(input: {
     parsed,
   });
 
-  if (!worthRecording(result)) return { ...result, batchId: null };
+  const needDetail = await tripsMissingAssignOperator(customerId, parsed.trips);
+
+  if (!worthRecording(result)) return { ...result, batchId: null, needDetail };
 
   const batchId = crypto.randomUUID();
   await db.insert(importBatches).values({
@@ -128,5 +132,72 @@ export async function ingestPortalFeed(input: {
   });
   await closePortalBatch(batchId, input.mode, result);
 
-  return { ...result, batchId };
+  return { ...result, batchId, needDetail };
+}
+
+/** How many trips one answer may ask the robot to fetch in detail — one call each, so it is capped. */
+const DETAIL_BATCH = 25;
+
+/**
+ * Which of these trips still lack the assignment operator (2026-08-16).
+ *
+ * `assign_operator` — who put a driver on the trip — lives ONLY in the portal's per-trip detail
+ * endpoint, one HTTP call each. Asking for all 500 every cycle would be absurd; asking for none
+ * means never having it. So the TMS names the few that are missing it, the robot fetches just those,
+ * and the list shrinks to nothing on its own as they get filled.
+ */
+async function tripsMissingAssignOperator(
+  customerId: string,
+  portalTrips: { externalTripId: string }[],
+): Promise<string[]> {
+  const ids = portalTrips.map((t) => t.externalTripId).filter(Boolean);
+  if (ids.length === 0) return [];
+
+  const rows = await db
+    .select({ externalTripId: trips.externalTripId })
+    .from(trips)
+    .where(
+      and(
+        eq(trips.customerId, customerId),
+        inArray(trips.externalTripId, ids),
+        sql`(${trips.customerFields} ->> 'Operador de atribuição (portal)') is null`,
+      ),
+    )
+    .limit(DETAIL_BATCH);
+
+  return rows.map((r) => r.externalTripId).filter((v): v is string => Boolean(v));
+}
+
+/**
+ * One trip's detail, forwarded by the robot: records who assigned it. Never creates a trip and never
+ * touches the lifecycle — it fills one display field on a trip the TMS already has.
+ */
+export async function ingestPortalDetail(input: {
+  payload: { retcode?: number; data?: Record<string, unknown> };
+  customerCode: string;
+}): Promise<{ externalTripId: string | null; recorded: boolean }> {
+  const detail = mapPortalApiDetail(input.payload);
+  if (!detail || !detail.assignOperator) {
+    return { externalTripId: detail?.externalTripId ?? null, recorded: false };
+  }
+
+  const customerId = await activeCustomerId(input.customerCode);
+  const existing = await db
+    .select({ id: trips.id, customerFields: trips.customerFields })
+    .from(trips)
+    .where(and(eq(trips.customerId, customerId), eq(trips.externalTripId, detail.externalTripId)));
+  if (existing.length === 0) return { externalTripId: detail.externalTripId, recorded: false };
+
+  for (const trip of existing) {
+    const current = (trip.customerFields ?? {}) as Record<string, string>;
+    if (current["Operador de atribuição (portal)"] === detail.assignOperator) continue;
+    await db
+      .update(trips)
+      .set({
+        customerFields: { ...current, "Operador de atribuição (portal)": detail.assignOperator },
+        updatedAt: new Date(),
+      })
+      .where(eq(trips.id, trip.id));
+  }
+  return { externalTripId: detail.externalTripId, recorded: true };
 }

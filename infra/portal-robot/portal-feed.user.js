@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.1.0
+// @version      1.2.0
 // @description  Lê as duas listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -132,11 +132,44 @@
     });
   }
 
+  /**
+   * O detalhe de UMA viagem — a única coisa que exige uma chamada por viagem.
+   *
+   * Só o detalhe traz o "Operador de atribuição". Buscar isso para as 500 viagens de cada ciclo
+   * seria absurdo; então o TMS responde quais ainda faltam (`needDetail`) e o robô busca só essas.
+   * A lista encolhe sozinha até zerar.
+   */
+  async function detalharViagens(numerosLH, lista) {
+    // O detalhe é buscado pelo id NUMÉRICO do portal, e o TMS só conhece o número da LH. A ponte
+    // entre os dois está na própria página que acabou de ser lida.
+    const idPorNumero = new Map((lista ?? []).map((t) => [t.trip_number, t.id]));
+    let feitos = 0;
+    for (const numero of numerosLH) {
+      const id = idPorNumero.get(numero);
+      if (!id) continue;
+      try {
+        const u = new URL("/api/line_haul/agency/trip/detail", location.origin);
+        u.searchParams.set("trip_id", String(id));
+        u.searchParams.set("agency_current_station_id", estacao());
+        const r = await fetch(u.toString(), { credentials: "include" });
+        if (!r.ok) continue;
+        const payload = await r.json();
+        if (payload?.retcode !== 0) continue;
+        await entregar("detail", payload);
+        feitos += 1;
+      } catch {
+        // Um detalhe que falha não custa o ciclo: o TMS pede de novo no próximo.
+      }
+    }
+    return feitos;
+  }
+
   /** Um ciclo: pagina a listagem e entrega cada página. Devolve o que aconteceu, para o log. */
   async function ciclo(modo, caminho, filtro) {
     let paginas = 0;
     let viagens = 0;
     let truncou = 0;
+    let detalhes = 0;
     const estacoesDesconhecidas = new Set();
 
     for (let pagina = 1; pagina <= CONFIG.maxPaginas; pagina += 1) {
@@ -149,6 +182,10 @@
       viagens += lista.length;
       for (const e of resumo?.unknownStations ?? []) estacoesDesconhecidas.add(e);
 
+      // O TMS diz quais viagens ainda estão sem o operador de atribuição; só essas custam uma
+      // chamada extra, e a lista some sozinha conforme elas são preenchidas.
+      if (resumo?.needDetail?.length) detalhes += await detalharViagens(resumo.needDetail, lista);
+
       // Última página: o portal já disse quantas existem no total.
       const total = payload?.data?.total ?? 0;
       if (pagina * CONFIG.porPagina >= total) break;
@@ -156,7 +193,13 @@
       if (pagina === CONFIG.maxPaginas) truncou = total - pagina * CONFIG.porPagina;
     }
 
-    return { paginas, viagens, truncou, estacoesDesconhecidas: [...estacoesDesconhecidas] };
+    return {
+      paginas,
+      viagens,
+      truncou,
+      detalhes,
+      estacoesDesconhecidas: [...estacoesDesconhecidas],
+    };
   }
 
   /**
@@ -173,7 +216,7 @@
       try {
         const r = await tarefa();
         log(
-          `${nome}: ${r.viagens} viagens em ${r.paginas} página(s), ${Math.round((Date.now() - t0) / 1000)}s`,
+          `${nome}: ${r.viagens} viagens em ${r.paginas} página(s)${r.detalhes ? `, ${r.detalhes} detalhe(s)` : ""}, ${Math.round((Date.now() - t0) / 1000)}s`,
         );
         if (r.truncou > 0) {
           erro(`${nome}: teto de páginas atingido — ${r.truncou} viagens NÃO foram lidas`);
