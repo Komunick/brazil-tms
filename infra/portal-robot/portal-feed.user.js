@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.0.0
+// @version      1.1.0
 // @description  Lê as duas listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -24,8 +24,9 @@
  *   2. BURRO DE PROPÓSITO. Nenhuma regra de negócio: não interpreta status, não decide o que é
  *      atraso, não filtra viagem. Atualizar script em VM é trabalho manual e não tem teste; a
  *      inteligência mora no TMS (`portal-api.ts`, sob teste).
- *   3. NUNCA TRAVA. Um ciclo é agendado a partir do FIM do anterior, todo erro é engolido e
- *      registrado, e nada é recursivo — uma falha de rede atrasa um ciclo, não mata o robô.
+ *   3. NUNCA TRAVA E SE CURA. Um ciclo é agendado a partir do FIM do anterior, todo erro é engolido
+ *      e registrado, e nada é recursivo. A primeira varredura de execução olha 30 dias para trás,
+ *      então qualquer interrupção se resolve sozinha no arranque seguinte.
  *
  * Instalação: Tampermonkey → novo script → cole este arquivo → ajuste o CONFIG abaixo → salve. O
  * script sobe sozinho junto com a aba do portal.
@@ -47,13 +48,26 @@
     intervaloExecucaoMs: 5 * 60 * 1000,
     /** Viagens por página. O portal aceita 100; o TMS aplica uma página por vez. */
     porPagina: 100,
-    /** Quantas páginas no máximo por ciclo — trava de segurança contra laço infinito. */
-    maxPaginas: 10,
+    /**
+     * Teto de páginas por ciclo — trava contra laço infinito. Precisa caber a varredura de arranque
+     * (30 dias ≈ 2.400 viagens no histórico observado), com folga. Bater o teto NÃO é silencioso.
+     */
+    maxPaginas: 40,
     /** Janela do plano: de ontem até uma semana à frente. */
     planoDiasAtras: 1,
     planoDiasAdiante: 7,
     /** Janela da execução: o que mudou nas últimas horas (o portal filtra por mtime). */
     execucaoHorasAtras: 6,
+    /**
+     * A PRIMEIRA execução depois que o robô sobe olha muito mais para trás — 30 dias.
+     *
+     * Uma janela de 6 horas é ótima em regime, e péssima depois de qualquer interrupção: o robô
+     * fora do ar por sete horas (reinício, queda de rede, VM reiniciada) perderia para sempre tudo
+     * o que aconteceu no intervalo, porque o portal filtra por data de MODIFICAÇÃO e uma viagem
+     * concluída não é modificada de novo. Uma varredura larga no arranque faz o robô se curar
+     * sozinho, e é barata: acontece uma vez por sessão.
+     */
+    execucaoHorasPrimeiroCiclo: 24 * 30,
   };
 
   const log = (...a) => console.log("[TMS robô]", ...a);
@@ -100,10 +114,16 @@
         onload: (res) => {
           if (res.status >= 200 && res.status < 300) {
             let corpo = {};
-            try { corpo = JSON.parse(res.responseText); } catch { /* resumo é opcional */ }
+            try {
+              corpo = JSON.parse(res.responseText);
+            } catch {
+              /* resumo é opcional */
+            }
             resolve(corpo);
           } else {
-            reject(new Error(`TMS respondeu ${res.status}: ${String(res.responseText).slice(0, 200)}`));
+            reject(
+              new Error(`TMS respondeu ${res.status}: ${String(res.responseText).slice(0, 200)}`),
+            );
           }
         },
         onerror: () => reject(new Error("falha de rede ao falar com o TMS")),
@@ -116,6 +136,7 @@
   async function ciclo(modo, caminho, filtro) {
     let paginas = 0;
     let viagens = 0;
+    let truncou = 0;
     const estacoesDesconhecidas = new Set();
 
     for (let pagina = 1; pagina <= CONFIG.maxPaginas; pagina += 1) {
@@ -131,9 +152,11 @@
       // Última página: o portal já disse quantas existem no total.
       const total = payload?.data?.total ?? 0;
       if (pagina * CONFIG.porPagina >= total) break;
+      // Bateu o teto com viagens ainda por ler: diz quantas ficaram, em vez de fingir que acabou.
+      if (pagina === CONFIG.maxPaginas) truncou = total - pagina * CONFIG.porPagina;
     }
 
-    return { paginas, viagens, estacoesDesconhecidas: [...estacoesDesconhecidas] };
+    return { paginas, viagens, truncou, estacoesDesconhecidas: [...estacoesDesconhecidas] };
   }
 
   /**
@@ -149,7 +172,12 @@
       const t0 = Date.now();
       try {
         const r = await tarefa();
-        log(`${nome}: ${r.viagens} viagens em ${r.paginas} página(s), ${Math.round((Date.now() - t0) / 1000)}s`);
+        log(
+          `${nome}: ${r.viagens} viagens em ${r.paginas} página(s), ${Math.round((Date.now() - t0) / 1000)}s`,
+        );
+        if (r.truncou > 0) {
+          erro(`${nome}: teto de páginas atingido — ${r.truncou} viagens NÃO foram lidas`);
+        }
         if (r.estacoesDesconhecidas.length) {
           erro(`${nome}: estações sem cadastro no TMS →`, r.estacoesDesconhecidas.join(", "));
         }
@@ -172,9 +200,12 @@
     }),
   );
 
-  repetir("execução", CONFIG.intervaloExecucaoMs, () =>
-    ciclo("execution", "/api/line_haul/agency/trip/history/list", {
-      mtime: `${agora() - CONFIG.execucaoHorasAtras * 3600},${agora()}`,
-    }),
-  );
+  let primeiraExecucao = true;
+  repetir("execução", CONFIG.intervaloExecucaoMs, () => {
+    const horas = primeiraExecucao ? CONFIG.execucaoHorasPrimeiroCiclo : CONFIG.execucaoHorasAtras;
+    primeiraExecucao = false;
+    return ciclo("execution", "/api/line_haul/agency/trip/history/list", {
+      mtime: `${agora() - horas * 3600},${agora()}`,
+    });
+  });
 })();
