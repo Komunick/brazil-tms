@@ -10,7 +10,12 @@ import {
 import { writeAudit } from "../audit/write-audit";
 import { NotFound } from "../errors";
 import { resolveRate } from "./rates";
-import { loadChecklistStatus, type ChecklistStatus, type DocRef, type TripScope } from "../documents/requirements";
+import {
+  loadChecklistStatus,
+  type ChecklistStatus,
+  type DocRef,
+  type TripScope,
+} from "../documents/requirements";
 
 /**
  * Feature 008 — billing-item reads + lifecycle helpers (data-model §11, R5/R7). `ensureBillingItem`
@@ -91,6 +96,7 @@ export async function ensureBillingItem(tx: TxLike, tripId: string): Promise<voi
       laneId: trips.laneId,
       plannedVehicleType: trips.plannedVehicleType,
       plannedPickupWindowStart: trips.plannedPickupWindowStart,
+      customerPriceCents: trips.customerPriceCents,
     })
     .from(trips)
     .where(eq(trips.id, tripId))
@@ -104,7 +110,16 @@ export async function ensureBillingItem(tx: TxLike, tripId: string): Promise<voi
     tripId,
     customerId: trip.customerId,
     rateId: rate?.id ?? null,
-    baseFreightCents: rate?.baseAmountCents ?? null,
+    /**
+     * A tabela de tarifas primeiro; o preço que o CLIENTE declarou por esta viagem depois
+     * (2026-08-16).
+     *
+     * A ordem importa: uma tarifa cadastrada é o preço NEGOCIADO, e prevalece. Mas essa tabela não
+     * existe hoje — 243 viagens chegaram ao faturamento sem preço nenhum e travaram ali, porque
+     * "Pronta para faturar" exige valor. O portal do cliente publica quanto paga por cada viagem, e
+     * usar esse número é mais honesto que um campo vazio ou um valor inventado.
+     */
+    baseFreightCents: rate?.baseAmountCents ?? trip.customerPriceCents ?? null,
     billingPeriod: billingPeriodSaoPaulo(new Date()),
   });
 }
@@ -217,7 +232,9 @@ export async function updateBillingItem(
     await tx
       .update(billingItems)
       .set({
-        ...(input.baseFreightCents !== undefined ? { baseFreightCents: input.baseFreightCents } : {}),
+        ...(input.baseFreightCents !== undefined
+          ? { baseFreightCents: input.baseFreightCents }
+          : {}),
         ...(input.billingPeriod !== undefined ? { billingPeriod: input.billingPeriod } : {}),
         ...(input.disputeStatus !== undefined ? { disputeStatus: input.disputeStatus } : {}),
         ...(input.notes !== undefined ? { notes: input.notes ?? null } : {}),

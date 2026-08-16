@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  bigint,
   check,
   index,
   integer,
@@ -89,6 +90,16 @@ export const trips = pgTable(
      * switched off (2026-08-15). Written only through `updateOperationalFields`.
      */
     operationalFields: jsonb("operational_fields"),
+    /**
+     * O preço que o CLIENTE declara por esta viagem — o que a Brazil Transports recebe por ela
+     * (2026-08-16). Vem do "Valor da Viagem" do portal, capturado no ciclo do plano porque some
+     * depois que a viagem termina. Centavos inteiros (R7).
+     *
+     * Coluna própria, e não `customer_fields`: dinheiro não mora num campo de texto de exibição —
+     * daqui ele alimenta a base do item de faturamento, que antes ficava sem preço nenhum porque
+     * dependia de uma tabela de tarifas por rota que a operação não mantém.
+     */
+    customerPriceCents: bigint("customer_price_cents", { mode: "number" }),
     plannedPickupWindowStart: timestamp("planned_pickup_window_start", { withTimezone: true }),
     plannedPickupWindowEnd: timestamp("planned_pickup_window_end", { withTimezone: true }),
     plannedDeliveryWindowStart: timestamp("planned_delivery_window_start", { withTimezone: true }),

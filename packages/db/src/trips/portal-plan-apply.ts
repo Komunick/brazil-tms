@@ -119,12 +119,23 @@ async function writeCustomerFields(
   tripId: string,
   portal: PortalTrip,
   current?: unknown,
+  currentPriceCents?: number | null,
 ): Promise<boolean> {
+  // O preço vai em COLUNA, não no texto de exibição: é dele que o faturamento tira a base. Escrito
+  // aqui porque o portal só o publica no Planejado — depois que a viagem termina, some.
+  const priceChanged = portal.priceCents != null && portal.priceCents !== currentPriceCents;
+  if (priceChanged) {
+    await db
+      .update(trips)
+      .set({ customerPriceCents: portal.priceCents, updatedAt: new Date() })
+      .where(eq(trips.id, tripId));
+  }
+
   const fields: Record<string, string> = {};
   if (portal.driverLabel) fields["Motorista (portal)"] = portal.driverLabel;
   if (portal.plateLabel) fields["Placa (portal)"] = portal.plateLabel;
   if (portal.operatorLabel) fields["Operador (portal)"] = portal.operatorLabel;
-  if (Object.keys(fields).length === 0) return false;
+  if (Object.keys(fields).length === 0) return priceChanged;
 
   // Keep whatever else the trip already carries (an operator name, a spreadsheet column) and only
   // overwrite what the portal actually states.
@@ -134,7 +145,9 @@ async function writeCustomerFields(
     existing != null &&
     Object.keys(merged).length === Object.keys(existing).length &&
     Object.entries(merged).every(([k, v]) => existing[k] === v);
-  if (same) return false;
+  // Um preço novo conta como mudança mesmo quando motorista e placa continuam iguais — senão o ciclo
+  // reportaria "sem mudança" logo depois de gravar dinheiro.
+  if (same) return priceChanged;
 
   await db
     .update(trips)
@@ -241,7 +254,12 @@ export async function applyPortalPlanTrip(
       // Who the CUSTOMER put on this trip. Written on every pass, not only on create: the portal
       // assigns a driver hours after planning the trip, so a create-only write would miss almost
       // every one of them.
-      const fieldsChanged = await writeCustomerFields(existing.id, portal, existing.customerFields);
+      const fieldsChanged = await writeCustomerFields(
+        existing.id,
+        portal,
+        existing.customerFields,
+        existing.customerPriceCents,
+      );
 
       // And the same words, matched to the registered fleet. Attempted on every pass because the
       // driver usually appears LATER than the trip: a create-only attempt would find nobody.

@@ -78,6 +78,8 @@ export interface PortalTrip {
   driverLabel: string | null;
   /** Quem o portal nomeia como operador da viagem (nome, não e-mail). */
   operatorLabel?: string | null;
+  /** O que a transportadora recebe por esta viagem, em centavos, quando o portal já precificou. */
+  priceCents?: number | null;
   vehicleLabel: string | null;
   plateLabel: string | null;
   stops: PortalStop[];
