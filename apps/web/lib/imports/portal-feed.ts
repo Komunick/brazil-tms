@@ -145,6 +145,12 @@ const DETAIL_BATCH = 25;
  * endpoint, one HTTP call each. Asking for all 500 every cycle would be absurd; asking for none
  * means never having it. So the TMS names the few that are missing it, the robot fetches just those,
  * and the list shrinks to nothing on its own as they get filled.
+ *
+ * It asks ONLY about trips that already have a driver. Measured against the live portal: the detail
+ * of a trip with a driver names the operator, and the detail of one without has no operator at all —
+ * there was no assignment to attribute. Without this filter the 25-per-page budget was spent on the
+ * ~460 trips that will never have one, and the 37 that did have one were rarely reached: the first
+ * run recorded zero.
  */
 async function tripsMissingAssignOperator(
   customerId: string,
@@ -160,6 +166,7 @@ async function tripsMissingAssignOperator(
       and(
         eq(trips.customerId, customerId),
         inArray(trips.externalTripId, ids),
+        sql`(${trips.customerFields} ->> 'Motorista (portal)') is not null`,
         sql`(${trips.customerFields} ->> 'Operador de atribuição (portal)') is null`,
       ),
     )
