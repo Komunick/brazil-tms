@@ -29,8 +29,12 @@ import { Conflict } from "../errors";
 
 export type FleetLinkOutcome =
   | "linked"
+  /** Vinculado apesar de avisos — o motivo fica gravado na própria atribuição. */
+  | "linked_with_warnings"
   | "already_assigned"
   | "not_assignable"
+  /** O portal ainda não disse quem vai — não é problema, é uma viagem sem motorista designado. */
+  | "not_stated"
   | "no_match"
   | "blocked";
 
@@ -60,7 +64,9 @@ export async function linkFleetFromPortal(
 ): Promise<FleetLinkResult> {
   const { vehicle: vehiclePlate, trailer: trailerPlate } = platesOf(portal.plateLabel);
   const driverName = portal.driverLabel?.trim() ?? "";
-  if (!vehiclePlate || !driverName) return { outcome: "no_match", detail: "portal não informou" };
+  // A maioria das viagens ainda não tem motorista designado no portal. Isso não é uma falha de
+  // casamento — contar como tal enterraria os casos que realmente precisam de cadastro.
+  if (!vehiclePlate || !driverName) return { outcome: "not_stated" };
 
   const trip = (
     await db
@@ -85,7 +91,11 @@ export async function linkFleetFromPortal(
 
   const vehicle = (
     await db
-      .select({ id: vehicles.id })
+      .select({
+        id: vehicles.id,
+        ownershipType: vehicles.ownershipType,
+        carrierId: vehicles.carrierId,
+      })
       .from(vehicles)
       .where(
         and(
@@ -99,7 +109,11 @@ export async function linkFleetFromPortal(
 
   const driver = (
     await db
-      .select({ id: drivers.id })
+      .select({
+        id: drivers.id,
+        ownershipType: drivers.ownershipType,
+        carrierId: drivers.carrierId,
+      })
       .from(drivers)
       .where(
         and(
@@ -138,25 +152,83 @@ export async function linkFleetFromPortal(
       )[0]
     : undefined;
 
+  /**
+   * A transportadora, quando os recursos são subcontratados — que é a regra e não a exceção nesta
+   * frota: 883 dos 982 motoristas e 888 dos 902 veículos. Ela NÃO é uma decisão nova: cada recurso
+   * subcontratado já carrega a sua (o banco exige por constraint). Sem passá-la, `assignTrip` recusa
+   * tudo por "atribuição incompleta" — foi exatamente o que aconteceu na primeira rodada, 48
+   * bloqueios e zero vínculos.
+   */
+  const subcontratado =
+    driver.ownershipType === "subcontracted" || vehicle.ownershipType === "subcontracted";
+  const carrierId = driver.carrierId ?? vehicle.carrierId ?? undefined;
+  if (
+    subcontratado &&
+    driver.carrierId &&
+    vehicle.carrierId &&
+    driver.carrierId !== vehicle.carrierId
+  ) {
+    // Motorista de uma transportadora com veículo de outra: é uma escolha real, não um detalhe a
+    // adivinhar. Fica para uma pessoa.
+    return { outcome: "blocked", detail: "motorista e veículo são de transportadoras diferentes" };
+  }
+
+  const base = {
+    driverId: driver.id,
+    vehicleId: vehicle.id,
+    trailerId: trailer?.id,
+    carrierId: subcontratado ? carrierId : undefined,
+    // The optimistic guard: if a dispatcher assigned this trip a second ago, our write loses
+    // rather than overwriting a person's decision.
+    expectedFromStatus: "received" as const,
+    notes: "Atribuição espelhada do portal do cliente.",
+  };
+
   try {
-    await assignTrip(
-      tripId,
-      {
-        driverId: driver.id,
-        vehicleId: vehicle.id,
-        trailerId: trailer?.id,
-        // The optimistic guard: if a dispatcher assigned this trip a second ago, our write loses
-        // rather than overwriting a person's decision.
-        expectedFromStatus: "received",
-        notes: "Atribuição espelhada do portal do cliente.",
-      },
-      actorUserId,
-    );
+    // Strict first: if nothing is wrong, the assignment carries no excuse attached to it.
+    await assignTrip(tripId, base, actorUserId);
     return { outcome: "linked" };
   } catch (error) {
-    // A refusal here is information, not a failure to hide: the customer's own choice does not pass
-    // the TMS's rules (licence, documents, vehicle type, subcontracting), and somebody should know.
-    if (error instanceof Conflict) return { outcome: "blocked", detail: error.message };
-    throw error;
+    if (!(error instanceof Conflict)) throw error;
+    // A hard refusal stands — expired documents, inactive driver, vehicle in maintenance, expired
+    // carrier contract. The customer put someone on the road the TMS would have stopped, and a robot
+    // must not wave that through.
+    if (error.code !== "OVERRIDE_REQUIRED") return { outcome: "blocked", detail: error.message };
+
+    const avisos = warningCodes(error.details);
+    // The one warning that is a real conflict RIGHT NOW rather than a gap in our own records: the
+    // same driver or truck already committed to another trip at the same time. That is a decision,
+    // not paperwork, so it stays with a person (decision 2026-08-16).
+    if (avisos.includes("schedule_overlap")) {
+      return { outcome: "blocked", detail: "conflito de agenda: recurso já está em outra viagem" };
+    }
+
+    // Everything else is our registry catching up with reality — 901 of 902 vehicles have no
+    // document date on file, so demanding a human for each would mean nobody is ever assigned. The
+    // mirror proceeds, and the reason says exactly what was accepted and why, on the record.
+    try {
+      await assignTrip(
+        tripId,
+        {
+          ...base,
+          overrideReason: `Espelho da atribuição do cliente no portal. Avisos aceitos: ${
+            avisos.join(", ") || "não detalhados"
+          }.`,
+        },
+        actorUserId,
+      );
+      return { outcome: "linked_with_warnings", detail: avisos.join(", ") };
+    } catch (retry) {
+      if (retry instanceof Conflict) return { outcome: "blocked", detail: retry.message };
+      throw retry;
+    }
   }
+}
+
+/** The finding codes carried by an `OVERRIDE_REQUIRED`, when it carries any. */
+function warningCodes(details: unknown): string[] {
+  if (!Array.isArray(details)) return [];
+  return details
+    .map((f) => (f && typeof f === "object" ? String((f as { code?: unknown }).code ?? "") : ""))
+    .filter(Boolean);
 }
