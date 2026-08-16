@@ -6,6 +6,7 @@ import {
   auditLogs,
   customers,
   db,
+  lanes,
   linkStationIds,
   loadStationMap,
   locations,
@@ -107,6 +108,8 @@ describe.skipIf(!hasDb)("applyPortalPlanTrip (integration)", () => {
       await db.delete(auditLogs).where(inArray(auditLogs.entityId, ids));
       await db.delete(trips).where(inArray(trips.id, ids));
     }
+    // Creating a trip registers its route, and that lane points at these locations.
+    await db.delete(lanes).where(eq(lanes.customerId, customerId));
     for (const id of [originId, destId, midId]) {
       if (id) await db.delete(locations).where(eq(locations.id, id));
     }
@@ -133,8 +136,27 @@ describe.skipIf(!hasDb)("applyPortalPlanTrip (integration)", () => {
     // 08:00 in São Paulo is 11:00Z.
     expect(trip.plannedPickupWindowStart?.toISOString()).toBe("2026-08-20T11:00:00.000Z");
     expect(trip.plannedDeliveryWindowStart?.toISOString()).toBe("2026-08-20T21:00:00.000Z");
+    // The portal states no departure from the last stop (nothing leaves it), so the delivery window
+    // has no end of its own — and `delayed_destination_arrival` needs one, or late delivery alerts
+    // for nobody. The promised arrival IS the deadline; the SLA tolerance grants the grace.
+    expect(trip.plannedDeliveryWindowEnd?.toISOString()).toBe("2026-08-20T21:00:00.000Z");
     // "CARRETA - EXPRESSA" is a commercial arrangement, not a vehicle: it is a carreta.
     expect(trip.plannedVehicleType).toBe("carreta");
+  });
+
+  it("keeps the portal's own departure as the delivery deadline when it states one", async () => {
+    // The fallback must not overwrite a real end: a stop the truck leaves again has both.
+    const ext = uniq("LH-END");
+    const withDeparture = planned(ext);
+    withDeparture.legs[0]!.destination.plannedDeparture = "20/08/2026 19:45";
+
+    const map = await loadStationMap(customerId);
+    await applyPortalPlanTrip(customerId, withDeparture, map, actorId, "planejado.csv");
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    tripIds.push(trip.id);
+    expect(trip.plannedDeliveryWindowStart?.toISOString()).toBe("2026-08-20T21:00:00.000Z");
+    expect(trip.plannedDeliveryWindowEnd?.toISOString()).toBe("2026-08-20T22:45:00.000Z");
   });
 
   it("writes NOTHING the second time — the plan already says exactly this", async () => {

@@ -8,6 +8,7 @@ import {
   importBatches,
   importRows,
   importTemplates,
+  lanes,
   locations,
   statusMappings,
   trips,
@@ -133,6 +134,8 @@ describe.skipIf(!hasDb)("validate job (integration)", () => {
     for (const cid of createdCustomerIds) {
       await db.delete(importTemplates).where(eq(importTemplates.customerId, cid));
       await db.delete(statusMappings).where(eq(statusMappings.customerId, cid));
+      // Creating a trip registers its route, and that lane points at these locations.
+      await db.delete(lanes).where(eq(lanes.customerId, cid));
       await db.delete(locations).where(eq(locations.customerId, cid));
       await db.delete(auditLogs).where(eq(auditLogs.entityId, cid));
       await db.delete(customers).where(eq(customers.id, cid));
@@ -171,9 +174,7 @@ describe.skipIf(!hasDb)("validate job (integration)", () => {
   }
 
   function reasonCodes(reasons: unknown): string[] {
-    return Array.isArray(reasons)
-      ? (reasons as { code: string }[]).map((r) => r.code)
-      : [];
+    return Array.isArray(reasons) ? (reasons as { code: string }[]).map((r) => r.code) : [];
   }
 
   it("classifies missing-required, invalid-window, and unmappable-vehicle rows; warning row stays valid-ish", async () => {

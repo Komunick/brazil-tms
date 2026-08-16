@@ -4,6 +4,7 @@ export * from "./errors";
 export * from "./audit/write-audit";
 export * from "./trips/trip-dto";
 export { createTrip, getTrip, listTrips } from "./trips/trips-service";
+export { resolveLaneId } from "./trips/lane-resolution";
 export { updateTripPlan } from "./trips/trip-plan";
 export { updateOperationalFields } from "./trips/trip-operational-fields";
 export {

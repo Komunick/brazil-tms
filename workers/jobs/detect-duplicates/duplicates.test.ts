@@ -8,6 +8,7 @@ import {
   importBatches,
   importRows,
   importTemplates,
+  lanes,
   locations,
   transitionTripStatus,
   tripEvents,
@@ -138,6 +139,8 @@ describe.skipIf(!hasDb)("detect-duplicates job — full pipeline (integration)",
     }
     for (const cid of createdCustomerIds) {
       await db.delete(importTemplates).where(eq(importTemplates.customerId, cid));
+      // Creating a trip registers its route, and that lane points at these locations.
+      await db.delete(lanes).where(eq(lanes.customerId, cid));
       await db.delete(locations).where(eq(locations.customerId, cid));
       await db.delete(auditLogs).where(eq(auditLogs.entityId, cid));
       await db.delete(customers).where(eq(customers.id, cid));
@@ -183,7 +186,10 @@ describe.skipIf(!hasDb)("detect-duplicates job — full pipeline (integration)",
   }
 
   async function trackTripsFor(batchId: string): Promise<void> {
-    const created = await db.select({ id: trips.id }).from(trips).where(eq(trips.importBatchId, batchId));
+    const created = await db
+      .select({ id: trips.id })
+      .from(trips)
+      .where(eq(trips.importBatchId, batchId));
     for (const t of created) if (!createdTripIds.includes(t.id)) createdTripIds.push(t.id);
   }
 
@@ -270,7 +276,9 @@ describe.skipIf(!hasDb)("detect-duplicates job — full pipeline (integration)",
     const planAudit = await db
       .select()
       .from(auditLogs)
-      .where(and(eq(auditLogs.entityId, originalTrip.id), eq(auditLogs.action, "trip.plan_update")));
+      .where(
+        and(eq(auditLogs.entityId, originalTrip.id), eq(auditLogs.action, "trip.plan_update")),
+      );
     expect(planAudit.length).toBeGreaterThanOrEqual(1);
   });
 
@@ -366,9 +374,21 @@ describe.skipIf(!hasDb)("detect-duplicates job — full pipeline (integration)",
 
     // Move the trip PAST `confirmed` via the legal 003 path. Imported trips are born `received`
     // (slice 015), so the walk starts there: received → assigned → confirmed → at_origin.
-    await transitionTripStatus(trip.id, { expectedFromStatus: "received", toStatus: "assigned" }, actorId);
-    await transitionTripStatus(trip.id, { expectedFromStatus: "assigned", toStatus: "confirmed" }, actorId);
-    await transitionTripStatus(trip.id, { expectedFromStatus: "confirmed", toStatus: "at_origin" }, actorId);
+    await transitionTripStatus(
+      trip.id,
+      { expectedFromStatus: "received", toStatus: "assigned" },
+      actorId,
+    );
+    await transitionTripStatus(
+      trip.id,
+      { expectedFromStatus: "assigned", toStatus: "confirmed" },
+      actorId,
+    );
+    await transitionTripStatus(
+      trip.id,
+      { expectedFromStatus: "confirmed", toStatus: "at_origin" },
+      actorId,
+    );
 
     // Re-import with a changed plan field → would be an `update`, but the trip is past confirmed.
     const csv2 = [

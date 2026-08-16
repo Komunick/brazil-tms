@@ -67,13 +67,26 @@ function vehicleTypeFrom(label: string | null): VehicleType | null {
   return parsed.success ? parsed.data : null;
 }
 
-/** The plan a leg states: both ends, the two windows, and the vehicle the customer asked for. */
+/**
+ * The plan a leg states: both ends, the two windows, and the vehicle the customer asked for.
+ *
+ * The delivery window's END falls back to its START (2026-08-16). The portal states a planned
+ * DEPARTURE for every stop a truck leaves again, and nothing for the one where the trip ends — so
+ * the last leg had a delivery window with no end, on 860 of 871 trips in tmsdev. That is not a
+ * cosmetic gap: `delayed_destination_arrival` (the late-delivery alert) requires
+ * `plannedDeliveryWindowEnd`, so late delivery fired for NOBODY on portal trips. When the customer
+ * promises an arrival time and no departure, the promise IS a point in time, and the deadline is
+ * that point — the SLA rule's `deliveryToleranceMinutes` is what grants the grace, not a window the
+ * customer never stated.
+ */
 function planFrom(leg: PortalLeg, vehicleLabel: string | null) {
+  const plannedDeliveryWindowStart = parsePortalInstant(leg.destination.plannedArrival);
   return {
     plannedPickupWindowStart: parsePortalInstant(leg.origin.plannedArrival),
     plannedPickupWindowEnd: parsePortalInstant(leg.origin.plannedDeparture),
-    plannedDeliveryWindowStart: parsePortalInstant(leg.destination.plannedArrival),
-    plannedDeliveryWindowEnd: parsePortalInstant(leg.destination.plannedDeparture),
+    plannedDeliveryWindowStart,
+    plannedDeliveryWindowEnd:
+      parsePortalInstant(leg.destination.plannedDeparture) ?? plannedDeliveryWindowStart,
     plannedVehicleType: vehicleTypeFrom(vehicleLabel),
   };
 }

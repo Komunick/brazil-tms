@@ -7,6 +7,7 @@ import {
   numeric,
   pgTable,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { customers } from "./customers";
@@ -43,10 +44,13 @@ export const lanes = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    check(
-      "lanes_origin_dest_ck",
-      sql`${table.originLocationId} <> ${table.destinationLocationId}`,
-    ),
+    check("lanes_origin_dest_ck", sql`${table.originLocationId} <> ${table.destinationLocationId}`),
+    // A lane IS its (customer, origin, destination) — trips resolve to one by that triple, so two
+    // live rows for the same triple would make the resolution ambiguous and split a lane's history
+    // in the reports. Partial: an archived lane steps aside and lets a fresh one take the pair.
+    uniqueIndex("lanes_customer_route_uq")
+      .on(table.customerId, table.originLocationId, table.destinationLocationId)
+      .where(sql`${table.archivedAt} is null`),
     index("lanes_customer_idx").on(table.customerId),
     index("lanes_origin_idx").on(table.originLocationId),
     index("lanes_dest_idx").on(table.destinationLocationId),
