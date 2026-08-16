@@ -1,6 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { auditLogs, customers, db, locations, tripEvents, trips, users } from "@brazil-tms/db";
+import {
+  auditLogs,
+  customers,
+  db,
+  lanes,
+  locations,
+  tripEvents,
+  trips,
+  users,
+} from "@brazil-tms/db";
 import { createTrip } from "./trips-service";
 import { updateTripPlan } from "./trip-plan";
 import { transitionTripStatus } from "./trip-transitions";
@@ -67,6 +76,8 @@ describe.skipIf(!hasDb)("trip audit semantics (integration, US3)", () => {
       await db.delete(auditLogs).where(eq(auditLogs.entityId, id));
       await db.delete(trips).where(eq(trips.id, id));
     }
+    // Creating a trip registers its route, and that lane points at these locations.
+    if (customerId) await db.delete(lanes).where(eq(lanes.customerId, customerId));
     for (const id of [originId, destId]) {
       if (id) await db.delete(locations).where(eq(locations.id, id));
     }
@@ -111,7 +122,11 @@ describe.skipIf(!hasDb)("trip audit semantics (integration, US3)", () => {
 
   it("a status change writes exactly one trip.status_change audit row", async () => {
     const id = await newTrip();
-    await transitionTripStatus(id, { toStatus: "assigned", expectedFromStatus: "received" }, actorId);
+    await transitionTripStatus(
+      id,
+      { toStatus: "assigned", expectedFromStatus: "received" },
+      actorId,
+    );
 
     const audits = await db
       .select()

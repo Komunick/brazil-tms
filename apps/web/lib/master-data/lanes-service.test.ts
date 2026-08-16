@@ -92,6 +92,20 @@ describe.skipIf(!hasDb)("lanes-service (integration)", () => {
     return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
   }
 
+  /**
+   * A route now belongs to ONE live lane, so a test that needs its own lane needs its own route.
+   * Mints a fresh destination for customer A and registers it for cleanup.
+   */
+  async function freshDestination(): Promise<string> {
+    const row = await db
+      .insert(locations)
+      .values({ customerId: customerAId, code: code("DEST"), name: "Destino A" })
+      .returning();
+    const id = row[0]!.id;
+    createdLocationIds.push(id);
+    return id;
+  }
+
   it("create inserts the row and emits lane.create in the same transaction", async () => {
     const dto = await createLane(
       {
@@ -122,7 +136,7 @@ describe.skipIf(!hasDb)("lanes-service (integration)", () => {
       {
         customerId: customerAId,
         originLocationId: originAId,
-        destinationLocationId: destAId,
+        destinationLocationId: await freshDestination(),
         standardDistanceKm: null,
       },
       actorId,
@@ -135,6 +149,56 @@ describe.skipIf(!hasDb)("lanes-service (integration)", () => {
     expect(withDist.standardDistanceKm).not.toBeNull();
     const cleared = await updateLane(dto.id, { standardDistanceKm: null }, actorId);
     expect(cleared.standardDistanceKm).toBeNull();
+  });
+
+  it("refuses a second live lane on the same route, and frees it once archived (DUPLICATE_LANE)", async () => {
+    // Trips resolve to their lane by (customer, origin, destination): two live lanes on one route
+    // would make that ambiguous. The screen must hear a named 409, not the index's raw violation.
+    const destination = await freshDestination();
+    const first = await createLane(
+      { customerId: customerAId, originLocationId: originAId, destinationLocationId: destination },
+      actorId,
+    );
+    createdLaneIds.push(first.id);
+
+    await expect(
+      createLane(
+        {
+          customerId: customerAId,
+          originLocationId: originAId,
+          destinationLocationId: destination,
+        },
+        actorId,
+      ),
+    ).rejects.toMatchObject({ code: "DUPLICATE_LANE" });
+
+    // Re-saving the SAME lane is not a collision with itself.
+    await expect(updateLane(first.id, { standardRateCents: 999 }, actorId)).resolves.toMatchObject({
+      id: first.id,
+    });
+
+    // Moving another lane onto the taken route collides...
+    const other = await createLane(
+      {
+        customerId: customerAId,
+        originLocationId: originAId,
+        destinationLocationId: await freshDestination(),
+      },
+      actorId,
+    );
+    createdLaneIds.push(other.id);
+    await expect(
+      updateLane(other.id, { destinationLocationId: destination }, actorId),
+    ).rejects.toMatchObject({ code: "DUPLICATE_LANE" });
+
+    // ...until the route is given up: an archived lane no longer holds it.
+    await archiveLane(first.id, actorId);
+    const replacement = await createLane(
+      { customerId: customerAId, originLocationId: originAId, destinationLocationId: destination },
+      actorId,
+    );
+    createdLaneIds.push(replacement.id);
+    expect(replacement.id).not.toBe(first.id);
   });
 
   it("rejects a lane whose destination belongs to another customer (INVALID_LANE_REFERENCE)", async () => {
@@ -190,7 +254,11 @@ describe.skipIf(!hasDb)("lanes-service (integration)", () => {
 
   it("archive sets archived_at and emits lane.archive; idempotent on re-archive", async () => {
     const dto = await createLane(
-      { customerId: customerAId, originLocationId: originAId, destinationLocationId: destAId },
+      {
+        customerId: customerAId,
+        originLocationId: originAId,
+        destinationLocationId: await freshDestination(),
+      },
       actorId,
     );
     createdLaneIds.push(dto.id);
@@ -222,11 +290,7 @@ describe.skipIf(!hasDb)("lanes-service (integration)", () => {
 
   it("update of a missing lane throws NOT_FOUND", async () => {
     await expect(
-      updateLane(
-        "00000000-0000-0000-0000-000000000000",
-        { expectedTransitMinutes: 60 },
-        actorId,
-      ),
+      updateLane("00000000-0000-0000-0000-000000000000", { expectedTransitMinutes: 60 }, actorId),
     ).rejects.toBeInstanceOf(NotFound);
   });
 });

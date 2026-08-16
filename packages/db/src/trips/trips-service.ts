@@ -3,6 +3,7 @@ import { db } from "../client";
 import { trips } from "../../schema";
 import { TRIP_STATUSES, type CreateTripInput, type TripStatus } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
+import { resolveLaneId } from "./lane-resolution";
 import { loadTripDetail, toTripSummary, type TripDetail, type TripSummary } from "./trip-dto";
 
 /**
@@ -28,6 +29,29 @@ export type { TripDetail, TripSummary } from "./trip-dto";
  * transition audit actually happen — `createTrip` writes ONLY the trip row + its `trip.create` audit.
  */
 export async function createTrip(input: CreateTripInput, actorUserId: string): Promise<TripDetail> {
+  return db.transaction(async (tx) => {
+    // Which route this trip runs on, registered on first sight (2026-08-16). Callers may state the
+    // lane explicitly (a form that picked one); every import leaves it unset, and an unset lane is
+    // what left `trips.lane_id` null everywhere — with it, the per-lane SLA rules, rates, document
+    // requirements and report grouping that already existed finally have something to match.
+    const laneId =
+      input.laneId ??
+      (await resolveLaneId(
+        tx,
+        input.customerId,
+        input.originLocationId,
+        input.destinationLocationId,
+      ));
+    return insertTrip(tx, input, laneId, actorUserId);
+  });
+}
+
+async function insertTrip(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  input: CreateTripInput,
+  laneId: string | null,
+  actorUserId: string,
+): Promise<TripDetail> {
   // The immutable snapshot of the imported/seeded plan (data-model §1, R4). Written once.
   const originalPlan = {
     customerId: input.customerId,
@@ -48,48 +72,46 @@ export async function createTrip(input: CreateTripInput, actorUserId: string): P
     plannedServiceRequirements: input.plannedServiceRequirements ?? null,
   };
 
-  return db.transaction(async (tx) => {
-    const inserted = await tx
-      .insert(trips)
-      .values({
-        customerId: input.customerId,
-        externalTripId: input.externalTripId ?? null,
-        // Leg of the customer's programming; 1 unless the import found a chained milk run.
-        legNumber: input.legNumber ?? 1,
-        importBatchId: input.importBatchId ?? null,
-        originLocationId: input.originLocationId,
-        destinationLocationId: input.destinationLocationId,
-        laneId: input.laneId ?? null,
-        currentStatus: "received",
-        originalPlan,
-        plannedPickupWindowStart: input.plannedPickupWindowStart ?? null,
-        plannedPickupWindowEnd: input.plannedPickupWindowEnd ?? null,
-        plannedDeliveryWindowStart: input.plannedDeliveryWindowStart ?? null,
-        plannedDeliveryWindowEnd: input.plannedDeliveryWindowEnd ?? null,
-        plannedVehicleType: input.plannedVehicleType ?? null,
-        plannedVolumeUnits: input.plannedVolumeUnits ?? null,
-        plannedWeightKg: input.plannedWeightKg ?? null,
-        plannedPalletCount: input.plannedPalletCount ?? null,
-        plannedRouteNotes: input.plannedRouteNotes ?? null,
-        plannedServiceRequirements: input.plannedServiceRequirements ?? null,
-      })
-      .returning();
-    const row = inserted[0];
-    if (!row) throw new Error("Inserção de viagem não retornou linha.");
+  const inserted = await tx
+    .insert(trips)
+    .values({
+      customerId: input.customerId,
+      externalTripId: input.externalTripId ?? null,
+      // Leg of the customer's programming; 1 unless the import found a chained milk run.
+      legNumber: input.legNumber ?? 1,
+      importBatchId: input.importBatchId ?? null,
+      originLocationId: input.originLocationId,
+      destinationLocationId: input.destinationLocationId,
+      laneId,
+      currentStatus: "received",
+      originalPlan,
+      plannedPickupWindowStart: input.plannedPickupWindowStart ?? null,
+      plannedPickupWindowEnd: input.plannedPickupWindowEnd ?? null,
+      plannedDeliveryWindowStart: input.plannedDeliveryWindowStart ?? null,
+      plannedDeliveryWindowEnd: input.plannedDeliveryWindowEnd ?? null,
+      plannedVehicleType: input.plannedVehicleType ?? null,
+      plannedVolumeUnits: input.plannedVolumeUnits ?? null,
+      plannedWeightKg: input.plannedWeightKg ?? null,
+      plannedPalletCount: input.plannedPalletCount ?? null,
+      plannedRouteNotes: input.plannedRouteNotes ?? null,
+      plannedServiceRequirements: input.plannedServiceRequirements ?? null,
+    })
+    .returning();
+  const row = inserted[0];
+  if (!row) throw new Error("Inserção de viagem não retornou linha.");
 
-    await writeAudit(tx, {
-      entityType: "trip",
-      entityId: row.id,
-      action: "trip.create",
-      previousValue: null,
-      newValue: { currentStatus: "received", originalPlan },
-      actorUserId,
-    });
-
-    const detail = await loadTripDetail(tx, row.id);
-    if (!detail) throw new Error("Viagem recém-criada não encontrada.");
-    return detail;
+  await writeAudit(tx, {
+    entityType: "trip",
+    entityId: row.id,
+    action: "trip.create",
+    previousValue: null,
+    newValue: { currentStatus: "received", originalPlan },
+    actorUserId,
   });
+
+  const detail = await loadTripDetail(tx, row.id);
+  if (!detail) throw new Error("Viagem recém-criada não encontrada.");
+  return detail;
 }
 
 /** Read a trip's full detail (events + audit + billing projection). Null → route maps to 404. */

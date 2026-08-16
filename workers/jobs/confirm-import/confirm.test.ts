@@ -10,6 +10,7 @@ import {
   importBatches,
   importRows,
   importTemplates,
+  lanes,
   locations,
   statusMappings,
   tripAssignments,
@@ -162,6 +163,8 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
     for (const cid of createdCustomerIds) {
       await db.delete(importTemplates).where(eq(importTemplates.customerId, cid));
       await db.delete(statusMappings).where(eq(statusMappings.customerId, cid));
+      // Creating a trip registers its route, and that lane points at these locations.
+      await db.delete(lanes).where(eq(lanes.customerId, cid));
       await db.delete(locations).where(eq(locations.customerId, cid));
       await db.delete(auditLogs).where(eq(auditLogs.entityId, cid));
       await db.delete(customers).where(eq(customers.id, cid));

@@ -1,6 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { auditLogs, customers, db, locations, tripEvents, trips, users } from "@brazil-tms/db";
+import {
+  auditLogs,
+  customers,
+  db,
+  lanes,
+  locations,
+  tripEvents,
+  trips,
+  users,
+} from "@brazil-tms/db";
 import { createOrUpdateTripManually } from "./manual-create";
 
 /**
@@ -66,6 +75,8 @@ describe.skipIf(!hasDb)("manual-create (integration)", () => {
       await db.delete(auditLogs).where(eq(auditLogs.entityId, id));
       await db.delete(trips).where(eq(trips.id, id));
     }
+    // Creating a trip registers its route, and that lane points at these locations.
+    await db.delete(lanes).where(eq(lanes.customerId, customerId));
     for (const id of createdLocationIds) {
       await db.delete(locations).where(eq(locations.id, id));
     }
@@ -132,9 +143,7 @@ describe.skipIf(!hasDb)("manual-create (integration)", () => {
     const matches = await db
       .select({ id: trips.id })
       .from(trips)
-      .where(
-        and(eq(trips.customerId, customerId), eq(trips.externalTripId, externalTripId)),
-      );
+      .where(and(eq(trips.customerId, customerId), eq(trips.externalTripId, externalTripId)));
     expect(matches).toHaveLength(1);
   });
 });

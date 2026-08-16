@@ -6,6 +6,7 @@ import {
   auditLogs,
   customers,
   db,
+  lanes,
   linkStationIds,
   loadStationMap,
   locations,
@@ -107,6 +108,8 @@ describe.skipIf(!hasDb)("applyPortalPlanTrip (integration)", () => {
       await db.delete(auditLogs).where(inArray(auditLogs.entityId, ids));
       await db.delete(trips).where(inArray(trips.id, ids));
     }
+    // Creating a trip registers its route, and that lane points at these locations.
+    await db.delete(lanes).where(eq(lanes.customerId, customerId));
     for (const id of [originId, destId, midId]) {
       if (id) await db.delete(locations).where(eq(locations.id, id));
     }

@@ -89,6 +89,39 @@ async function assertValidReferences(
   }
 }
 
+/**
+ * A route belongs to ONE lane (`lanes_customer_route_uq`, live rows only). Trips resolve to their
+ * lane by (customer, origin, destination), so a second live row for the same triple would make that
+ * resolution ambiguous and split the route's history across two ids. Checked here so the screen gets
+ * a named 409 in pt-BR instead of the index's raw unique violation surfacing as a 500; the index
+ * stays as the backstop for the race this check cannot see.
+ */
+async function assertRouteFree(
+  customerId: string,
+  originLocationId: string,
+  destinationLocationId: string,
+  exceptLaneId?: string,
+): Promise<void> {
+  const rows = await db
+    .select({ id: lanes.id })
+    .from(lanes)
+    .where(
+      and(
+        eq(lanes.customerId, customerId),
+        eq(lanes.originLocationId, originLocationId),
+        eq(lanes.destinationLocationId, destinationLocationId),
+        isNull(lanes.archivedAt),
+      ),
+    )
+    .limit(2);
+  if (rows.some((r) => r.id !== exceptLaneId)) {
+    throw new Conflict(
+      "DUPLICATE_LANE",
+      "Já existe uma rota ativa entre essa origem e esse destino para o cliente.",
+    );
+  }
+}
+
 async function loadActiveLocation(id: string): Promise<{ customerId: string }> {
   const rows = await db
     .select({ customerId: locations.customerId, archivedAt: locations.archivedAt })
@@ -134,6 +167,7 @@ export async function createLane(input: CreateLaneInput, actorUserId: string): P
     input.originLocationId,
     input.destinationLocationId,
   );
+  await assertRouteFree(input.customerId, input.originLocationId, input.destinationLocationId);
 
   return db.transaction(async (tx) => {
     const inserted = await tx
@@ -178,11 +212,13 @@ export async function updateLane(
   if (!current) throw new NotFound("NOT_FOUND", "Rota não encontrada.");
 
   // Re-validate the (possibly changed) reference triple against the merged values (FR-009, R5).
-  await assertValidReferences(
-    input.customerId ?? current.customerId,
-    input.originLocationId ?? current.originLocationId,
-    input.destinationLocationId ?? current.destinationLocationId,
-  );
+  const nextCustomerId = input.customerId ?? current.customerId;
+  const nextOriginId = input.originLocationId ?? current.originLocationId;
+  const nextDestinationId = input.destinationLocationId ?? current.destinationLocationId;
+  await assertValidReferences(nextCustomerId, nextOriginId, nextDestinationId);
+  // Moving a lane's endpoints onto a route another live lane already holds is the same collision as
+  // creating a duplicate — itself excluded, so re-saving a lane unchanged stays a no-op.
+  await assertRouteFree(nextCustomerId, nextOriginId, nextDestinationId, id);
 
   // Build the partial update + before/after snapshots from only the provided fields.
   const set: Record<string, unknown> = { updatedAt: new Date() };
@@ -203,9 +239,7 @@ export async function updateLane(
     // `numeric` column expects a string at the driver boundary — but only for a real value;
     // a cleared distance must stay SQL NULL, not the string "null".
     set[field] =
-      field === "standardDistanceKm" && input[field] != null
-        ? String(input[field])
-        : input[field];
+      field === "standardDistanceKm" && input[field] != null ? String(input[field]) : input[field];
     previousValue[field] = (current as Record<string, unknown>)[field] ?? null;
     newValue[field] = input[field];
   }

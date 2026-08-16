@@ -1,6 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, sql, type SQL } from "drizzle-orm";
-import { auditLogs, customers, db, locations, tripEvents, trips, users } from "@brazil-tms/db";
+import {
+  auditLogs,
+  customers,
+  db,
+  lanes,
+  locations,
+  tripEvents,
+  trips,
+  users,
+} from "@brazil-tms/db";
 import { createTrip } from "./trips-service";
 import { updateTripPlan } from "./trip-plan";
 
@@ -47,7 +56,11 @@ describe.skipIf(!hasDb)("trip events/audit append-only immutability (integration
       err = e;
     }
     expect(err, "expected a permission-denied rejection").toBeDefined();
-    const e = err as { code?: string; message?: string; cause?: { code?: string; message?: string } };
+    const e = err as {
+      code?: string;
+      message?: string;
+      cause?: { code?: string; message?: string };
+    };
     const sqlState = e?.cause?.code ?? e?.code;
     const message = `${e?.message ?? ""} ${e?.cause?.message ?? ""}`;
     expect(sqlState === "42501" || /permission denied/i.test(message)).toBe(true);
@@ -134,6 +147,8 @@ describe.skipIf(!hasDb)("trip events/audit append-only immutability (integration
       await db.delete(auditLogs).where(eq(auditLogs.entityId, tripId));
       await db.delete(trips).where(eq(trips.id, tripId));
     }
+    // Creating a trip registers its route, and that lane points at these locations.
+    if (customerId) await db.delete(lanes).where(eq(lanes.customerId, customerId));
     for (const id of [originId, destId]) {
       if (id) await db.delete(locations).where(eq(locations.id, id));
     }

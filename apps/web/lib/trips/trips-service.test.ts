@@ -1,6 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
-import { auditLogs, customers, db, locations, tripEvents, trips, users } from "@brazil-tms/db";
+import { and, eq, inArray } from "drizzle-orm";
+import {
+  alerts,
+  auditLogs,
+  customers,
+  db,
+  lanes,
+  locations,
+  tripEvents,
+  trips,
+  users,
+} from "@brazil-tms/db";
 import { createTrip, getTrip } from "./trips-service";
 
 /**
@@ -63,9 +73,16 @@ describe.skipIf(!hasDb)("trips-service (integration)", () => {
   afterAll(async () => {
     // FK-safe order: trip_events + audit → trips → locations → customers.
     for (const id of createdTripIds) {
+      // The SLA sweep runs over EVERY trip in the dev DB, so a concurrently-running suite can leave
+      // alerts hanging off these trips. Clear them or the delete below trips over their FK.
+      await db.delete(alerts).where(eq(alerts.tripId, id));
       await db.delete(tripEvents).where(eq(tripEvents.tripId, id));
       await db.delete(auditLogs).where(eq(auditLogs.entityId, id));
       await db.delete(trips).where(eq(trips.id, id));
+    }
+    // Creating a trip registers its route, and that lane points at these locations.
+    if (createdCustomerIds.length) {
+      await db.delete(lanes).where(inArray(lanes.customerId, createdCustomerIds));
     }
     for (const id of createdLocationIds) {
       await db.delete(auditLogs).where(eq(auditLogs.entityId, id));
