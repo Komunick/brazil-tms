@@ -223,4 +223,29 @@ describe.skipIf(!hasDb)("applyPortalTrip (integration)", () => {
     const after = (await db.select().from(trips).where(eq(trips.id, tripId)).limit(1))[0]!;
     expect(after.currentStatus).toBe("assigned");
   });
+  it("CANCELADA no portal fecha a viagem, mesmo tendo linha do tempo inteira", async () => {
+    /**
+     * O caso que o usuário apontou: no Concluído existem Cancelled E Completed, e uma cancelada
+     * costuma ter horários reais — ela chegou, carregou, e aí foi cancelada.
+     *
+     * Este caminho não sabia cancelar (só o do plano sabia), e o efeito era pior do que não fazer
+     * nada: os marcos empurravam a viagem para "em trânsito" como se estivesse rodando, ela ficava
+     * viva no quadro e no painel da parede, alertando — e nunca se resolvia, porque concluir exige
+     * que o portal diga "Completed" e uma cancelada nunca diz.
+     */
+    const { id: tripId, ext } = await makeTrip();
+    const map = await loadStationMap(customerId);
+    // Mesma linha do tempo completa do caso feliz; só a palavra do cliente muda.
+    const trip = portalTrip(ext, { status: "Cancelled" });
+
+    const [outcome] = await applyPortalTrip(customerId, trip, map, actorId, "portal");
+    expect(outcome!.status).toBe("closed");
+
+    const after = (await db.select().from(trips).where(eq(trips.id, tripId)).limit(1))[0]!;
+    expect(after.currentStatus).toBe("cancelled");
+
+    // E NÃO andou: nenhum marco de chegada foi registrado como se a viagem tivesse acontecido.
+    const eventos = await db.select().from(tripEvents).where(eq(tripEvents.tripId, tripId));
+    expect(eventos.some((e) => e.eventType === "origin_arrived")).toBe(false);
+  });
 });

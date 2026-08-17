@@ -38,6 +38,17 @@ export async function writePortalFacts(
   if (portal.driverLabel) fields["Motorista (portal)"] = portal.driverLabel;
   if (portal.plateLabel) fields["Placa (portal)"] = portal.plateLabel;
   if (portal.operatorLabel) fields["Operador (portal)"] = portal.operatorLabel;
+  /**
+   * O que o PORTAL chama esta viagem, gravado como está (2026-08-17).
+   *
+   * O status do portal era lido, usado para decidir cancelar/concluir, e jogado fora. Duas
+   * consequências: ninguém conseguia conferir na tela por que o TMS achou o que achou, e o
+   * vocabulário do cliente — Assigning, Arrived, Operating, Seal, Unseal, Departed, Unloaded — ficava
+   * invisível para nós, que só conhecemos quatro códigos por medição e chamamos o resto de
+   * "Status 40". Guardar o rótulo é o que permite aprender os que faltam a partir do dado real, em
+   * vez de adivinhar.
+   */
+  if (portal.status) fields["Status (portal)"] = portal.status;
   if (Object.keys(fields).length === 0) return priceChanged;
 
   // Preserva o que a viagem já carrega (uma coluna da planilha, o operador de atribuição vindo do
