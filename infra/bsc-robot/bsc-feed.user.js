@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.7.1
+// @version      1.8.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -118,7 +118,7 @@
    * a única pista foi a redação da mensagem ter mudado entre as duas. Com o número em cada linha, "o
    * que está rodando aí" deixa de ser dedução.
    */
-  const VERSAO = "1.7.1";
+  const VERSAO = "1.8.0";
   const log = (...a) => console.log(`[TMS BSC ${VERSAO}]`, ...a);
   const erro = (...a) => console.warn(`[TMS BSC ${VERSAO}]`, ...a);
 
@@ -127,11 +127,22 @@
   /**
    * Os três recortes, com o caminho EXATO do menu (medido na tela) e o rótulo do TMS.
    *
-   * `pai` é o item que precisa ser aberto antes de achar a opção. "Hoje" e "Últimos 7 dias" estão na
-   * raiz do menu; só o mês mora num submenu, que abre ao passar o mouse e não ao clicar.
+   * `pai` é o item que precisa ser aberto antes de achar a opção. "Ontem" está na raiz do menu; só o
+   * mês mora num submenu, que abre ao passar o mouse e não ao clicar. A janela de nove dias não usa o
+   * menu: monta o intervalo no "Avançado".
    */
   const RECORTES = [
-    { period: "day", pai: null, menu: "Hoje" },
+    // ONTEM, e não "Hoje", porque o BSC fecha às 04h com os dados até o dia anterior.
+    //
+    // Medido: "Hoje" (17/08 sozinho) devolveu 7 indicadores e nenhuma nota, enquanto o mês "até
+    // agora" veio como "1 a 16 de agosto" — o próprio relatório exclui o dia corrente. "Hoje" não é
+    // um recorte quase vazio por acaso do horário: ele é estruturalmente vazio, a qualquer hora.
+    //
+    // Isso desmente uma leitura anterior que eu tinha dado por boa: quando o recorte de dia apareceu
+    // com 20 indicadores e nota 72,8, era a tela AINDA SEM FILTRO — a mesma 72,8 reapareceu depois na
+    // janela de nove dias. Primeiro recorte do ciclo é o mais fácil de confundir com a tela de
+    // partida, e é por isso que `lerEstavel` registra quando estabiliza sem mudar de valores.
+    { period: "day", pai: null, menu: "Ontem" },
     // A JANELA RECENTE — nove dias terminando HOJE, pedida pelo usuário em 2026-08-17 ("do dia 9 até
     // o dia 17"). Móvel: amanhã ela é 10 a 18, sem ninguém mexer.
     //
