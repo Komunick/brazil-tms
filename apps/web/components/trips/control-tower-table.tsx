@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, X } from "lucide-react";
 import {
@@ -43,6 +43,12 @@ import { useFilterOptions, useTripBoard, useTripBoardFilters } from "@/lib/trips
 type SortKey = TripBoardQuery["sort"];
 
 /**
+ * O nome da âncora, exportado porque quem LINKA precisa dele tanto quanto quem ancora — deixar os
+ * dois lados repetirem a string é como um deles acorda quebrado sem ninguém notar.
+ */
+export const BOARD_ANCHOR = "viagens";
+
+/**
  * The Control Tower board (feature 005, US1): filters + a dense server-side
  * filtered/sorted/paginated TanStack Table + a pagination footer. URL is the source of truth
  * (`useTripBoardFilters`); data freshness is TanStack Query polling (`useTripBoard`), never
@@ -83,6 +89,25 @@ export function ControlTowerTable({
     return "—";
   }
   const board = useTripBoard(search);
+
+  /**
+   * Rolar até o quadro quando se chega por um atalho do painel do dia.
+   *
+   * O `#viagens` no link sozinho não resolve: quando o navegador processa a âncora, o quadro ainda
+   * não existe — ele nasce depois da primeira resposta da consulta. Então a rolagem espera o dado
+   * chegar, acontece UMA vez (a bandeira impede que cada poll de 30s jogue a página de volta para
+   * cima enquanto a pessoa lê) e respeita quem pediu menos movimento no sistema.
+   */
+  const jaRolou = useRef(false);
+  useEffect(() => {
+    if (jaRolou.current || board.isLoading) return;
+    if (window.location.hash !== `#${BOARD_ANCHOR}`) return;
+    jaRolou.current = true;
+    const alvo = document.getElementById(BOARD_ANCHOR);
+    if (!alvo) return;
+    const semAnimacao = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    alvo.scrollIntoView({ behavior: semAnimacao ? "auto" : "smooth", block: "start" });
+  }, [board.isLoading]);
 
   const items = board.data?.items ?? [];
   const total = board.data?.total ?? 0;
@@ -248,7 +273,16 @@ export function ControlTowerTable({
   const canNext = offset + limit < total;
 
   return (
-    <div className="space-y-4">
+    /**
+     * A âncora do quadro (2026-08-17).
+     *
+     * Clicar num status no painel do dia levava para cá — e para o TOPO da página, com os avisos na
+     * frente. A pessoa clicava em "Em trânsito" e tinha de rolar tudo até achar as LH que pediu.
+     *
+     * `scroll-mt-20` existe por causa da barra de topo fixa: sem essa margem, o navegador encosta a
+     * âncora no zero e a barra come as primeiras linhas.
+     */
+    <div id={BOARD_ANCHOR} className="scroll-mt-20 space-y-4">
       <TripFilters
         query={query}
         setFilters={setFilters}

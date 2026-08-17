@@ -74,3 +74,22 @@ export function groupAlertsByTrip<T extends AlertLike>(items: T[]): TripGroup<T>
     (a, b) => Number(a.activeItems.length === 0) - Number(b.activeItems.length === 0),
   );
 }
+
+/**
+ * Uma página da lista, com a página pedida presa no que existe.
+ *
+ * A lista encolhe SOZINHA embaixo do pé de quem lê: os avisos se resolvem quando o caminhão chega, e
+ * o quadro repolla a cada 30 segundos. Quem estava na página 5 pode acordar num mundo de 3 — e uma
+ * fatia fora do fim devolveria vazio, que na tela é indistinguível de "não há avisos". Por isso a
+ * página pedida é presa, e não confiada.
+ */
+export function paginate<T>(items: T[], pagina: number, porPagina: number): {
+  visiveis: T[];
+  paginaAtual: number;
+  totalPaginas: number;
+} {
+  const totalPaginas = Math.max(1, Math.ceil(items.length / porPagina));
+  const paginaAtual = Math.min(Math.max(1, pagina), totalPaginas);
+  const inicio = (paginaAtual - 1) * porPagina;
+  return { visiveis: items.slice(inicio, inicio + porPagina), paginaAtual, totalPaginas };
+}

@@ -7,6 +7,7 @@ import { saoPauloDate } from "@brazil-tms/shared";
 import type { DashboardSummary } from "@brazil-tms/db";
 import { useDashboardSummary } from "@/lib/trips/client";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
+import { BOARD_ANCHOR } from "@/components/trips/control-tower-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -81,7 +82,7 @@ function TripsTodayCard({ byStatus }: { byStatus: DashboardSummary["tripsTodayBy
             {byStatus.map(({ status, count }) => (
               <li key={status}>
                 <Link
-                  href={`/trips?status=${status}&pickupFrom=${today}&pickupTo=${today}&scope=all`}
+                  href={`/trips?status=${status}&pickupFrom=${today}&pickupTo=${today}&scope=all#${BOARD_ANCHOR}`}
                   className="flex items-center justify-between rounded-md px-1 py-0.5 hover:bg-muted"
                 >
                   <TripStatusBadge status={status} />
@@ -150,7 +151,10 @@ export function DashboardWidgets() {
     href = "/trips?scope=all",
   ): MetricCardProps {
     if (value === null) return { titleKey, placeholder: true };
-    return { titleKey, value: format(value), href };
+    // A âncora vai em TODO atalho do painel, não só nos status: quem clica num número daqui quer ver
+    // as viagens dele, e não o topo de uma página com a lista de avisos na frente.
+    const alvo = href.startsWith("/trips") ? `${href}#${BOARD_ANCHOR}` : href;
+    return { titleKey, value: format(value), href: alvo };
   }
 
   const pct = (n: number) => `${n}%`;
@@ -184,7 +188,7 @@ export function DashboardWidgets() {
       <MetricCard
         titleKey="billingPending"
         value={summary.billingPendingCount}
-        href="/trips?billingStatus=billing_pending&scope=all"
+        href={`/trips?billingStatus=billing_pending&scope=all#${BOARD_ANCHOR}`}
       />
       {metrics.map((m) => (
         <MetricCard key={m.titleKey} {...m} />
