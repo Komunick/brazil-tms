@@ -183,6 +183,13 @@
       "when": 1786998000000,
       "tag": "0025_backfill_confirmed_at",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1787000000000,
+      "tag": "0026_bsc_snapshots",
+      "breakpoints": true
     }
   ]
 }

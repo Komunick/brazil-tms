@@ -1636,5 +1636,15 @@
       "cancelled": "Cancelada",
       "disputed": "Em disputa"
     }
+  },
+  "Bsc": {
+    "source": "BSC · Shopee",
+    "stamp": "BSC de {at}",
+    "gaugeAlt": "Nota {score} no velocímetro do BSC",
+    "period": {
+      "day": "Hoje",
+      "week": "Semana",
+      "month": "Mês"
+    }
   }
 }

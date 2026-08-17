@@ -13,6 +13,7 @@ import type { DashboardSummary } from "@brazil-tms/db";
 import { useDashboardSummary } from "@/lib/trips/client";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { BOARD_ANCHOR } from "@/components/trips/control-tower-table";
+import { BscCard } from "@/components/trips/dashboard/bsc-card";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -226,7 +227,7 @@ export function DashboardWidgets() {
     );
   }
 
-  const { summary } = data;
+  const { summary, bsc } = data;
 
   /**
    * A later-slice metric: a number → value + deep-link into the board; `null` → labelled placeholder
@@ -289,6 +290,8 @@ export function DashboardWidgets() {
 
   return (
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+      {/* O BSC abre o painel: é a nota que decide contrato, e vem do cliente, não daqui. */}
+      {bsc.length > 0 ? <BscCard snapshots={bsc} /> : null}
       {filas.map((m) => (
         <MetricCard key={m.titleKey} {...m} />
       ))}
