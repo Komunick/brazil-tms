@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.6.0
+// @version      1.7.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -112,7 +112,7 @@
    * a única pista foi a redação da mensagem ter mudado entre as duas. Com o número em cada linha, "o
    * que está rodando aí" deixa de ser dedução.
    */
-  const VERSAO = "1.6.0";
+  const VERSAO = "1.7.0";
   const log = (...a) => console.log(`[TMS BSC ${VERSAO}]`, ...a);
   const erro = (...a) => console.warn(`[TMS BSC ${VERSAO}]`, ...a);
 
@@ -126,19 +126,24 @@
    */
   const RECORTES = [
     { period: "day", pai: null, menu: "Hoje" },
-    // A "semana" é JANELA MÓVEL, não semana de calendário, e a razão é medida.
+    // A JANELA RECENTE — nove dias terminando HOJE, pedida pelo usuário em 2026-08-17 ("do dia 9 até
+    // o dia 17"). Móvel: amanhã ela é 10 a 18, sem ninguém mexer.
     //
-    // "Esta semana (começa na segunda-feira)" foi o que eu usei primeiro, e produziu 17 a 23/08 — dias
-    // futuros incluídos, porque a semana mal tinha começado. O relatório devolveu 7 indicadores e
-    // nenhuma nota, enquanto o MESMO dia 17/08 sozinho devolvia os 20 completos. Um intervalo que
-    // avança sobre datas sem dado quebra o relatório, e o resultado não parece quebrado: parece um
-    // desempenho péssimo, com Reversa em 0%.
+    // Duas tentativas anteriores e o que cada uma ensinou:
     //
-    // Nenhuma opção de semana de calendário tem variante "até agora" (mês, trimestre e ano têm; a
-    // semana não), então não dá para cortar o futuro por ali. "Últimos 7 dias" resolve pela raiz: é
-    // uma janela que termina ontem e nunca alcança data sem dado. Medido: rótulo "10 de ago. de 2026 -
-    // 16 de ago. de 2026". Fica na raiz do menu, sem submenu, e clicar nela seleciona de fato.
-    { period: "week", pai: null, menu: "Últimos 7 dias" },
+    //   "Esta semana (começa na segunda-feira)" produziu 17 a 23/08 — seis dias FUTUROS dentro do
+    //   intervalo, porque a semana mal tinha começado. O relatório devolveu 7 indicadores e nenhuma
+    //   nota, enquanto o MESMO 17/08 sozinho devolvia os 20 completos. Intervalo que avança sobre data
+    //   sem dado quebra o relatório, e não parece quebrado: parece desempenho péssimo, com Reversa em
+    //   0%. Nenhuma opção de semana de calendário tem variante "até agora" (mês, trimestre e ano têm),
+    //   então não dá para cortar o futuro por ali.
+    //
+    //   "Últimos 7 dias" resolveu o futuro mas termina ONTEM (medido: 10 a 16/08). O dia de hoje, que
+    //   é justamente o que a operação quer ver, ficava de fora.
+    //
+    // O "Avançado" resolve os dois: início = Hoje menos 8, término = Hoje menos 0. Medido na tela,
+    // rótulo "9 de ago. de 2026 - 17 de ago. de 2026". Os oito são nove dias porque as pontas contam.
+    { period: "week", avancado: { inicioMenos: 8, fimMenos: 0 } },
     { period: "month", pai: "Este mês", menu: "Este mês, até agora" },
   ];
 
@@ -151,7 +156,9 @@
     "Fixo",
     "Avançado",
     "Ontem",
-    ...RECORTES.map((r) => r.menu),
+    // O recorte de janela móvel não tem item de menu — ele deixa o botão marcado como "Avançado",
+    // que já está na lista acima.
+    ...RECORTES.map((r) => r.menu).filter(Boolean),
   ];
 
   /** Todo texto visível da página, elemento a elemento — é assim que se acha rótulo no Looker. */
@@ -255,6 +262,32 @@
   function clicar(el) {
     for (const tipo of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
       eventoDeMouse(el, tipo);
+    }
+  }
+
+  /**
+   * Escreve num campo de formulário do relatório.
+   *
+   * `el.value = x` sozinho não serve: o Looker é Angular e só enxerga a mudança pelo evento. E o
+   * setter tem que ser o do protótipo, porque o framework substitui o do elemento para interceptar
+   * escrita — atribuir direto passaria batido justamente por quem precisa ouvir.
+   */
+  function preencherCampo(el, valor) {
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+    setter.call(el, String(valor));
+    for (const tipo of ["input", "change", "blur"]) {
+      el.dispatchEvent(new Event(tipo, { bubbles: true }));
+    }
+  }
+
+  /** Os dois campos de compensação do "Avançado", quando eles aparecerem. */
+  async function esperarCamposDeCompensacao(limiteMs = 8000) {
+    const ate = Date.now() + limiteMs;
+    for (;;) {
+      const campos = [...document.querySelectorAll("input[type=number]")].filter(clicavel);
+      if (campos.length >= 2) return campos;
+      if (Date.now() >= ate) return null;
+      await dormir(300);
     }
   }
 
@@ -491,16 +524,30 @@
     if (!modo) throw new Error(`nenhum modo de período na tela (esperava um de: ${MODOS.join(", ")})`);
     clicar(modo);
 
-    // "Hoje" está na raiz; semana e mês moram atrás de um submenu que abre no passar do mouse.
-    let opcao = await esperarPorTexto(recorte.menu, 2000);
-    if (!opcao && recorte.pai) {
-      const pai = await esperarPorTexto(recorte.pai);
-      if (!pai) throw new Error(`submenu "${recorte.pai}" não encontrado`);
-      passarMouse(pai);
-      opcao = await esperarPorTexto(recorte.menu);
+    if (recorte.avancado) {
+      // Janela móvel montada à mão: "Hoje menos N dias" nas duas pontas. Os seletores de âncora
+      // (Hoje), de sinal (Menos) e de unidade (Dias) já vêm assim; só os números são preenchidos.
+      const avancado = await esperarPorTexto("Avançado");
+      if (!avancado) throw new Error("opção 'Avançado' não encontrada");
+      clicar(avancado);
+
+      const campos = await esperarCamposDeCompensacao();
+      if (!campos) throw new Error("campos de compensação do 'Avançado' não encontrados");
+      preencherCampo(campos[0], recorte.avancado.inicioMenos);
+      preencherCampo(campos[1], recorte.avancado.fimMenos);
+      await dormir(1500);
+    } else {
+      // "Hoje" está na raiz; o mês mora atrás de um submenu que abre no passar do mouse.
+      let opcao = await esperarPorTexto(recorte.menu, 2000);
+      if (!opcao && recorte.pai) {
+        const pai = await esperarPorTexto(recorte.pai);
+        if (!pai) throw new Error(`submenu "${recorte.pai}" não encontrado`);
+        passarMouse(pai);
+        opcao = await esperarPorTexto(recorte.menu);
+      }
+      if (!opcao) throw new Error(`opção "${recorte.menu}" não encontrada`);
+      clicar(opcao);
     }
-    if (!opcao) throw new Error(`opção "${recorte.menu}" não encontrada`);
-    clicar(opcao);
 
     const aplicar = await esperarPorTexto("Aplicar");
     if (!aplicar) throw new Error("botão Aplicar não encontrado");
