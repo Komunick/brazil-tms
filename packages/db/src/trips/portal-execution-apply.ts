@@ -114,11 +114,22 @@ export async function applyPortalTrip(
       continue;
     }
 
+    /**
+     * A viagem é procurada ANTES da guarda de marcos (2026-08-17).
+     *
+     * Estava depois, e essa ordem engoliu a correção do cancelamento inteira: a viagem cancelada
+     * ANTES DE SAIR — que é o caso mais comum de cancelamento — não tem horário real nenhum, cai em
+     * `no_milestones` e sai do laço sem nunca chegar na checagem de cancelamento.
+     *
+     * Medido na `LT0Q8H02E2LD1`: cancelada no portal, sem chegada, sem carga, sem partida, só com
+     * "Em fila" preenchido (campo que não é marco). No TMS ela seguia em "Recebida", alertando, e
+     * aparecia como `no_milestones` em todo ciclo — um contador teimoso que era o defeito reclamando
+     * sem ninguém entender.
+     *
+     * Custa uma consulta por perna sem marco. É o preço de a palavra final do cliente ser lida antes
+     * de qualquer atalho de performance.
+     */
     const milestones = milestonesFor(leg);
-    if (milestones.length === 0) {
-      out.push({ ...base, status: "no_milestones" });
-      continue;
-    }
 
     const existing = (
       await db
@@ -168,19 +179,22 @@ export async function applyPortalTrip(
     );
 
     /**
-     * O cliente CANCELOU — e a viagem cancelada tem linha do tempo (2026-08-17).
+     * O cliente CANCELOU (2026-08-17).
      *
-     * Este caminho não sabia cancelar. Só o do plano sabia, e o resultado era pior do que não fazer
-     * nada: uma viagem cancelada no portal costuma ter horários reais (ela chegou, carregou, e aí
-     * foi cancelada), então os marcos a empurravam para "em trânsito" como se estivesse rodando. Ela
-     * ficava viva no quadro, viva no painel da parede, e alertando — por uma viagem que o cliente já
-     * tinha desistido.
+     * Este caminho não sabia cancelar — só o do plano sabia — e o efeito era pior do que não fazer
+     * nada nos dois formatos que um cancelamento tem:
      *
-     * E ela nunca se resolvia sozinha: `markCompleted` exige que o portal diga "Completed", e uma
-     * cancelada nunca diz. Ficava encalhada no último marco para sempre.
+     *   COM linha do tempo (chegou, carregou, e aí foi cancelada): os marcos a empurravam para "em
+     *   trânsito" como se estivesse rodando. Ficava viva no quadro, viva no painel da parede,
+     *   alertando — e nunca se resolvia, porque concluir exige que o portal diga "Completed" e uma
+     *   cancelada nunca diz.
      *
-     * Vem ANTES dos marcos de propósito: cancelar é a palavra final do cliente sobre a viagem, e
-     * andar com ela primeiro seria registrar um percurso que não conta mais.
+     *   SEM linha do tempo (cancelada antes de sair, que é o caso mais comum): nem chegava aqui. A
+     *   guarda de marcos ficava na frente e a viagem saía do laço como `no_milestones`, seguindo em
+     *   "Recebida" e alertando para sempre.
+     *
+     * Vem ANTES dos marcos, e agora antes da guarda deles também: cancelar é a palavra final do
+     * cliente sobre a viagem, e nenhum atalho pode passar na frente dela.
      */
     if (isCancelledAtPortal(portal.status)) {
       const fechou = await closeTripFromSource(existing.id, "CANCELADA", actorUserId, sourceLabel);
@@ -189,6 +203,13 @@ export async function applyPortalTrip(
         status: fechou === "closed" ? "closed" : "already_ahead",
         detail: "cancelada no portal",
       });
+      continue;
+    }
+
+    // Só agora a ausência de marco vira um resultado: não há o que aplicar, e o cliente não disse
+    // nada que encerre a viagem.
+    if (milestones.length === 0) {
+      out.push({ ...base, status: "no_milestones" });
       continue;
     }
 

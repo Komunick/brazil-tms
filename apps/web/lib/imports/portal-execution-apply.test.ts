@@ -248,4 +248,25 @@ describe.skipIf(!hasDb)("applyPortalTrip (integration)", () => {
     const eventos = await db.select().from(tripEvents).where(eq(tripEvents.tripId, tripId));
     expect(eventos.some((e) => e.eventType === "origin_arrived")).toBe(false);
   });
+  it("CANCELADA ANTES DE SAIR fecha a viagem — sem nenhum horário real", async () => {
+    /**
+     * O caso da LT0Q8H02E2LD1, achado pelo usuário: cancelada no portal com a linha do tempo VAZIA
+     * — sem chegada, sem carga, sem partida. É o formato mais comum de cancelamento, e era o único
+     * que a correção anterior não pegava: a guarda de marcos ficava na frente e a viagem saía como
+     * "no_milestones", seguindo em Recebida e alertando para sempre.
+     */
+    const { id: tripId, ext } = await makeTrip();
+    const map = await loadStationMap(customerId);
+    const trip = portalTrip(ext, { status: "Cancelled" });
+    // Nenhum horário real em lugar nenhum: a viagem nunca saiu.
+    trip.legs[0]!.origin.actualArrival = null;
+    trip.legs[0]!.origin.actualDeparture = null;
+    trip.legs[0]!.destination.actualArrival = null;
+
+    const [outcome] = await applyPortalTrip(customerId, trip, map, actorId, "portal");
+    expect(outcome!.status).toBe("closed");
+
+    const after = (await db.select().from(trips).where(eq(trips.id, tripId)).limit(1))[0]!;
+    expect(after.currentStatus).toBe("cancelled");
+  });
 });
