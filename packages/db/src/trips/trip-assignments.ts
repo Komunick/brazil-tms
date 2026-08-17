@@ -491,6 +491,9 @@ export async function mirrorAssignmentFromPortal(
   actorUserId: string,
 ): Promise<{ trip: TripDetail; findings: Finding[] }> {
   const expected = input.expectedFromStatus as TripStatus;
+  // Passou do ponto onde a confirmação era uma pergunta aberta?
+  const jaPassouDaConfirmacao =
+    TRIP_STATUSES.indexOf(expected) > TRIP_STATUSES.indexOf("confirmed");
   if (!MIRRORABLE_STATUSES.includes(expected)) {
     throw new Conflict(
       "ILLEGAL_TRANSITION",
@@ -566,6 +569,13 @@ export async function mirrorAssignmentFromPortal(
       notes: input.notes ?? null,
       overrideReason: input.overrideReason ?? null,
       isCurrent: true,
+      // Já confirmada quando a viagem passou de `confirmed` — e não por cortesia: o caminhão está
+      // na estrada, o que é prova mais forte do que a cerimônia. Deixar em branco fazia o aviso
+      // "confirmação pendente" ficar aceso numa viagem carregando, sem jeito de apagar: a
+      // confirmação nunca ia acontecer, porque ela já tinha acontecido no mundo.
+      // Uma viagem parada em `assigned` NÃO ganha o carimbo — lá a pergunta continua de pé.
+      confirmedByUserId: jaPassouDaConfirmacao ? actorUserId : null,
+      confirmedAt: jaPassouDaConfirmacao ? now : null,
     });
 
     // Auditado como `trip.assign`, com o status IGUAL nos dois lados: é o que separa este registro de

@@ -1,7 +1,13 @@
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import { hopsToApply, milestonesFor, type PortalTrip, type TripStatus } from "@brazil-tms/shared";
+import {
+  TRIP_STATUSES,
+  hopsToApply,
+  milestonesFor,
+  type PortalTrip,
+  type TripStatus,
+} from "@brazil-tms/shared";
 import { db } from "../client";
-import { locations, tripEvents, trips } from "../../schema";
+import { locations, tripAssignments, tripEvents, trips } from "../../schema";
 import { writeAudit } from "../audit/write-audit";
 import { recomputeTripSla } from "./sla";
 import { markCompleted } from "./completion";
@@ -227,6 +233,33 @@ export async function applyPortalTrip(
         .update(trips)
         .set({ currentStatus: target, updatedAt: new Date() })
         .where(eq(trips.id, existing.id));
+
+      /**
+       * A confirmação, carimbada pela realidade (2026-08-16).
+       *
+       * O aviso "confirmação pendente" olha o carimbo na atribuição, não o status da viagem. E o
+       * carimbo só existia quando alguém clicava "Confirmar" no TMS — cerimônia que o caminho do
+       * portal atravessa sem parar. Resultado medido: 9 avisos de confirmação pendente acesos em
+       * viagens que já estavam CARREGANDO, e sem como apagar, porque a confirmação que faltava já
+       * tinha acontecido no mundo.
+       *
+       * O caminhão chegou na origem. Isso responde a pergunta com mais força do que um clique.
+       */
+      if (TRIP_STATUSES.indexOf(target) > TRIP_STATUSES.indexOf("confirmed")) {
+        // O instante é o primeiro horário REAL desta rodada — a chegada na origem, quase sempre.
+        // Sem nenhum (só saltos sem hora), fica agora: o carimbo é verdadeiro, a hora é aproximada.
+        const quando = fresh.find((h) => h.at != null)?.at ?? new Date();
+        await tx
+          .update(tripAssignments)
+          .set({ confirmedByUserId: actorUserId, confirmedAt: quando, updatedAt: new Date() })
+          .where(
+            and(
+              eq(tripAssignments.tripId, existing.id),
+              eq(tripAssignments.isCurrent, true),
+              isNull(tripAssignments.confirmedAt),
+            ),
+          );
+      }
 
       await writeAudit(tx, {
         entityType: "trip",
