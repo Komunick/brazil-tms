@@ -176,6 +176,13 @@
       "when": 1786916284332,
       "tag": "0024_customer_price_cents",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1786998000000,
+      "tag": "0025_backfill_confirmed_at",
+      "breakpoints": true
     }
   ]
 }
