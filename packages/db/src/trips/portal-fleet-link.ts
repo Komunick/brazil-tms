@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 import type { PortalTrip, TripStatus } from "@brazil-tms/shared";
 import { db } from "../client";
 import { drivers, trailers, tripAssignments, trips, vehicles } from "../../schema";
@@ -62,6 +62,34 @@ export interface FleetLinkResult {
 
 /** Plates compare as letters and digits only: "DPF-9J13" and "dpf9j13" are the same truck. */
 const foldPlate = (value: string): string => value.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+
+/**
+ * Nomes comparam SEM acento e sem espaço sobrando (2026-08-16).
+ *
+ * Dois sistemas, duas pessoas digitando o mesmo motorista, e o acento nunca sobrevive aos dois:
+ * o portal diz "JOSE EDSON DA SILVA", a frota diz "JOSÉ EDSON DA SILVA", e o vínculo os tratava
+ * como pessoas diferentes. Medido na base: 3 dos 15 "motoristas sem cadastro" estavam cadastrados
+ * o tempo todo — e a operação ia atrás de recadastrar gente que já existia.
+ *
+ * Isto NÃO afrouxa o casamento: continua exigindo o nome inteiro, igual palavra por palavra. Só
+ * para de tratar Ô e O como letras diferentes, do mesmo jeito que a placa já ignora o hífen.
+ */
+const ACENTOS = "ÁÀÃÂÄÉÈÊËÍÌÎÏÓÒÕÔÖÚÙÛÜÇÑáàãâäéèêëíìîïóòõôöúùûüçñ";
+const SEM_ACENTO = "AAAAAEEEEIIIIOOOOOUUUUCNAAAAAEEEEIIIIOOOOOUUUUCN";
+
+export function foldName(value: string): string {
+  const semAcento = [...value]
+    .map((c) => {
+      const i = ACENTOS.indexOf(c);
+      return i === -1 ? c : SEM_ACENTO[i]!;
+    })
+    .join("");
+  return semAcento.replace(/\s+/g, " ").trim().toUpperCase();
+}
+
+/** O mesmo dobramento, feito pelo Postgres, para a comparação acontecer dentro da consulta. */
+const foldNameSql = (col: SQL | ReturnType<typeof sql.raw>): SQL =>
+  sql`upper(btrim(regexp_replace(translate(${col}, ${ACENTOS}, ${SEM_ACENTO}), '\\s+', ' ', 'g')))`;
 
 /** The two plates the portal packs into one field: tractor first, trailer second. */
 function platesOf(label: string | null): { vehicle: string | null; trailer: string | null } {
@@ -143,7 +171,7 @@ export async function linkFleetFromPortal(
       .from(drivers)
       .where(
         and(
-          sql`upper(btrim(${drivers.name})) = ${driverName.toUpperCase()}`,
+          sql`${foldNameSql(sql`${drivers.name}`)} = ${foldName(driverName)}`,
           eq(drivers.status, "active"),
           isNull(drivers.archivedAt),
         ),

@@ -457,6 +457,77 @@ describe.skipIf(!hasDb)("vínculo com a frota (integration)", () => {
     expect(atrib.driverId).toBe(d.id);
     // A nota diz que o registro é retroativo — ninguém confunde isto com um despacho feito a tempo.
     expect(atrib.notes).toMatch(/já em curso/i);
+    // E já nasce confirmada: o caminhão está na estrada. Sem isto, o aviso de "confirmação
+    // pendente" ficava aceso numa viagem carregando, sem jeito de apagar.
+    expect(atrib.confirmedAt).not.toBeNull();
+  });
+
+  it("casa o motorista mesmo quando o acento difere entre os dois sistemas", async () => {
+    // Dois sistemas, duas pessoas digitando o mesmo nome. Medido na base: 3 dos 15 "motoristas sem
+    // cadastro" estavam cadastrados o tempo todo, e só o Ô os separava.
+    const d = (
+      await db
+        .insert(drivers)
+        .values({
+          name: `MARCOS ANTÔNIO ${token}`,
+          ownershipType: "owned",
+          status: "active",
+          licenseExpiry: "2030-01-01",
+        })
+        .returning({ id: drivers.id })
+    )[0]!;
+    const v = (
+      await db
+        .insert(vehicles)
+        .values({
+          plate: `FFF${Math.floor(Math.random() * 9000 + 1000)}`,
+          vehicleType: "carreta",
+          ownershipType: "owned",
+          status: "active",
+          documentExpiry: "2030-01-01",
+        })
+        .returning({ id: vehicles.id, plate: vehicles.plate })
+    )[0]!;
+    criados.push(d.id, v.id);
+
+    const ext = `LH-ACENTO-${token}`;
+    const r = await ingestPortalFeed({
+      // O portal manda SEM acento e com espaço a mais — as duas coisas que se via na prática.
+      payload: payload({
+        trip_number: ext,
+        driver_name: `MARCOS  ANTONIO ${token}`,
+        vehicle_number: v.plate,
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    expect({ vinculadas: r.planSummary?.linked, semCadastro: r.planSummary?.linkNoMatch }).toEqual({
+      vinculadas: 1,
+      semCadastro: 0,
+    });
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    const atrib = (
+      await db.select().from(tripAssignments).where(eq(tripAssignments.tripId, trip.id))
+    )[0]!;
+    expect(atrib.driverId).toBe(d.id);
+  });
+
+  it("NÃO casa dois motoristas diferentes só porque parecem: o nome inteiro continua exigido", async () => {
+    // O dobramento tira acento e espaço sobrando. Não tira sobrenome, não faz aproximação.
+    const r = await ingestPortalFeed({
+      payload: payload({
+        trip_number: `LH-QUASE-${token}`,
+        driver_name: `Motorista Bo ${token}`, // falta o "m" de "Bom"
+        vehicle_number: placaBoa,
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    expect({ vinculadas: r.planSummary?.linked, semCadastro: r.planSummary?.linkNoMatch }).toEqual({
+      vinculadas: 0,
+      semCadastro: 1,
+    });
   });
 
   it("viagem sem motorista designado no portal não conta como pendência de cadastro", async () => {
