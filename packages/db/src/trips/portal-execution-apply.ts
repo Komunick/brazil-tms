@@ -13,6 +13,13 @@ import { recomputeTripSla } from "./sla";
 import { markCompleted } from "./completion";
 import { writePortalFacts } from "./portal-trip-facts";
 import { linkFleetFromPortal } from "./portal-fleet-link";
+import { closeTripFromSource } from "./source-status";
+
+/** A palavra do cliente para uma viagem que não vai acontecer. Uma só, e comparada do mesmo jeito
+ *  nos dois caminhos — o do plano e este. */
+export function isCancelledAtPortal(status: string | null): boolean {
+  return (status ?? "").trim().toLowerCase() === "cancelled";
+}
 
 /**
  * Writing the customer's portal execution onto trips the TMS already has (2026-08-16).
@@ -159,6 +166,32 @@ export async function applyPortalTrip(
       existing.customerFields,
       existing.customerPriceCents,
     );
+
+    /**
+     * O cliente CANCELOU — e a viagem cancelada tem linha do tempo (2026-08-17).
+     *
+     * Este caminho não sabia cancelar. Só o do plano sabia, e o resultado era pior do que não fazer
+     * nada: uma viagem cancelada no portal costuma ter horários reais (ela chegou, carregou, e aí
+     * foi cancelada), então os marcos a empurravam para "em trânsito" como se estivesse rodando. Ela
+     * ficava viva no quadro, viva no painel da parede, e alertando — por uma viagem que o cliente já
+     * tinha desistido.
+     *
+     * E ela nunca se resolvia sozinha: `markCompleted` exige que o portal diga "Completed", e uma
+     * cancelada nunca diz. Ficava encalhada no último marco para sempre.
+     *
+     * Vem ANTES dos marcos de propósito: cancelar é a palavra final do cliente sobre a viagem, e
+     * andar com ela primeiro seria registrar um percurso que não conta mais.
+     */
+    if (isCancelledAtPortal(portal.status)) {
+      const fechou = await closeTripFromSource(existing.id, "CANCELADA", actorUserId, sourceLabel);
+      out.push({
+        ...base,
+        status: fechou === "closed" ? "closed" : "already_ahead",
+        detail: "cancelada no portal",
+      });
+      continue;
+    }
+
     await linkFleetFromPortal(existing.id, portal, actorUserId);
 
     let reachedUnloaded = false;

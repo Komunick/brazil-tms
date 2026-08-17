@@ -12,7 +12,14 @@ import { db } from "../client";
 import { trips } from "../../schema";
 import { createTrip } from "./trips-service";
 import { updateTripPlan } from "./trip-plan";
-import { applyPortalTrip, loadStationMap, type PortalApplyOutcome } from "./portal-execution-apply";
+// `isCancelledAtPortal` vem de lá para os DOIS caminhos julgarem o cancelamento pela mesma regra —
+// foi a falta disso que deixou o Concluído sem saber cancelar (2026-08-17).
+import {
+  applyPortalTrip,
+  isCancelledAtPortal,
+  loadStationMap,
+  type PortalApplyOutcome,
+} from "./portal-execution-apply";
 import { closeTripFromSource } from "./source-status";
 import { linkFleetFromPortal, type FleetLinkResult } from "./portal-fleet-link";
 import { writePortalFacts } from "./portal-trip-facts";
@@ -64,10 +71,6 @@ export interface PortalPlanSummary {
   outcomes: PortalPlanOutcome[];
 }
 
-/** The customer's word for a trip that was called off, in the portal's vocabulary. */
-function isCancelledAtPortal(status: string | null): boolean {
-  return (status ?? "").trim().toLowerCase() === "cancelled";
-}
 
 /**
  * The customer's word for the vehicle → the enum, or null. A label nobody recognizes leaves the
