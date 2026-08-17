@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.3.0
+// @version      1.4.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -99,8 +99,10 @@
     intervaloMs: 60 * 60 * 1000,
     /** Piso antes de começar a olhar: o relatório nem começou a recalcular nos primeiros segundos. */
     pisoRecalculoMs: 6000,
+    /** Quanto tempo a tela precisa ficar IGUAL para a leitura valer — ver `lerEstavel`. */
+    patamarMs: 16000,
     /** Teto para a tela parar de mudar. Estourou, não manda — ver `lerEstavel`. */
-    limiteRecalculoMs: 90000,
+    limiteRecalculoMs: 120000,
   };
 
   /**
@@ -110,7 +112,7 @@
    * a única pista foi a redação da mensagem ter mudado entre as duas. Com o número em cada linha, "o
    * que está rodando aí" deixa de ser dedução.
    */
-  const VERSAO = "1.3.0";
+  const VERSAO = "1.4.0";
   const log = (...a) => console.log(`[TMS BSC ${VERSAO}]`, ...a);
   const erro = (...a) => console.warn(`[TMS BSC ${VERSAO}]`, ...a);
 
@@ -499,40 +501,81 @@
     return { nota: notaEZona(), indicadores: indicadores() };
   }
 
+  /** Uma leitura só é candidata a definitiva se tem nota E indicadores. */
+  function temConteudo(leitura) {
+    return leitura.nota.score != null && Object.keys(leitura.indicadores).length > 0;
+  }
+
   /**
-   * Lê a tela QUANDO ELA PARA DE MUDAR, em vez de dormir um tanto e ler uma vez.
+   * Lê a tela quando ela para de mudar E está cheia — as duas coisas, porque uma sem a outra mente.
    *
-   * O rótulo do período troca no instante do "Aplicar"; os números levam mais tempo, e chegam aos
-   * pedaços. Foi assim que a 1.2.1 mandou três recortes com a MESMA nota e com 18, 10 e 8
-   * indicadores: ela dormia nove segundos fixos e lia o que estivesse na tela — no primeiro recorte,
-   * a tela anterior inteira; nos outros, uma tela meio carregada. Números pela metade não parecem
-   * quebrados, parecem desempenho ruim, e é isso que os torna perigosos.
+   * O rótulo do período troca no instante do "Aplicar"; os números levam mais tempo e chegam aos
+   * pedaços. A 1.2.1 dormia nove segundos fixos e lia o que estivesse ali: mandou três recortes com a
+   * MESMA nota e com 18, 10 e 8 indicadores — no primeiro, a tela anterior inteira; nos outros, uma
+   * tela meio carregada. Número pela metade não parece quebrado, parece desempenho ruim.
+   *
+   * A 1.3.0 trocou o sono por quietude — três leituras iguais — e trocou um erro por outro: enquanto
+   * recalcula, o Looker esvazia os cartões para "Não há dados", e a tela VAZIA também fica parada.
+   * Quietude sozinha não distingue "terminou" de "ainda não começou", e os três recortes
+   * estabilizaram no branco.
+   *
+   * Daí as três condições, que juntas não têm como confundir carregando com pronto:
+   *
+   *   TEM CONTEÚDO. Leitura sem nota ou sem indicador nenhum não conta como amostra — é o estado de
+   *   transição, não um resultado. (Se a tela ficar vazia o tempo todo, isso vira a resposta: o
+   *   chamador avisa que o filtro Transportador deve estar vazio.)
+   *
+   *   ESTÁ COMPLETA. Só vale a leitura que tem tantos indicadores quanto o MÁXIMO já visto nesta
+   *   espera. Cartão aparece conforme carrega, nunca some — então um patamar com menos cartões que já
+   *   apareceram é meio caminho, por mais parado que esteja.
+   *
+   *   PAROU HÁ TEMPO. Não bastam duas ou três amostras iguais: o carregamento tem patamares curtos, e
+   *   quatro segundos parado passariam por conclusão. O valor só é aceito depois de `patamarMs` sem
+   *   mudar nenhuma vez. É a diferença entre "parou" e "parou de vez", e é o único parâmetro aqui que
+   *   é escolha e não medição — está alto de propósito, porque o robô lê de hora em hora e não tem
+   *   pressa nenhuma.
    *
    * Não dá para perguntar ao Looker se ele terminou: os elementos de carregamento ficam marcados como
-   * ocupados mesmo em repouso. Então o critério é o comportamento: espera um piso, amostra de dois em
-   * dois segundos, e só aceita quando três leituras seguidas saem idênticas. Se nesse meio tempo a
-   * tela mudou em relação ao que havia antes do filtro, melhor ainda — é a prova de que o recálculo
-   * aconteceu, e fica registrado.
+   * ocupados mesmo em repouso (medidos 36 deles, constantes, numa tela sem nada acontecendo).
    */
   async function lerEstavel(antes) {
     await dormir(CONFIG.pisoRecalculoMs);
     const ate = Date.now() + CONFIG.limiteRecalculoMs;
     let anterior = null;
-    let iguais = 0;
+    let desde = 0;
     let mudou = false;
+    let viuConteudo = false;
+    let maiorQtd = 0;
+
     while (Date.now() < ate) {
       const leitura = lerTela();
-      const agora = assinatura(leitura);
-      if (agora !== antes) mudou = true;
-      if (agora === anterior) {
-        if (++iguais >= 2) return { leitura, mudou };
+      if (temConteudo(leitura)) {
+        viuConteudo = true;
+        const qtd = Object.keys(leitura.indicadores).length;
+        if (qtd > maiorQtd) {
+          // Apareceu cartão novo: o que veio antes era meio caminho, e o relógio reinicia.
+          maiorQtd = qtd;
+          anterior = null;
+        }
+        if (qtd === maiorQtd) {
+          const agora = assinatura(leitura);
+          if (agora !== antes) mudou = true;
+          if (agora === anterior) {
+            if (Date.now() - desde >= CONFIG.patamarMs) {
+              return { leitura, mudou, viuConteudo, segundos: Math.round((Date.now() - desde) / 1000) };
+            }
+          } else {
+            anterior = agora;
+            desde = Date.now();
+          }
+        }
       } else {
-        anterior = agora;
-        iguais = 0;
+        // Tela em transição: descarta a série, não é patamar.
+        anterior = null;
       }
       await dormir(2000);
     }
-    return null;
+    return { leitura: null, mudou, viuConteudo };
   }
 
   /** O último carimbo enviado por recorte — a economia da regra 3. */
@@ -552,10 +595,17 @@
     }
 
     const estavel = await lerEstavel(antes);
-    if (!estavel) {
+    const limiteS = CONFIG.limiteRecalculoMs / 1000;
+    if (!estavel.leitura) {
+      // As duas saídas sem leitura dizem coisas diferentes, e confundi-las custou um ciclo inteiro:
+      // tela que NUNCA teve números é preparo da aba; tela que teve e não assentou é o relatório
+      // demorando mais que o teto.
       erro(
-        `${recorte.period}: a tela não parou de mudar em ${CONFIG.limiteRecalculoMs / 1000}s — ` +
-          `nada enviado (número pela metade parece desempenho ruim).`,
+        estavel.viuConteudo
+          ? `${recorte.period}: a tela não assentou em ${limiteS}s — nada enviado (número pela ` +
+              `metade parece desempenho ruim).`
+          : `${recorte.period}: a tela ficou ${limiteS}s sem nota nem indicador — nada enviado. ` +
+              `Confira se o filtro "Transportador" está preenchido nesta aba.`,
       );
       return;
     }
@@ -575,16 +625,9 @@
       return;
     }
 
+    // Nota e indicadores existem por construção: `lerEstavel` só devolve leitura com conteúdo.
     const { score, zone } = estavel.leitura.nota;
     const indicators = estavel.leitura.indicadores;
-    if (score == null || Object.keys(indicators).length === 0) {
-      // Quase sempre é o filtro Transportador vazio: sem ele o relatório inteiro vira "Não há dados".
-      erro(
-        `${recorte.period}: nota/indicadores ausentes na tela — nada enviado. ` +
-          `Confira se o filtro "Transportador" está preenchido nesta aba.`,
-      );
-      return;
-    }
 
     const r = await entregar({
       period: recorte.period,
@@ -595,7 +638,14 @@
       indicators,
     });
     ultimo[recorte.period] = at;
-    log(`${recorte.period}: enviado (${Object.keys(indicators).length} indicadores)`, r);
+    // A contagem de indicadores e o tempo de patamar vão para o console de propósito: são o que
+    // denuncia uma leitura meio carregada que tenha escapado. Três recortes com contagens muito
+    // diferentes é sinal de que a régua do patamar está curta demais.
+    log(
+      `${recorte.period}: enviado — ${Object.keys(indicators).length} indicadores, ` +
+        `tela parada há ${estavel.segundos}s, nota ${score}`,
+      r,
+    );
   }
 
   async function ciclo() {
