@@ -62,12 +62,38 @@ export function dayRangeSaoPaulo(date: string | Date): { from: string; to: strin
 }
 
 /**
+ * O mês corrente em São Paulo, meia-noite a meia-noite, em UTC.
+ *
+ * Mesma forma de `dayRangeSaoPaulo` e pelo mesmo motivo: o mês tem que virar no fuso do negócio, não
+ * no do servidor. Sem isso, no dia 1º entre 00:00 e 03:00 (BRT) a consulta ainda estaria no mês
+ * anterior em UTC, e o painel mostraria o mês errado justamente na virada.
+ */
+export function monthRangeSaoPaulo(date: string | Date): { from: string; to: string } {
+  const start = fromUtc(date).startOf("month");
+  const end = start.plus({ months: 1 });
+  return { from: start.toUTC().toISO() ?? "", to: end.toUTC().toISO() ?? "" };
+}
+
+/**
  * Today in São Paulo as `yyyy-MM-dd`, optionally shifted by whole days — the shape every date-range
  * board filter and `<input type="date">` speaks. Computed in the business zone so a request made
  * after 21:00 BRT (already "tomorrow" in UTC) still says today.
  */
 export function saoPauloDate(offsetDays = 0): string {
   return DateTime.now().setZone(APP_TIME_ZONE).plus({ days: offsetDays }).toISODate() ?? "";
+}
+
+/**
+ * O primeiro e o último dia do mês corrente em São Paulo, como `yyyy-MM-dd` — o formato que o filtro
+ * de data do quadro fala. É o par que faz o link do painel abrir a Torre no MESMO recorte que o
+ * cartão contou.
+ */
+export function saoPauloMonthBounds(): { first: string; last: string } {
+  const start = DateTime.now().setZone(APP_TIME_ZONE).startOf("month");
+  return {
+    first: start.toISODate() ?? "",
+    last: start.endOf("month").toISODate() ?? "",
+  };
 }
 
 /**

@@ -1299,8 +1299,8 @@
       "empty": "Nenhuma viagem com coleta hoje.",
       "loadError": "Não foi possível carregar o painel.",
       "trips": "{count} viagens",
-      "tripsOverall": "Todas as viagens por status",
-      "emptyOverall": "Nenhuma viagem no sistema."
+      "tripsMonth": "Viagens do mês por status",
+      "emptyMonth": "Nenhuma viagem neste mês."
     }
   },
   "Sla": {
