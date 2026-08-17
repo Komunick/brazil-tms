@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.5.0
+// @version      1.6.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -112,7 +112,7 @@
    * a única pista foi a redação da mensagem ter mudado entre as duas. Com o número em cada linha, "o
    * que está rodando aí" deixa de ser dedução.
    */
-  const VERSAO = "1.5.0";
+  const VERSAO = "1.6.0";
   const log = (...a) => console.log(`[TMS BSC ${VERSAO}]`, ...a);
   const erro = (...a) => console.warn(`[TMS BSC ${VERSAO}]`, ...a);
 
@@ -121,20 +121,24 @@
   /**
    * Os três recortes, com o caminho EXATO do menu (medido na tela) e o rótulo do TMS.
    *
-   * `pai` é o item que precisa ser aberto antes: "Hoje" está na raiz do menu, mas semana e mês moram
-   * num submenu que só aparece ao passar o mouse. O texto das opções de semana vem com a regra do
-   * primeiro dia embutida — "(começa na segunda-feira)" faz parte do nome, não é decoração.
+   * `pai` é o item que precisa ser aberto antes de achar a opção. "Hoje" e "Últimos 7 dias" estão na
+   * raiz do menu; só o mês mora num submenu, que abre ao passar o mouse e não ao clicar.
    */
   const RECORTES = [
     { period: "day", pai: null, menu: "Hoje" },
-    // Semana e mês saem do MESMO submenu — o que abre sob "Este mês" lista os dois, junto com
-    // trimestre e ano. Medido na tela: não existe um submenu por família.
+    // A "semana" é JANELA MÓVEL, não semana de calendário, e a razão é medida.
     //
-    // A semana é a ÚNICA sem variante "até agora": mês, trimestre e ano têm as duas, a semana só tem
-    // a inteira. Então este recorte vai de segunda a domingo, com os dias futuros ainda vazios — não
-    // é escolha, é o que o menu oferece. Como o rótulo do intervalo viaja junto com os números até o
-    // painel, a tela mostra "17 de ago. - 23 de ago." e ninguém confunde com semana fechada.
-    { period: "week", pai: "Este mês", menu: "Esta semana (começa na segunda-feira)" },
+    // "Esta semana (começa na segunda-feira)" foi o que eu usei primeiro, e produziu 17 a 23/08 — dias
+    // futuros incluídos, porque a semana mal tinha começado. O relatório devolveu 7 indicadores e
+    // nenhuma nota, enquanto o MESMO dia 17/08 sozinho devolvia os 20 completos. Um intervalo que
+    // avança sobre datas sem dado quebra o relatório, e o resultado não parece quebrado: parece um
+    // desempenho péssimo, com Reversa em 0%.
+    //
+    // Nenhuma opção de semana de calendário tem variante "até agora" (mês, trimestre e ano têm; a
+    // semana não), então não dá para cortar o futuro por ali. "Últimos 7 dias" resolve pela raiz: é
+    // uma janela que termina ontem e nunca alcança data sem dado. Medido: rótulo "10 de ago. de 2026 -
+    // 16 de ago. de 2026". Fica na raiz do menu, sem submenu, e clicar nela seleciona de fato.
+    { period: "week", pai: null, menu: "Últimos 7 dias" },
     { period: "month", pai: "Este mês", menu: "Este mês, até agora" },
   ];
 
