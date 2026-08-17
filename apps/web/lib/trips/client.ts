@@ -40,6 +40,7 @@ import type {
   TripDetailView,
   TripFilterOptions,
   DashboardSummary,
+  WallboardSummary,
   ExceptionListItem,
   ReasonCodeOption,
   CancellationOptionItem,
@@ -74,6 +75,14 @@ export const TRIP_DETAIL_POLL_MS = 30_000;
 export const REPORTS_POLL_MS = 60_000;
 /** Filter/resource option lists — bounded master data; 60s polling + focus refetch (019, issue #26). */
 export const FILTER_OPTIONS_POLL_MS = 60_000;
+/**
+ * Painel de parede — 30s, o mesmo passo do quadro da Torre.
+ *
+ * A TV fica ligada o dia inteiro e ninguém a recarrega, então o que importa não é o intervalo em si
+ * e sim que a tela DIGA a hora do último dado. Um painel que congela e continua bonito é pior que
+ * um painel apagado: a sala toma decisão em cima de um retrato velho sem saber.
+ */
+export const WALLBOARD_POLL_MS = 30_000;
 /** Synchronous CSV export row cap (R13); single source in @brazil-tms/shared, re-exported for UI copy. */
 export { EXPORT_ROW_CAP };
 
@@ -146,6 +155,10 @@ export function dashboardKey(): unknown[] {
   return [...TRIPS_ROOT, "dashboard"];
 }
 
+export function wallboardKey(): unknown[] {
+  return [...TRIPS_ROOT, "wallboard"];
+}
+
 // feature 009 — reports + audit-view query keys.
 const REPORTS_ROOT = ["reports"] as const;
 const AUDIT_ROOT = ["audit-logs"] as const;
@@ -209,6 +222,20 @@ export function useDashboardSummary(): UseQueryResult<{ summary: DashboardSummar
     queryFn: async () =>
       asJson<{ summary: DashboardSummary }>(await fetch(`/api/dashboard/summary`)),
     refetchInterval: DASHBOARD_POLL_MS,
+  });
+}
+
+/**
+ * O painel da TV. Continua buscando com a aba em segundo plano — uma TV de parede não tem "aba
+ * ativa", e o padrão do TanStack Query é pausar quando a janela perde o foco, que é exatamente o que
+ * congelaria a tela numa máquina que ninguém toca.
+ */
+export function useWallboard(): UseQueryResult<{ wallboard: WallboardSummary }> {
+  return useQuery({
+    queryKey: wallboardKey(),
+    queryFn: async () => asJson<{ wallboard: WallboardSummary }>(await fetch(`/api/wallboard`)),
+    refetchInterval: WALLBOARD_POLL_MS,
+    refetchIntervalInBackground: true,
   });
 }
 

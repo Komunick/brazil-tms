@@ -3,6 +3,8 @@ export {
   queryTripBoard,
   getTripDetailView,
   queryDashboardMetrics,
+  // O painel de parede: uma consulta por ciclo, já ordenada e cortada para caber na TV.
+  queryWallboard,
   exportTripRows,
   getTripFilterOptions,
   // Feature 007 — Exception Management / reason-code / SLA-rule / alert reads.

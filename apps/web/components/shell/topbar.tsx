@@ -23,8 +23,9 @@ export function Topbar({ userName }: { userName: string }) {
   }
 
   return (
-    <header className="flex h-14 items-center justify-between border-b px-6">
-      <div className="text-sm text-muted-foreground">{userName}</div>
+    // Gruda no topo: as listas do app são longas, e rolar até o fim escondia a saída.
+    <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/85 px-6 backdrop-blur">
+      <div className="text-sm font-medium text-foreground">{userName}</div>
       <Button variant="ghost" size="sm" onClick={signOut} disabled={loading}>
         <LogOut className="mr-2 h-4 w-4" aria-hidden />
         {t("signOut")}
