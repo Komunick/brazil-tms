@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.1.0
+// @version      1.1.1
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -92,8 +92,16 @@
     esperaRecalculoMs: 9000,
   };
 
-  const log = (...a) => console.log("[TMS BSC]", ...a);
-  const erro = (...a) => console.warn("[TMS BSC]", ...a);
+  /**
+   * A versão aparece em TODA linha do console, e não só na de partida.
+   *
+   * Custou uma ida e volta descobrir que um erro relatado vinha da versão anterior ainda instalada:
+   * a única pista foi a redação da mensagem ter mudado entre as duas. Com o número em cada linha, "o
+   * que está rodando aí" deixa de ser dedução.
+   */
+  const VERSAO = "1.1.1";
+  const log = (...a) => console.log(`[TMS BSC ${VERSAO}]`, ...a);
+  const erro = (...a) => console.warn(`[TMS BSC ${VERSAO}]`, ...a);
 
   const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
