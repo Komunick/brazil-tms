@@ -73,7 +73,7 @@ function importModeFor(mode: PortalFeedMode): PortalImportMode {
 /** As opções que cada modo passa ao caminho do plano. Só o backfill muda alguma coisa. */
 function planOptionsFor(mode: PortalFeedMode): PortalPlanOptions | undefined {
   if (mode !== "history") return undefined;
-  return { onCompleted: "close_only", linkFleet: false };
+  return { onCompleted: "close_only", linkFleet: false, updatePlan: false };
 }
 
 const FEED_LABEL: Record<PortalFeedMode, { fileName: string; source: string }> = {
