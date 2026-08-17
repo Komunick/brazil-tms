@@ -52,6 +52,8 @@ export {
   queryReasonCodes,
   queryCustomerSlaRules,
 } from "./trips/trips-read";
+export { queryWallboard, ON_THE_ROAD_STATUSES } from "./trips/wallboard-read";
+export type { WallboardSummary, WallboardTrip } from "./trips/wallboard-read";
 export type {
   TripBoardRow,
   TripBoardResult,

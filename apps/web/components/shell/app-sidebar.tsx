@@ -51,8 +51,10 @@ export function AppSidebar({ role }: { role: Role }) {
   const visibleItems = NAV_ITEMS.filter((item) => !item.permission || can(role, item.permission));
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
-      <div className="flex h-14 items-center border-b px-4 font-semibold">
+    // As bordas são as DO MENU, não as do app: com a barra escura, a borda clara do tema geral
+    // desenhava uma linha branca no meio do azul.
+    <aside className="flex w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
+      <div className="flex h-14 items-center border-b border-sidebar-border px-4 text-[0.95rem] font-semibold tracking-tight text-white">
         {tCommon("appName")}
       </div>
       <nav className="flex flex-1 flex-col gap-1 p-3">
@@ -64,13 +66,18 @@ export function AppSidebar({ role }: { role: Role }) {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                // A marca da esquerda é o que diz onde você está sem precisar comparar tons de
+                // fundo — de relance, a linha aparece antes da cor.
+                "flex items-center gap-3 rounded-md border-l-2 px-3 py-2 text-sm font-medium transition-colors",
                 active
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground hover:bg-sidebar-accent/60",
+                  ? "border-sidebar-primary bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "border-transparent text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
               )}
             >
-              <Icon className="h-4 w-4" aria-hidden />
+              <Icon
+                className={cn("h-4 w-4", active ? "text-sidebar-primary" : "opacity-70")}
+                aria-hidden
+              />
               <span>{t(item.key)}</span>
             </Link>
           );

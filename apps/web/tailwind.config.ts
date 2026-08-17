@@ -33,6 +33,19 @@ const config: Config = {
           DEFAULT: "hsl(var(--destructive))",
           foreground: "hsl(var(--destructive-foreground))",
         },
+        /**
+         * Estado, não decoração. Antes cada tela escolhia o seu `amber-100` / `emerald-600` na mão,
+         * e "atrasada" tinha um vermelho no quadro e outro no alerta. Agora vem do tema, e o escuro
+         * ajusta os três de uma vez.
+         */
+        success: {
+          DEFAULT: "hsl(var(--success))",
+          foreground: "hsl(var(--success-foreground))",
+        },
+        warning: {
+          DEFAULT: "hsl(var(--warning))",
+          foreground: "hsl(var(--warning-foreground))",
+        },
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
