@@ -56,6 +56,17 @@ export interface PortalPlanSummary {
   cancelled: number;
   unknownStation: number;
   failed: number;
+  /**
+   * POR QUE falharam (2026-08-17).
+   *
+   * O contador existia sozinho, e o backfill do histórico devolveu **71 falhas sem uma linha de
+   * explicação** — o mesmo tipo de silêncio que me custou horas hoje em outros lugares. Um número de
+   * erro que não diz o que houve não é diagnóstico, é só um número.
+   *
+   * Guarda os motivos DISTINTOS, com teto: 71 falhas costumam ser duas ou três causas repetidas, e a
+   * lista serve para nomeá-las, não para transcrever cada uma.
+   */
+  failedReasons: string[];
   /** Milestones applied on top, when the same file already carries real times. */
   milestones: number;
   /** Trips whose driver/vehicle the portal named and the TMS matched to its own registered fleet. */
@@ -141,6 +152,12 @@ export interface PortalPlanOptions extends PortalApplyOptions {
    * ninguém fez aqui.
    */
   linkFleet?: boolean;
+  /**
+   * Reescrever o plano de uma viagem que JÁ existe. Ligado no dia a dia — o cliente remaneja horário
+   * e o TMS acompanha. Desligado no backfill: ele veio buscar o que faltava, não corrigir o que já
+   * estava aqui.
+   */
+  updatePlan?: boolean;
 }
 
 export async function applyPortalPlanTrip(
@@ -155,6 +172,7 @@ export async function applyPortalPlanTrip(
   // O que o vínculo automático com a frota conseguiu (ou não) fazer, por perna.
   const links: FleetLinkResult[] = [];
   const linkFleet = options.linkFleet ?? true;
+  const updatePlan = options.updatePlan ?? true;
 
   for (const leg of portal.legs) {
     const base = { externalTripId: portal.externalTripId, legNumber: leg.legNumber };
@@ -229,7 +247,12 @@ export async function applyPortalPlanTrip(
       if (linkFleet) links.push(await linkFleetFromPortal(existing.id, portal, actorUserId));
 
       // An existing trip keeps its status: the plan is updated, the lifecycle is not touched here.
-      if (samePlan(existing, plan)) {
+      //
+      // O backfill NÃO reescreve plano de viagem que já existe (2026-08-17). Ele veio buscar o que
+      // faltava, não corrigir o que já estava aqui — e uma viagem que já rodou está fora da fase
+      // editável, então `updateTripPlan` a recusa por revisão obrigatória. Foram as 71 "falhas" da
+      // primeira varredura: nada quebrado, só o backfill tentando um trabalho que não é dele.
+      if (!updatePlan || samePlan(existing, plan)) {
         outcomes.push({ ...base, status: fieldsChanged ? "updated" : "unchanged" });
         continue;
       }
@@ -292,6 +315,10 @@ export async function applyPortalPlan(
     cancelled: count("cancelled"),
     unknownStation: count("unknown_station"),
     failed: count("failed"),
+    // Os motivos distintos, com teto — 71 falhas costumam ser duas ou três causas repetidas.
+    failedReasons: [
+      ...new Set(outcomes.filter((o) => o.status === "failed" && o.detail).map((o) => o.detail!)),
+    ].slice(0, 20),
     milestones,
     // O vínculo com a frota registrada. `blocked` é o que precisa de gente: o cliente pôs alguém
     // que as regras do TMS recusam (documento vencido, tipo de veículo, subcontratação sem
