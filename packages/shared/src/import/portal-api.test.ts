@@ -96,12 +96,45 @@ describe("mapPortalApiTrips", () => {
   });
 
   it("names only the status codes measured against the live portal", () => {
+    // Os onze foram lidos do filtro "Status da viagem" de cada aba, pelo parâmetro que o portal
+    // manda (`trip_station_status`) — nenhum é palpite. A escala é o ciclo de vida DENTRO da parada,
+    // e é por isso que ela cresce: carrega, lacra, parte, chega, abre o lacre, descarrega.
     const label = (code: number) =>
       mapPortalApiTrips(envelope(viagem({ trip_status: code }))).trips[0]!.status;
-    expect(label(4)).toBe("Planned");
-    expect(label(5)).toBe("Assigned");
-    expect(label(90)).toBe("Completed");
-    expect(label(100)).toBe("Cancelled");
+    expect({
+      4: label(4),
+      5: label(5),
+      10: label(10),
+      30: label(30),
+      40: label(40),
+      50: label(50),
+      60: label(60),
+      70: label(70),
+      80: label(80),
+      90: label(90),
+      100: label(100),
+    }).toEqual({
+      4: "Assigning",
+      5: "Assigned",
+      10: "Loading",
+      30: "Seal",
+      40: "Departed",
+      50: "Arrived",
+      60: "Unseal",
+      70: "Operating",
+      80: "Unloaded",
+      90: "Completed",
+      100: "Cancelled",
+    });
+  });
+
+  it("o 20 NÃO entra por palpite: o portal não o oferece como filtro, então não foi medido", () => {
+    // A viagem passa por "Em fila"/"Acoplado" antes de carregar, e o código disso existe. Mas ele
+    // não aparece no filtro, então não foi possível medi-lo — e um rótulo inventado aqui viraria
+    // decisão de negócio lá na frente.
+    expect(mapPortalApiTrips(envelope(viagem({ trip_status: 20 }))).trips[0]!.status).toBe(
+      "Status 20",
+    );
   });
 
   it("an unknown status can never close a trip: it passes through unnamed", () => {
