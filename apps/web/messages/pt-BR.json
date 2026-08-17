@@ -1288,7 +1288,6 @@
       "title": "Painel do dia",
       "subtitle": "O que precisa de atenção hoje.",
       "tripsToday": "Viagens de hoje por status",
-      "billingPending": "Faturamento pendente",
       "tripsAtRisk": "Viagens em risco de SLA",
       "unassignedTrips": "Viagens sem atribuição",
       "activeExceptions": "Exceções ativas",
@@ -1299,7 +1298,9 @@
       "viewInBoard": "Ver na Torre de Controle",
       "empty": "Nenhuma viagem com coleta hoje.",
       "loadError": "Não foi possível carregar o painel.",
-      "trips": "{count} viagens"
+      "trips": "{count} viagens",
+      "tripsOverall": "Todas as viagens por status",
+      "emptyOverall": "Nenhuma viagem no sistema."
     }
   },
   "Sla": {

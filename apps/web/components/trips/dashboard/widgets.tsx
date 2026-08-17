@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import { saoPauloDate } from "@brazil-tms/shared";
+import { saoPauloDate, TRIP_STATUSES } from "@brazil-tms/shared";
 import type { DashboardSummary } from "@brazil-tms/db";
 import { useDashboardSummary } from "@/lib/trips/client";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
@@ -60,6 +60,49 @@ function MetricCard({ titleKey, value, href, placeholder }: MetricCardProps) {
   );
 }
 
+/**
+ * A lista de status de um cartão, cada linha levando ao quadro já filtrado.
+ *
+ * Serve os DOIS cartões — o de hoje e o geral — porque a única diferença entre eles é o recorte de
+ * data no link. Duas cópias divergiriam no primeiro ajuste de estilo, e a pessoa veria dois quadros
+ * que se comportam diferente sem motivo.
+ */
+function StatusList({
+  byStatus,
+  emptyKey,
+  dateFilter,
+}: {
+  byStatus: DashboardSummary["tripsTodayByStatus"];
+  emptyKey: string;
+  /** O trecho de data do link, vazio no cartão geral. */
+  dateFilter: string;
+}) {
+  const t = useTranslations("Trips.dashboard");
+  if (byStatus.length === 0) {
+    return <p className="text-sm text-muted-foreground">{t(emptyKey)}</p>;
+  }
+  // A ordem é a do ciclo de vida, não a do banco: quem lê espera Recebida antes de Em trânsito, e
+  // um quadro que reordena a cada atualização obriga a procurar de novo o que já se sabia onde era.
+  const ordenadas = [...byStatus].sort(
+    (a, b) => TRIP_STATUSES.indexOf(a.status) - TRIP_STATUSES.indexOf(b.status),
+  );
+  return (
+    <ul className="space-y-2">
+      {ordenadas.map(({ status, count }) => (
+        <li key={status}>
+          <Link
+            href={`/trips?status=${status}${dateFilter}&scope=all#${BOARD_ANCHOR}`}
+            className="flex items-center justify-between rounded-md px-1 py-0.5 hover:bg-muted"
+          >
+            <TripStatusBadge status={status} />
+            <span className="text-sm font-semibold tabular-nums">{count}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** Computed widget #1: trips today, broken down by status, each row deep-linking into the board. */
 function TripsTodayCard({ byStatus }: { byStatus: DashboardSummary["tripsTodayByStatus"] }) {
   const t = useTranslations("Trips.dashboard");
@@ -75,23 +118,38 @@ function TripsTodayCard({ byStatus }: { byStatus: DashboardSummary["tripsTodayBy
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {byStatus.length === 0 ? (
-          <p className="text-sm text-muted-foreground">{t("empty")}</p>
-        ) : (
-          <ul className="space-y-2">
-            {byStatus.map(({ status, count }) => (
-              <li key={status}>
-                <Link
-                  href={`/trips?status=${status}&pickupFrom=${today}&pickupTo=${today}&scope=all#${BOARD_ANCHOR}`}
-                  className="flex items-center justify-between rounded-md px-1 py-0.5 hover:bg-muted"
-                >
-                  <TripStatusBadge status={status} />
-                  <span className="text-sm font-semibold tabular-nums">{count}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+        <StatusList
+          byStatus={byStatus}
+          emptyKey="empty"
+          dateFilter={`&pickupFrom=${today}&pickupTo=${today}`}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * O mesmo quadro, sem recorte de data (2026-08-17).
+ *
+ * Substituiu o cartão de "Faturamento pendente" a pedido do usuário. E passou a valer a pena no
+ * mesmo dia em que o histórico do portal entrou: o TMS foi de 997 para 2.960 viagens, então "no
+ * geral" deixou de ser o retrato de uma semana e meia de importação irregular e virou a operação
+ * inteira — o que já rodou, o que foi cancelado, o que está na rua agora.
+ */
+function TripsOverallCard({ byStatus }: { byStatus: DashboardSummary["tripsByStatus"] }) {
+  const t = useTranslations("Trips.dashboard");
+  const total = byStatus.reduce((n, s) => n + s.count, 0);
+
+  return (
+    <Card>
+      <CardHeader className="pb-2 flex flex-row items-baseline justify-between gap-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">
+          {t("tripsOverall")}
+        </CardTitle>
+        <span className="text-sm font-semibold tabular-nums">{total}</span>
+      </CardHeader>
+      <CardContent>
+        <StatusList byStatus={byStatus} emptyKey="emptyOverall" dateFilter="" />
       </CardContent>
     </Card>
   );
@@ -185,11 +243,9 @@ export function DashboardWidgets() {
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       <TripsTodayCard byStatus={summary.tripsTodayByStatus} />
-      <MetricCard
-        titleKey="billingPending"
-        value={summary.billingPendingCount}
-        href={`/trips?billingStatus=billing_pending&scope=all#${BOARD_ANCHOR}`}
-      />
+      {/* Trocou o cartão de "Faturamento pendente" (2026-08-17, a pedido): o número do faturamento
+          vive na tela de Faturamento, e aqui a pergunta é sobre a operação. */}
+      <TripsOverallCard byStatus={summary.tripsByStatus} />
       {metrics.map((m) => (
         <MetricCard key={m.titleKey} {...m} />
       ))}

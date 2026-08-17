@@ -141,6 +141,14 @@ export type TripDetailView = TripDetail & {
 
 export interface DashboardSummary {
   tripsTodayByStatus: { status: TripStatus; count: number }[];
+  /**
+   * TODAS as viagens por status, sem recorte de data (2026-08-17).
+   *
+   * Passou a fazer sentido quando o histórico do portal entrou: o TMS foi de 997 para 2.960 viagens,
+   * e a operação inteira — o que já rodou, o que foi cancelado, o que está na rua — cabe num quadro
+   * só. Antes desse dado, "no geral" seria o retrato de uma semana e meia de importação irregular.
+   */
+  tripsByStatus: { status: TripStatus; count: number }[];
   billingPendingCount: number;
   tripsAtRisk: number | null;
   unassignedTrips: number | null;
@@ -649,6 +657,7 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
 
   const [
     byStatus,
+    allByStatus,
     billingPending,
     unassigned,
     atRisk,
@@ -666,6 +675,11 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
           lt(trips.plannedPickupWindowStart, new Date(to)),
         ),
       )
+      .groupBy(trips.currentStatus),
+    // O mesmo recorte, sem data: a operação inteira num quadro só.
+    db
+      .select({ status: trips.currentStatus, value: count() })
+      .from(trips)
       .groupBy(trips.currentStatus),
     db.select({ value: count() }).from(trips).where(eq(trips.currentStatus, "billing_pending")),
     // Active trips with NO current assignment (006 — fills the "unassigned trips" widget).
@@ -746,6 +760,7 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
 
   return {
     tripsTodayByStatus: byStatus.map((r) => ({ status: r.status, count: r.value })),
+    tripsByStatus: allByStatus.map((r) => ({ status: r.status, count: r.value })),
     billingPendingCount: billingPending[0]?.value ?? 0,
     tripsAtRisk: atRisk[0]?.value ?? 0,
     unassignedTrips: unassigned[0]?.value ?? 0,

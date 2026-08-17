@@ -123,6 +123,7 @@ test.describe("US4 — Home daily dashboard summary", () => {
     const { summary } = (await res.json()) as {
       summary: {
         tripsTodayByStatus: Array<{ status: string; count: number }>;
+        tripsByStatus: Array<{ status: string; count: number }>;
         billingPendingCount: number;
         tripsAtRisk: number | null;
         unassignedTrips: number | null;
@@ -140,6 +141,16 @@ test.describe("US4 — Home daily dashboard summary", () => {
     expect(todayInTransit!.count).toBeGreaterThanOrEqual(1);
 
     expect(summary.billingPendingCount).toBeGreaterThanOrEqual(1);
+
+    /**
+     * O quadro GERAL (2026-08-17): mesmo formato, sem recorte de data. Substituiu o cartão de
+     * faturamento no painel, e a propriedade que importa é ser um SUPERCONJUNTO do de hoje — se
+     * alguém der um recorte de data nele por engano, esta asserção cai.
+     */
+    expect(Array.isArray(summary.tripsByStatus)).toBe(true);
+    const geralInTransit = summary.tripsByStatus.find((s) => s.status === "in_transit");
+    expect(geralInTransit).toBeDefined();
+    expect(geralInTransit!.count).toBeGreaterThanOrEqual(todayInTransit!.count);
 
     // Every later-slice metric is exactly null (006/007/008 placeholders).
     expect(summary.tripsAtRisk).toBeNull();
