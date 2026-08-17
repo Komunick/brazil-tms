@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
 import { handleRouteError } from "@/lib/api/respond";
 import { queryDashboardMetrics } from "@/lib/trips/trips-read";
+import { queryLatestBsc } from "@brazil-tms/db";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +14,10 @@ export async function GET(): Promise<NextResponse> {
   try {
     const ctx = await requireAuth();
     requirePermission(ctx, "view_all_trips");
-    const summary = await queryDashboardMetrics();
-    return NextResponse.json({ summary });
+    // O BSC vem junto do resumo, não numa chamada própria: é o mesmo painel, no mesmo passo de
+    // atualização. Separado, o cartão do cliente piscaria fora de sincronia com o resto da tela.
+    const [summary, bsc] = await Promise.all([queryDashboardMetrics(), queryLatestBsc()]);
+    return NextResponse.json({ summary, bsc });
   } catch (error) {
     return handleRouteError(error);
   }

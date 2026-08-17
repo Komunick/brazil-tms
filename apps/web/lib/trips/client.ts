@@ -40,6 +40,7 @@ import type {
   TripDetailView,
   TripFilterOptions,
   DashboardSummary,
+  BscSnapshotView,
   WallboardSummary,
   ExceptionListItem,
   ReasonCodeOption,
@@ -216,11 +217,20 @@ export function useTripDetail(id: string): UseQueryResult<{ item: TripDetailView
 }
 
 /** Home daily dashboard aggregates. */
-export function useDashboardSummary(): UseQueryResult<{ summary: DashboardSummary }> {
+/**
+ * O resumo do painel traz o BSC junto (2026-08-17) — mesma tela, mesmo passo de atualização. Numa
+ * chamada separada, o cartão do cliente piscaria fora de sincronia com o resto.
+ */
+export function useDashboardSummary(): UseQueryResult<{
+  summary: DashboardSummary;
+  bsc: BscSnapshotView[];
+}> {
   return useQuery({
     queryKey: dashboardKey(),
     queryFn: async () =>
-      asJson<{ summary: DashboardSummary }>(await fetch(`/api/dashboard/summary`)),
+      asJson<{ summary: DashboardSummary; bsc: BscSnapshotView[] }>(
+        await fetch(`/api/dashboard/summary`),
+      ),
     refetchInterval: DASHBOARD_POLL_MS,
   });
 }

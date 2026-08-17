@@ -141,3 +141,7 @@ export {
   type DocumentRequirementView,
   type DocumentTypeView,
 } from "./trips/trips-read";
+// O BSC do cliente, espelhado (2026-08-17): grava o que a Shopee publicou e devolve o mais recente
+// de cada recorte, com a idade colada.
+export { saveBscSnapshot, queryLatestBsc, BSC_PERIODS } from "./reporting/bsc";
+export type { BscPeriod, BscSnapshotInput, BscSnapshotView } from "./reporting/bsc";
