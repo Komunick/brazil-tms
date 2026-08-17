@@ -82,6 +82,11 @@ export interface PortalTrip {
    * frágil.
    */
   driverExternalId?: string | null;
+  /**
+   * "Pending" / "Accepted" — o cliente já aceitou esta viagem? Eixo INDEPENDENTE do `status`: uma
+   * viagem aceita e ainda sem motorista está esperando atribuição, e são 359 delas hoje.
+   */
+  acceptanceStatus?: string | null;
   /** Quem o portal nomeia como operador da viagem (nome, não e-mail). */
   operatorLabel?: string | null;
   /** O que a transportadora recebe por esta viagem, em centavos, quando o portal já precificou. */

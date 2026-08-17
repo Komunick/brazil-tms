@@ -1300,7 +1300,9 @@
       "loadError": "Não foi possível carregar o painel.",
       "trips": "{count} viagens",
       "tripsMonth": "Viagens do mês por status",
-      "emptyMonth": "Nenhuma viagem neste mês."
+      "emptyMonth": "Nenhuma viagem neste mês.",
+      "awaitingAcceptance": "Aguardando aceitação",
+      "awaitingAssignment": "Aceitas, aguardando motorista"
     }
   },
   "Sla": {

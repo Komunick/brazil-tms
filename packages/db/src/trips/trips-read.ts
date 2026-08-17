@@ -151,6 +151,15 @@ export interface DashboardSummary {
    * faturamento realmente pensam.
    */
   tripsByStatus: { status: TripStatus; count: number }[];
+  /**
+   * As duas filas do PLANEJADO, que são decisões de gente e não estados de caminhão (2026-08-17).
+   *
+   * O portal tem dois eixos: se a proposta foi aceita (`Aceitação`) e se há motorista (`Status`). O
+   * cruzamento deles descreve o que a operação precisa FAZER, e o TMS só enxergava o segundo — as
+   * duas filas viviam amontoadas em "Recebida", indistinguíveis.
+   */
+  awaitingAcceptance: number;
+  awaitingAssignment: number;
   billingPendingCount: number;
   tripsAtRisk: number | null;
   unassignedTrips: number | null;
@@ -661,6 +670,8 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
   const [
     byStatus,
     allByStatus,
+    aguardandoAceite,
+    aguardandoAtribuicao,
     billingPending,
     unassigned,
     atRisk,
@@ -690,6 +701,33 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
         ),
       )
       .groupBy(trips.currentStatus),
+    /**
+     * Esperando ACEITAÇÃO: a proposta chegou e ninguém decidiu. Só viagem viva conta — uma proposta
+     * de uma viagem já cancelada não é pendência de ninguém.
+     */
+    db
+      .select({ value: count() })
+      .from(trips)
+      .where(
+        and(
+          inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
+          sql`(${trips.customerFields} ->> 'Aceitação (portal)') = 'Pending'`,
+        ),
+      ),
+    /**
+     * Aceitas e esperando ATRIBUIÇÃO: o cliente já disse sim e ainda não há motorista. É a fila do
+     * despacho, e era a maior das duas — 359 no portal contra 44 esperando aceitação.
+     */
+    db
+      .select({ value: count() })
+      .from(trips)
+      .where(
+        and(
+          inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
+          sql`(${trips.customerFields} ->> 'Aceitação (portal)') = 'Accepted'`,
+          sql`(${trips.customerFields} ->> 'Motorista (portal)') is null`,
+        ),
+      ),
     db.select({ value: count() }).from(trips).where(eq(trips.currentStatus, "billing_pending")),
     // Active trips with NO current assignment (006 — fills the "unassigned trips" widget).
     db
@@ -770,6 +808,8 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
   return {
     tripsTodayByStatus: byStatus.map((r) => ({ status: r.status, count: r.value })),
     tripsByStatus: allByStatus.map((r) => ({ status: r.status, count: r.value })),
+    awaitingAcceptance: aguardandoAceite[0]?.value ?? 0,
+    awaitingAssignment: aguardandoAtribuicao[0]?.value ?? 0,
     billingPendingCount: billingPending[0]?.value ?? 0,
     tripsAtRisk: atRisk[0]?.value ?? 0,
     unassignedTrips: unassigned[0]?.value ?? 0,
