@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.4.0
+// @version      1.5.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -112,7 +112,7 @@
    * a única pista foi a redação da mensagem ter mudado entre as duas. Com o número em cada linha, "o
    * que está rodando aí" deixa de ser dedução.
    */
-  const VERSAO = "1.4.0";
+  const VERSAO = "1.5.0";
   const log = (...a) => console.log(`[TMS BSC ${VERSAO}]`, ...a);
   const erro = (...a) => console.warn(`[TMS BSC ${VERSAO}]`, ...a);
 
@@ -408,14 +408,25 @@
    * pegar "o primeiro 'Zona de …'" pegaria a legenda de cores, que lista as quatro. Só o par número +
    * faixa colados identifica o medidor — e quando ele não está na tela (filtro vazio), não acha nada,
    * que é exatamente o que se quer.
+   *
+   * A CASA DECIMAL É OPCIONAL, e isso custou dois ciclos inteiros. O relatório escreve o número com as
+   * casas que precisar: `62,75` num período, `73` noutro. Exigir vírgula fazia a nota sumir em toda
+   * leitura de nota redonda — e, como sem nota a leitura não conta como amostra, o robô passava dois
+   * minutos recusando uma tela cheia e reclamando do filtro Transportador.
+   *
+   * O `110` do eixo do medidor também é um inteiro de três dígitos, mas não tem faixa escrita embaixo.
+   * Quem separa os dois é o par, não o formato — e a legenda de cores, que lista as quatro faixas em
+   * sequência, é descartada porque um item dela vem sempre seguido de outro.
    */
+  const EH_FAIXA = /^(Zona de .+|Fora da faixa)$/;
+  const EH_NOTA = /^\d{1,3}(,\d{1,2})?$/;
+
   function notaEZona() {
     const todos = textos();
     for (let i = 1; i < todos.length; i++) {
-      const faixa = todos[i].txt;
-      if (!/^(Zona de .+|Fora da faixa)$/.test(faixa)) continue;
+      if (!EH_FAIXA.test(todos[i].txt)) continue;
       const antes = todos[i - 1].txt;
-      if (/^\d{1,3},\d{1,2}$/.test(antes)) return { score: antes, zone: faixa };
+      if (EH_NOTA.test(antes)) return { score: antes, zone: todos[i].txt };
     }
     return { score: null, zone: null };
   }
@@ -501,9 +512,21 @@
     return { nota: notaEZona(), indicadores: indicadores() };
   }
 
-  /** Uma leitura só é candidata a definitiva se tem nota E indicadores. */
+  /**
+   * Uma leitura só é candidata a definitiva se tem INDICADORES. A nota é bem-vinda e não é condição.
+   *
+   * Antes eu exigia as duas coisas, e isso pendurou a entrega inteira na leitura mais frágil do
+   * arquivo: o velocímetro é um número solto identificado pela faixa escrita embaixo dele, enquanto
+   * cada indicador é um número identificado pelo próprio nome do cartão. Quando a nota deixou de ser
+   * reconhecida — porque num período ela sai `73` e não `62,75` —, o robô passou dois minutos
+   * recusando uma tela cheia de indicadores perfeitamente legíveis.
+   *
+   * A tela em branco continua barrada do mesmo jeito, porque sem dados não há indicador nenhum. O que
+   * muda é que uma falha no medidor custa o medidor, e não o painel inteiro: o cartão do TMS já sabe
+   * mostrar "—" no lugar da nota.
+   */
   function temConteudo(leitura) {
-    return leitura.nota.score != null && Object.keys(leitura.indicadores).length > 0;
+    return Object.keys(leitura.indicadores).length > 0;
   }
 
   /**
@@ -643,7 +666,7 @@
     // diferentes é sinal de que a régua do patamar está curta demais.
     log(
       `${recorte.period}: enviado — ${Object.keys(indicators).length} indicadores, ` +
-        `tela parada há ${estavel.segundos}s, nota ${score}`,
+        `tela parada há ${estavel.segundos}s, nota ${score ?? "(não lida)"}`,
       r,
     );
   }
