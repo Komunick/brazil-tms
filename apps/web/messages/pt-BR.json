@@ -1418,6 +1418,8 @@
   "Alerts": {
     "title": "Alertas",
     "surfaceTitle": "Alertas ativos",
+    "activeTrips": "{count, plural, =0 {nenhuma viagem} one {# viagem} other {# viagens}}",
+    "activeAlerts": "{count, plural, one {# aviso} other {# avisos}}",
     "acknowledge": "Reconhecer",
     "acknowledged": "Reconhecido",
     "acknowledgedBy": "Reconhecido por",
