@@ -21,9 +21,17 @@ export {
   linkStationIds,
   loadStationMap,
 } from "./trips/portal-execution-apply";
-export type { PortalApplyOutcome, PortalApplySummary } from "./trips/portal-execution-apply";
+export type {
+  PortalApplyOutcome,
+  PortalApplySummary,
+  PortalApplyOptions,
+} from "./trips/portal-execution-apply";
 export { applyPortalPlan, applyPortalPlanTrip } from "./trips/portal-plan-apply";
-export type { PortalPlanOutcome, PortalPlanSummary } from "./trips/portal-plan-apply";
+export type {
+  PortalPlanOutcome,
+  PortalPlanSummary,
+  PortalPlanOptions,
+} from "./trips/portal-plan-apply";
 export { transitionTripStatus } from "./trips/trip-transitions";
 export {
   cancelTrip,

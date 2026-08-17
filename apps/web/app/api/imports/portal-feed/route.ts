@@ -41,11 +41,12 @@ export async function POST(request: Request): Promise<NextResponse> {
       mode !== "plan" &&
       mode !== "in_progress" &&
       mode !== "execution" &&
+      mode !== "history" &&
       mode !== "detail"
     ) {
       throw new Conflict(
         "MODE_REQUIRED",
-        "Informe 'plan' (aba Planejado), 'in_progress' (aba Aceito), 'execution' (aba Concluído) ou 'detail' (uma viagem).",
+        "Informe 'plan' (Planejado), 'in_progress' (Aceito), 'execution' (Concluído recente), 'history' (backfill do Concluído) ou 'detail' (uma viagem).",
       );
     }
     if (!body.payload || typeof body.payload !== "object") {

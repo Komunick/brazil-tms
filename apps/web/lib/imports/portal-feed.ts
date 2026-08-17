@@ -9,6 +9,7 @@ import {
   type PortalImportMode,
   type PortalImportResult,
 } from "@/lib/imports/portal-execution-import";
+import type { PortalPlanOptions } from "@brazil-tms/db";
 
 /**
  * The robot's door into the TMS (2026-08-16).
@@ -42,17 +43,44 @@ import {
  * O modo separado (em vez de mandar a aba "Aceito" como `plan`) é o que mantém o histórico de
  * importação legível: quem abrir a lista vê "Robô · Em curso" e sabe de onde aquilo veio.
  */
-export type PortalFeedMode = "plan" | "in_progress" | "execution";
+export type PortalFeedMode = "plan" | "in_progress" | "execution" | "history";
 
-/** O que cada aba pode fazer. Só o Concluído é proibido de criar. */
+/**
+ * O que cada aba pode fazer, e o que acontece ao concluir.
+ *
+ * `execution` é a leitura contínua do Concluído: acompanha o que TERMINOU nas últimas horas de
+ * viagens que o TMS já vinha seguindo, e conclui pelo caminho normal — entra na fila de faturamento
+ * e ganha item, porque é uma viagem que a operação de vocês executou sob o olhar do sistema.
+ *
+ * `history` é o BACKFILL (2026-08-17). O TMS começa em 06/08 e o histórico do portal vai a 18/07:
+ * três semanas de viagens que nunca entraram, mais dias irregulares no meio, porque vieram de
+ * uploads de CSV e não de varredura. Este modo CRIA o que falta e fecha com o que o portal diz —
+ * `Completed` vira **Concluída**, `Cancelled` vira **Cancelada**.
+ *
+ * Duas diferenças, e as duas existem para não estragar nada:
+ *
+ *   PARA EM "CONCLUÍDA". Não avança para faturamento pendente nem cria item. São ~1.400 viagens que
+ *   rodaram antes de o TMS existir e já foram cobradas por fora; item de faturamento para elas faria
+ *   dinheiro aparecer duas vezes, e isso não se desfaz com um clique.
+ *
+ *   NÃO VINCULA FROTA. Viagem encerrada há três semanas não precisa de atribuição, e criar vínculo
+ *   em massa encheria o histórico de cada motorista de trabalho que ninguém fez aqui.
+ */
 function importModeFor(mode: PortalFeedMode): PortalImportMode {
   return mode === "execution" ? "execution" : "plan";
+}
+
+/** As opções que cada modo passa ao caminho do plano. Só o backfill muda alguma coisa. */
+function planOptionsFor(mode: PortalFeedMode): PortalPlanOptions | undefined {
+  if (mode !== "history") return undefined;
+  return { onCompleted: "close_only", linkFleet: false };
 }
 
 const FEED_LABEL: Record<PortalFeedMode, { fileName: string; source: string }> = {
   plan: { fileName: "portal (plano)", source: "portal_robot_plan" },
   in_progress: { fileName: "portal (em curso)", source: "portal_robot_in_progress" },
   execution: { fileName: "portal (execução)", source: "portal_robot_execution" },
+  history: { fileName: "portal (histórico)", source: "portal_robot_history" },
 };
 
 export interface PortalFeedResult extends PortalImportResult {
@@ -139,6 +167,7 @@ export async function ingestPortalFeed(input: {
     customerId,
     actorUserId,
     mode: importModeFor(input.mode),
+    planOptions: planOptionsFor(input.mode),
     // What a trip's history will say moved it. "portal" — not a file name, because there is no file.
     sourceLabel: "portal",
     rows: Array.isArray(input.payload?.data?.list) ? input.payload.data!.list!.length : 0,

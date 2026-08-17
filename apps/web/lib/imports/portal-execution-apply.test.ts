@@ -4,6 +4,7 @@ import type { PortalTrip } from "@brazil-tms/shared";
 import {
   applyPortalTrip,
   auditLogs,
+  billingItems,
   customers,
   db,
   linkStationIds,
@@ -268,5 +269,31 @@ describe.skipIf(!hasDb)("applyPortalTrip (integration)", () => {
 
     const after = (await db.select().from(trips).where(eq(trips.id, tripId)).limit(1))[0]!;
     expect(after.currentStatus).toBe("cancelled");
+  });
+  it("backfill do histórico: conclui e PARA, sem entrar na fila do faturamento", async () => {
+    /**
+     * As ~1.400 viagens que rodaram antes de o TMS existir já foram cobradas por fora. Concluí-las
+     * pelo caminho normal criaria um item de faturamento para cada uma — dinheiro aparecendo duas
+     * vezes, e isso não se desfaz com um clique. Por isso o backfill para em "Concluída".
+     */
+    const { id: tripId, ext } = await makeTrip();
+    const map = await loadStationMap(customerId);
+
+    // Uma viagem que rodou até o fim: a descarga é o que faz o TMS aceitar concluí-la.
+    const trip = portalTrip(ext);
+    trip.legs[0]!.destination.unsealedAt = "13/08/2026 09:00";
+    trip.legs[0]!.destination.unloadedAt = "13/08/2026 09:40";
+
+    const outcomes = await applyPortalTrip(customerId, trip, map, actorId, "portal", {
+      onCompleted: "close_only",
+    });
+    expect(outcomes.some((o) => o.status === "completed")).toBe(true);
+
+    const after = (await db.select().from(trips).where(eq(trips.id, tripId)).limit(1))[0]!;
+    // Concluída — e NÃO billing_pending, que é onde o caminho normal a deixaria.
+    expect(after.currentStatus).toBe("completed");
+
+    const itens = await db.select().from(billingItems).where(eq(billingItems.tripId, tripId));
+    expect(itens).toHaveLength(0);
   });
 });

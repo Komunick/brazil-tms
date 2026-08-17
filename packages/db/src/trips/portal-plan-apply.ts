@@ -18,6 +18,7 @@ import {
   applyPortalTrip,
   isCancelledAtPortal,
   loadStationMap,
+  type PortalApplyOptions,
   type PortalApplyOutcome,
 } from "./portal-execution-apply";
 import { closeTripFromSource } from "./source-status";
@@ -70,7 +71,6 @@ export interface PortalPlanSummary {
   linkBlockedReasons: string[];
   outcomes: PortalPlanOutcome[];
 }
-
 
 /**
  * The customer's word for the vehicle → the enum, or null. A label nobody recognizes leaves the
@@ -133,16 +133,28 @@ function samePlan(
  * the same file already proves. A trip the portal reports Cancelled is created and cancelled, so the
  * operation can still answer "why didn't this one run?" — the same call the spreadsheet import makes.
  */
+export interface PortalPlanOptions extends PortalApplyOptions {
+  /**
+   * Casar a frota registrada com o que o cliente escreveu. Ligado no dia a dia; DESLIGADO no backfill
+   * do histórico (2026-08-17) — uma viagem que terminou há três semanas não precisa de atribuição, e
+   * criar vínculo em massa em viagem encerrada encheria o histórico de cada motorista de trabalho que
+   * ninguém fez aqui.
+   */
+  linkFleet?: boolean;
+}
+
 export async function applyPortalPlanTrip(
   customerId: string,
   portal: PortalTrip,
   stationMap: Map<string, string>,
   actorUserId: string,
   sourceLabel: string,
+  options: PortalPlanOptions = {},
 ): Promise<{ outcomes: PortalPlanOutcome[]; milestones: number; links: FleetLinkResult[] }> {
   const outcomes: PortalPlanOutcome[] = [];
   // O que o vínculo automático com a frota conseguiu (ou não) fazer, por perna.
   const links: FleetLinkResult[] = [];
+  const linkFleet = options.linkFleet ?? true;
 
   for (const leg of portal.legs) {
     const base = { externalTripId: portal.externalTripId, legNumber: leg.legNumber };
@@ -196,7 +208,7 @@ export async function applyPortalPlanTrip(
           await closeTripFromSource(created.id, "CANCELADA", actorUserId, sourceLabel);
           outcomes.push({ ...base, status: "cancelled" });
         } else {
-          links.push(await linkFleetFromPortal(created.id, portal, actorUserId));
+          if (linkFleet) links.push(await linkFleetFromPortal(created.id, portal, actorUserId));
           outcomes.push({ ...base, status: "created" });
         }
         continue;
@@ -214,7 +226,7 @@ export async function applyPortalPlanTrip(
 
       // And the same words, matched to the registered fleet. Attempted on every pass because the
       // driver usually appears LATER than the trip: a create-only attempt would find nobody.
-      links.push(await linkFleetFromPortal(existing.id, portal, actorUserId));
+      if (linkFleet) links.push(await linkFleetFromPortal(existing.id, portal, actorUserId));
 
       // An existing trip keeps its status: the plan is updated, the lifecycle is not touched here.
       if (samePlan(existing, plan)) {
@@ -234,7 +246,9 @@ export async function applyPortalPlanTrip(
   }
 
   // Whatever the same file already proves about execution, recorded on top of the plan just written.
-  const applied = await applyPortalTrip(customerId, portal, stationMap, actorUserId, sourceLabel);
+  const applied = await applyPortalTrip(customerId, portal, stationMap, actorUserId, sourceLabel, {
+    onCompleted: options.onCompleted,
+  });
   const milestones = applied.filter((o) => o.status === "applied").length;
 
   return { outcomes, milestones, links };
@@ -245,6 +259,7 @@ export async function applyPortalPlan(
   portalTrips: PortalTrip[],
   actorUserId: string,
   sourceLabel: string,
+  options: PortalPlanOptions = {},
 ): Promise<PortalPlanSummary> {
   const stationMap = await loadStationMap(customerId);
   const outcomes: PortalPlanOutcome[] = [];
@@ -258,6 +273,7 @@ export async function applyPortalPlan(
       stationMap,
       actorUserId,
       sourceLabel,
+      options,
     );
     outcomes.push(...result.outcomes);
     links.push(...result.links);
