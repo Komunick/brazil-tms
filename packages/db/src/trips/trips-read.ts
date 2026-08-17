@@ -47,6 +47,7 @@ import {
   billingStatus,
   billingStatusToStatuses,
   dayRangeSaoPaulo,
+  monthRangeSaoPaulo,
   type BillingStatus,
   type ExceptionFilter,
   type TripBoardQuery,
@@ -142,11 +143,12 @@ export type TripDetailView = TripDetail & {
 export interface DashboardSummary {
   tripsTodayByStatus: { status: TripStatus; count: number }[];
   /**
-   * TODAS as viagens por status, sem recorte de data (2026-08-17).
+   * As viagens DO MÊS por status (2026-08-17).
    *
-   * Passou a fazer sentido quando o histórico do portal entrou: o TMS foi de 997 para 2.960 viagens,
-   * e a operação inteira — o que já rodou, o que foi cancelado, o que está na rua — cabe num quadro
-   * só. Antes desse dado, "no geral" seria o retrato de uma semana e meia de importação irregular.
+   * Nasceu sem recorte de data e virou mensal no mesmo dia, a pedido — e o pedido está certo. Com o
+   * histórico do portal dentro, "todas" passou a somar 30 dias de operação encerrada: um número que
+   * cresce para sempre e não muda decisão de ninguém. O mês é o ciclo em que a operação e o
+   * faturamento realmente pensam.
    */
   tripsByStatus: { status: TripStatus; count: number }[];
   billingPendingCount: number;
@@ -651,6 +653,7 @@ export async function getTripDetailView(id: string): Promise<TripDetailView | nu
  */
 export async function queryDashboardMetrics(): Promise<DashboardSummary> {
   const { from, to } = dayRangeSaoPaulo(new Date());
+  const mes = monthRangeSaoPaulo(new Date());
   // 009 — the shared on-time predicate (R2): one source of truth with the SLA report.
   const pickup = onTimeExpr("pickup");
   const arrival = onTimeExpr("arrival");
@@ -676,10 +679,16 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
         ),
       )
       .groupBy(trips.currentStatus),
-    // O mesmo recorte, sem data: a operação inteira num quadro só.
+    // O mesmo recorte, no MÊS corrente — o ciclo em que a operação e o faturamento pensam.
     db
       .select({ status: trips.currentStatus, value: count() })
       .from(trips)
+      .where(
+        and(
+          gte(trips.plannedPickupWindowStart, new Date(mes.from)),
+          lt(trips.plannedPickupWindowStart, new Date(mes.to)),
+        ),
+      )
       .groupBy(trips.currentStatus),
     db.select({ value: count() }).from(trips).where(eq(trips.currentStatus, "billing_pending")),
     // Active trips with NO current assignment (006 — fills the "unassigned trips" widget).

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
-import { saoPauloDate, TRIP_STATUSES } from "@brazil-tms/shared";
+import { saoPauloDate, saoPauloMonthBounds, TRIP_STATUSES } from "@brazil-tms/shared";
 import type { DashboardSummary } from "@brazil-tms/db";
 import { useDashboardSummary } from "@/lib/trips/client";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
@@ -63,7 +63,7 @@ function MetricCard({ titleKey, value, href, placeholder }: MetricCardProps) {
 /**
  * A lista de status de um cartão, cada linha levando ao quadro já filtrado.
  *
- * Serve os DOIS cartões — o de hoje e o geral — porque a única diferença entre eles é o recorte de
+ * Serve os DOIS cartões — o de hoje e o do mês — porque a única diferença entre eles é o recorte de
  * data no link. Duas cópias divergiriam no primeiro ajuste de estilo, e a pessoa veria dois quadros
  * que se comportam diferente sem motivo.
  */
@@ -74,7 +74,7 @@ function StatusList({
 }: {
   byStatus: DashboardSummary["tripsTodayByStatus"];
   emptyKey: string;
-  /** O trecho de data do link, vazio no cartão geral. */
+  /** O trecho de data do link — o MESMO recorte que o cartão contou. */
   dateFilter: string;
 }) {
   const t = useTranslations("Trips.dashboard");
@@ -129,27 +129,35 @@ function TripsTodayCard({ byStatus }: { byStatus: DashboardSummary["tripsTodayBy
 }
 
 /**
- * O mesmo quadro, sem recorte de data (2026-08-17).
+ * O mesmo quadro, no MÊS corrente (2026-08-17).
  *
- * Substituiu o cartão de "Faturamento pendente" a pedido do usuário. E passou a valer a pena no
- * mesmo dia em que o histórico do portal entrou: o TMS foi de 997 para 2.960 viagens, então "no
- * geral" deixou de ser o retrato de uma semana e meia de importação irregular e virou a operação
- * inteira — o que já rodou, o que foi cancelado, o que está na rua agora.
+ * Substituiu o cartão de "Faturamento pendente" a pedido, e nasceu sem recorte de data — virou
+ * mensal no mesmo dia, também a pedido, e o pedido está certo: com o histórico do portal dentro,
+ * "todas" passou a somar 30 dias de operação encerrada. Um número que cresce para sempre e não muda
+ * decisão de ninguém. O mês é o ciclo em que a operação e o faturamento realmente pensam.
+ *
+ * O link carrega o MESMO recorte que o cartão contou — um cartão que abre um quadro com outro número
+ * é pior do que não abrir nada.
  */
-function TripsOverallCard({ byStatus }: { byStatus: DashboardSummary["tripsByStatus"] }) {
+function TripsMonthCard({ byStatus }: { byStatus: DashboardSummary["tripsByStatus"] }) {
   const t = useTranslations("Trips.dashboard");
   const total = byStatus.reduce((n, s) => n + s.count, 0);
+  const { first, last } = saoPauloMonthBounds();
 
   return (
     <Card>
-      <CardHeader className="pb-2 flex flex-row items-baseline justify-between gap-2">
+      <CardHeader className="flex flex-row items-baseline justify-between gap-2 pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">
-          {t("tripsOverall")}
+          {t("tripsMonth")}
         </CardTitle>
         <span className="text-sm font-semibold tabular-nums">{total}</span>
       </CardHeader>
       <CardContent>
-        <StatusList byStatus={byStatus} emptyKey="emptyOverall" dateFilter="" />
+        <StatusList
+          byStatus={byStatus}
+          emptyKey="emptyMonth"
+          dateFilter={`&pickupFrom=${first}&pickupTo=${last}`}
+        />
       </CardContent>
     </Card>
   );
@@ -245,7 +253,7 @@ export function DashboardWidgets() {
       <TripsTodayCard byStatus={summary.tripsTodayByStatus} />
       {/* Trocou o cartão de "Faturamento pendente" (2026-08-17, a pedido): o número do faturamento
           vive na tela de Faturamento, e aqui a pergunta é sobre a operação. */}
-      <TripsOverallCard byStatus={summary.tripsByStatus} />
+      <TripsMonthCard byStatus={summary.tripsByStatus} />
       {metrics.map((m) => (
         <MetricCard key={m.titleKey} {...m} />
       ))}
