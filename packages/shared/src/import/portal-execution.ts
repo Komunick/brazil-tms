@@ -76,6 +76,12 @@ export interface PortalTrip {
   /** The portal's own word: "Completed", "Cancelled", … — the caller decides what it means. */
   status: string | null;
   driverLabel: string | null;
+  /**
+   * O id do motorista no sistema do CLIENTE, quando a origem o entrega (a API entrega; a planilha
+   * não). É a única chave que os dois lados compartilham — o nome é o que temos hoje, e nome é
+   * frágil.
+   */
+  driverExternalId?: string | null;
   /** Quem o portal nomeia como operador da viagem (nome, não e-mail). */
   operatorLabel?: string | null;
   /** O que a transportadora recebe por esta viagem, em centavos, quando o portal já precificou. */

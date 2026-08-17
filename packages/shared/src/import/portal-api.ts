@@ -185,6 +185,19 @@ export function mapPortalApiTrips(payload: PortalApiEnvelope): PortalParseResult
       tripName: trimmed(raw.trip_name),
       status: statusCode == null ? null : (TRIP_STATUS_LABEL[statusCode] ?? `Status ${statusCode}`),
       driverLabel: trimmed(raw.driver_name),
+      /**
+       * O id do motorista NO SISTEMA DO CLIENTE (2026-08-17).
+       *
+       * O portal manda `driver: 181446` junto do nome, e a gente vinha jogando fora — ficávamos
+       * casando a frota por NOME, que é frágil por natureza: um acento fora do lugar já custou 3
+       * motoristas que existiam e o TMS jurava não existirem.
+       *
+       * Guardar o id não conserta o casamento sozinho (a frota do TMS ainda não carrega esse
+       * número), mas é a única chave que os dois lados compartilham. Sem ela, qualquer casamento
+       * exato no futuro seria impossível — e jogar fora um dado que o cliente entrega de graça é o
+       * tipo de perda que só aparece quando já é tarde.
+       */
+      driverExternalId: positive(raw.driver) != null ? String(raw.driver) : null,
       operatorLabel: trimmed(raw.operator),
       priceCents: portalPriceCents(raw.cost_unit),
       vehicleLabel: trimmed(raw.vehicle_type_name),

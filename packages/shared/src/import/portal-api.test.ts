@@ -194,4 +194,21 @@ describe("mapPortalApiTrips", () => {
       mapPortalApiTrips({ data: { list: [null as unknown as object] } }).rejected,
     ).toHaveLength(1);
   });
+
+  it("guarda o id do motorista no sistema do cliente — a única chave que os dois lados têm", () => {
+    // O portal manda `driver: 181446` junto do nome, e a gente jogava fora, casando a frota por
+    // NOME. Nome é frágil: um acento fora do lugar já custou 3 motoristas que existiam e o TMS
+    // jurava não existirem.
+    const t = mapPortalApiTrips(envelope(viagem({ driver: 181446, driver_name: "FELIPE MAIA" })))
+      .trips[0]!;
+    expect({ id: t.driverExternalId, nome: t.driverLabel }).toEqual({
+      id: "181446",
+      nome: "FELIPE MAIA",
+    });
+  });
+
+  it("sem id do motorista não inventa zero: viagem sem motorista designado fica nula", () => {
+    const t = mapPortalApiTrips(envelope(viagem({ driver: 0, driver_name: "" }))).trips[0]!;
+    expect({ id: t.driverExternalId, nome: t.driverLabel }).toEqual({ id: null, nome: null });
+  });
 });

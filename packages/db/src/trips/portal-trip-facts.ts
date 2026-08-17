@@ -36,6 +36,9 @@ export async function writePortalFacts(
 
   const fields: Record<string, string> = {};
   if (portal.driverLabel) fields["Motorista (portal)"] = portal.driverLabel;
+  // O id do motorista no sistema do cliente. Guardado porque é a única chave que os dois lados
+  // compartilham, e porque um dado que o cliente entrega de graça não se joga fora.
+  if (portal.driverExternalId) fields["ID do motorista (portal)"] = portal.driverExternalId;
   if (portal.plateLabel) fields["Placa (portal)"] = portal.plateLabel;
   if (portal.operatorLabel) fields["Operador (portal)"] = portal.operatorLabel;
   /**
