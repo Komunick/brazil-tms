@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.5.0
+// @version      1.6.0
 // @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -54,8 +54,21 @@
      * (30 dias ≈ 2.400 viagens no histórico observado), com folga. Bater o teto NÃO é silencioso.
      */
     maxPaginas: 40,
-    /** Janela do plano: de ontem até uma semana à frente. */
-    planoDiasAtras: 1,
+    /**
+     * Janela do plano: 15 dias para trás, uma semana à frente (1.6.0).
+     *
+     * Eram 1 dia para trás, e o preço disso apareceu inteiro na medição: uma viagem fica no
+     * Planejado ESPERANDO ACEITAÇÃO por dias — 55 estavam assim, algumas de 11/08 —, e ao passar de
+     * um dia ela saía do campo de visão do robô e CONGELAVA no TMS. Sem preço, sem mudança de
+     * status, sem detectar cancelamento: parada para sempre, gritando alerta, enquanto no portal
+     * seguia viva e já precificada (uma delas, R$ 4.548,30 que o TMS não tinha).
+     *
+     * O corte era visível a olho nu: nenhuma viagem com data anterior a ontem tinha valor. Nenhuma.
+     *
+     * Quinze dias custa ~12 páginas por ciclo em vez de 2, bem abaixo do teto de 40, a cada 15
+     * minutos. É barato perto de perder de vista uma viagem que o cliente ainda considera dele.
+     */
+    planoDiasAtras: 15,
     planoDiasAdiante: 7,
     /**
      * A aba "Aceito" — as viagens que estão ACONTECENDO agora (2026-08-16).
