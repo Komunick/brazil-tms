@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.7.0
+// @version      1.7.1
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -11,6 +11,12 @@
 // @connect      tms.braziltransports.com.br
 // @grant        GM_xmlhttpRequest
 // @run-at       document-idle
+// Sem estas duas linhas o Tampermonkey nunca procura versão nova, e cada correção vira "abra a URL,
+// clique em Reinstalar". Isso já custou uma instalação errada: os dois robôs desta VM moram no mesmo
+// servidor e estavam ambos na 1.7.0, então abrir o arquivo do portal por engano mostrava "versão
+// instalada 1.7.0, nada a atualizar" — e parecia que a correção do BSC não tinha saído.
+// @updateURL    http://127.0.0.1:8899/bsc-feed.user.js
+// @downloadURL  http://127.0.0.1:8899/bsc-feed.user.js
 // ==/UserScript==
 
 /**
@@ -112,7 +118,7 @@
    * a única pista foi a redação da mensagem ter mudado entre as duas. Com o número em cada linha, "o
    * que está rodando aí" deixa de ser dedução.
    */
-  const VERSAO = "1.7.0";
+  const VERSAO = "1.7.1";
   const log = (...a) => console.log(`[TMS BSC ${VERSAO}]`, ...a);
   const erro = (...a) => console.warn(`[TMS BSC ${VERSAO}]`, ...a);
 
