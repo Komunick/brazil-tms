@@ -1607,8 +1607,8 @@
     "onTheRoad": "Na estrada agora",
     "empty": "Nenhum caminhão na estrada.",
     "late": "atraso",
-    "lateTrips": "atrasadas",
-    "unassigned": "sem motorista",
+    "lateTrips": "atrasadas hoje",
+    "unassigned": "sem motorista hoje",
     "today": "viagens hoje",
     "more": "… e mais {count} na estrada",
     "status": {

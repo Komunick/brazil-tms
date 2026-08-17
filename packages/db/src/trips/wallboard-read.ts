@@ -1,6 +1,6 @@
 import { alias } from "drizzle-orm/pg-core";
-import { and, asc, count, eq, gte, inArray, lt, sql } from "drizzle-orm";
-import { ACTIVE_TRIP_STATUSES, dayRangeSaoPaulo, type TripStatus } from "@brazil-tms/shared";
+import { and, asc, count, eq, gte, inArray, lt, or, sql, type SQL } from "drizzle-orm";
+import { dayRangeSaoPaulo, type TripStatus } from "@brazil-tms/shared";
 import { db } from "../client";
 import { locations, tripAssignments, trips } from "../../schema";
 
@@ -54,7 +54,7 @@ export interface WallboardSummary {
   trips: WallboardTrip[];
   /** Quantas existem ao todo — a lista mostra as primeiras, e o rodapé não pode mentir sobre o resto. */
   tripsTotal: number;
-  /** Atrasadas com coleta até o fim de hoje — o que a sala ainda pode resolver. */
+  /** Atrasadas entre as que estão em jogo hoje — na rua agora ou programadas para hoje. */
   lateCount: number;
   /** Sem motorista, mesmo recorte. */
   unassignedCount: number;
@@ -65,6 +65,36 @@ export interface WallboardSummary {
 
 /** Quantas viagens a TV lista antes de dizer "e mais N". Cabe numa tela de 1080p sem rolar. */
 const WALL_ROWS = 12;
+
+/**
+ * O que está EM JOGO HOJE — o único recorte que faz sentido num rodapé de parede (2026-08-17).
+ *
+ * Duas versões erradas antes desta, e as duas pela mesma razão: o número era verdadeiro e não era
+ * acionável.
+ *
+ *   1. Toda viagem ativa → 782 "sem motorista", somando a semana inteira que o cliente nem designou.
+ *   2. Tudo até o fim de hoje → 161, e crescendo sozinho: virou o acúmulo dos 15 dias que o robô
+ *      passou a enxergar. Um contador que só sobe não é pendência, é paisagem.
+ *
+ * Em jogo hoje é: o caminhão que está na rua AGORA, mais a viagem programada para hoje que ainda
+ * não saiu. Dá 14 atrasadas e 46 sem motorista contra 131 e 161 — e essas a sala resolve.
+ *
+ * A viagem de 12/08 parada esperando aceitação continua existindo e continua alertando; ela é
+ * assunto da Torre, onde alguém senta e trabalha nela. Não é assunto de uma parede.
+ */
+function emJogoHoje(from: string, to: string): SQL {
+  return or(
+    inArray(trips.currentStatus, [...ON_THE_ROAD_STATUSES]),
+    and(
+      inArray(trips.currentStatus, PRE_PARTIDA),
+      gte(trips.plannedPickupWindowStart, new Date(from)),
+      lt(trips.plannedPickupWindowStart, new Date(to)),
+    ),
+  )!;
+}
+
+/** Antes de sair: a viagem ainda está no pátio, e é aí que o despacho age. */
+const PRE_PARTIDA = ["received", "assigned", "confirmed"] as const satisfies readonly TripStatus[];
 
 export async function queryWallboard(): Promise<WallboardSummary> {
   const { from, to } = dayRangeSaoPaulo(new Date());
@@ -110,27 +140,14 @@ export async function queryWallboard(): Promise<WallboardSummary> {
     db
       .select({ value: count() })
       .from(trips)
-      .where(
-        and(
-          inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
-          inArray(trips.slaStatus, ["late", "breached"]),
-          lt(trips.plannedPickupWindowStart, new Date(to)),
-        ),
-      ),
+      .where(and(emJogoHoje(from, to), inArray(trips.slaStatus, ["late", "breached"]))),
 
     db
       .select({ value: count() })
       .from(trips)
       .where(
         and(
-          inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
-          // Até o fim de HOJE, e não "todas as ativas" (2026-08-16).
-          //
-          // Sem esse corte o contador dava 782 contra 117 — porque somava toda viagem da semana que
-          // vem que o cliente ainda nem designou. Numa parede isso não é pendência, é ruído: um
-          // número vermelho enorme que ninguém pode resolver hoje ensina a sala a ignorar o
-          // vermelho. O rodapé só conta o que dá para agir agora.
-          lt(trips.plannedPickupWindowStart, new Date(to)),
+          emJogoHoje(from, to),
           sql`NOT EXISTS (
               SELECT 1 FROM ${tripAssignments}
               WHERE ${tripAssignments.tripId} = ${trips.id} AND ${tripAssignments.isCurrent}

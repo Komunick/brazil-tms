@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, count, eq, inArray, lt } from "drizzle-orm";
-import { ACTIVE_TRIP_STATUSES, dayRangeSaoPaulo, type TripStatus } from "@brazil-tms/shared";
+import { and, count, eq, gte, inArray, lt, or } from "drizzle-orm";
+import { dayRangeSaoPaulo, type TripStatus } from "@brazil-tms/shared";
 import { alerts, auditLogs, customers, db, locations, tripEvents, trips } from "@brazil-tms/db";
-import { queryWallboard } from "./wallboard-read";
+import { ON_THE_ROAD_STATUSES, queryWallboard } from "./wallboard-read";
 
 /**
  * O painel da parede.
@@ -108,48 +108,70 @@ describe.skipIf(!hasDb)("queryWallboard (integration)", () => {
     expect(board.onTheRoad.every((e) => typeof e.count === "number")).toBe(true);
   });
 
-  it("o rodapé conta só o que dá para resolver hoje — 782 contra 117 é a diferença", async () => {
+  it("o rodapé conta o que está EM JOGO HOJE, não o acúmulo de quinze dias", async () => {
     /**
-     * Um número vermelho enorme que ninguém pode resolver hoje ensina a sala a ignorar o vermelho.
-     * Sem o recorte, "sem motorista" dava 782 na base real contra 117 — o resto era viagem da semana
-     * que vem que o cliente ainda nem designou.
+     * Duas versões erradas antes desta, as duas verdadeiras e nenhuma acionável: 782 (toda viagem
+     * ativa) e 161 (tudo até hoje, crescendo sozinho conforme o robô enxergava mais passado). Um
+     * contador que só sobe não é pendência, é paisagem — e ensina a sala a ignorar o vermelho.
      *
-     * A asserção NÃO é sobre a variação do contador: o banco é compartilhado e outras suítes criam e
-     * apagam viagens ao mesmo tempo, então qualquer delta global é uma corrida. Em vez disso, o
-     * teste calcula por conta própria o número que o recorte deveria dar e compara com o que o
-     * painel devolveu. Se alguém tirar o recorte, os dois passam a divergir por centenas.
+     * A asserção NÃO é sobre variação de contador: o banco é compartilhado e outras suítes criam e
+     * apagam viagens ao mesmo tempo, então qualquer delta global é corrida — foi assim que a
+     * primeira versão deste teste passou sozinha e falhou na suíte inteira. Em vez disso ele
+     * calcula, por conta própria, o número que o recorte deveria dar.
      */
-    await makeTrip({ status: "received", coletaEmHoras: 24 * 5, sla: "late" });
-    await makeTrip({ status: "received", coletaEmHoras: -2, sla: "late" });
+    const velhaParada = await makeTrip({ status: "received", coletaEmHoras: -24 * 4, sla: "late" });
+    const deHojeParada = await makeTrip({ status: "received", coletaEmHoras: -2, sla: "late" });
+    const naRua = await makeTrip({ status: "in_transit", coletaEmHoras: -24 * 3, sla: "late" });
 
     const board = await queryWallboard();
-    const fimDeHoje = new Date(dayRangeSaoPaulo(new Date()).to);
+    const { from, to } = dayRangeSaoPaulo(new Date());
 
-    const esperadoAtrasadas = await db
+    const esperado = await db
       .select({ v: count() })
       .from(trips)
       .where(
         and(
-          inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
           inArray(trips.slaStatus, ["late", "breached"]),
-          lt(trips.plannedPickupWindowStart, fimDeHoje),
+          or(
+            inArray(trips.currentStatus, [...ON_THE_ROAD_STATUSES]),
+            and(
+              inArray(trips.currentStatus, ["received", "assigned", "confirmed"]),
+              gte(trips.plannedPickupWindowStart, new Date(from)),
+              lt(trips.plannedPickupWindowStart, new Date(to)),
+            ),
+          ),
         ),
       );
+    expect(board.lateCount).toBe(Number(esperado[0]!.v));
 
-    expect(board.lateCount).toBe(Number(esperadoAtrasadas[0]!.v));
-
-    // E o recorte tem de estar MORDENDO de verdade: sem ele o número seria maior, porque a viagem
-    // de daqui a cinco dias que acabamos de criar entraria.
-    const semRecorte = await db
-      .select({ v: count() })
-      .from(trips)
-      .where(
-        and(
-          inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
-          inArray(trips.slaStatus, ["late", "breached"]),
-        ),
-      );
-    expect(Number(semRecorte[0]!.v)).toBeGreaterThan(board.lateCount);
+    // E as três viagens que acabamos de criar provam cada lado do recorte, uma a uma.
+    const dentro = async (id: string): Promise<boolean> => {
+      const r = await db
+        .select({ v: count() })
+        .from(trips)
+        .where(
+          and(
+            eq(trips.id, id),
+            or(
+              inArray(trips.currentStatus, [...ON_THE_ROAD_STATUSES]),
+              and(
+                inArray(trips.currentStatus, ["received", "assigned", "confirmed"]),
+                gte(trips.plannedPickupWindowStart, new Date(from)),
+                lt(trips.plannedPickupWindowStart, new Date(to)),
+              ),
+            ),
+          ),
+        );
+      return Number(r[0]!.v) === 1;
+    };
+    expect({
+      // Parada há quatro dias esperando aceitação: existe, alerta, e NÃO é assunto de parede.
+      velhaParada: await dentro(velhaParada),
+      // Programada para hoje e ainda não saiu: é o trabalho da sala agora.
+      deHojeParada: await dentro(deHojeParada),
+      // Saiu anteontem e continua rodando: o caminhão está na rua, então conta.
+      naRua: await dentro(naRua),
+    }).toEqual({ velhaParada: false, deHojeParada: true, naRua: true });
   });
 
   it("a viagem em Recebida não conta como caminhão na estrada", async () => {
