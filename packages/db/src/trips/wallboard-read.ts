@@ -54,7 +54,9 @@ export interface WallboardSummary {
   trips: WallboardTrip[];
   /** Quantas existem ao todo — a lista mostra as primeiras, e o rodapé não pode mentir sobre o resto. */
   tripsTotal: number;
+  /** Atrasadas com coleta até o fim de hoje — o que a sala ainda pode resolver. */
   lateCount: number;
+  /** Sem motorista, mesmo recorte. */
   unassignedCount: number;
   tripsTodayCount: number;
   /** Carimbo do servidor: é o que prova que a TV não congelou numa tela velha. */
@@ -112,6 +114,7 @@ export async function queryWallboard(): Promise<WallboardSummary> {
         and(
           inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
           inArray(trips.slaStatus, ["late", "breached"]),
+          lt(trips.plannedPickupWindowStart, new Date(to)),
         ),
       ),
 
@@ -121,6 +124,13 @@ export async function queryWallboard(): Promise<WallboardSummary> {
       .where(
         and(
           inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
+          // Até o fim de HOJE, e não "todas as ativas" (2026-08-16).
+          //
+          // Sem esse corte o contador dava 782 contra 117 — porque somava toda viagem da semana que
+          // vem que o cliente ainda nem designou. Numa parede isso não é pendência, é ruído: um
+          // número vermelho enorme que ninguém pode resolver hoje ensina a sala a ignorar o
+          // vermelho. O rodapé só conta o que dá para agir agora.
+          lt(trips.plannedPickupWindowStart, new Date(to)),
           sql`NOT EXISTS (
               SELECT 1 FROM ${tripAssignments}
               WHERE ${tripAssignments.tripId} = ${trips.id} AND ${tripAssignments.isCurrent}
