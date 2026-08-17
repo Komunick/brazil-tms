@@ -211,4 +211,28 @@ describe("mapPortalApiTrips", () => {
     const t = mapPortalApiTrips(envelope(viagem({ driver: 0, driver_name: "" }))).trips[0]!;
     expect({ id: t.driverExternalId, nome: t.driverLabel }).toEqual({ id: null, nome: null });
   });
+  it("lê a ACEITAÇÃO como eixo próprio — e o zero é um valor, não ausência", () => {
+    /**
+     * Medido no portal: Pending + Assigning = 44 (alguém precisa aceitar), Accepted + Assigning =
+     * 359 (aceitas, esperando motorista). Sem este campo as duas filas eram uma pilha só de
+     * "Recebida" no TMS, e a de 359 — a que precisa de despacho — era invisível.
+     *
+     * O 0 é PENDING. Tratá-lo como ausente esconderia exatamente a fila que exige decisão.
+     */
+    const aceite = (code: unknown) =>
+      mapPortalApiTrips(envelope(viagem({ acceptance_status: code }))).trips[0]!.acceptanceStatus;
+    expect({ zero: aceite(0), um: aceite(1), ausente: aceite(undefined) }).toEqual({
+      zero: "Pending",
+      um: "Accepted",
+      ausente: null,
+    });
+  });
+
+  it("um código de aceitação desconhecido não vira rótulo inventado", () => {
+    // "Accepted(Pending Award)" existe no portal e hoje não tem viagem nenhuma, então o código dele
+    // não foi medido. Fica visível como número em vez de virar um palpite com cara de verdade.
+    expect(
+      mapPortalApiTrips(envelope(viagem({ acceptance_status: 2 }))).trips[0]!.acceptanceStatus,
+    ).toBe("Aceitação 2");
+  });
 });

@@ -85,6 +85,29 @@ export interface PortalApiEnvelope {
  * `closedStatusLabels`, então um código que nunca vimos pode criar ou atualizar uma viagem, mas nunca
  * encerrar nem cancelar uma. É essa regra que deixa a tabela incompleta ser segura.
  */
+/**
+ * O SEGUNDO eixo: o cliente já aceitou esta viagem? (2026-08-17)
+ *
+ * `trip_status` diz se há motorista; `acceptance_status` diz se a proposta foi aceita. São
+ * independentes, e é o cruzamento deles que descreve a operação de verdade — medido no portal:
+ *
+ *   Pending  + Assigning  →  44 viagens  →  alguém precisa ACEITAR ou REJEITAR
+ *   Accepted + Assigning  → 359 viagens  →  aceitas, esperando ATRIBUIR motorista
+ *   Accepted + Assigned   →  43 viagens  →  já atribuídas
+ *
+ * Sem este campo as 403 primeiras eram uma pilha só de "Recebida" no TMS, e a fila de 359 que precisa
+ * de despacho era invisível. Os códigos vieram do filtro "Status de aceitação", medidos pelo
+ * parâmetro que o portal manda — não são palpite.
+ *
+ * `Accepted(Pending Award)` existe na lista do portal e hoje não tem nenhuma viagem, então o código
+ * dele não foi medido: fica de fora, e um código desconhecido passa como `Aceitação <n>` em vez de
+ * virar um rótulo inventado.
+ */
+const ACCEPTANCE_LABEL: Record<number, string> = {
+  0: "Pending",
+  1: "Accepted",
+};
+
 const TRIP_STATUS_LABEL: Record<number, string> = {
   4: "Assigning",
   5: "Assigned",
@@ -198,6 +221,12 @@ export function mapPortalApiTrips(payload: PortalApiEnvelope): PortalParseResult
        * tipo de perda que só aparece quando já é tarde.
        */
       driverExternalId: positive(raw.driver) != null ? String(raw.driver) : null,
+      // 0 é um valor VÁLIDO aqui (Pending), então não dá para usar `positive`: o zero é justamente a
+      // fila que precisa de gente.
+      acceptanceStatus:
+        typeof raw.acceptance_status === "number"
+          ? (ACCEPTANCE_LABEL[raw.acceptance_status] ?? `Aceitação ${raw.acceptance_status}`)
+          : null,
       operatorLabel: trimmed(raw.operator),
       priceCents: portalPriceCents(raw.cost_unit),
       vehicleLabel: trimmed(raw.vehicle_type_name),

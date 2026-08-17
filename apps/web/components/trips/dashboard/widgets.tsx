@@ -234,6 +234,20 @@ export function DashboardWidgets() {
   // 008 — the "Missing documents" view deep-link (matches the DEFAULT_TRIP_VIEWS "missingDocuments").
   const missingDocsHref = "/trips?missingDocuments=true&scope=active&sort=pickupStart";
 
+  /**
+   * As duas filas do Planejado (2026-08-17).
+   *
+   * São decisões de GENTE, não estados de caminhão — e é por isso que vêm primeiro: aceitar uma
+   * proposta e despachar um motorista são as duas coisas que só acontecem se alguém fizer.
+   *
+   * Ainda sem link para o quadro: o filtro por aceitação não existe lá, e um atalho que abre uma
+   * lista com outro número é pior do que número nenhum. É o próximo passo.
+   */
+  const filas: MetricCardProps[] = [
+    { titleKey: "awaitingAcceptance", value: summary.awaitingAcceptance },
+    { titleKey: "awaitingAssignment", value: summary.awaitingAssignment },
+  ];
+
   const metrics: MetricCardProps[] = [
     metric("tripsAtRisk", summary.tripsAtRisk, (n) => n, atRiskHref),
     metric("unassignedTrips", summary.unassignedTrips, (n) => n, unassignedHref),
@@ -250,6 +264,9 @@ export function DashboardWidgets() {
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {filas.map((m) => (
+        <MetricCard key={m.titleKey} {...m} />
+      ))}
       <TripsTodayCard byStatus={summary.tripsTodayByStatus} />
       {/* Trocou o cartão de "Faturamento pendente" (2026-08-17, a pedido): o número do faturamento
           vive na tela de Faturamento, e aqui a pergunta é sobre a operação. */}

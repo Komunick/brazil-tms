@@ -52,6 +52,15 @@ export async function writePortalFacts(
    * vez de adivinhar.
    */
   if (portal.status) fields["Status (portal)"] = portal.status;
+  /**
+   * O eixo da ACEITAÇÃO, que é onde a operação decide (2026-08-17).
+   *
+   * "Pending" quer dizer que a viagem chegou e alguém precisa aceitar ou rejeitar a proposta.
+   * "Accepted" com a viagem ainda sem motorista quer dizer que ela está esperando atribuição — 359
+   * assim no portal hoje, todas amontoadas em "Recebida" no TMS, indistinguíveis das 44 que ainda
+   * nem foram aceitas.
+   */
+  if (portal.acceptanceStatus) fields["Aceitação (portal)"] = portal.acceptanceStatus;
   if (Object.keys(fields).length === 0) return priceChanged;
 
   // Preserva o que a viagem já carrega (uma coluna da planilha, o operador de atribuição vindo do
