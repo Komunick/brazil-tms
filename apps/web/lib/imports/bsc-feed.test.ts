@@ -58,5 +58,21 @@ describe("parseBscNumber", () => {
     // "1.877" em pt-BR é mil oitocentos e setenta e sete. Lido como inglês viraria 1,877 — e um
     // indicador de 1,877% pareceria catástrofe onde não há nenhuma.
     expect(parseBscNumber("1.877")).toBe(1877);
+    expect(parseBscNumber("1.234.567")).toBe(1234567);
+  });
+
+  it("recusa o mesmo relatório renderizado em INGLÊS em vez de multiplicar por cem", () => {
+    /**
+     * O relatório abriu em inglês na mesma conta e no mesmo navegador (medido em 2026-08-17): lá ele
+     * escreve "100.00%" e "9.50%", onde o ponto é DECIMAL. Pela regra brasileira — milhar tem três
+     * casas — isso viraria 10000 e 950. O primeiro estouraria a escala e derrubaria a página inteira,
+     * mas o segundo passaria: 950% de um indicador cujo piso é 97 pareceria desempenho excepcional.
+     * Como o texto sozinho não diz em que idioma foi escrito, ausência é a única resposta honesta.
+     */
+    expect({
+      cem: parseBscNumber("100.00%"),
+      baixo: parseBscNumber("9.50%"),
+      zero: parseBscNumber("0.00%"),
+    }).toEqual({ cem: null, baixo: null, zero: null });
   });
 });

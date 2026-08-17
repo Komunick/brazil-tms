@@ -44,8 +44,14 @@ export function parseBscNumber(raw: unknown): number | null {
   if (typeof raw !== "string") return null;
   const texto = raw.trim();
   if (texto === "" || texto === "-" || texto === "—") return null;
-  const limpo = texto.replace(/%/g, "").replace(/\s/g, "").replace(/\./g, "").replace(",", ".");
-  const n = Number.parseFloat(limpo);
+  const limpo = texto.replace(/%/g, "").replace(/\s/g, "");
+  // Em pt-BR o ponto separa MILHAR, e milhar tem sempre três casas. Um ponto seguido de outra
+  // quantidade ("100.00%") não é pt-BR: é o mesmo relatório renderizado em inglês, onde o ponto é
+  // DECIMAL — e lê-lo pela regra brasileira devolveria 10.000 no lugar de 100. Como o texto sozinho
+  // não diz em que idioma foi escrito, a única saída honesta é recusar; o robô já se recusa a ler a
+  // tela fora do português, e isto é a mesma trava do lado de cá.
+  if (/\.(?!\d{3}(\D|$))/.test(limpo)) return null;
+  const n = Number.parseFloat(limpo.replace(/\./g, "").replace(",", "."));
   return Number.isFinite(n) ? n : null;
 }
 
