@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.1.1
+// @version      1.2.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -49,9 +49,18 @@
  *   em" nunca acha nada. Como sem carimbo o script (corretamente) se recusa a mandar, essa sozinha já
  *   garantia silêncio total.
  *
- *   O ELEMENTO COM O TEXTO EXATO É INVISÍVEL. `Selecionar período` casa com um nó de 1x16 pixels que
- *   o Looker mantém fora da tela; clicar nele não abre coisa nenhuma. Achar por texto exato sem exigir
- *   que o elemento seja CLICÁVEL é clicar no vazio e concluir que a página não respondeu.
+ *   NENHUM ELEMENTO VISÍVEL TEM O TEXTO EXATO. O Looker desenha ícone com fonte de ligadura: o `<i>`
+ *   do calendário contém, literalmente, a palavra `calendar_today`. O controle do período tem então
+ *   como texto `calendar_today Selecionar período arrow_drop_down`, e o único elemento cujo texto
+ *   bate exatamente é um nó de 1x16 px que o Looker mantém fora da tela. A 1.0.0 clicava nele — no
+ *   vazio. A 1.1.1 passou a exigir que o elemento fosse clicável e, sem tirar os ícones do texto,
+ *   passou a não achar nada. Ambas as versões erravam a mesma coisa por lados opostos: comparar
+ *   contra o texto CRU.
+ *
+ *   `el.click()` NÃO ABRE O MENU. Os controles escutam `mousedown`/`mouseup`; o clique do DOM dispara
+ *   só o `click`. A sequência que abre é pointerdown → mousedown → pointerup → mouseup → click, e o
+ *   submenu abre no passar do mouse, não no clique. Tudo isso foi medido abrindo o seletor na página
+ *   real, não deduzido do HTML.
  *
  *   O IDIOMA NÃO É GARANTIDO. A mesma conta, no mesmo navegador, abriu o relatório em inglês: "Select
  *   date range", "100.00%", "No data". Em inglês o ponto é DECIMAL, e o leitor de números do TMS lê
@@ -99,7 +108,7 @@
    * a única pista foi a redação da mensagem ter mudado entre as duas. Com o número em cada linha, "o
    * que está rodando aí" deixa de ser dedução.
    */
-  const VERSAO = "1.1.1";
+  const VERSAO = "1.2.0";
   const log = (...a) => console.log(`[TMS BSC ${VERSAO}]`, ...a);
   const erro = (...a) => console.warn(`[TMS BSC ${VERSAO}]`, ...a);
 
@@ -114,8 +123,27 @@
    */
   const RECORTES = [
     { period: "day", pai: null, menu: "Hoje" },
-    { period: "week", pai: "Últimos 7 dias", menu: "Esta semana (começa na segunda-feira)" },
+    // Semana e mês saem do MESMO submenu — o que abre sob "Este mês" lista os dois, junto com
+    // trimestre e ano. Medido na tela: não existe um submenu por família.
+    //
+    // A semana é a ÚNICA sem variante "até agora": mês, trimestre e ano têm as duas, a semana só tem
+    // a inteira. Então este recorte vai de segunda a domingo, com os dias futuros ainda vazios — não
+    // é escolha, é o que o menu oferece. Como o rótulo do intervalo viaja junto com os números até o
+    // painel, a tela mostra "17 de ago. - 23 de ago." e ninguém confunde com semana fechada.
+    { period: "week", pai: "Este mês", menu: "Esta semana (começa na segunda-feira)" },
     { period: "month", pai: "Este mês", menu: "Este mês, até agora" },
+  ];
+
+  /**
+   * Os nomes que o botão de modo pode estar exibindo — ele mostra o modo em vigor, não um rótulo
+   * fixo. "Período automático" é só o estado de uma aba que ninguém mexeu ainda.
+   */
+  const MODOS = [
+    "Período automático",
+    "Fixo",
+    "Avançado",
+    "Ontem",
+    ...RECORTES.map((r) => r.menu),
   ];
 
   /** Todo texto visível da página, elemento a elemento — é assim que se acha rótulo no Looker. */
@@ -145,27 +173,97 @@
   }
 
   /**
-   * O elemento CLICÁVEL cujo texto é exatamente `alvo`, preferindo o mais interno.
+   * O texto de um elemento SEM os nomes dos ícones.
    *
-   * Se nenhum dos candidatos for visível, sobe a partir do mais interno até achar um ancestral que
-   * seja — é o caso do rótulo que mora dentro de um botão maior.
+   * O Looker desenha ícone com fonte de ligadura: o `<i>` do calendário contém, literalmente, a
+   * palavra `calendar_today`, e a setinha contém `arrow_drop_down`. Então o controle do período tem
+   * como texto `calendar_today Selecionar período arrow_drop_down`, e NENHUM elemento visível tem o
+   * texto exato "Selecionar período" — só um nó de 1x16 px que o Looker guarda fora da tela. Procurar
+   * texto exato no texto cru acha o nó invisível e mais nada; foi assim que a 1.0.0 clicou no vazio e
+   * a 1.1.1 concluiu que o seletor não existia.
+   *
+   * Clonar sai caro, então só é chamado sobre os poucos elementos que já contêm o alvo.
    */
-  function acharPorTexto(alvo) {
-    const candidatos = textos()
-      .filter((x) => x.txt === alvo)
-      .map((x) => x.el)
-      .sort((a, b) => profundidade(b) - profundidade(a));
-    if (candidatos.length === 0) return null;
-    const visivel = candidatos.find(clicavel);
-    if (visivel) return visivel;
-    for (let p = candidatos[0]; p; p = p.parentElement) if (clicavel(p)) return p;
-    return null;
+  function textoLimpo(el) {
+    const clone = el.cloneNode(true);
+    clone
+      .querySelectorAll("i, .material-icons, .material-icons-extended, .google-symbols")
+      .forEach((n) => n.remove());
+    return (clone.textContent || "").replace(/\s+/g, " ").trim();
   }
 
-  /** Abre um submenu. O Looker abre no `mouseover`, não no clique. */
+  /** O elemento CLICÁVEL cujo texto (sem ícones) é exatamente `alvo`, preferindo o mais interno. */
+  function acharPorTexto(alvo) {
+    // Alvo vazio casaria com todo elemento sem texto da página, e o script clicaria num `div`
+    // qualquer. Quem chama com "" está dizendo "não sei o que procurar" — a resposta é nada.
+    if (!alvo) return null;
+    return (
+      [...document.querySelectorAll("div,span,button,li,text,ng2-canvas-component")]
+        .filter((el) => {
+          const cru = el.textContent || "";
+          return cru.length < 200 && cru.includes(alvo);
+        })
+        .filter((el) => textoLimpo(el) === alvo)
+        .sort((a, b) => profundidade(b) - profundidade(a))
+        .find(clicavel) || null
+    );
+  }
+
+  /**
+   * Um clique de verdade, não `el.click()`.
+   *
+   * Os controles do Looker escutam `mousedown`/`mouseup`; o `.click()` do DOM dispara só o `click` e
+   * o menu não abre. A sequência abaixo é a que foi medida abrindo o seletor na página real.
+   */
+  function eventoDeMouse(el, tipo) {
+    const r = el.getBoundingClientRect();
+    const opcoes = {
+      bubbles: true,
+      cancelable: true,
+      view: window,
+      clientX: r.left + r.width / 2,
+      clientY: r.top + r.height / 2,
+      button: 0,
+    };
+    const Ev = tipo.startsWith("pointer") && window.PointerEvent ? PointerEvent : MouseEvent;
+    el.dispatchEvent(new Ev(tipo, opcoes));
+  }
+
+  function clicar(el) {
+    for (const tipo of ["pointerdown", "mousedown", "pointerup", "mouseup", "click"]) {
+      eventoDeMouse(el, tipo);
+    }
+  }
+
+  /** Abre um submenu. O Looker abre no passar do mouse, não no clique. */
   function passarMouse(el) {
-    for (const tipo of ["mouseover", "mouseenter", "mousemove"]) {
-      el.dispatchEvent(new MouseEvent(tipo, { bubbles: true, cancelable: true, view: window }));
+    for (const tipo of ["pointerover", "mouseover", "mouseenter", "mousemove"]) {
+      eventoDeMouse(el, tipo);
+    }
+  }
+
+  /**
+   * Espera o elemento aparecer, em vez de dormir um tanto e torcer.
+   *
+   * O Looker redesenha o controle depois de recalcular, e existe uma janela de alguns décimos em que
+   * ele simplesmente não está no DOM. Uma busca instantânea depois de um `dormir` de valor fixo cai
+   * nessa janela de vez em quando — o mesmo passo falhou e, repetido, passou. Sono fixo é chute sobre
+   * a máquina mais lenta; isto devolve assim que aparece e só desiste no limite.
+   */
+  async function esperarPorTexto(alvo, limiteMs = 8000) {
+    return esperarQualquer([alvo], limiteMs);
+  }
+
+  /** O primeiro da lista que aparecer — quando o rótulo do controle depende do estado dele. */
+  async function esperarQualquer(alvos, limiteMs = 8000) {
+    const ate = Date.now() + limiteMs;
+    for (;;) {
+      for (const alvo of alvos) {
+        const achado = acharPorTexto(alvo);
+        if (achado) return achado;
+      }
+      if (Date.now() >= ate) return null;
+      await dormir(300);
     }
   }
 
@@ -318,36 +416,56 @@
   }
 
   /**
+   * Fecha qualquer popup aberto, com Esc.
+   *
+   * Sem isto, UMA falha no meio do caminho deixa o calendário aberto — e com ele aberto o controle
+   * fechado não existe mais no DOM, então TODOS os ciclos seguintes falham no primeiro passo. O robô
+   * não tem quem aperte Esc por ele: ou ele limpa a própria bagunça antes de começar, ou o primeiro
+   * tropeço vira pane permanente.
+   */
+  async function fecharPopups() {
+    for (const tipo of ["keydown", "keyup"]) {
+      document.dispatchEvent(
+        new KeyboardEvent(tipo, { key: "Escape", code: "Escape", keyCode: 27, bubbles: true }),
+      );
+    }
+    await dormir(600);
+  }
+
+  /**
    * Troca o período no seletor. São os ÚNICOS cliques do script, e todos em controle de
    * visualização: nada é gravado no relatório.
    */
   async function escolherPeriodo(recorte) {
-    const seletor = acharPorTexto(rotuloPeriodo()) || acharPorTexto("Selecionar período");
-    if (!seletor) throw new Error("seletor de período não encontrado");
-    seletor.click();
-    await dormir(1500);
+    await fecharPopups();
 
-    const automatico = acharPorTexto("Período automático");
-    if (!automatico) throw new Error("menu 'Período automático' não encontrado");
-    automatico.click();
-    await dormir(1200);
+    const seletor =
+      (await esperarPorTexto(rotuloPeriodo())) || (await esperarPorTexto("Selecionar período"));
+    if (!seletor) throw new Error("seletor de período não encontrado");
+    clicar(seletor);
+
+    // O botão de modo NÃO se chama sempre "Período automático": ele mostra o modo que está valendo.
+    // Numa aba virgem é "Período automático"; depois que o robô aplica "Hoje", ele passa a se chamar
+    // "Hoje" — e procurar o nome antigo faz o segundo ciclo falhar onde o primeiro tinha passado.
+    // Por isso a busca é pelo CONJUNTO de nomes possíveis, não por um.
+    const modo = await esperarQualquer(MODOS);
+    if (!modo) throw new Error(`nenhum modo de período na tela (esperava um de: ${MODOS.join(", ")})`);
+    clicar(modo);
 
     // "Hoje" está na raiz; semana e mês moram atrás de um submenu que abre no passar do mouse.
-    let opcao = acharPorTexto(recorte.menu);
+    let opcao = await esperarPorTexto(recorte.menu, 2000);
     if (!opcao && recorte.pai) {
-      const pai = acharPorTexto(recorte.pai);
+      const pai = await esperarPorTexto(recorte.pai);
       if (!pai) throw new Error(`submenu "${recorte.pai}" não encontrado`);
       passarMouse(pai);
-      await dormir(1200);
-      opcao = acharPorTexto(recorte.menu);
+      opcao = await esperarPorTexto(recorte.menu);
     }
     if (!opcao) throw new Error(`opção "${recorte.menu}" não encontrada`);
-    opcao.click();
-    await dormir(1000);
+    clicar(opcao);
 
-    const aplicar = acharPorTexto("Aplicar");
+    const aplicar = await esperarPorTexto("Aplicar");
     if (!aplicar) throw new Error("botão Aplicar não encontrado");
-    aplicar.click();
+    clicar(aplicar);
     await dormir(CONFIG.esperaRecalculoMs);
   }
 
@@ -411,6 +529,8 @@
         await lerEEnviar(recorte);
       } catch (e) {
         erro(`${recorte.period} falhou (tenta de novo no próximo ciclo):`, e?.message ?? e);
+        // Limpa o que a falha deixou aberto para o próximo recorte não herdar a bagunça.
+        await fecharPopups();
       }
     }
   }
