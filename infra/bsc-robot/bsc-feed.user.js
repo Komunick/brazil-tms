@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.2.0
+// @version      1.2.1
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -108,7 +108,7 @@
    * a única pista foi a redação da mensagem ter mudado entre as duas. Com o número em cada linha, "o
    * que está rodando aí" deixa de ser dedução.
    */
-  const VERSAO = "1.2.0";
+  const VERSAO = "1.2.1";
   const log = (...a) => console.log(`[TMS BSC ${VERSAO}]`, ...a);
   const erro = (...a) => console.warn(`[TMS BSC ${VERSAO}]`, ...a);
 
@@ -217,16 +217,31 @@
    */
   function eventoDeMouse(el, tipo) {
     const r = el.getBoundingClientRect();
+    // SEM `view: window`. Dentro do sandbox do Tampermonkey o `window` é um proxy, não um `Window`
+    // de verdade, e o construtor do evento rejeita: "Failed to convert value to 'Window'". O mesmo
+    // código roda liso no console da página, onde o `window` é o legítimo — foi assim que passou nos
+    // meus testes e quebrou na instalação real. Nenhum controle do Looker lê `event.view`, então a
+    // propriedade some em vez de virar dependência de sandbox.
     const opcoes = {
       bubbles: true,
       cancelable: true,
-      view: window,
       clientX: r.left + r.width / 2,
       clientY: r.top + r.height / 2,
       button: 0,
+      buttons: tipo === "pointerdown" || tipo === "mousedown" ? 1 : 0,
     };
-    const Ev = tipo.startsWith("pointer") && window.PointerEvent ? PointerEvent : MouseEvent;
-    el.dispatchEvent(new Ev(tipo, opcoes));
+    if (tipo.startsWith("pointer") && typeof PointerEvent === "function") {
+      try {
+        el.dispatchEvent(
+          new PointerEvent(tipo, { ...opcoes, pointerId: 1, pointerType: "mouse", isPrimary: true }),
+        );
+        return;
+      } catch {
+        // Ambiente sem PointerEvent utilizável: o MouseEvent com o mesmo nome de tipo entrega o
+        // evento aos mesmos ouvintes. Um detalhe de construtor não derruba o ciclo inteiro.
+      }
+    }
+    el.dispatchEvent(new MouseEvent(tipo, opcoes));
   }
 
   function clicar(el) {
