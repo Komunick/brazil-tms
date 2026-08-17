@@ -87,14 +87,30 @@ export async function loadStationMap(customerId: string): Promise<Map<string, st
  * Apply one portal trip's legs. Each leg is matched to the TMS trip by (customer, external id, leg)
  * — the same key the planning import uses, so a milk run's second movement lands on its own trip.
  */
+export interface PortalApplyOptions {
+  /**
+   * O que fazer quando o cliente diz "Completed" (2026-08-17).
+   *
+   *   `billing`     — o caminho normal: conclui, avança para faturamento pendente e cria o item.
+   *                   É o certo para a viagem que o TMS acompanhou acontecer.
+   *   `close_only`  — conclui e PARA. É o certo para o backfill do histórico: são viagens que
+   *                   rodaram antes de o TMS existir e foram cobradas por fora. Criar item de
+   *                   faturamento para elas faria dinheiro aparecer duas vezes, e isso não se
+   *                   desfaz com um clique.
+   */
+  onCompleted?: "billing" | "close_only";
+}
+
 export async function applyPortalTrip(
   customerId: string,
   portal: PortalTrip,
   stationMap: Map<string, string>,
   actorUserId: string,
   sourceLabel: string,
+  options: PortalApplyOptions = {},
 ): Promise<PortalApplyOutcome[]> {
   const out: PortalApplyOutcome[] = [];
+  const onCompleted = options.onCompleted ?? "billing";
 
   for (const leg of portal.legs) {
     const base = { externalTripId: portal.externalTripId, legNumber: leg.legNumber };
@@ -343,7 +359,13 @@ export async function applyPortalTrip(
     // complete (a document missing, someone moved it meanwhile) is reported, and the rest go on.
     if (tripId && reachedUnloaded && isCompletedAtPortal(portal.status)) {
       try {
-        await markCompleted(tripId, {}, actorUserId);
+        // `close_only` é o backfill do histórico: conclui e para, sem entrar na fila do dinheiro.
+        // Essas viagens rodaram antes de o TMS existir e já foram cobradas por fora.
+        if (onCompleted === "close_only") {
+          await closeTripFromSource(tripId, "FINALIZADA", actorUserId, sourceLabel);
+        } else {
+          await markCompleted(tripId, {}, actorUserId);
+        }
         out.push({ ...base, status: "completed" });
       } catch (error) {
         out.push({

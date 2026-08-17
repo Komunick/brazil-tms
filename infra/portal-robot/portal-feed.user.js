@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.6.0
+// @version      1.7.0
 // @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -314,11 +314,25 @@
     }),
   );
 
+  /**
+   * A aba "Concluído", lida de dois jeitos (1.7.0).
+   *
+   * O ciclo NORMAL olha as últimas horas: são viagens que o TMS vinha acompanhando e acabaram de
+   * terminar, e elas seguem o caminho de sempre — concluem e entram na fila de faturamento.
+   *
+   * A PRIMEIRA leitura depois que o script sobe é outra coisa: 30 dias de histórico, entregues como
+   * `history`. O TMS começa em 06/08 e o portal tem viagem desde 18/07, então esse arranque é o que
+   * traz o que faltava. Elas fecham como Concluída ou Cancelada e NÃO entram na fila do dinheiro —
+   * já foram cobradas por fora, e item de faturamento duplicado não se desfaz com um clique.
+   *
+   * Quem decide isso tudo é o TMS. Aqui só se diz de onde veio e se é a varredura de arranque.
+   */
   let primeiraExecucao = true;
   repetir("execução", CONFIG.intervaloExecucaoMs, () => {
-    const horas = primeiraExecucao ? CONFIG.execucaoHorasPrimeiroCiclo : CONFIG.execucaoHorasAtras;
+    const arranque = primeiraExecucao;
+    const horas = arranque ? CONFIG.execucaoHorasPrimeiroCiclo : CONFIG.execucaoHorasAtras;
     primeiraExecucao = false;
-    return ciclo("execution", "/api/line_haul/agency/trip/history/list", {
+    return ciclo(arranque ? "history" : "execution", "/api/line_haul/agency/trip/history/list", {
       mtime: `${agora() - horas * 3600},${agora()}`,
     });
   });

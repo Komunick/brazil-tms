@@ -816,7 +816,8 @@
       "portal_execution": "Portal · Execução",
       "portal_robot_plan": "Robô · Planejado",
       "portal_robot_in_progress": "Robô · Em curso",
-      "portal_robot_execution": "Robô · Execução"
+      "portal_robot_execution": "Robô · Execução",
+      "portal_robot_history": "Robô · Histórico"
     },
     "summaryPlan": "{created} criadas · {updated} atualizadas · {unchanged} sem mudança · {cancelled} canceladas",
     "summaryExecution": "{applied} com horário real · {notFound} sem viagem · {ahead} já à frente",

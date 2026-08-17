@@ -13,6 +13,7 @@ import {
   db,
   importBatches,
   type PortalApplySummary,
+  type PortalPlanOptions,
   type PortalPlanSummary,
 } from "@brazil-tms/db";
 import { putOriginal } from "@/lib/supabase/storage";
@@ -143,6 +144,8 @@ export async function applyParsedPortalTrips(input: {
   sourceLabel: string;
   rows: number;
   parsed: PortalParseResult;
+  /** Como o modo `plan` deve se comportar — usado pelo backfill do histórico (ver `PortalFeedMode`). */
+  planOptions?: PortalPlanOptions;
 }): Promise<PortalImportResult> {
   const { customerId, parsed } = input;
 
@@ -150,7 +153,13 @@ export async function applyParsedPortalTrips(input: {
   // execution mode only records. The difference is the operator's choice, never a guess.
   const planSummary =
     input.mode === "plan"
-      ? await applyPortalPlan(customerId, parsed.trips, input.actorUserId, input.sourceLabel)
+      ? await applyPortalPlan(
+          customerId,
+          parsed.trips,
+          input.actorUserId,
+          input.sourceLabel,
+          input.planOptions,
+        )
       : null;
   const summary =
     input.mode === "execution"

@@ -68,6 +68,18 @@ describe.skipIf(!hasDb)("POST /api/imports/portal-feed", () => {
     });
   });
 
+  it("aceita o modo history (backfill do Concluído) e o trata como plano", async () => {
+    // O TMS começa em 06/08 e o portal tem viagem desde 18/07. Este é o modo que traz o que falta —
+    // criando, e fechando como Concluída/Cancelada sem entrar na fila do dinheiro.
+    const res = await POST(post({ mode: "history", payload: { retcode: 0, data: { list: [] } } }));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect({ temPlano: body.plan !== null, temExecucao: body.execution !== null }).toEqual({
+      temPlano: true,
+      temExecucao: false,
+    });
+  });
+
   it("sem token não passa, e um modo inventado é recusado", async () => {
     const semToken = await POST(post({ mode: "plan", payload: {} }, "errado"));
     expect(semToken.status).toBe(401);
