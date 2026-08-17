@@ -53,12 +53,48 @@ export interface PortalApiEnvelope {
  * The 90/100 split is what makes the mapping safe: arrival at the last stop is present in every
  * single 90 and in no 100 at all.
  *
- * An UNKNOWN code deliberately passes through as `Status <n>`: it matches no `closedStatusLabels`
- * entry, so a code we have never seen can create or update a trip but can never close or cancel one.
+ * VOCABULÁRIO COMPLETO, LIDO DO PRÓPRIO PORTAL (2026-08-17)
+ *
+ * Os quatro acima vieram de inferência sobre os dados; o resto do vocabulário simplesmente não
+ * existia para nós — sete rótulos viravam `Status 40`, `Status 50`, e por aí. Com autorização do
+ * usuário, o filtro "Status da viagem" de cada aba foi aberto e cada opção medida pelo parâmetro que
+ * o portal manda (`trip_station_status`). Nada de adivinhação: o número saiu da própria requisição.
+ *
+ * E o nome do parâmetro conta a coisa mais importante: é o status da ESTAÇÃO ATUAL da viagem, não da
+ * viagem inteira. Por isso ele avança e recomeça a cada parada — e por isso o TMS continua tirando o
+ * status da viagem dos MARCOS (horários reais), nunca deste rótulo.
+ *
+ * A escala é um ciclo de vida crescente dentro da parada:
+ *
+ *   4   Assigning   Planejado  — o cliente ainda está designando
+ *   5   Assigned    Planejado  — já tem motorista, não saiu
+ *   10  Loading     Aceito     — carregando
+ *   30  Seal        Aceito     — lacrado
+ *   40  Departed    Aceito     — partiu
+ *   50  Arrived     Aceito     — chegou na parada seguinte
+ *   60  Unseal      Aceito     — lacre aberto
+ *   70  Operating   Aceito     — descarregando
+ *   80  Unloaded    Aceito     — descarregado
+ *   90  Completed   Concluído  — encerrada
+ *   100 Cancelled   Concluído  — cancelada
+ *
+ * O 20 existe no portal (a viagem passa por "Em fila"/"Acoplado" antes de carregar) e NÃO é oferecido
+ * como filtro, então não foi medido — fica de fora em vez de entrar por palpite.
+ *
+ * Um código desconhecido continua passando como `Status <n>`: ele não casa com nenhum
+ * `closedStatusLabels`, então um código que nunca vimos pode criar ou atualizar uma viagem, mas nunca
+ * encerrar nem cancelar uma. É essa regra que deixa a tabela incompleta ser segura.
  */
 const TRIP_STATUS_LABEL: Record<number, string> = {
-  4: "Planned",
+  4: "Assigning",
   5: "Assigned",
+  10: "Loading",
+  30: "Seal",
+  40: "Departed",
+  50: "Arrived",
+  60: "Unseal",
+  70: "Operating",
+  80: "Unloaded",
   90: "Completed",
   100: "Cancelled",
 };
