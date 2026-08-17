@@ -10,15 +10,31 @@ import {
   useAlerts,
   useUnacknowledgeAlert,
 } from "@/lib/trips/client";
+import { groupAlertsByTrip } from "@/lib/alerts/group-by-trip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
- * In-app alert surface (007, US4). Lists the open §17 alerts (newest-first) with an acknowledge
- * action; the acknowledged ones are behind a toggle (2026-08-15), greyed, naming who silenced each
- * and when, and undoable. Mounted on the Control-Tower board + Home Dashboard; polled on the
- * control-tower cadence. In-app only — nothing leaves the app (FR-025). pt-BR.
+ * In-app alert surface (007, US4). Lists the open §17 alerts with an acknowledge action; the
+ * acknowledged ones are behind a toggle (2026-08-15), greyed, naming who silenced each and when, and
+ * undoable. Mounted on the Control-Tower board + Home Dashboard; polled on the control-tower
+ * cadence. In-app only — nothing leaves the app (FR-025). pt-BR.
+ *
+ * UMA LINHA POR VIAGEM, não por alerta (2026-08-16).
+ *
+ * A lista era plana e contava alertas. Medido na operação real: 307 alertas em 123 viagens — 75
+ * delas com TRÊS. E os três dizem a mesma coisa: não foi atribuída, não chegou na origem, não
+ * chegou no destino, porque o caminhão não saiu. Um problema, contado três vezes.
+ *
+ * Ninguém trata isso como três pendências, então a tela parava de ajudar exatamente quando mais
+ * precisava — no dia cheio. Agora a viagem é a linha, os tipos viram etiquetas dentro dela, e o
+ * número no topo é quantas VIAGENS pedem atenção. O total de alertas continua visível ao lado, para
+ * quem quiser a conta antiga.
+ *
+ * Reconhecer também passa a ser por viagem: silencia os alertas ativos daquela viagem de uma vez, e
+ * desfazer devolve todos. É o gesto que a pessoa já faz — "essa eu vi" —, e não um clique por
+ * sintoma.
  */
 
 const SEVERITY_CLASS: Record<string, string> = {
@@ -26,6 +42,7 @@ const SEVERITY_CLASS: Record<string, string> = {
   medium: "bg-amber-100 text-amber-900",
   high: "bg-destructive/15 text-destructive",
 };
+
 
 export function AlertSurface() {
   const t = useTranslations("Alerts");
@@ -42,13 +59,11 @@ export function AlertSurface() {
   const unacknowledge = useUnacknowledgeAlert();
 
   const items = query.data?.items ?? [];
-  // Active first, then the silenced ones — the working list must not be pushed down the page by
-  // rows that are, by definition, already handled.
-  const sorted = [...items].sort(
-    (a, b) => Number(a.state === "acknowledged") - Number(b.state === "acknowledged"),
-  );
-  const activeCount = items.filter((a) => a.state === "active").length;
-  const acknowledgedCount = items.length - activeCount;
+  const groups = groupAlertsByTrip(items);
+  // O número que importa: quantas VIAGENS pedem atenção. O total de alertas fica ao lado.
+  const activeTripCount = groups.filter((g) => g.activeItems.length > 0).length;
+  const activeAlertCount = items.filter((a) => a.state === "active").length;
+  const acknowledgedCount = items.length - activeAlertCount;
 
   const mapError = (e: unknown): string => {
     const code = e instanceof TripsError ? e.code : "REQUEST_FAILED";
@@ -64,9 +79,18 @@ export function AlertSurface() {
       <CardHeader className="flex flex-row items-center justify-between gap-2">
         <CardTitle>{t("surfaceTitle")}</CardTitle>
         <div className="flex items-center gap-3">
-          {/* The number always counts the ACTIVE ones, toggle or no toggle: it is the size of the
-              pile still owed attention, and it must not grow when you ask to see the handled ones. */}
-          <span className="text-sm text-muted-foreground tabular-nums">{activeCount}</span>
+          {/* Conta sempre as ATIVAS, com ou sem o botão ligado: é o tamanho da pilha que ainda pede
+              atenção, e ela não pode crescer só porque alguém pediu para ver as tratadas.
+              Viagens em destaque; o total de alertas fica ao lado, menor, para quem faz a conta. */}
+          <span className="text-sm tabular-nums">
+            {t("activeTrips", { count: activeTripCount })}
+            {activeAlertCount > activeTripCount ? (
+              <span className="text-muted-foreground">
+                {" · "}
+                {t("activeAlerts", { count: activeAlertCount })}
+              </span>
+            ) : null}
+          </span>
           <Button
             size="sm"
             variant="ghost"
@@ -93,76 +117,89 @@ export function AlertSurface() {
           </p>
         ) : (
           <ul className="space-y-2">
-            {sorted.map((a) => (
-              <li
-                key={a.id}
-                className={`flex flex-wrap items-center justify-between gap-2 rounded-md border p-2 text-sm ${
-                  a.state === "acknowledged" ? "bg-muted/40 text-muted-foreground" : ""
-                }`}
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      SEVERITY_CLASS[a.severity] ?? ""
-                    }`}
-                  >
-                    {t(`caseValue.${a.alertCase}` as Parameters<typeof t>[0])}
-                  </span>
-                  <Link
-                    href={`/trips/${a.tripId}`}
-                    className="font-medium text-primary hover:underline"
-                  >
-                    {a.externalTripId ?? a.tripId.slice(0, 8)}
-                  </Link>
-                  {a.customerName ? (
-                    <span className="text-muted-foreground">· {a.customerName}</span>
-                  ) : null}
-                  <span className="text-muted-foreground">{formatDateTime(a.createdAt)}</span>
-                </div>
-                {a.state === "acknowledged" ? (
+            {groups.map((g) => {
+              const tudoReconhecido = g.activeItems.length === 0;
+              // Quem silenciou — mostrado a partir do primeiro reconhecido, porque o gesto é um só.
+              const quem = g.acknowledgedItems.find((a) => a.acknowledgedByName);
+              return (
+                <li
+                  key={g.tripId}
+                  className={`flex flex-wrap items-center justify-between gap-2 rounded-md border p-2 text-sm ${
+                    tudoReconhecido ? "bg-muted/40 text-muted-foreground" : ""
+                  }`}
+                >
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs">
-                      {a.acknowledgedByName
-                        ? t("acknowledgedByAt", {
-                            name: a.acknowledgedByName,
-                            at: formatDateTime(a.acknowledgedAt),
-                          })
-                        : t("acknowledged")}
-                    </span>
+                    <Link
+                      href={`/trips/${g.tripId}`}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      {g.externalTripId ?? g.tripId.slice(0, 8)}
+                    </Link>
+                    {g.customerName ? (
+                      <span className="text-muted-foreground">· {g.customerName}</span>
+                    ) : null}
+                    {/* Os motivos, um por etiqueta. Reconhecido fica apagado no meio dos outros:
+                        a viagem continua sendo uma linha só. */}
+                    {g.items.map((a) => (
+                      <span
+                        key={a.id}
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                          a.state === "acknowledged"
+                            ? "bg-muted text-muted-foreground line-through"
+                            : (SEVERITY_CLASS[a.severity] ?? "")
+                        }`}
+                      >
+                        {t(`caseValue.${a.alertCase}` as Parameters<typeof t>[0])}
+                      </span>
+                    ))}
+                    <span className="text-muted-foreground">{formatDateTime(g.firstAt)}</span>
+                  </div>
+                  {tudoReconhecido ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-xs">
+                        {quem?.acknowledgedByName
+                          ? t("acknowledgedByAt", {
+                              name: quem.acknowledgedByName,
+                              at: formatDateTime(quem.acknowledgedAt),
+                            })
+                          : t("acknowledged")}
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={unacknowledge.isPending}
+                        onClick={() => {
+                          for (const a of g.acknowledgedItems) {
+                            unacknowledge.mutate(a.id, {
+                              onError: (e) => console.error(mapError(e)),
+                            });
+                          }
+                        }}
+                      >
+                        {t("undoAcknowledge")}
+                      </Button>
+                    </div>
+                  ) : (
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={unacknowledge.isPending}
-                      onClick={() =>
-                        unacknowledge.mutate(a.id, {
-                          onError: (e) => {
-                            console.error(mapError(e));
-                          },
-                        })
-                      }
+                      disabled={acknowledge.isPending}
+                      onClick={() => {
+                        // Silencia a VIAGEM: todos os motivos ainda abertos, de uma vez. É o gesto
+                        // que a pessoa faz — "essa eu vi" —, não um clique por sintoma.
+                        for (const a of g.activeItems) {
+                          acknowledge.mutate(a.id, {
+                            onError: (e) => console.error(mapError(e)),
+                          });
+                        }
+                      }}
                     >
-                      {t("undoAcknowledge")}
+                      {t("acknowledge")}
                     </Button>
-                  </div>
-                ) : (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={acknowledge.isPending}
-                    onClick={() =>
-                      acknowledge.mutate(a.id, {
-                        onError: (e) => {
-                          // Surface a transient error inline via the row title attribute.
-                          console.error(mapError(e));
-                        },
-                      })
-                    }
-                  >
-                    {t("acknowledge")}
-                  </Button>
-                )}
-              </li>
-            ))}
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </CardContent>
