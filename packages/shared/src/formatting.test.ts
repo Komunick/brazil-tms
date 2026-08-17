@@ -5,6 +5,7 @@ import {
   documentExpiryState,
   formatBRL,
   formatDate,
+  monthRangeSaoPaulo,
 } from "./formatting";
 
 describe("documentExpiryState (R9)", () => {
@@ -82,5 +83,34 @@ describe("formatBRL", () => {
     // Non-breaking spaces in the Intl output — assert on the digits/symbol loosely.
     expect(formatBRL(123456)).toContain("1.234,56");
     expect(formatBRL(0)).toContain("0,00");
+  });
+});
+
+describe("monthRangeSaoPaulo — mês do NEGÓCIO, não do servidor", () => {
+  it("mapeia um mês para meia-noite..meia-noite de São Paulo, em UTC", () => {
+    const { from, to } = monthRangeSaoPaulo("2026-08-17");
+    expect({ from, to }).toEqual({
+      from: "2026-08-01T03:00:00.000Z",
+      to: "2026-09-01T03:00:00.000Z",
+    });
+  });
+
+  it("na virada do mês usa o mês de SÃO PAULO, não o de UTC", () => {
+    /**
+     * O caso que erra em silêncio: 01/09 às 01:00Z ainda é 31/08 às 22:00 em São Paulo. Sem o fuso
+     * do negócio, o painel mostraria setembro enquanto a operação ainda está em agosto — e só na
+     * virada, que é quando ninguém está olhando.
+     */
+    const { from, to } = monthRangeSaoPaulo(new Date("2026-09-01T01:00:00.000Z"));
+    expect({ from, to }).toEqual({
+      from: "2026-08-01T03:00:00.000Z",
+      to: "2026-09-01T03:00:00.000Z",
+    });
+  });
+
+  it("a janela é meio-aberta: o primeiro instante do mês seguinte fica DE FORA", () => {
+    const { to } = monthRangeSaoPaulo("2026-02-10");
+    // Fevereiro de 2026 tem 28 dias; o fim é 01/03 em São Paulo, não 28/02.
+    expect(to).toBe("2026-03-01T03:00:00.000Z");
   });
 });
