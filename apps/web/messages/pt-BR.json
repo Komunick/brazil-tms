@@ -1470,7 +1470,10 @@
       "STALE_ALERT": "O alerta já foi resolvido.",
       "FORBIDDEN": "Você não tem permissão para esta ação.",
       "REQUEST_FAILED": "Não foi possível concluir a operação. Tente novamente."
-    }
+    },
+    "page": "Página {current} de {total}",
+    "previous": "Anterior",
+    "next": "Próxima"
   },
   "Dispatch": {
     "title": "Expedição",

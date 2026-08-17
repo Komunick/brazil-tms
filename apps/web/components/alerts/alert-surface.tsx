@@ -10,7 +10,7 @@ import {
   useAlerts,
   useUnacknowledgeAlert,
 } from "@/lib/trips/client";
-import { groupAlertsByTrip } from "@/lib/alerts/group-by-trip";
+import { groupAlertsByTrip, paginate } from "@/lib/alerts/group-by-trip";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -39,9 +39,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 const SEVERITY_CLASS: Record<string, string> = {
   low: "bg-muted text-muted-foreground",
-  medium: "bg-amber-100 text-amber-900",
+  medium: "bg-warning/15 text-warning",
   high: "bg-destructive/15 text-destructive",
 };
+
+/** Quantas viagens por página. Oito cabem sem rolar em qualquer tela. */
+const GRUPOS_POR_PAGINA = 8;
 
 
 export function AlertSurface() {
@@ -54,12 +57,25 @@ export function AlertSurface() {
    * greyed, each naming who silenced it and when, each undoable.
    */
   const [showAcknowledged, setShowAcknowledged] = useState(false);
+  const [pagina, setPagina] = useState(1);
   const query = useAlerts(showAcknowledged ? {} : { state: "active" });
   const acknowledge = useAcknowledgeAlert();
   const unacknowledge = useUnacknowledgeAlert();
 
   const items = query.data?.items ?? [];
   const groups = groupAlertsByTrip(items);
+
+  /**
+   * A lista vira PÁGINAS (2026-08-17).
+   *
+   * Mesmo com uma linha por viagem, 127 viagens é uma parede de rolagem — e no quadro da Torre os
+   * avisos ficam ACIMA das viagens, então quem clicava num status no painel do dia caía no topo e
+   * tinha de rolar a lista inteira até chegar nas LH. O problema não era achar o aviso, era
+   * atravessá-los.
+   *
+   * Oito por vez cabem sem rolar em qualquer tela, e a página some sozinha quando há uma só.
+   */
+  const { visiveis, paginaAtual, totalPaginas } = paginate(groups, pagina, GRUPOS_POR_PAGINA);
   // O número que importa: quantas VIAGENS pedem atenção. O total de alertas fica ao lado.
   const activeTripCount = groups.filter((g) => g.activeItems.length > 0).length;
   const activeAlertCount = items.filter((a) => a.state === "active").length;
@@ -117,7 +133,7 @@ export function AlertSurface() {
           </p>
         ) : (
           <ul className="space-y-2">
-            {groups.map((g) => {
+            {visiveis.map((g) => {
               const tudoReconhecido = g.activeItems.length === 0;
               // Quem silenciou — mostrado a partir do primeiro reconhecido, porque o gesto é um só.
               const quem = g.acknowledgedItems.find((a) => a.acknowledgedByName);
@@ -202,6 +218,31 @@ export function AlertSurface() {
             })}
           </ul>
         )}
+        {totalPaginas > 1 ? (
+          <div className="flex items-center justify-between border-t pt-3 text-sm text-muted-foreground">
+            <span className="tabular-nums">
+              {t("page", { current: paginaAtual, total: totalPaginas })}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={paginaAtual <= 1}
+                onClick={() => setPagina(paginaAtual - 1)}
+              >
+                {t("previous")}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={paginaAtual >= totalPaginas}
+                onClick={() => setPagina(paginaAtual + 1)}
+              >
+                {t("next")}
+              </Button>
+            </div>
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

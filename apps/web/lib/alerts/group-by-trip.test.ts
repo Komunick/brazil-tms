@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { groupAlertsByTrip, type AlertLike } from "./group-by-trip";
+import { groupAlertsByTrip, paginate, type AlertLike } from "./group-by-trip";
 
 /**
  * O caso real que motivou isto: uma viagem que não saiu dispara três alertas — não foi atribuída,
@@ -72,5 +72,40 @@ describe("groupAlertsByTrip", () => {
 
   it("lista vazia devolve lista vazia", () => {
     expect(groupAlertsByTrip([])).toEqual([]);
+  });
+});
+
+describe("paginate", () => {
+  const itens = Array.from({ length: 20 }, (_, i) => i);
+
+  it("corta a fatia certa e conta as páginas", () => {
+    const r = paginate(itens, 2, 8);
+    expect({ primeiro: r.visiveis[0], tamanho: r.visiveis.length, total: r.totalPaginas }).toEqual({
+      primeiro: 8,
+      tamanho: 8,
+      total: 3,
+    });
+  });
+
+  it("prende a página quando a lista encolhe embaixo do pé de quem lê", () => {
+    // Os avisos se resolvem sozinhos e o quadro repolla a cada 30s: quem estava na página 5 acorda
+    // num mundo de 1. Uma fatia fora do fim devolveria vazio — na tela, indistinguível de "não há
+    // avisos".
+    const r = paginate([1, 2, 3], 5, 8);
+    expect({ pagina: r.paginaAtual, visiveis: r.visiveis }).toEqual({ pagina: 1, visiveis: [1, 2, 3] });
+  });
+
+  it("lista vazia continua sendo uma página, não zero", () => {
+    const r = paginate([], 1, 8);
+    expect({ total: r.totalPaginas, pagina: r.paginaAtual, visiveis: r.visiveis }).toEqual({
+      total: 1,
+      pagina: 1,
+      visiveis: [],
+    });
+  });
+
+  it("a última página leva o resto, mesmo incompleta", () => {
+    const r = paginate(itens, 3, 8);
+    expect(r.visiveis).toEqual([16, 17, 18, 19]);
   });
 });
