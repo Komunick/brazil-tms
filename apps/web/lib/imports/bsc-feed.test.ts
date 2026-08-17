@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseBscNumber } from "./bsc-feed";
+import { ingestBscSnapshot, parseBscNumber } from "./bsc-feed";
 
 /**
  * A leitura do BSC é RASPADA DE TELA, e é aí que mora todo o risco: um JSON de API vem tipado, um
@@ -74,5 +74,38 @@ describe("parseBscNumber", () => {
       baixo: parseBscNumber("9.50%"),
       zero: parseBscNumber("0.00%"),
     }).toEqual({ cem: null, baixo: null, zero: null });
+  });
+});
+
+describe("ingestBscSnapshot", () => {
+  const base = {
+    period: "day" as const,
+    periodLabel: "17 de ago. de 2026 - 17 de ago. de 2026",
+    score: "62,75",
+    zone: "Zona de Atenção",
+    indicators: { SPOT: "46,03%" },
+  };
+
+  it("recusa carimbo no futuro — é fuso errado, e vence as leituras certas no painel", async () => {
+    /**
+     * Um robô rodando em UTC somou -03:00 a uma hora que já era UTC e gravou três snapshots
+     * adiantados em três horas. O painel escolhe, por período, o maior `captured_at` — então aquelas
+     * três leituras meio carregadas ganhariam de toda leitura correta pelas três horas seguintes,
+     * sem parecer defeito nenhum: pareceriam o dado mais fresco que existe.
+     */
+    await expect(
+      ingestBscSnapshot({ ...base, capturedAt: new Date(Date.now() + 3 * 3600_000).toISOString() }),
+    ).rejects.toMatchObject({ code: "BSC_CAPTURED_AT_IN_FUTURE" });
+  });
+
+  it("deixa passar o relógio destoando alguns minutos", async () => {
+    // A folga existe para máquina com relógio um pouco adiantado, não para erro de fuso: cinco
+    // minutos passam, três horas não. Aqui só se afirma que a TRAVA não disparou — a gravação em si
+    // depende do banco e é exercício de teste de integração, não deste arquivo.
+    const perto = ingestBscSnapshot({
+      ...base,
+      capturedAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+    }).catch((e: { code?: string }) => e);
+    await expect(perto).resolves.not.toMatchObject({ code: "BSC_CAPTURED_AT_IN_FUTURE" });
   });
 });

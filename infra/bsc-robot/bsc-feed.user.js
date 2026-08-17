@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.2.1
+// @version      1.3.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -97,8 +97,10 @@
      * para pegar a virada sem depender de acertar o minuto, e não porque o dado mude.
      */
     intervaloMs: 60 * 60 * 1000,
-    /** Quanto esperar o relatório recalcular depois de trocar o período. */
-    esperaRecalculoMs: 9000,
+    /** Piso antes de começar a olhar: o relatório nem começou a recalcular nos primeiros segundos. */
+    pisoRecalculoMs: 6000,
+    /** Teto para a tela parar de mudar. Estourou, não manda — ver `lerEstavel`. */
+    limiteRecalculoMs: 90000,
   };
 
   /**
@@ -108,7 +110,7 @@
    * a única pista foi a redação da mensagem ter mudado entre as duas. Com o número em cada linha, "o
    * que está rodando aí" deixa de ser dedução.
    */
-  const VERSAO = "1.2.1";
+  const VERSAO = "1.3.0";
   const log = (...a) => console.log(`[TMS BSC ${VERSAO}]`, ...a);
   const erro = (...a) => console.warn(`[TMS BSC ${VERSAO}]`, ...a);
 
@@ -336,13 +338,18 @@
       if (!pm && hora === 12) hora = 0;
     }
 
-    const p2 = (v) => String(v).padStart(2, "0");
-    // O fuso vai FIXO em -03:00, e não pelo relógio da máquina: o relatório publica em horário de
-    // São Paulo, e o robô pode acabar rodando numa VM em UTC. Deixar o navegador interpretar
-    // deslocaria todo carimbo em três horas sem nenhum sintoma visível. O Brasil não tem mais horário
-    // de verão desde 2019, então -03:00 é constante.
-    const iso = `${ano}-${p2(mes)}-${p2(dia)}T${p2(hora)}:${p2(min)}:${p2(seg || 0)}-03:00`;
-    const d = new Date(iso);
+    // O fuso é o DO NAVEGADOR, não um -03:00 fixo.
+    //
+    // Eu tinha fixado São Paulo por dedução ("o relatório é brasileiro"). O primeiro carimbo que
+    // chegou de verdade provou o contrário: veio 18:55:41 de uma leitura feita às 16h de Brasília —
+    // uma hora que ainda não tinha acontecido. O Chromium da VM roda em UTC, e o Looker escreve o
+    // "Dados atualizados pela última vez" no relógio de quem está olhando. Somar -03:00 a uma hora
+    // que já era UTC empurrava todo carimbo três horas para o futuro, e um dado do futuro nunca
+    // aparece como erro: aparece como o dado mais fresco que existe.
+    //
+    // Deixar o navegador interpretar acerta nos dois casos, porque é exatamente a mesma conta que o
+    // Looker fez para escrever o texto.
+    const d = new Date(Number(ano), Number(mes) - 1, Number(dia), hora, Number(min), Number(seg || 0));
     return Number.isNaN(d.getTime()) ? null : d.toISOString();
   }
 
@@ -481,13 +488,59 @@
     const aplicar = await esperarPorTexto("Aplicar");
     if (!aplicar) throw new Error("botão Aplicar não encontrado");
     clicar(aplicar);
-    await dormir(CONFIG.esperaRecalculoMs);
+  }
+
+  /** Tudo que vai ser enviado, como texto — serve para comparar duas leituras da tela. */
+  function assinatura(leitura) {
+    return JSON.stringify(leitura);
+  }
+
+  function lerTela() {
+    return { nota: notaEZona(), indicadores: indicadores() };
+  }
+
+  /**
+   * Lê a tela QUANDO ELA PARA DE MUDAR, em vez de dormir um tanto e ler uma vez.
+   *
+   * O rótulo do período troca no instante do "Aplicar"; os números levam mais tempo, e chegam aos
+   * pedaços. Foi assim que a 1.2.1 mandou três recortes com a MESMA nota e com 18, 10 e 8
+   * indicadores: ela dormia nove segundos fixos e lia o que estivesse na tela — no primeiro recorte,
+   * a tela anterior inteira; nos outros, uma tela meio carregada. Números pela metade não parecem
+   * quebrados, parecem desempenho ruim, e é isso que os torna perigosos.
+   *
+   * Não dá para perguntar ao Looker se ele terminou: os elementos de carregamento ficam marcados como
+   * ocupados mesmo em repouso. Então o critério é o comportamento: espera um piso, amostra de dois em
+   * dois segundos, e só aceita quando três leituras seguidas saem idênticas. Se nesse meio tempo a
+   * tela mudou em relação ao que havia antes do filtro, melhor ainda — é a prova de que o recálculo
+   * aconteceu, e fica registrado.
+   */
+  async function lerEstavel(antes) {
+    await dormir(CONFIG.pisoRecalculoMs);
+    const ate = Date.now() + CONFIG.limiteRecalculoMs;
+    let anterior = null;
+    let iguais = 0;
+    let mudou = false;
+    while (Date.now() < ate) {
+      const leitura = lerTela();
+      const agora = assinatura(leitura);
+      if (agora !== antes) mudou = true;
+      if (agora === anterior) {
+        if (++iguais >= 2) return { leitura, mudou };
+      } else {
+        anterior = agora;
+        iguais = 0;
+      }
+      await dormir(2000);
+    }
+    return null;
   }
 
   /** O último carimbo enviado por recorte — a economia da regra 3. */
   const ultimo = {};
 
   async function lerEEnviar(recorte) {
+    // Guardado ANTES de mexer no filtro: é contra isto que se sabe se o relatório recalculou.
+    const antes = assinatura(lerTela());
     await escolherPeriodo(recorte);
 
     // A TRAVA. O seletor voltando a dizer "Selecionar período" significa que o filtro NÃO pegou —
@@ -496,6 +549,20 @@
     if (!rotulo || /^Selecionar per/i.test(rotulo) || !/\d/.test(rotulo)) {
       erro(`${recorte.period}: o filtro não confirmou (rótulo "${rotulo}") — nada enviado.`);
       return;
+    }
+
+    const estavel = await lerEstavel(antes);
+    if (!estavel) {
+      erro(
+        `${recorte.period}: a tela não parou de mudar em ${CONFIG.limiteRecalculoMs / 1000}s — ` +
+          `nada enviado (número pela metade parece desempenho ruim).`,
+      );
+      return;
+    }
+    if (!estavel.mudou) {
+      // Não é motivo para recusar — o rótulo já provou que o filtro pegou, e dois recortes podem dar
+      // o mesmo resultado. Mas fica dito, porque é a assinatura de uma leitura que não recalculou.
+      log(`${recorte.period}: a tela estabilizou sem mudar de valores.`);
     }
 
     const at = carimbo();
@@ -508,8 +575,8 @@
       return;
     }
 
-    const { score, zone } = notaEZona();
-    const indicators = indicadores();
+    const { score, zone } = estavel.leitura.nota;
+    const indicators = estavel.leitura.indicadores;
     if (score == null || Object.keys(indicators).length === 0) {
       // Quase sempre é o filtro Transportador vazio: sem ele o relatório inteiro vira "Não há dados".
       erro(

@@ -92,6 +92,21 @@ export async function ingestBscSnapshot(input: {
       "Sem o 'Atualizado em' do relatório, a tela não tem como dizer de quando é o dado.",
     );
   }
+  /**
+   * Carimbo do futuro é sempre erro de fuso, e é o erro mais silencioso que existe aqui.
+   *
+   * O painel escolhe, por período, a leitura de maior `captured_at`. Uma leitura adiantada em três
+   * horas — foi o que um robô rodando em UTC produziu ao somar -03:00 a uma hora que já era UTC —
+   * ganha de todas as leituras corretas pelas três horas seguintes. Não aparece como defeito:
+   * aparece como o dado mais fresco que existe. Os dez minutos de folga cobrem relógio destoando.
+   */
+  if (capturedAt.getTime() > Date.now() + 10 * 60 * 1000) {
+    throw new Conflict(
+      "BSC_CAPTURED_AT_IN_FUTURE",
+      `O carimbo veio ${capturedAt.toISOString()}, no futuro — isso é fuso errado na leitura, ` +
+        `e uma leitura adiantada venceria as corretas no painel.`,
+    );
+  }
 
   const brutos = (input.indicators ?? {}) as Record<string, unknown>;
   const indicators: Record<string, number> = {};
