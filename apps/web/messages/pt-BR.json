@@ -1078,6 +1078,8 @@
       "assignedAll": "Todas",
       "assignedYes": "Atribuídas",
       "assignedNo": "Não atribuídas",
+      "filterDispatchQueue": "Fila do despacho",
+      "awaitingAssignment": "Aguardando atribuição",
       "filterPickupFrom": "Coleta de",
       "filterPickupTo": "Coleta até",
       "filterScope": "Abrangência",
