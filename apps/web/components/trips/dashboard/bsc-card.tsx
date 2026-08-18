@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { formatDateTime } from "@brazil-tms/shared";
 import type { BscPeriod, BscSnapshotView } from "@brazil-tms/db";
 import { Card, CardTitle } from "@/components/ui/card";
+import { indicadoresNaTela } from "@/lib/bsc/indicadores";
 
 /**
  * O BSC do cliente dentro do painel (2026-08-17).
@@ -43,8 +44,15 @@ const PISO: Record<string, number> = {
   Reversa: 97.5,
 };
 
-/** A ordem é a do desenho aprovado: os que costumam doer primeiro. */
-const NA_TELA = ["SPOT", "ETA Origem", "ETA Destino", "Telemetria", "No Show", "Reversa"];
+/**
+ * OS VINTE, e não seis (2026-08-18).
+ *
+ * O robô sempre leu o painel KPI inteiro e o banco sempre guardou os vinte; a TELA é que mostrava um
+ * recorte de seis. Quem olhava o TMS via seis números e o BSC do cliente, vinte — e a diferença não
+ * estava escrita em lugar nenhum, que é a pior forma de um painel mentir: por omissão silenciosa.
+ *
+ * A ordem e a regra de quem entra moram em `@/lib/bsc/indicadores`, fora do componente e sob teste.
+ */
 
 function tom(valor: number, piso: number | undefined): string {
   if (piso == null) return "text-foreground";
@@ -151,14 +159,20 @@ export function BscCard({ snapshots }: { snapshots: BscSnapshotView[] }) {
           </div>
         </div>
 
-        <ul className="grid min-w-[280px] flex-1 grid-cols-2 gap-1.5 sm:grid-cols-3 xl:grid-cols-6">
-          {NA_TELA.filter((nome) => atual.indicators[nome] != null).map((nome) => {
+        {/* Vinte cartões pedem mais colunas que seis: numa TV larga eles fecham em duas fileiras. */}
+        <ul className="grid min-w-[280px] flex-1 grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-7 2xl:grid-cols-10">
+          {indicadoresNaTela(atual.indicators).map((nome) => {
             const valor = atual.indicators[nome]!;
             const piso = PISO[nome];
             const { largura, cor } = barra(valor, piso);
             return (
               <li key={nome} className="flex min-w-0 flex-col gap-1 rounded border p-1.5">
-                <span className="truncate text-[0.64rem] uppercase tracking-wide text-muted-foreground">
+                {/* Duas linhas em vez de reticências: "Atendimento Check List" cortado vira
+                    "Atendimento Chec…", e numa TV ninguém passa o mouse para descobrir o resto. */}
+                <span
+                  title={nome}
+                  className="line-clamp-2 min-h-[1.7em] text-[0.64rem] uppercase leading-tight tracking-wide text-muted-foreground"
+                >
                   {nome}
                 </span>
                 <span className="flex items-baseline justify-between gap-1">
