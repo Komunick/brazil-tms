@@ -232,3 +232,26 @@ describe("awaitingAssignment (a fila do despacho)", () => {
     expect(q.awaitingAssignment).toBeUndefined();
   });
 });
+
+describe("inAnalysis (as duas filas do que era Recebida)", () => {
+  it("é lido da URL nos dois sentidos", () => {
+    const emAnalise = tripBoardQueryFromParams(
+      new URLSearchParams("status=received&inAnalysis=true"),
+    );
+    const pAtribuir = tripBoardQueryFromParams(
+      new URLSearchParams("status=received&inAnalysis=false"),
+    );
+    expect({ a: emAnalise.inAnalysis, b: pAtribuir.inAnalysis }).toEqual({ a: "true", b: "false" });
+  });
+
+  it("ausente é 'não filtre por isso', e NÃO 'false'", () => {
+    /**
+     * Aqui os dois valores são filtros de verdade e opostos — `false` quer dizer "p/atribuir", não
+     * "sem filtro". Colapsar ausente em `false` esconderia metade da fila do quadro, e o total
+     * bateria com a ficha errada.
+     */
+    expect(
+      tripBoardQueryFromParams(new URLSearchParams("status=received")).inAnalysis,
+    ).toBeUndefined();
+  });
+});

@@ -115,12 +115,23 @@ test.beforeAll(async () => {
   // OWNED + active + in-document resources ⇒ a clean assignment (no eligibility findings → no override).
   const drv = await db
     .insert(drivers)
-    .values({ name: driverName, ownershipType: "owned", status: "active", licenseExpiry: farFutureDate() })
+    .values({
+      name: driverName,
+      ownershipType: "owned",
+      status: "active",
+      licenseExpiry: farFutureDate(),
+    })
     .returning({ id: drivers.id });
   driverId = drv[0]!.id;
   const veh = await db
     .insert(vehicles)
-    .values({ plate, vehicleType: "truck", ownershipType: "owned", status: "active", documentExpiry: farFutureDate() })
+    .values({
+      plate,
+      vehicleType: "truck",
+      ownershipType: "owned",
+      status: "active",
+      documentExpiry: farFutureDate(),
+    })
     .returning({ id: vehicles.id });
   vehicleId = veh[0]!.id;
   const car = await db
@@ -138,7 +149,12 @@ test.beforeAll(async () => {
   docTypeId = dt[0]!.id;
   const req = await db
     .insert(documentRequirements)
-    .values({ customerId, documentTypeId: docTypeId, requiredForCompletion: true, requiredForBilling: true })
+    .values({
+      customerId,
+      documentTypeId: docTypeId,
+      requiredForCompletion: true,
+      requiredForBilling: true,
+    })
     .returning({ id: documentRequirements.id });
   requirementId = req[0]!.id;
 
@@ -157,7 +173,8 @@ test.afterAll(async () => {
     .from(importBatches)
     .where(eq(importBatches.customerId, customerId));
   const batchIds = batches.map((b) => b.id);
-  if (batchIds.length) await db.delete(importRows).where(inArray(importRows.importBatchId, batchIds));
+  if (batchIds.length)
+    await db.delete(importRows).where(inArray(importRows.importBatchId, batchIds));
 
   if (tripIds.length) {
     await db.delete(alerts).where(inArray(alerts.tripId, tripIds));
@@ -180,13 +197,15 @@ test.afterAll(async () => {
     await db.delete(auditLogs).where(inArray(auditLogs.entityId, batchIds));
     await db.delete(importBatches).where(inArray(importBatches.id, batchIds));
   }
-  if (requirementId) await db.delete(documentRequirements).where(eq(documentRequirements.id, requirementId));
+  if (requirementId)
+    await db.delete(documentRequirements).where(eq(documentRequirements.id, requirementId));
   if (docTypeId) await db.delete(documentTypes).where(eq(documentTypes.id, docTypeId));
   if (rateId) await db.delete(rates).where(eq(rates.id, rateId));
   if (driverId) await db.delete(drivers).where(eq(drivers.id, driverId));
   if (vehicleId) await db.delete(vehicles).where(eq(vehicles.id, vehicleId));
   if (carrierId) await db.delete(carriers).where(eq(carriers.id, carrierId));
-  for (const id of [originId, destId]) if (id) await db.delete(locations).where(eq(locations.id, id));
+  for (const id of [originId, destId])
+    if (id) await db.delete(locations).where(eq(locations.id, id));
   if (customerId) await db.delete(customers).where(eq(customers.id, customerId));
 });
 
@@ -243,7 +262,11 @@ test("the full cycle of a trip — import → billing-ready, clicked through the
       `${externalImportId},${originCode},${destCode},01/09/2026 08:00,01/09/2026 12:00,02/09/2026 08:00,02/09/2026 18:00,truck,Planejada\n`;
     await page
       .locator('[id="import-file"]')
-      .setInputFiles({ name: "viagens-shopee.csv", mimeType: "text/csv", buffer: Buffer.from(csv) });
+      .setInputFiles({
+        name: "viagens-shopee.csv",
+        mimeType: "text/csv",
+        buffer: Buffer.from(csv),
+      });
     await page.getByRole("button", { name: "Importar", exact: true }).click();
   });
   await shot(page, "import_uploaded");
@@ -255,7 +278,9 @@ test("the full cycle of a trip — import → billing-ready, clicked through the
   await shot(page, "import_validated");
 
   await confirmImportBtn.click();
-  await expect(page.getByText(/Importação concluída com sucesso/i)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByText(/Importação concluída com sucesso/i)).toBeVisible({
+    timeout: 60_000,
+  });
   await shot(page, "import_completed");
 
   // Read back the worker-created trip (born `received`, slice 015).
@@ -280,10 +305,11 @@ test("the full cycle of a trip — import → billing-ready, clicked through the
   tripId = created[0]!.id;
   tripIds.push(tripId);
 
-  // ── 1. Recebida — the imported trip on its detail page (slice 015: born `received`, dispatch-ready) ─
+  // ── 1. P/Atribuir — a viagem importada na tela dela (nasce `received`; o rótulo passou a dizer o
+  //    que falta em vez de descrever o TMS — ver `displayStatusOf`) ─
   await page.goto(`/trips/${tripId}`);
   await expect(page.getByText(externalImportId).first()).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByText("Recebida", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("P/Atribuir", { exact: true }).first()).toBeVisible();
   await shot(page, "received");
 
   // ── 2. Assign driver + vehicle + carrier → assigned ───────────────────────────────────────────
@@ -323,7 +349,9 @@ test("the full cycle of a trip — import → billing-ready, clicked through the
 
   // unloaded — the Billing section now offers "Marcar como concluída".
   await page.getByRole("button", { name: "Descarregada", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Marcar como concluída", exact: true })).toBeVisible({
+  await expect(
+    page.getByRole("button", { name: "Marcar como concluída", exact: true }),
+  ).toBeVisible({
     timeout: 20_000,
   });
   await shot(page, "unloaded");
@@ -344,7 +372,10 @@ test("the full cycle of a trip — import → billing-ready, clicked through the
   await page.context().clearCookies();
   await uiLogin(page, testAccounts.nonAdmin); // finance@ holds mark_billing_ready
   await page.goto(`/trips/${tripId}`);
-  const billingReadyBtn = page.getByRole("button", { name: "Marcar pronta para faturar", exact: true });
+  const billingReadyBtn = page.getByRole("button", {
+    name: "Marcar pronta para faturar",
+    exact: true,
+  });
   await expect(billingReadyBtn).toBeVisible({ timeout: 20_000 });
   await billingReadyBtn.click();
   await expect(billingReadyBtn).toHaveCount(0, { timeout: 20_000 });

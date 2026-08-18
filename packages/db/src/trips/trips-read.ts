@@ -52,11 +52,13 @@ import {
   type ExceptionFilter,
   type TripBoardQuery,
   type TripExportQuery,
+  type TripDisplayStatus,
   type TripStatus,
 } from "@brazil-tms/shared";
 import { Conflict } from "../errors";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
 import { onTimeExpr } from "./on-time";
+import { inAnalysisSql } from "./portal-withdrawn";
 
 /**
  * Feature 005 — Control Tower read models (board / detail / dashboard / export). These are the
@@ -102,6 +104,13 @@ export interface TripBoardRow {
   assignedDriverName: string | null;
   assignedVehiclePlate: string | null;
   assignedCarrierName: string | null;
+  /**
+   * O que o CLIENTE respondeu sobre esta proposta — `Pending` ou `Accepted` (2026-08-18).
+   *
+   * Viaja com a linha porque é ele que desdobra "Recebida" em "Em análise" e "P/Atribuir" na tela.
+   * Sem isto, o quadro teria de adivinhar ou fazer uma segunda consulta por linha.
+   */
+  portalAcceptance: string | null;
 }
 
 export interface TripBoardResult {
@@ -111,7 +120,7 @@ export interface TripBoardResult {
    * How many trips each status holds under the current filters, ignoring the status filter itself —
    * what the board's status chips display. Absent key = zero (the chip is hidden).
    */
-  statusCounts: Partial<Record<TripStatus, number>>;
+  statusCounts: Partial<Record<TripDisplayStatus, number>>;
 }
 
 export type TripDetailView = TripDetail & {
@@ -141,7 +150,7 @@ export type TripDetailView = TripDetail & {
 };
 
 export interface DashboardSummary {
-  tripsTodayByStatus: { status: TripStatus; count: number }[];
+  tripsTodayByStatus: { status: TripDisplayStatus; count: number }[];
   /**
    * As viagens de AMANHÃ por status (2026-08-17, a pedido).
    *
@@ -149,7 +158,7 @@ export interface DashboardSummary {
    * está montando amanhã. "Hoje" responde o que está acontecendo; "amanhã" responde o que ainda dá
    * tempo de arrumar, que é onde a operação consegue agir.
    */
-  tripsTomorrowByStatus: { status: TripStatus; count: number }[];
+  tripsTomorrowByStatus: { status: TripDisplayStatus; count: number }[];
   /**
    * As viagens DO MÊS por status (2026-08-17).
    *
@@ -158,7 +167,7 @@ export interface DashboardSummary {
    * cresce para sempre e não muda decisão de ninguém. O mês é o ciclo em que a operação e o
    * faturamento realmente pensam.
    */
-  tripsByStatus: { status: TripStatus; count: number }[];
+  tripsByStatus: { status: TripDisplayStatus; count: number }[];
   /**
    * A fila do DESPACHO: aceita pelo cliente e ainda sem motorista no portal (2026-08-17).
    *
@@ -265,6 +274,7 @@ const boardColumns = {
   plannedDeliveryWindowEnd: trips.plannedDeliveryWindowEnd,
   plannedVehicleType: trips.plannedVehicleType,
   updatedAt: trips.updatedAt,
+  portalAcceptance: sql<string | null>`(${trips.customerFields} ->> 'Aceitação (portal)')`,
   assignmentId: boardAsg.id,
   assignedDriverName: boardDriver.name,
   assignedVehiclePlate: boardVehicle.plate,
@@ -274,6 +284,7 @@ const boardColumns = {
 type BoardRow = {
   id: string;
   externalTripId: string | null;
+  portalAcceptance: string | null;
   customerId: string;
   customerName: string | null;
   originCode: string | null;
@@ -320,6 +331,7 @@ function toBoardRow(row: BoardRow): TripBoardRow {
     plannedDeliveryWindowEnd: iso(row.plannedDeliveryWindowEnd),
     plannedVehicleType: row.plannedVehicleType,
     updatedAt: row.updatedAt.toISOString(),
+    portalAcceptance: row.portalAcceptance ?? null,
     isAssigned: row.assignmentId != null,
     assignedDriverName: row.assignedDriverName,
     assignedVehiclePlate: row.assignedVehiclePlate,
@@ -451,6 +463,29 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
     conditions.push(inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]));
     conditions.push(awaitingAssignmentSql());
   }
+  /**
+   * As duas metades do que era "Recebida" (2026-08-18).
+   *
+   * `true` = em análise (o cliente não decidiu); `false` = p/atribuir (decidiu, falta motorista). O
+   * par é EXAUSTIVO de propósito: juntos cobrem `received` inteiro sem sobreposição, e é isso que
+   * permite a ficha do quadro somar exatamente o mesmo total de antes.
+   *
+   * O `false` precisa ser negação explícita — sem ele, a ficha "P/Atribuir" abriria a lista inteira
+   * e mostraria um número diferente do que a própria ficha anuncia.
+   */
+  if (query.inAnalysis === "true") {
+    conditions.push(eq(trips.currentStatus, "received"));
+    conditions.push(inAnalysisSql());
+  }
+  if (query.inAnalysis === "false") {
+    conditions.push(eq(trips.currentStatus, "received"));
+    // `IS DISTINCT FROM`, e não `NOT (… = …)`: sem aceitação gravada o igual devolve NULO, o NOT
+    // devolve NULO, e a viagem sumiria da lista — enquanto `displayStatusOf` a chama de "p/atribuir".
+    // As duas escritas da regra têm de concordar inclusive no vazio, que é onde elas divergem calado.
+    conditions.push(
+      sql`(${trips.customerFields} ->> 'Aceitação (portal)') IS DISTINCT FROM 'Pending'`,
+    );
+  }
 
   // Feature 006 — assignment filters (data-model.md §5). These reference the LEFT-joined current
   // assignment (`boardAsg`), so the join is present in BOTH `boardSelect()` and `boardCount()`.
@@ -527,9 +562,28 @@ function boardSelect() {
  * explicit `status` list suppresses the active default), so each chip's number is a promise: click me
  * and you get this many rows. Statuses with no rows are simply absent from the result.
  */
+/**
+ * O status COMO A TELA CHAMA — `received` desdobrado pelo eixo da aceitação (2026-08-18).
+ *
+ * "Recebida" descrevia o TMS e escondia duas filas que pedem coisas diferentes de pessoas
+ * diferentes: 63 esperando alguém aceitar contra 326 esperando alguém escalar motorista. O quadro e
+ * o painel contam por ESTE valor, não pelo status cru, senão a ficha diria um número e as linhas
+ * dela diriam outro.
+ *
+ * A regra vive em `displayStatusOf` (shared, sob teste) e aqui em SQL. São duas escritas da mesma
+ * regra, e é uma dívida consciente: agrupar no banco é a única forma de contar sem trazer a tabela
+ * inteira para a memória. O teste de contrato entre as duas é o que impede a divergência.
+ */
+const displayStatusSql = sql<string>`CASE
+  WHEN ${trips.currentStatus} = 'received'
+   AND (${trips.customerFields} ->> 'Aceitação (portal)') = 'Pending' THEN 'in_analysis'
+  WHEN ${trips.currentStatus} = 'received' THEN 'to_assign'
+  ELSE ${trips.currentStatus}::text
+END`;
+
 function boardStatusCounts(where: SQL | undefined) {
   return db
-    .select({ status: trips.currentStatus, value: count() })
+    .select({ status: displayStatusSql, value: count() })
     .from(trips)
     .leftJoin(customers, eq(trips.customerId, customers.id))
     .leftJoin(originLoc, eq(trips.originLocationId, originLoc.id))
@@ -539,7 +593,7 @@ function boardStatusCounts(where: SQL | undefined) {
     .leftJoin(boardVehicle, eq(boardAsg.vehicleId, boardVehicle.id))
     .leftJoin(boardCarrier, eq(boardAsg.carrierId, boardCarrier.id))
     .where(where)
-    .groupBy(trips.currentStatus);
+    .groupBy(displayStatusSql);
 }
 
 /** A `count()` over the same joins (the where/q references the joined names + current assignment). */
@@ -581,8 +635,10 @@ export async function queryTripBoard(query: TripBoardQuery): Promise<TripBoardRe
     boardStatusCounts(facetWhere),
   ]);
 
-  const statusCounts: Partial<Record<TripStatus, number>> = {};
-  for (const row of statusRows) statusCounts[row.status] = row.value;
+  // O agrupamento vem do SQL como texto; o conjunto possível é o de `displayStatusSql`, e o teste
+  // de contrato entre ele e `displayStatusOf` é quem garante que não apareça uma chave inventada.
+  const statusCounts: Partial<Record<TripDisplayStatus, number>> = {};
+  for (const row of statusRows) statusCounts[row.status as TripDisplayStatus] = row.value;
 
   return {
     rows: rows.map(toBoardRow),
@@ -715,7 +771,7 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
     missingDocs,
   ] = await Promise.all([
     db
-      .select({ status: trips.currentStatus, value: count() })
+      .select({ status: displayStatusSql, value: count() })
       .from(trips)
       .where(
         and(
@@ -723,10 +779,10 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
           lt(trips.plannedPickupWindowStart, new Date(to)),
         ),
       )
-      .groupBy(trips.currentStatus),
+      .groupBy(displayStatusSql),
     // O mesmo recorte, no dia SEGUINTE — o que ainda dá tempo de arrumar.
     db
-      .select({ status: trips.currentStatus, value: count() })
+      .select({ status: displayStatusSql, value: count() })
       .from(trips)
       .where(
         and(
@@ -734,10 +790,10 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
           lt(trips.plannedPickupWindowStart, new Date(amanha.to)),
         ),
       )
-      .groupBy(trips.currentStatus),
+      .groupBy(displayStatusSql),
     // O mesmo recorte, no MÊS corrente — o ciclo em que a operação e o faturamento pensam.
     db
-      .select({ status: trips.currentStatus, value: count() })
+      .select({ status: displayStatusSql, value: count() })
       .from(trips)
       .where(
         and(
@@ -745,7 +801,7 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
           lt(trips.plannedPickupWindowStart, new Date(mes.to)),
         ),
       )
-      .groupBy(trips.currentStatus),
+      .groupBy(displayStatusSql),
     /**
      * Aceitas e esperando ATRIBUIÇÃO: o cliente já disse sim e ainda não há motorista. É a fila do
      * despacho — 359 no portal quando foi medida.
@@ -757,12 +813,7 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
     db
       .select({ value: count() })
       .from(trips)
-      .where(
-        and(
-          inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
-          awaitingAssignmentSql(),
-        ),
-      ),
+      .where(and(inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]), awaitingAssignmentSql())),
     db.select({ value: count() }).from(trips).where(eq(trips.currentStatus, "billing_pending")),
     // Active trips with NO current assignment (006 — fills the "unassigned trips" widget).
     db
@@ -841,9 +892,18 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
   };
 
   return {
-    tripsTodayByStatus: byStatus.map((r) => ({ status: r.status, count: r.value })),
-    tripsTomorrowByStatus: byStatusAmanha.map((r) => ({ status: r.status, count: r.value })),
-    tripsByStatus: allByStatus.map((r) => ({ status: r.status, count: r.value })),
+    tripsTodayByStatus: byStatus.map((r) => ({
+      status: r.status as TripDisplayStatus,
+      count: r.value,
+    })),
+    tripsTomorrowByStatus: byStatusAmanha.map((r) => ({
+      status: r.status as TripDisplayStatus,
+      count: r.value,
+    })),
+    tripsByStatus: allByStatus.map((r) => ({
+      status: r.status as TripDisplayStatus,
+      count: r.value,
+    })),
     awaitingAssignment: aguardandoAtribuicao[0]?.value ?? 0,
     billingPendingCount: billingPending[0]?.value ?? 0,
     tripsAtRisk: atRisk[0]?.value ?? 0,

@@ -5,10 +5,10 @@ import { useTranslations } from "next-intl";
 import {
   BILLING_PHASE_STATUSES,
   SLA_STATUSES,
-  TRIP_STATUSES,
+  TRIP_DISPLAY_ORDER,
   VEHICLE_TYPE_VALUES,
   type TripBoardQuery,
-  type TripStatus,
+  type TripDisplayStatus,
 } from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -62,7 +62,7 @@ export function TripFilters({
    * with them). Undefined on first paint, before the board answers — then every chip is shown, since
    * "no count yet" must never be read as "no trips".
    */
-  statusCounts?: Partial<Record<TripStatus, number>>;
+  statusCounts?: Partial<Record<TripDisplayStatus, number>>;
 }) {
   const t = useTranslations("Trips");
   const tCommon = useTranslations("Common");
@@ -79,26 +79,54 @@ export function TripFilters({
   const locationList = options.locations;
   const codeOf = new Map(locationList.map((l) => [l.id, l.code]));
 
-  const statusSet = new Set<TripStatus>(query.status ?? []);
+  // A ficha marcada é o status real na URL — MENOS as duas filas, que se identificam pelo
+  // parâmetro próprio delas: as duas moram no mesmo `received`, e olhar só o status acenderia as
+  // duas ao mesmo tempo.
+  const statusSet = new Set<TripDisplayStatus>(
+    query.inAnalysis === "true"
+      ? ["in_analysis"]
+      : query.inAnalysis === "false"
+        ? ["to_assign"]
+        : (query.status ?? []),
+  );
 
   // With 16 statuses the chip row is long enough that the one you want hides in the middle of the
   // ones you never use. A status with no trips under the current filters is dead weight, so it is
   // folded away behind a counter — unless it is selected (you must always be able to unselect it).
   const [showEmptyStatuses, setShowEmptyStatuses] = useState(false);
-  const visibleStatuses = TRIP_STATUSES.filter(
+  const visibleStatuses = TRIP_DISPLAY_ORDER.filter(
     (status) =>
       showEmptyStatuses ||
       statusCounts === undefined ||
       (statusCounts[status] ?? 0) > 0 ||
       statusSet.has(status),
   );
-  const hiddenStatusCount = TRIP_STATUSES.length - visibleStatuses.length;
+  const hiddenStatusCount = TRIP_DISPLAY_ORDER.length - visibleStatuses.length;
 
-  function toggleStatus(status: TripStatus) {
+  /**
+   * As duas filas do "Recebida" são fichas próprias, e ligar uma DESLIGA a outra (2026-08-18).
+   *
+   * Elas compartilham o mesmo status real e se separam por `inAnalysis`, que é um parâmetro só —
+   * não dá para pedir as duas ao mesmo tempo por ele. Mas isso não é limitação: pedir as duas é
+   * exatamente pedir "Recebida" inteira, que é o que a ficha faz quando nenhuma das duas está
+   * marcada. O caminho de ida e o de volta existem, e nenhum estado fica inalcançável.
+   */
+  function toggleStatus(status: TripDisplayStatus) {
+    const fila = status === "in_analysis" || status === "to_assign";
+    if (fila) {
+      const querAtivar = query.inAnalysis !== (status === "in_analysis" ? "true" : "false");
+      setFilters({
+        status: querAtivar ? ["received"] : [],
+        inAnalysis: querAtivar ? (status === "in_analysis" ? "true" : "false") : undefined,
+      });
+      return;
+    }
     const next = new Set(statusSet);
     if (next.has(status)) next.delete(status);
     else next.add(status);
-    setFilters({ status: Array.from(next) });
+    // Sair de uma fila para um status comum tem de soltar o recorte da fila junto, senão o quadro
+    // fica filtrando por uma coisa que a tela não mostra mais.
+    setFilters({ status: Array.from(next), inAnalysis: undefined });
   }
 
   function applySearch() {

@@ -3,12 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, X } from "lucide-react";
-import {
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-  type ColumnDef,
-} from "@tanstack/react-table";
+import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import {
   formatDateTime,
@@ -26,12 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { TripFilters } from "@/components/trips/trip-filters";
 import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
@@ -144,7 +134,10 @@ export function ControlTowerTable({
       id: "externalTripId",
       header: () => t("board.colExternalId"),
       cell: ({ row }) => (
-        <Link href={`/trips/${row.original.id}`} className="font-medium text-primary hover:underline">
+        <Link
+          href={`/trips/${row.original.id}`}
+          className="font-medium text-primary hover:underline"
+        >
           {row.original.externalTripId ?? "—"}
         </Link>
       ),
@@ -176,7 +169,13 @@ export function ControlTowerTable({
     {
       id: "status",
       header: () => <SortableHeader label={t("board.colStatus")} sortKey="status" />,
-      cell: ({ row }) => <TripStatusBadge status={row.original.currentStatus} />,
+      cell: ({ row }) => (
+        // A aceitação vai junto: é ela que separa "Em análise" de "P/Atribuir" na mesma linha.
+        <TripStatusBadge
+          status={row.original.currentStatus}
+          portalAcceptance={row.original.portalAcceptance}
+        />
+      ),
     },
     {
       // 007 — server-computed SLA-risk indicator (the UI never computes it).
@@ -450,7 +449,9 @@ function AssignmentCell({ row }: { row: TripBoardRow }) {
   return (
     <span className="inline-flex items-center gap-1" title={parts.join(" · ")}>
       <Check className="h-3.5 w-3.5 text-green-600" aria-hidden />
-      <span className="text-sm">{parts.length > 0 ? parts.join(" · ") : t("board.assignedYes")}</span>
+      <span className="text-sm">
+        {parts.length > 0 ? parts.join(" · ") : t("board.assignedYes")}
+      </span>
     </span>
   );
 }

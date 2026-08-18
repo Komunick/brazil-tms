@@ -1,5 +1,5 @@
 import { useTranslations } from "next-intl";
-import type { TripStatus } from "@brazil-tms/shared";
+import { displayStatusOf, type TripDisplayStatus } from "@brazil-tms/shared";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
@@ -23,7 +23,25 @@ import { cn } from "@/lib/utils";
  * Cada uma ganhou par para o tema escuro: as versões claras viravam manchas fluorescentes sobre o
  * fundo escuro, com o texto escuro quase ilegível.
  */
-const STATUS_CLASS: Record<TripStatus, string> = {
+const STATUS_CLASS: Record<TripDisplayStatus, string> = {
+  /**
+   * As duas filas que viviam dentro de "Recebida" (2026-08-18, a pedido).
+   *
+   * Cores diferentes porque pedem AÇÕES diferentes, de pessoas diferentes: em análise espera alguém
+   * decidir aceitar ou rejeitar; p/atribuir espera alguém escalar motorista. Do mesmo cinza, o
+   * quadro mostrava 389 linhas iguais escondendo duas filas de 63 e 326.
+   *
+   * O âmbar de "em análise" é de propósito o mesmo tom do faturamento pendente: as duas são "parado
+   * esperando decisão de gente". O violeta de "p/atribuir" encosta no de "atribuída", que é o passo
+   * seguinte dela — a cor caminha junto com a viagem.
+   */
+  in_analysis:
+    "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-400/25",
+  to_assign:
+    "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-300 dark:border-violet-400/20",
+  // `received` continua existindo na MÁQUINA e no histórico: um evento antigo aponta para ele, e
+  // sem esta entrada a linha do tempo ficaria sem cor. Na tela ele nunca aparece sozinho — quem
+  // decide o rótulo é `displayStatusOf`.
   received:
     "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/15 dark:text-slate-300 dark:border-slate-400/25",
   assigned:
@@ -59,11 +77,26 @@ const STATUS_CLASS: Record<TripStatus, string> = {
     "bg-red-100 text-red-800 border-red-200 dark:bg-red-500/15 dark:text-red-300 dark:border-red-400/25",
 };
 
-export function TripStatusBadge({ status }: { status: TripStatus }) {
+export function TripStatusBadge({
+  status,
+  /**
+   * A resposta do cliente (`Pending` / `Accepted`), quando a tela a tem.
+   *
+   * Só muda alguma coisa para `received`, e é o que desdobra a etiqueta em "Em análise" ou
+   * "P/Atribuir". Ausente, a viagem cai em "P/Atribuir" — ver `displayStatusOf` para o porquê.
+   */
+  portalAcceptance,
+}: {
+  status: TripDisplayStatus;
+  portalAcceptance?: string | null;
+}) {
   const t = useTranslations("Trips.status");
+  // Já veio desdobrado (contagem do painel, ficha do quadro)? Passa direto. Veio cru (uma linha do
+  // quadro, a linha do tempo)? Desdobra aqui, com um só lugar decidindo.
+  const chave = status === "received" ? displayStatusOf(status, portalAcceptance ?? null) : status;
   return (
-    <Badge variant="outline" className={cn("font-medium", STATUS_CLASS[status])}>
-      {t(status)}
+    <Badge variant="outline" className={cn("font-medium", STATUS_CLASS[chave])}>
+      {t(chave)}
     </Badge>
   );
 }

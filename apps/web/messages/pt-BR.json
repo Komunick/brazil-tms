@@ -1025,7 +1025,9 @@
       "errorGeneric": "Não foi possível salvar. Tente novamente."
     },
     "status": {
-      "received": "Recebida",
+      "received": "P/Atribuir",
+      "in_analysis": "Em Análise",
+      "to_assign": "P/Atribuir",
       "assigned": "Atribuída",
       "confirmed": "Confirmada",
       "at_origin": "Na origem",
@@ -1618,7 +1620,9 @@
     "today": "viagens hoje",
     "more": "… e mais {count} na estrada",
     "status": {
-      "received": "Recebida",
+      "received": "P/Atribuir",
+      "in_analysis": "Em Análise",
+      "to_assign": "P/Atribuir",
       "assigned": "Atribuída",
       "confirmed": "Confirmada",
       "at_origin": "Na origem",

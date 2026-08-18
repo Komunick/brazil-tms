@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lt, sql, type SQL } from "drizzle-orm";
 import { ACTIVE_TRIP_STATUSES } from "@brazil-tms/shared";
 import { db } from "../client";
 import { trips } from "../../schema";
@@ -38,6 +38,16 @@ import { closeTripFromSource } from "./source-status";
  *   Uma varredura sadia acha poucas; dezenas de uma vez é o robô ou o portal quebrado, e nesse caso
  *   a resposta certa é não fazer nada e deixar rastro. É a trava que existe para o dia ruim.
  */
+
+/**
+ * "Ninguém decidiu esta proposta ainda" — a metade EM ANÁLISE do que era "Recebida".
+ *
+ * Fica ao lado de `awaitingAssignmentSql` porque as duas são a mesma pergunta em eixos opostos da
+ * aceitação, e escrever uma sem olhar a outra é como elas passam a se sobrepor ou a deixar buraco.
+ */
+export function inAnalysisSql(): SQL<boolean> {
+  return sql<boolean>`((${trips.customerFields} ->> 'Aceitação (portal)') = 'Pending')`;
+}
 
 /** Marca as viagens desta página como VISTAS agora. Uma instrução por página, não uma por viagem. */
 export async function marcarVistasNoPortal(

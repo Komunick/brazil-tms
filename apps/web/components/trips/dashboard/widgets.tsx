@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 import {
+  boardQueryForDisplayStatus,
   saoPauloDate,
   saoPauloMonthBounds,
-  TRIP_STATUSES,
-  type TripStatus,
+  TRIP_DISPLAY_ORDER,
+  type TripDisplayStatus,
 } from "@brazil-tms/shared";
 import type { DashboardSummary } from "@brazil-tms/db";
 import { useDashboardSummary } from "@/lib/trips/client";
@@ -102,7 +103,7 @@ function MetricCard({ titleKey, value, href, placeholder }: MetricCardProps) {
  * Elas continuam existindo, contando e valendo em todo o resto do sistema — inclusive no total do
  * cartão, que segue sendo o número real. O que muda é só quais linhas ocupam espaço aqui.
  */
-const STATUS_OCULTOS = new Set<TripStatus>([
+const STATUS_OCULTOS = new Set<TripDisplayStatus>([
   "at_origin",
   "loading",
   "loaded",
@@ -134,7 +135,7 @@ function StatusList({
   // um quadro que reordena a cada atualização obriga a procurar de novo o que já se sabia onde era.
   const ordenadas = byStatus
     .filter((s) => !STATUS_OCULTOS.has(s.status))
-    .sort((a, b) => TRIP_STATUSES.indexOf(a.status) - TRIP_STATUSES.indexOf(b.status));
+    .sort((a, b) => TRIP_DISPLAY_ORDER.indexOf(a.status) - TRIP_DISPLAY_ORDER.indexOf(b.status));
 
   if (ordenadas.length === 0) {
     return <p className="text-xs text-muted-foreground">{t(emptyKey)}</p>;
@@ -144,7 +145,7 @@ function StatusList({
       {ordenadas.map(({ status, count }) => (
         <li key={status}>
           <Link
-            href={`/trips?status=${status}${dateFilter}&scope=all#${BOARD_ANCHOR}`}
+            href={`/trips?${boardQueryForDisplayStatus(status)}${dateFilter}&scope=all#${BOARD_ANCHOR}`}
             className="flex items-center justify-between gap-2 rounded px-1 py-0.5 hover:bg-muted"
           >
             <TripStatusBadge status={status} />
