@@ -3,6 +3,7 @@ import {
   BILLING_JOBS,
   DOCUMENT_JOBS,
   IMPORT_JOBS,
+  PORTAL_JOBS,
   SLA_JOBS,
   type BillingJobName,
   type BillingJobPayloads,
@@ -10,6 +11,8 @@ import {
   type DocumentJobPayloads,
   type ImportJobName,
   type ImportJobPayloads,
+  type PortalJobName,
+  type PortalJobPayloads,
   type SlaJobName,
   type SlaJobPayloads,
 } from "@brazil-tms/shared";
@@ -29,13 +32,20 @@ import {
  * The merged job-name → queue-name map (import pipeline + the 007 SLA sweep + the 008 on-demand
  * `billing.export` and the second scheduled job `documents.checks`).
  */
-export const JOB = { ...IMPORT_JOBS, ...SLA_JOBS, ...BILLING_JOBS, ...DOCUMENT_JOBS } as const;
+export const JOB = {
+  ...IMPORT_JOBS,
+  ...SLA_JOBS,
+  ...BILLING_JOBS,
+  ...DOCUMENT_JOBS,
+  ...PORTAL_JOBS,
+} as const;
 
-export type JobName = ImportJobName | SlaJobName | BillingJobName | DocumentJobName;
+export type JobName = ImportJobName | SlaJobName | BillingJobName | DocumentJobName | PortalJobName;
 export type JobPayloads = ImportJobPayloads &
   SlaJobPayloads &
   BillingJobPayloads &
-  DocumentJobPayloads;
+  DocumentJobPayloads &
+  PortalJobPayloads;
 
 /** Construct the pg-boss instance against the worker's DATABASE_URL (server/worker-only). */
 export function createBoss(): PgBoss {

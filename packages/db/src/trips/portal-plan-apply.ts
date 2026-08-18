@@ -22,6 +22,7 @@ import {
   type PortalApplyOutcome,
 } from "./portal-execution-apply";
 import { closeTripFromSource } from "./source-status";
+import { marcarVistasNoPortal } from "./portal-withdrawn";
 import { linkFleetFromPortal, type FleetLinkResult } from "./portal-fleet-link";
 import { writePortalFacts } from "./portal-trip-facts";
 
@@ -285,6 +286,12 @@ export async function applyPortalPlan(
   options: PortalPlanOptions = {},
 ): Promise<PortalPlanSummary> {
   const stationMap = await loadStationMap(customerId);
+  // Quem apareceu NESTA leitura ganha carimbo de agora. É a ausência desse carimbo, horas depois,
+  // que denuncia a viagem que o cliente retirou do Planejado — ver `marcarRetiradasDoPortal`.
+  await marcarVistasNoPortal(
+    customerId,
+    portalTrips.map((t) => t.externalTripId),
+  );
   const outcomes: PortalPlanOutcome[] = [];
   const links: FleetLinkResult[] = [];
   let milestones = 0;

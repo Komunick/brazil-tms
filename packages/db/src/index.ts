@@ -27,6 +27,14 @@ export type {
   PortalApplyOptions,
 } from "./trips/portal-execution-apply";
 export { applyPortalPlan, applyPortalPlanTrip } from "./trips/portal-plan-apply";
+export { resolvePortalActorId } from "./trips/portal-actor";
+export {
+  marcarVistasNoPortal,
+  marcarRetiradasDoPortal,
+  SILENCIO_HORAS,
+  TETO,
+  type RetiradasResumo,
+} from "./trips/portal-withdrawn";
 export type {
   PortalPlanOutcome,
   PortalPlanSummary,

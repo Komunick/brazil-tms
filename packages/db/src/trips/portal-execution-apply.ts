@@ -14,6 +14,7 @@ import { markCompleted } from "./completion";
 import { writePortalFacts } from "./portal-trip-facts";
 import { linkFleetFromPortal } from "./portal-fleet-link";
 import { advanceTripFromSource, closeTripFromSource } from "./source-status";
+import { marcarVistasNoPortal } from "./portal-withdrawn";
 
 /** A palavra do cliente para uma viagem que não vai acontecer. Uma só, e comparada do mesmo jeito
  *  nos dois caminhos — o do plano e este. */
@@ -472,6 +473,12 @@ export async function applyPortalExecution(
   sourceLabel: string,
 ): Promise<PortalApplySummary> {
   const stationMap = await loadStationMap(customerId);
+  // A aba "Aceito" e o "Concluído" também contam como ter sido vista: a viagem que saiu do Planejado
+  // porque foi aceita não pode ser lida como retirada pelo cliente.
+  await marcarVistasNoPortal(
+    customerId,
+    portalTrips.map((t) => t.externalTripId),
+  );
   const outcomes: PortalApplyOutcome[] = [];
 
   for (const portal of portalTrips) {
