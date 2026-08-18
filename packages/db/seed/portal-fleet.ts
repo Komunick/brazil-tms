@@ -206,17 +206,45 @@ async function main(): Promise<void> {
     };
     const nota = `${MARCA} — ID ${portalId ?? "?"}, status ${statusPortal}.`;
 
-    // CPF primeiro, nome depois: o CPF identifica a pessoa, o nome só a descreve. Onde o portal não
-    // deu CPF (todo mundo que não está `Active`), sobra o nome — e é por isso que dois "JOSE EDSON
-    // DA SILVA" com CPFs diferentes são um problema conhecido e avisado no fim.
-    const achado = cpf
+    /**
+     * TRÊS TENTATIVAS, NESTA ORDEM — e cada uma existe por um erro medido (2026-08-18).
+     *
+     * 1. ID DO PORTAL, gravado na observação por esta mesma carga. É a única chave que não mente:
+     *    uma vez carregado, o motorista é reencontrado por ela mesmo que mude de nome ou corrijam
+     *    o CPF dele no portal.
+     *
+     * 2. CPF. Identifica a pessoa, mas só serve quando os dois lados o têm — e não têm: produção
+     *    não tem CPF em NENHUM cadastro. Sozinha, esta chave ia criar 1076 motoristas onde só
+     *    existiam 932 novos, recriando gente que já estava lá.
+     *
+     * 3. NOME, e só em registro que nenhum outro motorista do portal já reivindicou. É a queda que
+     *    salva os cadastros antigos, e o filtro do `NOT LIKE` é o que impede o dano oposto: sem ele,
+     *    dois homônimos de verdade (há dois "JOSE EDSON DA SILVA", com IDs e CPFs distintos)
+     *    viravam um só, e um motorista real sumia do TMS.
+     *
+     * Por que o CPF não basta para separar homônimo de duplicata: os CPFs antigos estão errados. Dos
+     * 9 nomes repetidos que apareceram no ambiente de testes, 8 eram a MESMA pessoa com o zero à
+     * esquerda comido (`510691218` no lugar de `00510691218`) ou um dígito trocado. Só o ID do
+     * portal distingue os dois casos.
+     */
+    const marcaId = portalId ? `${MARCA} — ID ${portalId},%` : null;
+    const porId = marcaId
       ? await db.select({ id: drivers.id, notes: drivers.notes }).from(drivers)
-          .where(and(eq(drivers.cpf, cpf), isNull(drivers.archivedAt))).limit(1)
+          .where(and(sql`${drivers.notes} LIKE ${marcaId}`, isNull(drivers.archivedAt))).limit(1)
+      : [];
+    const porCpf = porId[0] || !cpf
+      ? []
+      : await db.select({ id: drivers.id, notes: drivers.notes }).from(drivers)
+          .where(and(eq(drivers.cpf, cpf), isNull(drivers.archivedAt))).limit(1);
+    const porNome = porId[0] || porCpf[0]
+      ? []
       : await db.select({ id: drivers.id, notes: drivers.notes }).from(drivers)
           .where(and(
             sql`${dobrarNomeSql(sql`${drivers.name}`)} = ${dobrado}`,
+            sql`(${drivers.notes} IS NULL OR ${drivers.notes} NOT LIKE ${`${MARCA} — ID %`})`,
             isNull(drivers.archivedAt),
           )).limit(1);
+    const achado = porId[0] ? porId : porCpf[0] ? porCpf : porNome;
 
     if (!achado[0]) {
       contagem.criados += 1;
@@ -246,8 +274,9 @@ async function main(): Promise<void> {
     console.log(
       `\nATENÇÃO — ${repetidos.length} nome(s) aparecem mais de uma vez na exportação:\n  ` +
         repetidos.map(([n, q]) => `${n} (${q}×)`).join("\n  ") +
-        `\nSão pessoas diferentes com o mesmo nome. O vínculo automático casa POR NOME e pega a\n` +
-        `primeira — então uma viagem dessas pode ir para o homônimo errado. Vale conferir na tela.`,
+        `\nSão pessoas diferentes com o mesmo nome, e entraram como cadastros separados (é o certo).\n` +
+        `Só que o vínculo automático casa POR NOME e pega o primeiro — então uma viagem de um deles\n` +
+        `pode ir parar no homônimo. Não há como o robô decidir isso sozinho: confira na tela.`,
     );
   }
   if (semNome.length > 0) console.log(`\nlinhas sem nome, ignoradas: ${semNome.join(", ")}`);
