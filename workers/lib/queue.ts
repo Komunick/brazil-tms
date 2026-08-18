@@ -84,7 +84,31 @@ export async function work<K extends JobName>(
 ): Promise<void> {
   await boss.work<JobPayloads[K]>(name, async (jobs: Job<JobPayloads[K]>[]) => {
     for (const job of jobs) {
-      await handler(job.data);
+      try {
+        await handler(job.data);
+      } catch (error) {
+        /**
+         * A falha vai para o LOG antes de ir para o pg-boss (2026-08-18).
+         *
+         * O pg-boss já guardava tudo: estado `failed` e a pilha inteira na coluna `output` da
+         * tabela. Só que ninguém opera lendo tabela de fila — quem opera lê o log. O resultado foi
+         * uma varredura agendada falhando de meia em meia hora, quatro vezes seguidas, por uma
+         * variável de ambiente que faltava no worker, e NENHUMA linha em lugar nenhum que alguém
+         * fosse olhar. Só apareceu porque fui procurar de propósito.
+         *
+         * O erro é relançado logo em seguida: quem decide o que fazer com a falha continua sendo o
+         * pg-boss (marcar, repetir, desistir). Isto aqui só garante que ela seja VISTA.
+         */
+        console.error(
+          JSON.stringify({
+            job: name,
+            jobId: job.id,
+            erro: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack?.split("\n").slice(0, 4).join(" | ") : null,
+          }),
+        );
+        throw error;
+      }
     }
   });
 }
