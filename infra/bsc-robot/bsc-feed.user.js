@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.10.0
+// @version      1.11.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -89,7 +89,7 @@
  * Instalação: Tampermonkey → novo script → cole → ajuste o CONFIG → salve.
  */
 
-/* global GM_xmlhttpRequest */
+/* global GM_xmlhttpRequest, GM_info */
 (function () {
   "use strict";
 
@@ -123,8 +123,14 @@
    * Custou uma ida e volta descobrir que um erro relatado vinha da versão anterior ainda instalada:
    * a única pista foi a redação da mensagem ter mudado entre as duas. Com o número em cada linha, "o
    * que está rodando aí" deixa de ser dedução.
+   *
+   * E VEM DO CABEÇALHO, não de uma constante copiada (1.11.0). A constante era escrita à mão e
+   * envelheceu calada: a 1.10.0 saiu com o `@version` novo e o console ainda dizendo 1.9.0 — ou seja,
+   * a linha que existe para provar qual versão está rodando passou a mentir sobre exatamente isso.
+   * `GM_info` é a única fonte que não pode divergir do que o Tampermonkey instalou.
    */
-  const VERSAO = "1.9.0";
+  const VERSAO =
+    (typeof GM_info !== "undefined" && GM_info?.script?.version) || "versão desconhecida";
   const log = (...a) => console.log(`[TMS BSC ${VERSAO}]`, ...a);
   const erro = (...a) => console.warn(`[TMS BSC ${VERSAO}]`, ...a);
 
@@ -137,6 +143,26 @@
    * mês mora num submenu, que abre ao passar o mouse e não ao clicar. A janela de nove dias não usa o
    * menu: monta o intervalo no "Avançado".
    */
+  /**
+   * A semana da operação: DOMINGO a SEGUNDA, nove dias com as pontas contando.
+   *
+   * O "Avançado" do Looker só sabe contar para trás a partir de hoje ("Hoje menos N"), então a
+   * âncora de calendário vira aritmética aqui: o fim é a última segunda-feira (hoje, se hoje for
+   * segunda) e o início é oito dias antes dela, que cai sempre num domingo.
+   *
+   *   terça 18/08   → fim = hoje menos 1 (17, segunda), início = hoje menos 9 (9, domingo)
+   *   domingo 23/08 → fim = hoje menos 6 (17, segunda), início = hoje menos 14 (9, domingo)
+   *   segunda 24/08 → fim = hoje menos 0 (24, segunda), início = hoje menos 8 (16, domingo)
+   *
+   * A janela anda numa segunda-feira, e nunca invade o futuro — que é o defeito que derrubou as duas
+   * primeiras tentativas de recorte semanal (ver o comentário do RECORTE, logo abaixo).
+   */
+  function janelaSemanal(hoje = new Date()) {
+    // getDay(): 0 = domingo. Rodado para segunda = 0, que é a distância até a última segunda-feira.
+    const fimMenos = (hoje.getDay() + 6) % 7;
+    return { inicioMenos: fimMenos + 8, fimMenos };
+  }
+
   const RECORTES = [
     // ONTEM, e não "Hoje", porque o BSC fecha às 04h com os dados até o dia anterior.
     //
@@ -149,8 +175,16 @@
     // janela de nove dias. Primeiro recorte do ciclo é o mais fácil de confundir com a tela de
     // partida, e é por isso que `lerEstavel` registra quando estabiliza sem mudar de valores.
     { period: "day", pai: null, menu: "Ontem" },
-    // A JANELA RECENTE — nove dias terminando HOJE, pedida pelo usuário em 2026-08-17 ("do dia 9 até
-    // o dia 17"). Móvel: amanhã ela é 10 a 18, sem ninguém mexer.
+    // A SEMANA — domingo a segunda-feira, ancorada no CALENDÁRIO e não em hoje (2026-08-18).
+    //
+    // Nasceu como "nove dias terminando hoje" (Hoje menos 8 → Hoje menos 0), e no dia em que foi
+    // medida caiu em "9 a 17 de ago." porque 17 era segunda. No dia seguinte virou "10 a 18" — uma
+    // segunda a uma terça —, e foi aí que ficou claro o que o usuário queria de fato: o intervalo
+    // 9→17, toda vez, porque a semana da operação vai de DOMINGO a SEGUNDA.
+    //
+    // A conta é a mesma janela de nove dias, só que presa à última segunda-feira em vez de a hoje:
+    // ver `janelaSemanal`. O rótulo do TMS deixou de ser "9 dias" e virou "Semana" no mesmo commit —
+    // o nome contava o tamanho da janela, que era exatamente a parte que estava errada.
     //
     // Duas tentativas anteriores e o que cada uma ensinou:
     //
@@ -166,7 +200,7 @@
     //
     // O "Avançado" resolve os dois: início = Hoje menos 8, término = Hoje menos 0. Medido na tela,
     // rótulo "9 de ago. de 2026 - 17 de ago. de 2026". Os oito são nove dias porque as pontas contam.
-    { period: "week", avancado: { inicioMenos: 8, fimMenos: 0 } },
+    { period: "week", avancado: janelaSemanal },
     { period: "month", pai: "Este mês", menu: "Este mês, até agora" },
   ];
 
@@ -568,8 +602,13 @@
 
       const campos = await esperarCamposDeCompensacao();
       if (!campos) throw new Error("campos de compensação do 'Avançado' não encontrados");
-      preencherCampo(campos[0], recorte.avancado.inicioMenos);
-      preencherCampo(campos[1], recorte.avancado.fimMenos);
+      // Calculado NA HORA, não uma vez na carga do script: a aba fica aberta por dias, e uma janela
+      // congelada no dia da abertura escorregaria um dia a cada meia-noite sem nada avisar.
+      const janela =
+        typeof recorte.avancado === "function" ? recorte.avancado() : recorte.avancado;
+      log(`${recorte.period}: janela Hoje menos ${janela.inicioMenos} até Hoje menos ${janela.fimMenos}.`);
+      preencherCampo(campos[0], janela.inicioMenos);
+      preencherCampo(campos[1], janela.fimMenos);
       await dormir(1500);
     } else {
       // "Hoje" está na raiz; o mês mora atrás de um submenu que abre no passar do mouse.

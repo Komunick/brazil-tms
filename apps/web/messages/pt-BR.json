@@ -1652,7 +1652,7 @@
     "target": "meta {value}",
     "period": {
       "day": "Ontem",
-      "week": "9 dias",
+      "week": "Semana",
       "month": "Mês"
     }
   }
