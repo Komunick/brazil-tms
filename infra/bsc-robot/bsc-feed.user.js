@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.12.0
+// @version      1.13.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -73,10 +73,16 @@
  *   ponto como separador de milhar — "100.00%" viraria 10.000%. Por isso a aba tem que abrir com
  *   `?hl=pt-BR` e o script CONFERE o idioma antes de qualquer coisa.
  *
- *   O FILTRO "Transportador" NÃO PERSISTE. Numa aba recém-aberta ele vem vazio e o relatório inteiro
- *   mostra "Não há dados" — inclusive o velocímetro. Isso era o passo manual do preparo, e virou
- *   trabalho do robô na 1.12.0: ver `garantirTransportador`. O que continua valendo é a recusa —
- *   sem nota na tela, ele não manda, em vez de gravar um zero que ninguém saberia de onde veio.
+ *   O FILTRO "Transportador" PODE VIR VAZIO — e aqui a afirmação antiga estava forte demais. Ela
+ *   dizia "não persiste", e a medição de 2026-08-18 mostrou o contrário no caso que mais importa: o
+ *   Chromium foi reiniciado inteiro, com o mesmo perfil, e o filtro voltou aplicado — o robô não
+ *   precisou repor nada. O estado vazio é real, mas pertence à aba/perfil SEM histórico (a primeira
+ *   preparação, dados de site limpos), não a todo reinício.
+ *
+ *   Quando acontece, o relatório inteiro mostra "Não há dados", inclusive o velocímetro. Desde a
+ *   1.12.0 isso é trabalho do robô: ver `garantirTransportador`, que não custa nada quando o filtro
+ *   já está lá. O que continua valendo é a recusa — sem nota na tela, ele não manda, em vez de
+ *   gravar um zero que ninguém saberia de onde veio.
  *
  * ── PREPARO DA ABA (uma vez, à mão) ────────────────────────────────────────────────────────────
  *
@@ -108,8 +114,12 @@
      */
     transportador: "BRAZIL TRANSPORTS",
     /**
-     * De quanto em quanto tempo reler. O BSC fecha às 4h, então de hora em hora é generoso — existe
-     * para pegar a virada sem depender de acertar o minuto, e não porque o dado mude.
+     * De quanto em quanto tempo ACORDAR. Acordar não é ler: desde a 1.13.0 o robô confere o carimbo
+     * do rodapé — que está na tela sem clique nenhum — e só faz o ciclo completo se o relatório
+     * republicou. Como o BSC fecha uma vez por dia, isso dá UMA leitura diária de verdade.
+     *
+     * De hora em hora, então, é generoso de propósito: existe para pegar a virada sem depender de
+     * acertar o minuto, e agora custa quase nada quando não há nada novo.
      */
     intervaloMs: 60 * 60 * 1000,
     /** Piso antes de começar a olhar: o relatório nem começou a recalcular nos primeiros segundos. */
@@ -771,6 +781,15 @@
   /** O último carimbo enviado por recorte — a economia da regra 3. */
   const ultimo = {};
 
+  /**
+   * O carimbo que estava na tela quando o último ciclo terminou — a economia da regra 3, um nível
+   * acima: ela evita o ENVIO repetido; este evita o ciclo inteiro. Ver `ciclo`.
+   *
+   * Nasce nulo de propósito. Recarregou a página, o primeiro ciclo roda inteiro, sempre — é a única
+   * leitura em que não se sabe nada sobre o que já foi entregue.
+   */
+  let ultimoCarimboDoCiclo = null;
+
   async function lerEEnviar(recorte) {
     // Guardado ANTES de mexer no filtro: é contra isto que se sabe se o relatório recalculou.
     const antes = assinatura(lerTela());
@@ -859,19 +878,19 @@
    * paga o preço de abrir menu.
    */
   async function garantirTransportador() {
-    if (temConteudo(lerTela())) return;
+    if (temConteudo(lerTela())) return false;
 
     // Tela vazia pode ser só carregamento — a aba acabou de abrir, o Looker ainda está montando.
     // Esperar antes de mexer evita abrir menu em cima de um relatório que ia encher sozinho.
     await dormir(CONFIG.pisoRecalculoMs);
-    if (temConteudo(lerTela())) return;
+    if (temConteudo(lerTela())) return false;
 
     log(`tela sem indicadores — repondo o filtro "${CONFIG.transportador}".`);
     await fecharPopups();
     const controle = await esperarPorTexto("Transportador");
     if (!controle) {
       erro('controle "Transportador" não encontrado — a aba precisa de olho humano.');
-      return;
+      return false;
     }
     clicar(controle);
 
@@ -882,7 +901,7 @@
           "transportador. Nada foi alterado.",
       );
       await fecharPopups();
-      return;
+      return false;
     }
     clicar(opcao);
     await fecharPopups();
@@ -892,6 +911,9 @@
     await dormir(CONFIG.pisoRecalculoMs);
     if (temConteudo(lerTela())) log("filtro reposto — o relatório voltou a mostrar dados.");
     else erro("filtro reposto e a tela continua vazia — não vou insistir neste ciclo.");
+    // Devolve TRUE mesmo quando a tela seguiu vazia: quem chama usa isto para não pular o ciclo,
+    // e um ciclo a mais é barato perto de perder a publicação do dia.
+    return true;
   }
 
   async function ciclo() {
@@ -902,7 +924,36 @@
       );
       return;
     }
-    await garantirTransportador();
+    const repos = await garantirTransportador();
+
+    /**
+     * O CICLO INTEIRO SÓ ACONTECE SE O RELATÓRIO REPUBLICOU (1.13.0, 2026-08-18).
+     *
+     * O BSC publica UMA vez por dia, de madrugada. O robô lia de hora em hora e trocava o filtro de
+     * período três vezes em cada leitura: 72 trocas por dia para buscar um número que muda uma vez.
+     * A regra 3 já evitava reenviar o repetido, mas só DEPOIS de mexer na tela — a economia era de
+     * rede, não de risco.
+     *
+     * E o risco é o que importa aqui: cada troca de filtro é uma chance de cair na leitura da tela
+     * anterior, que foi o defeito de hoje (ver a quarta condição em `lerEstavel`). Setenta e duas
+     * chances por dia viram três.
+     *
+     * O carimbo do rodapé está visível SEM clicar em nada, e é o mesmo que o Looker reescreve quando
+     * recalcula. Comparar o de agora com o do fim do ciclo anterior é comparar duas leituras da MESMA
+     * tela — o filtro não mudou entre uma coisa e outra —, então igualdade significa "nada novo foi
+     * publicado".
+     *
+     * Duas saídas de segurança, porque pular ciclo é o tipo de economia que esconde falha:
+     *   - Carimbo ilegível não pula. Não saber é motivo para olhar, não para dormir.
+     *   - Filtro recém-reposto não pula. A tela pode ter passado o dia vazia, e a publicação de hoje
+     *     nunca ter sido lida; economizar aí seria perder justamente o que se queria.
+     */
+    const carimboAgora = carimbo();
+    if (!repos && carimboAgora && carimboAgora === ultimoCarimboDoCiclo) {
+      log(`o relatório não republicou desde ${carimboAgora} — nenhum filtro tocado neste ciclo.`);
+      return;
+    }
+
     for (const recorte of RECORTES) {
       try {
         await lerEEnviar(recorte);
@@ -912,6 +963,10 @@
         await fecharPopups();
       }
     }
+
+    // Gravado no FIM e relido da tela, não copiado do começo: o que interessa é o carimbo do estado
+    // em que a aba ficou, que é contra o que o próximo ciclo vai comparar.
+    ultimoCarimboDoCiclo = carimbo();
   }
 
   /** Agenda a partir do FIM do anterior — nunca em paralelo consigo mesmo. */
