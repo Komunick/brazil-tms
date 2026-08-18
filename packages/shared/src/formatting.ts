@@ -55,8 +55,18 @@ export function toUtcIso(value: DateTime | Date): string {
  * "trips today by status" dashboard count against UTC-stored `planned_pickup_window_start`. Computing
  * the boundary in the business timezone avoids the off-by-one-day bug near midnight BRT.
  */
-export function dayRangeSaoPaulo(date: string | Date): { from: string; to: string } {
-  const start = fromUtc(date).startOf("day");
+export function dayRangeSaoPaulo(
+  date: string | Date,
+  /**
+   * Dias a somar ao dia de `date` — `1` é amanhã, e é como o painel monta o quadro do dia seguinte.
+   *
+   * Some DIAS DE CALENDÁRIO, não 24 horas: somar milissegundos ao instante erraria a virada em
+   * qualquer fuso com horário de verão. O Brasil não tem mais, mas o helper é do sistema inteiro e a
+   * conta certa não custa nada.
+   */
+  offsetDays = 0,
+): { from: string; to: string } {
+  const start = fromUtc(date).startOf("day").plus({ days: offsetDays });
   const end = start.plus({ days: 1 });
   return { from: start.toUTC().toISO() ?? "", to: end.toUTC().toISO() ?? "" };
 }

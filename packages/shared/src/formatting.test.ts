@@ -76,6 +76,22 @@ describe("dayRangeSaoPaulo (R6) — BRT calendar day → half-open UTC range", (
     const { from, to } = dayRangeSaoPaulo("2026-01-15");
     expect(new Date(to).getTime() - new Date(from).getTime()).toBe(24 * 60 * 60 * 1000);
   });
+
+  it("desloca por DIA DE CALENDÁRIO — é assim que o painel monta o quadro de amanhã", () => {
+    const hoje = dayRangeSaoPaulo("2026-05-29");
+    const amanha = dayRangeSaoPaulo("2026-05-29", 1);
+    // Amanhã começa exatamente onde hoje termina: sem buraco e sem sobreposição entre os dois
+    // cartões do painel. Uma viagem contada nos dois lugares (ou em nenhum) seria invisível como erro.
+    expect(amanha.from).toBe(hoje.to);
+    expect(amanha.to).toBe("2026-05-31T03:00:00.000Z");
+  });
+
+  it("o deslocamento parte do DIA em São Paulo, não do instante", () => {
+    // 30/05 01:00Z é 29/05 22:00 em São Paulo — o dia BRT é 29, então "amanhã" é 30, não 31.
+    const amanha = dayRangeSaoPaulo(new Date("2026-05-30T01:00:00.000Z"), 1);
+    expect(amanha.from).toBe("2026-05-30T03:00:00.000Z");
+    expect(amanha.to).toBe("2026-05-31T03:00:00.000Z");
+  });
 });
 
 describe("formatBRL", () => {

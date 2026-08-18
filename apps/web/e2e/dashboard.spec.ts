@@ -123,6 +123,7 @@ test.describe("US4 — Home daily dashboard summary", () => {
     const { summary } = (await res.json()) as {
       summary: {
         tripsTodayByStatus: Array<{ status: string; count: number }>;
+        tripsTomorrowByStatus: Array<{ status: string; count: number }>;
         tripsByStatus: Array<{ status: string; count: number }>;
         billingPendingCount: number;
         tripsAtRisk: number | null;
@@ -151,6 +152,20 @@ test.describe("US4 — Home daily dashboard summary", () => {
     const mesInTransit = summary.tripsByStatus.find((s) => s.status === "in_transit");
     expect(mesInTransit).toBeDefined();
     expect(mesInTransit!.count).toBeGreaterThanOrEqual(todayInTransit!.count);
+
+    /**
+     * O quadro de AMANHÃ (2026-08-17): forma e sanidade, não volume.
+     *
+     * O banco de desenvolvimento é compartilhado e recebe o histórico do portal, então "amanhã tem
+     * menos que hoje" seria uma asserção que quebra sozinha num dia movimentado. O que dá para
+     * afirmar sem depender do movimento é que a lista existe e que toda contagem é um inteiro não
+     * negativo — o recorte em si tem teste próprio em `dayRangeSaoPaulo`.
+     */
+    expect(Array.isArray(summary.tripsTomorrowByStatus)).toBe(true);
+    for (const linha of summary.tripsTomorrowByStatus) {
+      expect(Number.isInteger(linha.count)).toBe(true);
+      expect(linha.count).toBeGreaterThanOrEqual(0);
+    }
 
     // Every later-slice metric is exactly null (006/007/008 placeholders).
     expect(summary.tripsAtRisk).toBeNull();

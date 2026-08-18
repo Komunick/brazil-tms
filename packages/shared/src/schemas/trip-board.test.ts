@@ -209,3 +209,26 @@ describe("updateTripPlanSchema — 005 tightening (≥1 field, window start ≤ 
     expect(res.success).toBe(true);
   });
 });
+
+describe("awaitingAssignment (a fila do despacho)", () => {
+  /**
+   * O cartão do painel abre o quadro por este parâmetro, e o número dos dois lados sai do mesmo
+   * predicado. Se ele deixar de ser lido da URL, o atalho abre o quadro SEM filtro nenhum — uma lista
+   * com milhares de linhas onde deveriam estar algumas dezenas, e nada na tela dizendo que o filtro
+   * caiu. É o tipo de regressão que passa despercebida numa TV.
+   */
+  it("é lido da URL e conserva o recorte", () => {
+    const q = tripBoardQueryFromParams(
+      new URLSearchParams("awaitingAssignment=true&scope=active&sort=pickupStart"),
+    );
+    expect(q.awaitingAssignment).toBe("true");
+    expect(q.scope).toBe("active");
+  });
+
+  it("ausente vira undefined, e não 'false'", () => {
+    // `false` é um filtro (as JÁ atribuídas); ausente é "não filtre por isso". Colapsar os dois
+    // esconderia metade do quadro.
+    const q = tripBoardQueryFromParams(new URLSearchParams("scope=all"));
+    expect(q.awaitingAssignment).toBeUndefined();
+  });
+});
