@@ -451,12 +451,24 @@ export async function assignTrip(
 // ---------------------------------------------------------------------------
 
 /**
- * A viagem que já saiu: em curso desde "assigned" até "unloaded". Fora disso, ou ela ainda pode ser
- * atribuída pelo caminho normal (`received`), ou já encerrou e o dinheiro está em jogo.
+ * A viagem que JÁ SAIU: de "assigned" até "billed" (2026-08-18).
+ *
+ * Ia só até `unloaded`, sob o argumento de que "já encerrou e o dinheiro está em jogo". O argumento
+ * não se sustentou quando foi verificado: o item de faturamento é montado a partir da viagem, da rota
+ * e do preço — `billing-items.ts` não lê a atribuição nem a transportadora. Espelhar quem dirigiu não
+ * mexe em centavo nenhum; só registra o que já aconteceu.
+ *
+ * O preço da regra antiga era grande e silencioso: 799 viagens com motorista e placa no portal e o
+ * painel de Atribuições vazio — 121 concluídas, 258 em faturamento e 420 canceladas. Quem rodou a
+ * viagem simplesmente não existia no TMS, e não havia como saber sem abrir o portal.
+ *
+ * `cancelled` fica DE FORA de propósito: ali a viagem não rodou, e registrar um condutor numa viagem
+ * que não aconteceu confunde relatório de motorista. É uma decisão de negócio, não uma limitação
+ * técnica — se a operação quiser o registro de quem estava escalado quando cancelou, é só incluir.
  */
 const MIRRORABLE_STATUSES: readonly TripStatus[] = TRIP_STATUSES.slice(
   TRIP_STATUSES.indexOf("assigned"),
-  TRIP_STATUSES.indexOf("unloaded") + 1,
+  TRIP_STATUSES.indexOf("billed") + 1,
 );
 
 /**

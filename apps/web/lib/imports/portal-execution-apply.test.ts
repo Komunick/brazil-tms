@@ -296,4 +296,64 @@ describe.skipIf(!hasDb)("applyPortalTrip (integration)", () => {
     const itens = await db.select().from(billingItems).where(eq(billingItems.tripId, tripId));
     expect(itens).toHaveLength(0);
   });
+
+  it("Completed no portal FECHA a viagem mesmo sem a hora da descarga", async () => {
+    /**
+     * O defeito que este teste tranca (medido em 2026-08-18): onze viagens com o portal dizendo
+     * Completed e o TMS parado em "Descarregando", "No destino" ou em trânsito — cobrando atribuição
+     * e alertando semanas depois de entregues.
+     *
+     * A causa era a condição de fechamento exigir que ESTA rodada terminasse exatamente em
+     * `unloaded`. Quando o portal não carimba a hora da descarga, nenhuma rodada termina ali e a
+     * viagem fica aberta para sempre. O fechamento é a palavra do cliente sobre o fim da viagem: não
+     * pode depender de qual salto a leitura conseguiu dar.
+     */
+    const { id: tripId, ext } = await makeTrip();
+    const map = await loadStationMap(customerId);
+
+    // Chegou ao destino e abriu o lacre; a descarga o portal NÃO carimbou.
+    const trip = portalTrip(ext);
+    trip.legs[0]!.destination.unsealedAt = "13/08/2026 09:00";
+
+    const outcomes = await applyPortalTrip(customerId, trip, map, actorId, "portal", {
+      onCompleted: "close_only",
+    });
+    expect(outcomes.some((o) => o.status === "completed")).toBe(true);
+
+    const after = (await db.select().from(trips).where(eq(trips.id, tripId)).limit(1))[0]!;
+    expect(after.currentStatus).toBe("completed");
+  });
+
+  it("Completed FECHA na leitura seguinte, quando não há mais salto nenhum a dar", async () => {
+    /**
+     * A segunda metade do mesmo defeito. Uma viagem que já tinha avançado tudo o que os marcos
+     * permitiam saía do laço por um `continue` de "já está adiante" — e o fechamento morava depois
+     * dele. O ciclo que movia não fechava, e o ciclo seguinte nem chegava a tentar.
+     *
+     * Aqui a mesma linha do tempo é aplicada duas vezes. Na segunda não há salto novo, e é
+     * exatamente aí que a viagem tem que fechar.
+     */
+    const { id: tripId, ext } = await makeTrip();
+    const map = await loadStationMap(customerId);
+
+    // Primeira leitura: o cliente ainda não disse que acabou, então ela só anda.
+    const emCurso = portalTrip(ext, { status: "Arrived" });
+    emCurso.legs[0]!.destination.unsealedAt = "13/08/2026 09:00";
+    await applyPortalTrip(customerId, emCurso, map, actorId, "portal", {
+      onCompleted: "close_only",
+    });
+    const meio = (await db.select().from(trips).where(eq(trips.id, tripId)).limit(1))[0]!;
+    expect(meio.currentStatus).not.toBe("completed");
+
+    // Segunda leitura: mesmos marcos, agora com o cliente dizendo Completed.
+    const fim = portalTrip(ext);
+    fim.legs[0]!.destination.unsealedAt = "13/08/2026 09:00";
+    const outcomes = await applyPortalTrip(customerId, fim, map, actorId, "portal", {
+      onCompleted: "close_only",
+    });
+    expect(outcomes.some((o) => o.status === "completed")).toBe(true);
+
+    const after = (await db.select().from(trips).where(eq(trips.id, tripId)).limit(1))[0]!;
+    expect(after.currentStatus).toBe("completed");
+  });
 });

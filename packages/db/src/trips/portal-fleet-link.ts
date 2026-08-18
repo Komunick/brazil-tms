@@ -5,7 +5,10 @@ import { drivers, trailers, tripAssignments, trips, vehicles } from "../../schem
 import { assignTrip, mirrorAssignmentFromPortal } from "./trip-assignments";
 import { Conflict } from "../errors";
 
-/** Viagem já em curso: o registro é retroativo, sem mexer no status (ver `mirrorAssignmentFromPortal`). */
+/**
+ * Viagem já em curso OU já encerrada: o registro é retroativo, sem mexer no status (ver
+ * `mirrorAssignmentFromPortal`, que guarda a mesma lista e explica por que ela chega até `billed`).
+ */
 const MIRROR_STATUSES = new Set<TripStatus>([
   "assigned",
   "confirmed",
@@ -16,6 +19,10 @@ const MIRROR_STATUSES = new Set<TripStatus>([
   "at_destination",
   "unloading",
   "unloaded",
+  "completed",
+  "billing_pending",
+  "billing_ready",
+  "billed",
 ]);
 
 /**
@@ -233,7 +240,10 @@ export async function linkFleetFromPortal(
    * atribuição, que é onde alguém olha quando o pagamento do subcontratado não bate.
    */
   const carrierDiverges = Boolean(
-    subcontratado && driver.carrierId && vehicle.carrierId && driver.carrierId !== vehicle.carrierId,
+    subcontratado &&
+    driver.carrierId &&
+    vehicle.carrierId &&
+    driver.carrierId !== vehicle.carrierId,
   );
 
   const nota = [

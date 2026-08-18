@@ -13,7 +13,7 @@ import { recomputeTripSla } from "./sla";
 import { markCompleted } from "./completion";
 import { writePortalFacts } from "./portal-trip-facts";
 import { linkFleetFromPortal } from "./portal-fleet-link";
-import { closeTripFromSource } from "./source-status";
+import { advanceTripFromSource, closeTripFromSource } from "./source-status";
 
 /** A palavra do cliente para uma viagem que não vai acontecer. Uma só, e comparada do mesmo jeito
  *  nos dois caminhos — o do plano e este. */
@@ -171,7 +171,29 @@ export async function applyPortalTrip(
       continue;
     }
 
-    // Uma viagem encerrada não recebe mais nada: nem marco, nem motorista, nem vínculo.
+    /**
+     * QUEM DIRIGIU é registrado antes de qualquer guarda (2026-08-18).
+     *
+     * Estava depois de três `continue` — o de viagem terminal, o de cancelamento e o de "sem marco"
+     * — e o primeiro deles sozinho custava 121 viagens concluídas com motorista e placa no portal e
+     * nenhuma atribuição no TMS. A viagem fechava antes de o robô conseguir ligar a frota, e a porta
+     * nunca mais abria: o portal continua mandando a linha todo ciclo, e todo ciclo ela batia no
+     * mesmo `continue`.
+     *
+     * "Encerrada não recebe mais nada" confundia duas coisas diferentes. Não mover uma viagem
+     * fechada está certo — reabrir o que acabou seria falsear a linha do tempo. Mas registrar quem a
+     * dirigiu não a move: `mirrorAssignmentFromPortal` grava a atribuição sem tocar no status, e o
+     * item de faturamento não lê a atribuição, então não há centavo em jogo.
+     *
+     * Cancelada continua de fora, e de propósito: numa viagem que não rodou, `assignTrip` moveria uma
+     * "Recebida" para "Atribuída" segundos antes de cancelá-la — barulho pelo qual ninguém pediu.
+     */
+    if (!isCancelledAtPortal(portal.status)) {
+      await linkFleetFromPortal(existing.id, portal, actorUserId);
+    }
+
+    // Uma viagem encerrada não recebe mais MARCO: mover o que já acabou seria reescrever a linha do
+    // tempo. O vínculo de frota acima é outra coisa — é registro do que já aconteceu.
     if (TERMINAL.has(existing.currentStatus as TripStatus)) {
       out.push({ ...base, status: "closed", detail: existing.currentStatus });
       continue;
@@ -229,125 +251,148 @@ export async function applyPortalTrip(
       continue;
     }
 
-    await linkFleetFromPortal(existing.id, portal, actorUserId);
-
-    let reachedUnloaded = false;
+    /**
+     * A palavra do portal sobre o FIM da viagem não depende de esta leitura ter movido alguma coisa.
+     *
+     * Custou 11 viagens presas em aberto com o portal dizendo Completed — seis em "Descarregando",
+     * três em "No destino", uma em trânsito e uma descarregada. Duas armadilhas somadas, e as duas
+     * pela mesma raiz: o fechamento estava amarrado ao MOVIMENTO daquela rodada, não ao ESTADO.
+     *
+     *   O `continue` abaixo saía da viagem inteira quando não havia salto novo. Uma viagem que
+     *   chegou a `unloaded` numa leitura anterior nunca mais era considerada: no ciclo seguinte não
+     *   há salto, e o fechamento ficava do outro lado de um `continue`.
+     *
+     *   E a condição de fechar exigia que ESTA rodada terminasse exatamente em `unloaded`. Quando o
+     *   portal não informa a hora do descarregamento — o caso das seis paradas em "Descarregando" —
+     *   nenhuma rodada termina ali, e a viagem ficava aberta para sempre, cobrando atribuição e
+     *   alertando semanas depois de entregue.
+     */
+    const fechar = isCompletedAtPortal(portal.status);
     let tripId: string | null = null;
+    let statusFinal = existing.currentStatus as TripStatus;
     const hops = hopsToApply(existing.currentStatus as TripStatus, milestones);
     if (hops.length === 0) {
+      // "Já está adiante" continua sendo verdade e continua sendo relatado — o que ele não pode mais
+      // fazer é interromper o processamento antes do fechamento.
       out.push({ ...base, status: "already_ahead", detail: existing.currentStatus });
-      continue;
-    }
+      if (!fechar) continue;
+      tripId = existing.id;
+    } else {
+      await db.transaction(async (tx) => {
+        // Re-read under lock: between the read above and here, a dispatcher may have moved this trip.
+        const locked = (
+          await tx
+            .select({ currentStatus: trips.currentStatus })
+            .from(trips)
+            .where(eq(trips.id, existing.id))
+            .for("update")
+            .limit(1)
+        )[0]!;
+        const from = locked.currentStatus as TripStatus;
+        const fresh = hopsToApply(from, milestones);
+        if (fresh.length === 0) {
+          // Alguém moveu a viagem entre a leitura de fora e este lock. Não há salto a aplicar, mas o
+          // fechamento continua valendo pelo ESTADO — sair daqui sem `tripId` reintroduziria, numa
+          // corrida rara, exatamente o defeito que o comentário lá em cima descreve.
+          statusFinal = from;
+          tripId = existing.id;
+          out.push({ ...base, status: "already_ahead", detail: from });
+          return;
+        }
 
-    await db.transaction(async (tx) => {
-      // Re-read under lock: between the read above and here, a dispatcher may have moved this trip.
-      const locked = (
-        await tx
-          .select({ currentStatus: trips.currentStatus })
-          .from(trips)
-          .where(eq(trips.id, existing.id))
-          .for("update")
-          .limit(1)
-      )[0]!;
-      const from = locked.currentStatus as TripStatus;
-      const fresh = hopsToApply(from, milestones);
-      if (fresh.length === 0) {
-        out.push({ ...base, status: "already_ahead", detail: from });
-        return;
-      }
+        // Which (event type, instant) pairs this trip already carries — the idempotency guard that
+        // makes re-importing the same export write nothing.
+        const already = await tx
+          .select({ eventType: tripEvents.eventType, eventTimestamp: tripEvents.eventTimestamp })
+          .from(tripEvents)
+          .where(eq(tripEvents.tripId, existing.id));
+        const seen = new Set(
+          already
+            .filter((e) => e.eventTimestamp != null)
+            .map((e) => `${e.eventType}@${e.eventTimestamp!.getTime()}`),
+        );
 
-      // Which (event type, instant) pairs this trip already carries — the idempotency guard that
-      // makes re-importing the same export write nothing.
-      const already = await tx
-        .select({ eventType: tripEvents.eventType, eventTimestamp: tripEvents.eventTimestamp })
-        .from(tripEvents)
-        .where(eq(tripEvents.tripId, existing.id));
-      const seen = new Set(
-        already
-          .filter((e) => e.eventTimestamp != null)
-          .map((e) => `${e.eventType}@${e.eventTimestamp!.getTime()}`),
-      );
-
-      let before = from;
-      const written: TripStatus[] = [];
-      for (const hop of fresh) {
-        await tx.insert(tripEvents).values({
-          tripId: existing.id,
-          eventType: "status_change",
-          statusBefore: before,
-          statusAfter: hop.status,
-          eventTimestamp: hop.at,
-          source: "import",
-          actorUserId,
-          notes: `Execução registrada pelo cliente (${sourceLabel}).`,
-        });
-        // The milestone event itself, with its real instant — skipped when already recorded.
-        if (hop.eventType && hop.at && !seen.has(`${hop.eventType}@${hop.at.getTime()}`)) {
+        let before = from;
+        const written: TripStatus[] = [];
+        for (const hop of fresh) {
           await tx.insert(tripEvents).values({
             tripId: existing.id,
-            eventType: hop.eventType,
+            eventType: "status_change",
             statusBefore: before,
             statusAfter: hop.status,
             eventTimestamp: hop.at,
             source: "import",
             actorUserId,
-            notes: `Horário real informado pelo cliente (${sourceLabel}).`,
+            notes: `Execução registrada pelo cliente (${sourceLabel}).`,
           });
+          // The milestone event itself, with its real instant — skipped when already recorded.
+          if (hop.eventType && hop.at && !seen.has(`${hop.eventType}@${hop.at.getTime()}`)) {
+            await tx.insert(tripEvents).values({
+              tripId: existing.id,
+              eventType: hop.eventType,
+              statusBefore: before,
+              statusAfter: hop.status,
+              eventTimestamp: hop.at,
+              source: "import",
+              actorUserId,
+              notes: `Horário real informado pelo cliente (${sourceLabel}).`,
+            });
+          }
+          before = hop.status;
+          written.push(hop.status);
         }
-        before = hop.status;
-        written.push(hop.status);
-      }
 
-      const target = written[written.length - 1]!;
-      await tx
-        .update(trips)
-        .set({ currentStatus: target, updatedAt: new Date() })
-        .where(eq(trips.id, existing.id));
-
-      /**
-       * A confirmação, carimbada pela realidade (2026-08-16).
-       *
-       * O aviso "confirmação pendente" olha o carimbo na atribuição, não o status da viagem. E o
-       * carimbo só existia quando alguém clicava "Confirmar" no TMS — cerimônia que o caminho do
-       * portal atravessa sem parar. Resultado medido: 9 avisos de confirmação pendente acesos em
-       * viagens que já estavam CARREGANDO, e sem como apagar, porque a confirmação que faltava já
-       * tinha acontecido no mundo.
-       *
-       * O caminhão chegou na origem. Isso responde a pergunta com mais força do que um clique.
-       */
-      if (TRIP_STATUSES.indexOf(target) > TRIP_STATUSES.indexOf("confirmed")) {
-        // O instante é o primeiro horário REAL desta rodada — a chegada na origem, quase sempre.
-        // Sem nenhum (só saltos sem hora), fica agora: o carimbo é verdadeiro, a hora é aproximada.
-        const quando = fresh.find((h) => h.at != null)?.at ?? new Date();
+        const target = written[written.length - 1]!;
         await tx
-          .update(tripAssignments)
-          .set({ confirmedByUserId: actorUserId, confirmedAt: quando, updatedAt: new Date() })
-          .where(
-            and(
-              eq(tripAssignments.tripId, existing.id),
-              eq(tripAssignments.isCurrent, true),
-              isNull(tripAssignments.confirmedAt),
-            ),
-          );
-      }
+          .update(trips)
+          .set({ currentStatus: target, updatedAt: new Date() })
+          .where(eq(trips.id, existing.id));
 
-      await writeAudit(tx, {
-        entityType: "trip",
-        entityId: existing.id,
-        action: "trip.status_change",
-        previousValue: { current_status: from },
-        newValue: { current_status: target, hops: written },
-        actorUserId,
-        reason: `Execução do portal do cliente (${sourceLabel}).`,
+        /**
+         * A confirmação, carimbada pela realidade (2026-08-16).
+         *
+         * O aviso "confirmação pendente" olha o carimbo na atribuição, não o status da viagem. E o
+         * carimbo só existia quando alguém clicava "Confirmar" no TMS — cerimônia que o caminho do
+         * portal atravessa sem parar. Resultado medido: 9 avisos de confirmação pendente acesos em
+         * viagens que já estavam CARREGANDO, e sem como apagar, porque a confirmação que faltava já
+         * tinha acontecido no mundo.
+         *
+         * O caminhão chegou na origem. Isso responde a pergunta com mais força do que um clique.
+         */
+        if (TRIP_STATUSES.indexOf(target) > TRIP_STATUSES.indexOf("confirmed")) {
+          // O instante é o primeiro horário REAL desta rodada — a chegada na origem, quase sempre.
+          // Sem nenhum (só saltos sem hora), fica agora: o carimbo é verdadeiro, a hora é aproximada.
+          const quando = fresh.find((h) => h.at != null)?.at ?? new Date();
+          await tx
+            .update(tripAssignments)
+            .set({ confirmedByUserId: actorUserId, confirmedAt: quando, updatedAt: new Date() })
+            .where(
+              and(
+                eq(tripAssignments.tripId, existing.id),
+                eq(tripAssignments.isCurrent, true),
+                isNull(tripAssignments.confirmedAt),
+              ),
+            );
+        }
+
+        await writeAudit(tx, {
+          entityType: "trip",
+          entityId: existing.id,
+          action: "trip.status_change",
+          previousValue: { current_status: from },
+          newValue: { current_status: target, hops: written },
+          actorUserId,
+          reason: `Execução do portal do cliente (${sourceLabel}).`,
+        });
+
+        await recomputeTripSla(tx, existing.id);
+        out.push({ ...base, status: "applied", hops: written });
+        statusFinal = target;
+        tripId = existing.id;
       });
+    }
 
-      await recomputeTripSla(tx, existing.id);
-      out.push({ ...base, status: "applied", hops: written });
-      reachedUnloaded = written[written.length - 1] === "unloaded";
-      tripId = existing.id;
-    });
-
-    // The customer says the trip is over, and the TMS agrees it is unloaded: close it (2026-08-16).
+    // The customer says the trip is over: close it (2026-08-16, corrigido em 2026-08-18).
     //
     // Left open, a trip sat at `at_destination` forever — on tmsdev that was 244 of them, each still
     // demanding a resource assignment weeks after it had been delivered, and NONE of them in the
@@ -355,15 +400,40 @@ export async function applyPortalTrip(
     // runs the real gate (documents), advances to `billing_pending` and creates the billing item.
     // Nothing is invoiced by this — the next step (Billing Ready) needs pricing and stays human.
     //
+    // A condição olha o ESTADO da viagem, não o que esta rodada moveu. O `ENCERRADOS` está aqui só
+    // para não bater na porta de mil e novecentas viagens já fechadas a cada ciclo: quem decide de
+    // verdade continua sendo `closeTripFromSource` (que anda só por transições declaradas e recusa
+    // viagem terminal) e `markCompleted` (que roda a trava dos documentos).
+    //
     // Called outside the transaction because it opens its own, and never fatally: a trip that cannot
     // complete (a document missing, someone moved it meanwhile) is reported, and the rest go on.
-    if (tripId && reachedUnloaded && isCompletedAtPortal(portal.status)) {
+    if (tripId && fechar && !ENCERRADOS.has(statusFinal)) {
       try {
         // `close_only` é o backfill do histórico: conclui e para, sem entrar na fila do dinheiro.
         // Essas viagens rodaram antes de o TMS existir e já foram cobradas por fora.
         if (onCompleted === "close_only") {
           await closeTripFromSource(tripId, "FINALIZADA", actorUserId, sourceLabel);
         } else {
+          /**
+           * `markCompleted` só conclui a partir de `unloaded` — é o portão do dinheiro e está certo.
+           *
+           * Só que o portal nem sempre carimba a hora da descarga: a viagem para em "No destino" ou
+           * "Descarregando" com o cliente dizendo Completed, e o portão recusava para sempre. Andar
+           * até `unloaded` pelas transições declaradas resolve sem afrouxar nada — a trava dos
+           * documentos continua sendo `markCompleted`, logo abaixo, e o item de faturamento continua
+           * nascendo por lá.
+           *
+           * `advanceTripFromSource` é forward-only e recusa viagem sem recurso ativo. Uma viagem que
+           * o portal diz concluída mas que não tem ninguém dirigindo continua sem fechar, e agora
+           * aparece como `completion_blocked` em vez de sumir do relatório.
+           */
+          await advanceTripFromSource(
+            tripId,
+            "unloaded",
+            "CONCLUIDA NO PORTAL",
+            actorUserId,
+            sourceLabel,
+          );
           await markCompleted(tripId, {}, actorUserId);
         }
         out.push({ ...base, status: "completed" });
@@ -384,6 +454,15 @@ export async function applyPortalTrip(
 function isCompletedAtPortal(status: string | null): boolean {
   return (status ?? "").trim().toLowerCase() === "completed";
 }
+
+/** Viagem que já acabou aqui — não se tenta fechar de novo a cada ciclo do robô. */
+const ENCERRADOS = new Set<TripStatus>([
+  "completed",
+  "billing_pending",
+  "billing_ready",
+  "billed",
+  "cancelled",
+]);
 
 /** Apply a whole export, trip by trip, and tally what happened. */
 export async function applyPortalExecution(
