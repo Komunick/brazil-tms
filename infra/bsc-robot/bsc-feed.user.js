@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.9.0
+// @version      1.10.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -107,8 +107,14 @@
     pisoRecalculoMs: 6000,
     /** Quanto tempo a tela precisa ficar IGUAL para a leitura valer — ver `lerEstavel`. */
     patamarMs: 16000,
-    /** Teto para a tela parar de mudar. Estourou, não manda — ver `lerEstavel`. */
-    limiteRecalculoMs: 120000,
+    /**
+     * Teto para a tela virar OUTRA e parar. Estourou, não manda — ver `lerEstavel`.
+     *
+     * Subiu de 2 para 3 minutos junto com a quarta condição (1.10.0). Antes, estourar significava
+     * mandar meia tela; agora significa pular o recorte neste ciclo, o que é barato — o robô lê de
+     * hora em hora. Dado o custo de errar ter virado o custo de esperar, esperar mais sai de graça.
+     */
+    limiteRecalculoMs: 180000,
   };
 
   /**
@@ -588,8 +594,21 @@
     return JSON.stringify(leitura);
   }
 
+  /**
+   * O CARIMBO ENTRA NA LEITURA (1.10.0, 2026-08-18).
+   *
+   * Ele não é enfeite aqui: é o que distingue "os dois recortes deram o mesmo resultado" de "a tela
+   * ainda é a do recorte anterior". Medido no banco — cada recorte tem o SEU "Dados atualizados pela
+   * última vez" (ontem 10:27:21, nove dias 00:39:48), porque o Looker reescreve o rodapé quando
+   * recalcula. Então números iguais COM carimbo igual é tela velha; números iguais com carimbo
+   * diferente é coincidência legítima, e essa passa.
+   *
+   * Sem ele na assinatura, recusar leitura que não mudou condenaria dois recortes genuinamente
+   * iguais a nunca mais atualizarem — a trava viraria o problema, que já aconteceu neste projeto
+   * (ver o teto da varredura de retiradas).
+   */
   function lerTela() {
-    return { nota: notaEZona(), indicadores: indicadores() };
+    return { nota: notaEZona(), indicadores: indicadores(), at: carimbo() };
   }
 
   /**
@@ -663,11 +682,31 @@
         if (qtd === maiorQtd) {
           const agora = assinatura(leitura);
           if (agora !== antes) mudou = true;
-          if (agora === anterior) {
+          /**
+           * A QUARTA CONDIÇÃO: TEM DE SER OUTRA TELA (1.10.0).
+           *
+           * As três anteriores param no "a tela está pronta" e não perguntam PRONTA COM O QUÊ. A
+           * tela do recorte ANTERIOR é cheia, completa e parada há muito mais que dezesseis
+           * segundos — passa nas três com folga, e foi o que aconteceu: no ciclo das 11:40, "9 dias"
+           * gravou os números de ontem e "mês" gravou os de nove dias, cada recorte lendo o de trás.
+           *
+           * A comparação já existia e virava só um aviso no console ("estabilizou sem mudar de
+           * valores"). O comentário que a acompanhava dizia que não era motivo para recusar, porque
+           * o rótulo do período já provara que o filtro pegou. O rótulo prova que o CONTROLE mudou;
+           * não prova que o relatório recalculou — e é essa distinção que custou a leitura errada.
+           *
+           * Agora o patamar antigo não conta como resposta: o laço continua até a tela virar outra
+           * ou o tempo acabar, e sem virar ninguém envia nada. Nada é melhor que errado, que é a
+           * regra que o resto deste arquivo já segue.
+           */
+          // `agora !== antes`, e não a bandeira `mudou`: ela é histórica ("em algum momento houve
+          // outra tela") e aceitaria um patamar que VOLTOU a ser a tela anterior. O que precisa ser
+          // verdade é sobre a leitura que está sendo devolvida, agora.
+          if (agora === anterior && agora !== antes) {
             if (Date.now() - desde >= CONFIG.patamarMs) {
               return { leitura, mudou, viuConteudo, segundos: Math.round((Date.now() - desde) / 1000) };
             }
-          } else {
+          } else if (agora !== anterior) {
             anterior = agora;
             desde = Date.now();
           }
@@ -700,25 +739,26 @@
     const estavel = await lerEstavel(antes);
     const limiteS = CONFIG.limiteRecalculoMs / 1000;
     if (!estavel.leitura) {
-      // As duas saídas sem leitura dizem coisas diferentes, e confundi-las custou um ciclo inteiro:
+      // As TRÊS saídas sem leitura dizem coisas diferentes, e confundi-las custou um ciclo inteiro:
       // tela que NUNCA teve números é preparo da aba; tela que teve e não assentou é o relatório
-      // demorando mais que o teto.
+      // demorando mais que o teto; e tela que nunca deixou de ser a anterior é a que gravava número
+      // errado com cara de certo, até a 1.10.0.
       erro(
-        estavel.viuConteudo
-          ? `${recorte.period}: a tela não assentou em ${limiteS}s — nada enviado (número pela ` +
-              `metade parece desempenho ruim).`
-          : `${recorte.period}: a tela ficou ${limiteS}s sem nota nem indicador — nada enviado. ` +
-              `Confira se o filtro "Transportador" está preenchido nesta aba.`,
+        !estavel.viuConteudo
+          ? `${recorte.period}: a tela ficou ${limiteS}s sem nota nem indicador — nada enviado. ` +
+              `Confira se o filtro "Transportador" está preenchido nesta aba.`
+          : estavel.mudou
+            ? `${recorte.period}: a tela não assentou em ${limiteS}s — nada enviado (número pela ` +
+                `metade parece desempenho ruim).`
+            : `${recorte.period}: a tela continuou sendo a do recorte anterior por ${limiteS}s ` +
+                `(mesmos números E mesmo carimbo) — nada enviado. O relatório não recalculou.`,
       );
       return;
     }
-    if (!estavel.mudou) {
-      // Não é motivo para recusar — o rótulo já provou que o filtro pegou, e dois recortes podem dar
-      // o mesmo resultado. Mas fica dito, porque é a assinatura de uma leitura que não recalculou.
-      log(`${recorte.period}: a tela estabilizou sem mudar de valores.`);
-    }
 
-    const at = carimbo();
+    // Vem da leitura estável, e não de uma consulta nova: entre uma coisa e outra o Looker pode ter
+    // republicado, e aí o carimbo seria de uma tela que não é a que foi lida.
+    const at = estavel.leitura.at;
     if (!at) {
       erro(`${recorte.period}: sem "Dados atualizados pela última vez" na tela — nada enviado.`);
       return;
