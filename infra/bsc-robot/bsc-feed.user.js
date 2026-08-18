@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.8.0
+// @version      1.9.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -118,7 +118,7 @@
    * a única pista foi a redação da mensagem ter mudado entre as duas. Com o número em cada linha, "o
    * que está rodando aí" deixa de ser dedução.
    */
-  const VERSAO = "1.8.0";
+  const VERSAO = "1.9.0";
   const log = (...a) => console.log(`[TMS BSC ${VERSAO}]`, ...a);
   const erro = (...a) => console.warn(`[TMS BSC ${VERSAO}]`, ...a);
 
@@ -366,9 +366,21 @@
     /(?:Dados atualizados pela última vez|Data Last Updated)\s*:?\s*(\d{1,4})[-/](\d{1,2})[-/](\d{1,4})[ ,]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)?/i;
 
   function carimbo() {
-    const alvo = textos().find((x) => CARIMBO_RE.test(x.txt));
-    if (!alvo) return null;
-    const m = CARIMBO_RE.exec(alvo.txt);
+    /**
+     * A busca é no TEXTO DA PÁGINA INTEIRA, não elemento por elemento (2026-08-18).
+     *
+     * Procurar dentro de cada elemento exige que a frase e a data morem no MESMO nó, e isso é uma
+     * aposta sobre como o Looker monta o rodapé — uma aposta que ele desfez sozinho: o carimbo
+     * passou de 17/08 15:55 para 18/08 00:40 na tela, e o robô passou três ciclos dizendo "sem
+     * 'Dados atualizados pela última vez' na tela" com a frase visível ali.
+     *
+     * A expressão é ancorada na frase e exige data e hora logo depois dela, então varrer o texto
+     * todo não afrouxa nada: continua sendo impossível casar com outro número da página. O que some
+     * é a dependência de estrutura, que é o que quebrou.
+     */
+    const texto = document.body?.innerText ?? "";
+    const m = CARIMBO_RE.exec(texto);
+    if (!m) return null;
     const [, g1, g2, g3, h, min, seg, meridiano] = m;
 
     let ano, mes, dia;
