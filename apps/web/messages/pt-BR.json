@@ -330,6 +330,7 @@
     "trip_fields_update": "Dados da operação atualizados",
     "trip_status_change": "Status da viagem alterado",
     "trip_cancel": "Viagem cancelada",
+    "trip_purge_withdrawn": "Viagem retirada do portal (removida)",
     "trip_assign": "Viagem atribuída",
     "trip_reassign": "Atribuição substituída",
     "trip_unassign": "Atribuição removida",

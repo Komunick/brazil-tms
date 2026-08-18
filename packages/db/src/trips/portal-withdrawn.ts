@@ -1,8 +1,8 @@
 import { and, eq, inArray, isNotNull, lt, sql, type SQL } from "drizzle-orm";
 import { ACTIVE_TRIP_STATUSES, type TripQueue } from "@brazil-tms/shared";
 import { db } from "../client";
-import { trips } from "../../schema";
-import { closeTripFromSource } from "./source-status";
+import { alerts, importRows, tripEvents, trips } from "../../schema";
+import { writeAudit } from "../audit/write-audit";
 
 /**
  * A viagem que o cliente RETIROU (2026-08-18).
@@ -15,28 +15,42 @@ import { closeTripFromSource } from "./source-status";
  * A regra é ausência: a viagem tem carimbo de já ter sido vista, o robô continua varrendo a janela
  * onde ela está, e mesmo assim ela não aparece há horas. Isso é o cliente tendo tirado.
  *
- * ── POR QUE ISTO CANCELA E NÃO APAGA ───────────────────────────────────────────────────────────
+ * ── APAGA, E A DISTINÇÃO É O CANCELADA ─────────────────────────────────────────────────────────
  *
- * Apagar em massa por ausência é a regra que, no dia em que o robô ler uma página vazia por erro de
- * rede, varre a operação inteira do banco — sem log, sem volta, sem ninguém entender no dia seguinte.
- * Cancelar deixa o registro, a auditoria e o motivo; some do quadro e para de alertar, que é o que a
- * operação precisa; e é reversível por gente. As limpezas manuais que apagaram linhas foram decisão
- * explícita do usuário sobre um conjunto conferido LH a LH — automação não recebe esse poder.
+ * A regra veio do usuário e é exata: viagem que o portal mostra CANCELADA fica — é história real, e
+ * "por que essa não rodou?" é pergunta legítima. Some só a que NÃO EXISTE no portal, e essa nunca
+ * chegou a ser uma viagem: foi uma proposta retirada antes de qualquer coisa acontecer.
  *
- * ── AS QUATRO TRAVAS ───────────────────────────────────────────────────────────────────────────
+ * A distinção se sustenta sozinha, sem precisar de um teste de "está cancelada lá?": a viagem que o
+ * portal cancela chega aqui como `cancelled`, e esta varredura só olha `received`. Uma cancelada é
+ * inalcançável por construção, não por cuidado.
+ *
+ * Cancelar em vez de apagar foi o desenho anterior e resolveria a poluição — 641 canceladas geram
+ * zero avisos, medido. Mas jogaria os fantasmas no MESMO balde das cancelações de verdade, e o
+ * número de "Cancelada" do painel deixaria de dizer alguma coisa: hoje são 637 reais contra 4
+ * fantasmas, e com a varredura diária a proporção se inverteria.
+ *
+ * O que resta como registro é a auditoria: `trip.purge_withdrawn` não tem chave estrangeira para a
+ * viagem e sobrevive a ela, com o número da LH, o cliente e há quantas horas sumira.
+ *
+ * ── AS CINCO TRAVAS ────────────────────────────────────────────────────────────────────────────
  *
  *   SÓ QUEM JÁ FOI VISTA. `portalLastSeenAt` nulo é "nunca apareceu numa listagem" — viagem digitada
  *   à mão, importação de planilha. Ausência não significa nada para quem nunca esteve lá.
  *
  *   SÓ "RECEBIDA". Uma viagem despachada tem motorista e caminhão envolvidos; se sumiu do portal
- *   estando em curso, isso é uma conversa entre pessoas, não um cancelamento automático.
+ *   estando em curso, isso é uma conversa entre pessoas, não uma remoção automática. É também esta
+ *   trava que torna a cancelada intocável.
  *
  *   SÓ DENTRO DA JANELA VARRIDA. O robô olha de 15 dias atrás a 7 à frente. Fora disso ele não passa,
  *   e a ausência só diz que ninguém olhou — nunca que o cliente retirou.
  *
- *   E O TETO. Se aparecerem retiradas demais de uma vez, NADA é cancelado e o número é registrado.
- *   Uma varredura sadia acha poucas; dezenas de uma vez é o robô ou o portal quebrado, e nesse caso
- *   a resposta certa é não fazer nada e deixar rastro. É a trava que existe para o dia ruim.
+ *   SÓ COM O ROBÔ ALIMENTANDO. Ver `feedEstaFresco`: se ele parou, ausência não prova nada sobre
+ *   viagem nenhuma. É a trava do dia ruim, e é ela — não a contagem — que protege contra a página
+ *   vazia por erro de rede.
+ *
+ *   SÓ SEM TRAÇO OPERACIONAL. Nada de atribuição, documento, item de fatura ou exceção. Nenhuma
+ *   candidata deveria ter, e é justamente por isso que se verifica.
  */
 
 /**
@@ -84,34 +98,74 @@ export async function marcarVistasNoPortal(
 export interface RetiradasResumo {
   /** Quantas se enquadram na regra. */
   candidatas: number;
-  /** Quantas foram efetivamente canceladas (zero quando o teto barra). */
-  canceladas: number;
-  /** Verdadeiro quando o teto barrou a varredura inteira — ver `TETO`. */
-  barradoPeloTeto: boolean;
+  /** Quantas foram efetivamente apagadas. */
+  removidas: number;
+  /** Verdadeiro quando o robô não está alimentando — nada é cancelado. Ver `feedEstaFresco`. */
+  barradoPeloFeed: boolean;
+  /** Verdadeiro quando havia mais candidatas que o teto — o resto fica para a varredura seguinte. */
+  limitadoPeloTeto: boolean;
   externalTripIds: string[];
 }
 
 /**
- * O teto de segurança. Uma varredura sadia acha unidades; este número é o "isto não pode estar certo".
+ * O TETO ERA A TRAVA ERRADA (corrigido em 2026-08-18, no mesmo dia em que nasceu).
  *
- * Calibrado sobre o observado: o pior dia medido teve 14 retiradas de uma vez, e as limpezas manuais
- * somaram 60 acumuladas de várias semanas. Trinta por varredura, de quinze em quinze minutos, é folga
- * larga para a operação real e barreira firme para uma leitura quebrada.
+ * A ideia era boa e a consequência não: com uma pilha acumulada acima dele, a varredura passava a não
+ * fazer NADA — para sempre, e inclusive para as retiradas novas. Medido: 62 candidatas, todas
+ * conferidas uma a uma no portal e nenhuma lá, e o TMS travado de meia em meia hora com 253 avisos
+ * ativos que ninguém podia resolver. A trava virou o problema que ela existia para evitar.
+ *
+ * O erro foi usar a QUANTIDADE como sinal. Muitas candidatas não distingue "o cliente retirou muita
+ * coisa" de "o robô morreu" — e são situações opostas. O que distingue é olhar o ROBÔ: se ele está
+ * alimentando agora, a ausência de uma viagem é informação; se ele parou, ausência não diz nada sobre
+ * viagem nenhuma, tenha ela uma ou mil.
+ *
+ * Ver `feedEstaFresco`. O teto continua existindo, alto, com outra função: limitar o TRABALHO de uma
+ * varredura, não julgar se ela deve acontecer.
  */
-export const TETO = 30;
+export const TETO = 200;
+
+/** Quantas viagens o robô precisa ter carimbado na última hora para a ausência valer como prova. */
+export const MINIMO_VISTAS_NA_HORA = 50;
+
+/**
+ * O robô está alimentando AGORA?
+ *
+ * É a pergunta que a contagem de candidatas tentava responder e não respondia. Um ciclo do plano
+ * carimba centenas de viagens de uma vez (496 numa medição), então "menos de cinquenta na última
+ * hora" é robô parado, aba fechada ou sessão do portal caída — e nesse estado nenhuma ausência
+ * significa coisa alguma.
+ */
+export async function feedEstaFresco(minimo = MINIMO_VISTAS_NA_HORA): Promise<boolean> {
+  const r = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(trips)
+    .where(sql`${trips.portalLastSeenAt} > now() - interval '1 hour'`);
+  return (r[0]?.n ?? 0) >= minimo;
+}
 
 /** Horas sem aparecer em NENHUMA listagem até a ausência valer como retirada. */
 export const SILENCIO_HORAS = 3;
 
 export async function marcarRetiradasDoPortal(
   actorUserId: string,
-  opcoes: { diasAtras?: number; diasAdiante?: number; silencioHoras?: number; teto?: number } = {},
+  opcoes: {
+    diasAtras?: number;
+    diasAdiante?: number;
+    silencioHoras?: number;
+    teto?: number;
+    minimoVistas?: number;
+  } = {},
 ): Promise<RetiradasResumo> {
   // A janela do robô, espelhada aqui. Se ela mudar lá, muda aqui — e é por isso que são parâmetros.
   const diasAtras = opcoes.diasAtras ?? 15;
   const diasAdiante = opcoes.diasAdiante ?? 7;
   const silencioHoras = opcoes.silencioHoras ?? SILENCIO_HORAS;
   const teto = opcoes.teto ?? TETO;
+  // Injetável para o teste poder exercer os DOIS lados do guarda de frescor. Um banco de teste tem
+  // meia dúzia de viagens; com o mínimo de produção fixo, todo caso cairia no "robô parado" e o
+  // teste do caminho normal viraria uma tautologia verde que não prova nada.
+  const minimoVistas = opcoes.minimoVistas ?? MINIMO_VISTAS_NA_HORA;
 
   const candidatas = await db
     .select({ id: trips.id, externalTripId: trips.externalTripId })
@@ -130,35 +184,129 @@ export async function marcarRetiradasDoPortal(
     );
 
   const externalTripIds = candidatas.map((c) => c.externalTripId ?? "(sem id)");
+  const base = { candidatas: candidatas.length, externalTripIds };
   if (candidatas.length === 0) {
-    return { candidatas: 0, canceladas: 0, barradoPeloTeto: false, externalTripIds };
-  }
-  if (candidatas.length > teto) {
-    // Nada é cancelado. O número fica registrado para alguém olhar — é sinal de robô parado ou de
-    // portal devolvendo página vazia, e nenhuma dessas coisas se conserta cancelando viagem.
-    return {
-      candidatas: candidatas.length,
-      canceladas: 0,
-      barradoPeloTeto: true,
-      externalTripIds,
-    };
+    return { ...base, removidas: 0, barradoPeloFeed: false, limitadoPeloTeto: false };
   }
 
-  let canceladas = 0;
-  for (const c of candidatas) {
-    // Uma por vez e com falha isolada: uma viagem que não fecha não pode levar as outras junto.
-    try {
-      const r = await closeTripFromSource(
-        c.id,
-        "CANCELADA",
+  /**
+   * A TRAVA: o robô está alimentando agora?
+   *
+   * Esta é a pergunta certa, e ela é feita DEPOIS de ter candidatas para não custar uma consulta em
+   * toda varredura vazia. Robô parado, aba fechada, sessão do portal caída — em qualquer um desses
+   * estados a ausência de uma viagem na listagem não prova nada sobre ela, e remover seria destruir
+   * a operação com a aparência de trabalho.
+   */
+  if (!(await feedEstaFresco(minimoVistas))) {
+    return { ...base, removidas: 0, barradoPeloFeed: true, limitadoPeloTeto: false };
+  }
+
+  // O teto agora limita o TRABALHO, não julga se ele deve acontecer: o excedente fica para a
+  // varredura seguinte, meia hora depois. Uma pilha grande drena em alguns ciclos em vez de travar
+  // o mecanismo para sempre — que foi o que aconteceu com 62 candidatas e teto de 30.
+  const aRemover = candidatas.slice(0, teto);
+  const ids = aRemover.map((c) => c.id);
+
+  /**
+   * APAGA, e não cancela (decisão do usuário, 2026-08-18).
+   *
+   * A regra que ele deu é precisa e é a que este arquivo segue: viagem que o portal mostra como
+   * CANCELADA fica — é história real, e "por que essa não rodou?" é pergunta legítima. Some só a que
+   * NÃO EXISTE no portal, e essa nunca foi uma viagem: foi uma proposta que o cliente retirou antes
+   * de qualquer coisa acontecer.
+   *
+   * E há um motivo técnico que empurra na mesma direção. Cancelar já resolveria a poluição — 641
+   * canceladas geram zero avisos, medido. Mas jogaria os fantasmas no MESMO balde das cancelações de
+   * verdade, e aí o número de "Cancelada" do painel deixaria de significar alguma coisa: hoje ele é
+   * 637 reais contra 4 fantasmas, e com a varredura rodando todo dia a proporção se inverteria.
+   * Uma viagem que o portal nunca teve não é uma viagem cancelada.
+   *
+   * O que protege é a ordem das travas, não o ato: só `received`, só com carimbo de já ter sido
+   * vista, só dentro da janela varrida, só com o robô alimentando agora, e só quem não tem NENHUM
+   * traço operacional. O número de cada remoção sai no log — é o registro que sobra de algo que,
+   * por definição, não deveria existir.
+   */
+  const semTraco = await db
+    .select({
+      id: trips.id,
+      externalTripId: trips.externalTripId,
+      customerId: trips.customerId,
+      vistaEm: trips.portalLastSeenAt,
+    })
+    .from(trips)
+    .where(
+      and(
+        inArray(trips.id, ids),
+        // A quinta trava, e a mais concreta: qualquer traço operacional veta a remoção. Nenhuma
+        // candidata deveria ter algum — atribuição, documento, item de fatura e exceção só existem
+        // depois de `received` —, mas "não deveria" não é garantia, e o que está sendo feito aqui
+        // não tem volta. Uma linha aqui é um sinal de que a regra acima entendeu algo errado.
+        sql`NOT EXISTS (SELECT 1 FROM trip_assignments a WHERE a.trip_id = ${trips.id})`,
+        sql`NOT EXISTS (SELECT 1 FROM billing_items b WHERE b.trip_id = ${trips.id})`,
+        sql`NOT EXISTS (SELECT 1 FROM documents d WHERE d.trip_id = ${trips.id})`,
+        sql`NOT EXISTS (SELECT 1 FROM exceptions x WHERE x.trip_id = ${trips.id})`,
+      ),
+    );
+
+  if (semTraco.length === 0) {
+    return { ...base, removidas: 0, barradoPeloFeed: false, limitadoPeloTeto: false };
+  }
+
+  const removiveis = semTraco.map((r) => r.id);
+  const agora = Date.now();
+
+  await db.transaction(async (tx) => {
+    /**
+     * A AUDITORIA VEM PRIMEIRO, e ela NÃO é apagada.
+     *
+     * `audit_logs` é a única tabela que aponta para a viagem sem chave estrangeira (`entity_id` é
+     * polimórfico) e a única marcada como append-only no banco. As duas coisas convergem no que se
+     * quer aqui: a linha da viagem some, o registro de que ela existiu e de por que sumiu fica.
+     * Escrita antes do `DELETE` e na MESMA transação — se a remoção falhar, o registro cai junto e
+     * não sobra auditoria de uma remoção que não houve.
+     */
+    for (const t of semTraco) {
+      await writeAudit(tx, {
+        entityType: "trip",
+        entityId: t.id,
+        action: "trip.purge_withdrawn",
+        previousValue: null,
+        newValue: {
+          externalTripId: t.externalTripId,
+          customerId: t.customerId,
+          portalLastSeenAt: t.vistaEm?.toISOString() ?? null,
+          horasSemAparecer: t.vistaEm
+            ? Math.round(((agora - t.vistaEm.getTime()) / 3_600_000) * 10) / 10
+            : null,
+        },
         actorUserId,
-        `portal (retirada do Planejado após ${silencioHoras}h sem aparecer)`,
-      );
-      if (r === "closed") canceladas += 1;
-    } catch {
-      // Registrada no resumo pela diferença entre candidatas e canceladas.
+        reason: `retirada do portal (${silencioHoras}h sem aparecer em nenhuma listagem)`,
+      });
     }
-  }
 
-  return { candidatas: candidatas.length, canceladas, barradoPeloTeto: false, externalTripIds };
+    // `import_rows.target_trip_id` é ANULÁVEL e tem chave estrangeira: sem isto o `DELETE` abaixo
+    // falha com violação de FK, e a varredura inteira volta a não fazer nada — desta vez em silêncio,
+    // porque o erro sairia idêntico a cada meia hora. A linha da importação continua lá, apontando
+    // para nada, que é a verdade: a viagem que ela criou foi retirada.
+    await tx
+      .update(importRows)
+      .set({ targetTripId: null })
+      .where(inArray(importRows.targetTripId, removiveis));
+
+    // Alertas e eventos têm FK e morrem com a viagem. Eventos de uma proposta retirada são o que se
+    // esperaria: a criação, e nada mais.
+    await tx.delete(alerts).where(inArray(alerts.tripId, removiveis));
+    await tx.delete(tripEvents).where(inArray(tripEvents.tripId, removiveis));
+    await tx.delete(trips).where(inArray(trips.id, removiveis));
+  });
+
+  return {
+    candidatas: candidatas.length,
+    // O resumo lista o que FOI removido, não o que se cogitou remover: é este número que vai para o
+    // log do worker, e é por ele que alguém procura uma LH que sumiu do quadro.
+    externalTripIds: semTraco.map((t) => t.externalTripId ?? "(sem id)"),
+    removidas: removiveis.length,
+    barradoPeloFeed: false,
+    limitadoPeloTeto: candidatas.length > teto,
+  };
 }
