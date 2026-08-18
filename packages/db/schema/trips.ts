@@ -115,6 +115,22 @@ export const trips = pgTable(
     cancellationBillingImpact: text("cancellation_billing_impact"),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     disputedFromStatus: tripStatus("disputed_from_status").$type<TripStatus>(),
+    /**
+     * A última vez que esta viagem apareceu numa listagem do portal (2026-08-18).
+     *
+     * Existe para responder uma pergunta que nenhum outro campo responde: o cliente RETIROU esta
+     * viagem? O portal não avisa — a proposta simplesmente some do Planejado. Medido num único dia:
+     * 14 das 16 viagens recebidas naquele dia deixaram de existir lá, e do lado de cá seguiam vivas,
+     * cobrando atribuição e alertando.
+     *
+     * É coluna, e não mais um campo em `customer_fields`, por dois motivos. O mapa de campos só é
+     * gravado quando algo MUDA — pôr um carimbo de tempo ali faria toda viagem ser reescrita a cada
+     * ciclo do robô, quinze em quinze minutos. E é uma pergunta de tempo, que quer índice.
+     *
+     * NULO quer dizer "nunca visto numa listagem", e é diferente de "sumiu": a viagem digitada à mão
+     * nunca terá carimbo, e não pode ser confundida com uma retirada pelo cliente.
+     */
+    portalLastSeenAt: timestamp("portal_last_seen_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -137,5 +153,10 @@ export const trips = pgTable(
     // 005 (R5): backs date-range filters, the Today/Next-24h views, default active ordering by pickup,
     // and the "trips today by status" dashboard count.
     index("trips_pickup_start_idx").on(table.plannedPickupWindowStart),
+    // A varredura de retiradas pergunta "quem não é visto há horas?" — parcial, porque só viagem
+    // que veio do portal (com carimbo) pode ter sido retirada dele.
+    index("trips_portal_last_seen_idx")
+      .on(table.portalLastSeenAt)
+      .where(sql`${table.portalLastSeenAt} IS NOT NULL`),
   ],
 );
