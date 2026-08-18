@@ -473,12 +473,6 @@ export async function applyPortalExecution(
   sourceLabel: string,
 ): Promise<PortalApplySummary> {
   const stationMap = await loadStationMap(customerId);
-  // A aba "Aceito" e o "Concluído" também contam como ter sido vista: a viagem que saiu do Planejado
-  // porque foi aceita não pode ser lida como retirada pelo cliente.
-  await marcarVistasNoPortal(
-    customerId,
-    portalTrips.map((t) => t.externalTripId),
-  );
   const outcomes: PortalApplyOutcome[] = [];
 
   for (const portal of portalTrips) {
@@ -486,6 +480,15 @@ export async function applyPortalExecution(
       ...(await applyPortalTrip(customerId, portal, stationMap, actorUserId, sourceLabel)),
     );
   }
+
+  // A aba "Aceito" e o "Concluído" também contam como ter sido vista: a viagem que saiu do Planejado
+  // porque foi aceita não pode ser lida como retirada pelo cliente. Depois do laço, e não antes —
+  // o carimbo é um UPDATE e não alcança quem ainda não existe. Ver a explicação longa em
+  // `applyPortalPlan`, que é onde o defeito nasceu.
+  await marcarVistasNoPortal(
+    customerId,
+    portalTrips.map((t) => t.externalTripId),
+  );
 
   const count = (s: PortalApplyOutcome["status"]): number =>
     outcomes.filter((o) => o.status === s).length;
