@@ -1,5 +1,5 @@
-import { desc, sql } from "drizzle-orm";
-import type { SpotOfferInput } from "@brazil-tms/shared";
+import { and, desc, gte, lt } from "drizzle-orm";
+import { dayRangeSaoPaulo, type SpotOfferInput } from "@brazil-tms/shared";
 import { db } from "../client";
 import { spotOffers } from "../../schema";
 
@@ -50,23 +50,30 @@ export async function recordSpotOffer(offer: SpotOfferInput): Promise<{ nova: bo
 }
 
 /**
- * Quantos minutos de ofertas a TV recebe em cada consulta.
+ * A LISTA DO DIA, e não uma janela de minutos (2026-08-18).
  *
- * Dez, e não trinta segundos (o intervalo da tela), porque a TV recarrega sozinha quando a rede
- * volta: uma janela do tamanho do intervalo perderia a oferta que chegou durante a queda. Quem
- * decide o que ANUNCIAR é a tela, que lembra o que já mostrou — a janela larga só garante que a
- * oferta esteja na resposta para ser considerada.
+ * Nasceu como "os últimos dez minutos", que era o suficiente quando o único destino era o aviso de
+ * trinta segundos. Com o cartãozinho de histórico no painel, a pergunta virou outra: "o que passou
+ * hoje?" — e uma janela de minutos apagaria a oferta das 8h antes do café.
+ *
+ * Uma lista só serve aos dois: o aviso decide o que anunciar pela MEMÓRIA da tela (ver
+ * `novasOfertas`), não pelo tamanho da janela. Duas consultas com recortes diferentes seriam duas
+ * verdades sobre a mesma coisa.
  */
-export const OFERTAS_JANELA_MIN = 10;
-
-export async function readRecentSpotOffers(janelaMin = OFERTAS_JANELA_MIN): Promise<SpotOfferView[]> {
+export async function readSpotOffersToday(agora = new Date()): Promise<SpotOfferView[]> {
+  const { from, to } = dayRangeSaoPaulo(agora);
   const rows = await db
     .select()
     .from(spotOffers)
-    .where(sql`${spotOffers.receivedAt} > now() - ${`${janelaMin} minutes`}::interval`)
+    .where(and(gte(spotOffers.receivedAt, new Date(from)), lt(spotOffers.receivedAt, new Date(to))))
     .orderBy(desc(spotOffers.receivedAt))
-    .limit(20);
-  return rows.map((r) => ({
+    // Teto de sanidade: num dia de pico o leilão abre dezenas, e a tela mostra as primeiras.
+    .limit(30);
+  return rows.map(paraView);
+}
+
+function paraView(r: typeof spotOffers.$inferSelect): SpotOfferView {
+  return {
     id: r.id,
     portalTripId: r.portalTripId,
     tripNumber: r.tripNumber,
@@ -77,5 +84,5 @@ export async function readRecentSpotOffers(janelaMin = OFERTAS_JANELA_MIN): Prom
     arrival: r.arrival,
     operator: r.operator,
     receivedAt: r.receivedAt.toISOString(),
-  }));
+  };
 }

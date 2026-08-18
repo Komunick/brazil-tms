@@ -35,6 +35,18 @@ export function formatDateTime(value: string | Date | null | undefined): string 
   return dt.isValid ? dt.toFormat("dd/MM/yyyy HH:mm") : EMPTY;
 }
 
+/**
+ * HH:mm em São Paulo — a hora sem a data.
+ *
+ * Existe para lista de coisas que aconteceram HOJE, onde repetir "18/08" em cada linha só ocupa
+ * espaço e empurra o que importa para fora do cartão.
+ */
+export function formatTime(value: string | Date | null | undefined): string {
+  if (value == null) return EMPTY;
+  const dt = fromUtc(value);
+  return dt.isValid ? dt.toFormat("HH:mm") : EMPTY;
+}
+
 /** Localized relative time (e.g. "há 2 horas"), or an em dash for null/invalid input. */
 export function formatRelative(value: string | Date | null | undefined): string {
   if (value == null) return EMPTY;

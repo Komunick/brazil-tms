@@ -17,6 +17,7 @@ import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { BOARD_ANCHOR } from "@/components/trips/control-tower-table";
 import { BscCard } from "@/components/trips/dashboard/bsc-card";
 import { OfertaDeSpot } from "@/components/spot/oferta-de-spot";
+import { OfertasDoDia } from "@/components/spot/ofertas-do-dia";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -323,6 +324,8 @@ export function DashboardWidgets() {
         byStatus={summary.tripsTomorrowByStatus}
         dateFilter={`&pickupFrom=${amanha}&pickupTo=${amanha}`}
       />
+      {/* O destino do aviso depois que ele sai do meio da tela: mesma consulta, tamanho de cartão. */}
+      <OfertasDoDia />
       {/* Trocou o cartão de "Faturamento pendente" (2026-08-17, a pedido): o número do faturamento
           vive na tela de Faturamento, e aqui a pergunta é sobre a operação. */}
       <StatusCard

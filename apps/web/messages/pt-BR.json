@@ -1612,10 +1612,18 @@
       "REQUEST_FAILED": "Não foi possível concluir a operação. Tente novamente."
     }
   },
+  "Spot": {
+    "newOffer": "Nova oferta de spot",
+    "dismiss": "Fechar aviso",
+    "departure": "Saída",
+    "vehicle": "Veículo",
+    "queued": "+{count} na fila",
+    "todayTitle": "Ofertas de spot hoje",
+    "todayEmpty": "Nenhuma oferta hoje.",
+    "todayMore": "e mais {count}"
+  },
   "Wallboard": {
     "title": "Brazil Transports · Torre",
-    "spotOffer": "Nova oferta de spot",
-    "spotDeparture": "Saída",
     "live": "ao vivo",
     "stale": "sem atualizar",
     "onTheRoad": "Na estrada agora",
