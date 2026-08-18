@@ -11,6 +11,7 @@ import {
 } from "@brazil-tms/shared";
 import type { DashboardSummary } from "@brazil-tms/db";
 import { useDashboardSummary } from "@/lib/trips/client";
+import { useReconexao } from "@/lib/ui/reconexao";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { BOARD_ANCHOR } from "@/components/trips/control-tower-table";
 import { BscCard } from "@/components/trips/dashboard/bsc-card";
@@ -196,6 +197,9 @@ export function DashboardWidgets() {
   const t = useTranslations("Trips.dashboard");
   const tCommon = useTranslations("Common");
   const { data, isLoading, isError } = useDashboardSummary();
+  // Numa TV, a queda de um deploy não pode apagar a tela — e a volta tem que trazer a versão nova
+  // sem ninguém dar F5. Ver `useReconexao`.
+  const { desatualizado } = useReconexao(isError);
 
   if (isLoading) {
     return (
@@ -214,7 +218,18 @@ export function DashboardWidgets() {
     );
   }
 
-  if (isError || !data) {
+  /**
+   * A mensagem de erro só entra quando NÃO HÁ o que mostrar.
+   *
+   * Era `isError || !data`, e o `isError` sozinho apagava a tela inteira: bastava uma leitura falhar
+   * — um deploy de dois minutos, um engasgo de rede — para os números somarem e virarem um aviso
+   * vermelho. Numa televisão isso é o pior desfecho possível: quem passa na sala perde a informação
+   * toda por causa de uma falha temporária que ninguém ali pode resolver.
+   *
+   * Com dado em mãos, a tela continua mostrando o último retrato bom e DIZ que está velho. Sem dado
+   * nenhum, aí sim o erro é a única coisa honesta a exibir.
+   */
+  if (!data) {
     return (
       <Card>
         <CardContent className="py-6">
@@ -272,6 +287,17 @@ export function DashboardWidgets() {
 
   return (
     <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+      {/* Uma faixa fina, e só quando há o que avisar: a tela continua inteira, mas quem olhar sabe
+          que está vendo um retrato de antes da queda. Volta sozinha quando o servidor voltar. */}
+      {desatualizado ? (
+        <div
+          role="status"
+          className="col-span-full flex items-center gap-2 rounded border border-warning/40 bg-warning/10 px-2.5 py-1.5 text-xs font-medium text-warning"
+        >
+          <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-warning" />
+          {t("reconnecting")}
+        </div>
+      ) : null}
       {/* O BSC abre o painel: é a nota que decide contrato, e vem do cliente, não daqui. */}
       {bsc.length > 0 ? <BscCard snapshots={bsc} /> : null}
       {cartoes.map((m) => (

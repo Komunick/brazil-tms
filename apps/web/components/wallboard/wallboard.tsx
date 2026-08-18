@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import type { TripStatus } from "@brazil-tms/shared";
 import type { WallboardSummary, WallboardTrip } from "@brazil-tms/db";
 import { useWallboard } from "@/lib/trips/client";
+import { useReconexao } from "@/lib/ui/reconexao";
 
 /**
  * O painel da parede (2026-08-16).
@@ -77,9 +78,7 @@ function Linha({ trip, t }: { trip: WallboardTrip; t: ReturnType<typeof useTrans
   return (
     <tr
       className={
-        atrasada
-          ? "border-b border-red-900/50 bg-red-950/40"
-          : "border-b border-slate-800/70"
+        atrasada ? "border-b border-red-900/50 bg-red-950/40" : "border-b border-slate-800/70"
       }
     >
       <td className="py-[1.05vh] pl-[1.2vw] pr-[0.8vw] text-[1.5vw] font-semibold tabular-nums text-white">
@@ -114,6 +113,9 @@ export function Wallboard() {
   const t = useTranslations("Wallboard");
   const tStatus = useTranslations("Trips");
   const { data, isError } = useWallboard();
+  // A tela já sobrevivia à queda mostrando o último retrato; o que faltava era voltar com a versão
+  // NOVA depois de um deploy, em vez de rodar o pacote antigo para sempre. Ver `useReconexao`.
+  useReconexao(isError);
   const agora = useAgora();
   const { dia, hora } = diaEHora(agora);
 
@@ -144,7 +146,9 @@ export function Wallboard() {
           </span>
           <span
             className={`flex items-center gap-[0.5vw] rounded-full px-[1vw] py-[0.5vh] text-[1.1vw] font-semibold uppercase tracking-wider ${
-              parado || isError ? "bg-amber-500/20 text-amber-300" : "bg-emerald-500/15 text-emerald-300"
+              parado || isError
+                ? "bg-amber-500/20 text-amber-300"
+                : "bg-emerald-500/15 text-emerald-300"
             }`}
           >
             <span
@@ -185,7 +189,9 @@ export function Wallboard() {
               <col className="w-[14%]" />
             </colgroup>
             <tbody>
-              {board?.trips.map((trip) => <Linha key={trip.id} trip={trip} t={t} />)}
+              {board?.trips.map((trip) => (
+                <Linha key={trip.id} trip={trip} t={t} />
+              ))}
             </tbody>
           </table>
         )}
