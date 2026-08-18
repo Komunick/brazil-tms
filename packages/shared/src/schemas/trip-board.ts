@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { BILLING_PHASE_STATUSES, TRIP_STATUSES } from "../domain/trip-status";
+import { TRIP_QUEUES } from "../domain/trip-display-status";
 import { SLA_STATUSES } from "../domain/sla-risk";
 import { dateStringSchema, vehicleTypeSchema } from "./master-data";
 
@@ -85,13 +86,17 @@ export const tripBoardQuerySchema = z.object({
    */
   awaitingAssignment: optParam(z.enum(["true", "false"])),
   /**
-   * A outra metade do que era "Recebida": a proposta que ninguém decidiu ainda (2026-08-18).
+   * QUAL das três filas do que era "Recebida" (2026-08-18).
    *
-   * Irmão de `awaitingAssignment`, e os dois juntos cobrem a fila inteira sem sobreposição —
-   * aceitação `Pending` de um lado, `Accepted` do outro. Existem porque o painel mostra os dois
-   * números separados e cada um precisa abrir a lista dele.
+   *   `in_analysis`      — o cliente não decidiu a proposta
+   *   `to_assign`        — decidiu, e falta motorista
+   *   `awaiting_arrival` — o portal já tem motorista; espera-se o comparecimento
+   *
+   * Um parâmetro com TRÊS valores, e não dois booleanos. Booleanos deixariam pedir combinações que
+   * não existem ("em análise E já atribuída") e o quadro voltaria vazio sem dizer por quê. As três
+   * são exaustivas e mutuamente exclusivas por construção: juntas somam `received` inteiro.
    */
-  inAnalysis: optParam(z.enum(["true", "false"])),
+  queue: optParam(z.enum(TRIP_QUEUES)),
   q: z.preprocess(
     (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
     z.string().trim().min(1).max(200).optional(),
@@ -135,7 +140,7 @@ const PARAM_KEYS = [
   "atRisk",
   "missingDocuments",
   "awaitingAssignment",
-  "inAnalysis",
+  "queue",
   "q",
   "scope",
   "sort",

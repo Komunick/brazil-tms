@@ -174,6 +174,7 @@ export function ControlTowerTable({
         <TripStatusBadge
           status={row.original.currentStatus}
           portalAcceptance={row.original.portalAcceptance}
+          portalStatus={row.original.portalStatus}
         />
       ),
     },

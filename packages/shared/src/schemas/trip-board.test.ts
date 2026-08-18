@@ -233,25 +233,21 @@ describe("awaitingAssignment (a fila do despacho)", () => {
   });
 });
 
-describe("inAnalysis (as duas filas do que era Recebida)", () => {
-  it("é lido da URL nos dois sentidos", () => {
-    const emAnalise = tripBoardQueryFromParams(
-      new URLSearchParams("status=received&inAnalysis=true"),
-    );
-    const pAtribuir = tripBoardQueryFromParams(
-      new URLSearchParams("status=received&inAnalysis=false"),
-    );
-    expect({ a: emAnalise.inAnalysis, b: pAtribuir.inAnalysis }).toEqual({ a: "true", b: "false" });
+describe("queue (as três filas do que era Recebida)", () => {
+  it("é lido da URL nos três valores", () => {
+    for (const fila of ["in_analysis", "to_assign", "awaiting_arrival"] as const) {
+      const q = tripBoardQueryFromParams(new URLSearchParams(`status=received&queue=${fila}`));
+      expect(q.queue).toBe(fila);
+    }
   });
 
-  it("ausente é 'não filtre por isso', e NÃO 'false'", () => {
-    /**
-     * Aqui os dois valores são filtros de verdade e opostos — `false` quer dizer "p/atribuir", não
-     * "sem filtro". Colapsar ausente em `false` esconderia metade da fila do quadro, e o total
-     * bateria com a ficha errada.
-     */
-    expect(
-      tripBoardQueryFromParams(new URLSearchParams("status=received")).inAnalysis,
-    ).toBeUndefined();
+  it("valor fora do conjunto é recusado, não ignorado em silêncio", () => {
+    // Um valor inventado que passasse como `undefined` abriria a lista INTEIRA enquanto a ficha
+    // anuncia dezenas — o quadro mostraria milhares sem nada dizendo que o filtro não pegou.
+    expect(() => tripBoardQueryFromParams(new URLSearchParams("queue=qualquer"))).toThrow();
+  });
+
+  it("ausente é 'não filtre por fila'", () => {
+    expect(tripBoardQueryFromParams(new URLSearchParams("status=received")).queue).toBeUndefined();
   });
 });

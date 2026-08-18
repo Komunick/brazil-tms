@@ -58,7 +58,7 @@ import {
 import { Conflict } from "../errors";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
 import { onTimeExpr } from "./on-time";
-import { inAnalysisSql } from "./portal-withdrawn";
+import { tripQueueSql } from "./portal-withdrawn";
 
 /**
  * Feature 005 — Control Tower read models (board / detail / dashboard / export). These are the
@@ -111,6 +111,8 @@ export interface TripBoardRow {
    * Sem isto, o quadro teria de adivinhar ou fazer uma segunda consulta por linha.
    */
   portalAcceptance: string | null;
+  /** O que o portal chama esta viagem — `Assigning` / `Assigned`. Ver `displayStatusOf`. */
+  portalStatus: string | null;
 }
 
 export interface TripBoardResult {
@@ -275,6 +277,7 @@ const boardColumns = {
   plannedVehicleType: trips.plannedVehicleType,
   updatedAt: trips.updatedAt,
   portalAcceptance: sql<string | null>`(${trips.customerFields} ->> 'Aceitação (portal)')`,
+  portalStatus: sql<string | null>`(${trips.customerFields} ->> 'Status (portal)')`,
   assignmentId: boardAsg.id,
   assignedDriverName: boardDriver.name,
   assignedVehiclePlate: boardVehicle.plate,
@@ -285,6 +288,7 @@ type BoardRow = {
   id: string;
   externalTripId: string | null;
   portalAcceptance: string | null;
+  portalStatus: string | null;
   customerId: string;
   customerName: string | null;
   originCode: string | null;
@@ -332,6 +336,7 @@ function toBoardRow(row: BoardRow): TripBoardRow {
     plannedVehicleType: row.plannedVehicleType,
     updatedAt: row.updatedAt.toISOString(),
     portalAcceptance: row.portalAcceptance ?? null,
+    portalStatus: row.portalStatus ?? null,
     isAssigned: row.assignmentId != null,
     assignedDriverName: row.assignedDriverName,
     assignedVehiclePlate: row.assignedVehiclePlate,
@@ -473,18 +478,11 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
    * O `false` precisa ser negação explícita — sem ele, a ficha "P/Atribuir" abriria a lista inteira
    * e mostraria um número diferente do que a própria ficha anuncia.
    */
-  if (query.inAnalysis === "true") {
+  // Uma das três filas do que era "Recebida". O predicado vem de `tripQueueSql`, o MESMO que a
+  // contagem da ficha usa — escritos separados, a lista e o número que a anuncia divergiriam.
+  if (query.queue) {
     conditions.push(eq(trips.currentStatus, "received"));
-    conditions.push(inAnalysisSql());
-  }
-  if (query.inAnalysis === "false") {
-    conditions.push(eq(trips.currentStatus, "received"));
-    // `IS DISTINCT FROM`, e não `NOT (… = …)`: sem aceitação gravada o igual devolve NULO, o NOT
-    // devolve NULO, e a viagem sumiria da lista — enquanto `displayStatusOf` a chama de "p/atribuir".
-    // As duas escritas da regra têm de concordar inclusive no vazio, que é onde elas divergem calado.
-    conditions.push(
-      sql`(${trips.customerFields} ->> 'Aceitação (portal)') IS DISTINCT FROM 'Pending'`,
-    );
+    conditions.push(tripQueueSql(query.queue));
   }
 
   // Feature 006 — assignment filters (data-model.md §5). These reference the LEFT-joined current
@@ -575,10 +573,10 @@ function boardSelect() {
  * inteira para a memória. O teste de contrato entre as duas é o que impede a divergência.
  */
 const displayStatusSql = sql<string>`CASE
-  WHEN ${trips.currentStatus} = 'received'
-   AND (${trips.customerFields} ->> 'Aceitação (portal)') = 'Pending' THEN 'in_analysis'
-  WHEN ${trips.currentStatus} = 'received' THEN 'to_assign'
-  ELSE ${trips.currentStatus}::text
+  WHEN ${trips.currentStatus} <> 'received' THEN ${trips.currentStatus}::text
+  WHEN (${trips.customerFields} ->> 'Status (portal)') = 'Assigned' THEN 'awaiting_arrival'
+  WHEN (${trips.customerFields} ->> 'Aceitação (portal)') = 'Pending' THEN 'in_analysis'
+  ELSE 'to_assign'
 END`;
 
 function boardStatusCounts(where: SQL | undefined) {

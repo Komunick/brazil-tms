@@ -186,9 +186,10 @@ test.describe("US1 — imported trips are born received (slice 015)", () => {
   // cannot run here — that a confirm-created trip is born `received` is asserted in the worker
   // integration test (workers/jobs/confirm-import/confirm.test.ts). What this e2e pins is the
   // operator-facing surface: slice 015 collapsed the validation states, so a confirm-created
-  // (born-`received`) import trip shows status "Recebida" on the Control Tower and is itself
-  // dispatch-ready (no separate "Validada" hop). Seeded directly via @brazil-tms/db, mirroring the
-  // dispatch e2e.
+  // (born-`received`) import trip shows, na Torre de Controle, o rótulo dessa espera — que desde
+  // 2026-08-18 diz o que FALTA em vez de descrever o TMS: "P/Atribuir" para quem não tem resposta do
+  // cliente no portal — e é ela mesma despachável (sem o passo "Validada"). Seeded via @brazil-tms/db,
+  // espelhando o e2e de despacho.
   const ADMIN_EMAIL = "admin@braziltransports.com.br";
   let customerId = "";
   let originId = "";
