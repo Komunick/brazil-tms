@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.11.0
+// @version      1.12.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -28,14 +28,14 @@
  * mente de um jeito que JSON de API não mente.
  *
  * SCRIPT SEPARADO, de propósito. O robô do portal tem uma regra de ouro — somente leitura, três
- * listagens, nenhum clique. Este precisa CLICAR (no filtro de período), e misturar os dois faria a
+ * listagens, nenhum clique. Este precisa CLICAR (nos filtros de período e transportador), e misturar os dois faria a
  * regra daquele virar mentira. Domínios diferentes, arquivos diferentes, riscos diferentes.
  *
  * Quatro regras que este arquivo não pode quebrar:
  *
- *   1. NÃO ESCREVE NADA NO RELATÓRIO. Os únicos cliques são no seletor de período, que é controle de
- *      VISUALIZAÇÃO: muda o que esta sessão do navegador mostra e não altera o relatório para
- *      ninguém. Nenhum outro clique existe.
+ *   1. NÃO ESCREVE NADA NO RELATÓRIO. Os únicos cliques são no seletor de período e no filtro
+ *      "Transportador" — os dois são controles de VISUALIZAÇÃO: mudam o que esta sessão do
+ *      navegador mostra e não alteram o relatório para ninguém. Nenhum outro clique existe.
  *   2. CONFIRMADO OU NADA. Depois de escolher o recorte, confere o rótulo que apareceu. Se não for o
  *      que pediu — porque a Shopee mexeu no seletor —, NÃO manda. Um número com o período errado é
  *      pior que número nenhum, e ao contrário de um erro visível, esse ninguém percebe.
@@ -74,17 +74,18 @@
  *   `?hl=pt-BR` e o script CONFERE o idioma antes de qualquer coisa.
  *
  *   O FILTRO "Transportador" NÃO PERSISTE. Numa aba recém-aberta ele vem vazio e o relatório inteiro
- *   mostra "Não há dados" — inclusive o velocímetro. O script não tem como adivinhar qual
- *   transportador escolher, então a aba precisa ser preparada UMA VEZ à mão; o que ele faz é se
- *   recusar a mandar quando a nota não está na tela, em vez de gravar um zero que ninguém saberia de
- *   onde veio.
+ *   mostra "Não há dados" — inclusive o velocímetro. Isso era o passo manual do preparo, e virou
+ *   trabalho do robô na 1.12.0: ver `garantirTransportador`. O que continua valendo é a recusa —
+ *   sem nota na tela, ele não manda, em vez de gravar um zero que ninguém saberia de onde veio.
  *
  * ── PREPARO DA ABA (uma vez, à mão) ────────────────────────────────────────────────────────────
  *
  *   1. Abrir o relatório com `?hl=pt-BR` no fim da URL.
- *   2. Escolher o Transportador no filtro do topo.
- *   3. Deixar a aba DEDICADA: ninguém navega nela. O script troca o filtro de período, e uma pessoa
+ *   2. Deixar a aba DEDICADA: ninguém navega nela. O script troca o filtro de período, e uma pessoa
  *      mexendo ao mesmo tempo faria os dois brigarem.
+ *
+ *   O transportador não está mais nesta lista de propósito: era o item que ninguém lembrava, falhava
+ *   calado e derrubava o BSC até alguém reparar num carimbo velho.
  *
  * Instalação: Tampermonkey → novo script → cole → ajuste o CONFIG → salve.
  */
@@ -98,6 +99,14 @@
     tms: "https://tmsdev.braziltransports.com.br",
     /** O mesmo valor de PORTAL_FEED_TOKEN no servidor. */
     token: "COLE_AQUI_O_TOKEN",
+    /**
+     * O valor do filtro "Transportador" do relatório, reposto quando a tela aparece vazia.
+     *
+     * Lido da lista do próprio controle: hoje ela tem esta única opção. Fica em CONFIG e não no
+     * código porque é um nome do cliente — se a Shopee renomear, muda aqui e o robô volta a achar,
+     * em vez de alguém ter que caçar a string no meio do arquivo.
+     */
+    transportador: "BRAZIL TRANSPORTS",
     /**
      * De quanto em quanto tempo reler. O BSC fecha às 4h, então de hora em hora é generoso — existe
      * para pegar a virada sem depender de acertar o minuto, e não porque o dado mude.
@@ -830,6 +839,61 @@
     );
   }
 
+  /**
+   * O FILTRO "Transportador", que o robô agora repõe sozinho (1.12.0, 2026-08-18).
+   *
+   * Era o único passo manual que sobrava, e o pior tipo de passo manual: invisível. O filtro não
+   * sobrevive a um reinício do Chromium, e sem ele o relatório inteiro mostra "Não há dados" — o
+   * robô se recusa a mandar (certo) e o painel congela com a cara de atual. Reboot de VM de
+   * madrugada bastava para o BSC parar até alguém reparar no carimbo velho.
+   *
+   * O que descobri abrindo o controle numa cópia isolada do perfil (sem Tampermonkey, noutro
+   * display, para não brigar com o robô): a lista tem UM valor só, "BRAZIL TRANSPORTS". Não há
+   * escolha a fazer nem ambiguidade a resolver — é repor o que sempre foi.
+   *
+   * Isto continua dentro da regra 1 deste arquivo. O controle é de VISUALIZAÇÃO, da mesma família do
+   * seletor de período que o robô já opera: muda o que esta sessão do navegador mostra, e não altera
+   * o relatório para mais ninguém. Nada é escrito no BSC.
+   *
+   * A saída rápida é a primeira linha: com a tela cheia, não se toca em nada. Só o estado quebrado
+   * paga o preço de abrir menu.
+   */
+  async function garantirTransportador() {
+    if (temConteudo(lerTela())) return;
+
+    // Tela vazia pode ser só carregamento — a aba acabou de abrir, o Looker ainda está montando.
+    // Esperar antes de mexer evita abrir menu em cima de um relatório que ia encher sozinho.
+    await dormir(CONFIG.pisoRecalculoMs);
+    if (temConteudo(lerTela())) return;
+
+    log(`tela sem indicadores — repondo o filtro "${CONFIG.transportador}".`);
+    await fecharPopups();
+    const controle = await esperarPorTexto("Transportador");
+    if (!controle) {
+      erro('controle "Transportador" não encontrado — a aba precisa de olho humano.');
+      return;
+    }
+    clicar(controle);
+
+    const opcao = await esperarPorTexto(CONFIG.transportador);
+    if (!opcao) {
+      erro(
+        `"${CONFIG.transportador}" não apareceu na lista do filtro — confira se a Shopee renomeou o ` +
+          "transportador. Nada foi alterado.",
+      );
+      await fecharPopups();
+      return;
+    }
+    clicar(opcao);
+    await fecharPopups();
+
+    // Conferir o RESULTADO, não o clique: menu que abre e opção que existe não provam que o
+    // relatório voltou a ter dados, e é o dado que importa.
+    await dormir(CONFIG.pisoRecalculoMs);
+    if (temConteudo(lerTela())) log("filtro reposto — o relatório voltou a mostrar dados.");
+    else erro("filtro reposto e a tela continua vazia — não vou insistir neste ciclo.");
+  }
+
   async function ciclo() {
     if (!estaEmPortugues()) {
       erro(
@@ -838,6 +902,7 @@
       );
       return;
     }
+    await garantirTransportador();
     for (const recorte of RECORTES) {
       try {
         await lerEEnviar(recorte);

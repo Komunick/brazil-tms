@@ -1650,6 +1650,7 @@
     "stamp": "BSC de {at}",
     "gaugeAlt": "Nota {score} no velocímetro do BSC",
     "target": "meta {value}",
+    "stale": "sem atualizar há {age}",
     "period": {
       "day": "Ontem",
       "week": "Semana",
