@@ -300,9 +300,10 @@ describe.skipIf(!hasDb)("vínculo com a frota (integration)", () => {
       mode: "plan",
       customerCode,
     });
-    expect({ linked: r.planSummary?.linked, bloqueadas: r.planSummary?.linkBlockedReasons }).toEqual(
-      { linked: 1, bloqueadas: [] },
-    );
+    expect({
+      linked: r.planSummary?.linked,
+      bloqueadas: r.planSummary?.linkBlockedReasons,
+    }).toEqual({ linked: 1, bloqueadas: [] });
 
     const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
     const atrib = (
@@ -580,5 +581,112 @@ describe.skipIf(!hasDb)("vínculo com a frota (integration)", () => {
 
     const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
     expect(trip.currentStatus).toBe("received");
+  });
+
+  it("viagem JÁ CONCLUÍDA ainda registra quem a dirigiu", async () => {
+    /**
+     * Medido em 2026-08-18: 121 viagens concluídas e 258 em faturamento tinham motorista e placa no
+     * card do portal e nenhuma atribuição no TMS. A regra dizia "encerrada não recebe mais nada", e
+     * isso confundia duas coisas — não MOVER uma viagem fechada está certo; não REGISTRAR quem a
+     * dirigiu apaga a história de quem rodou.
+     *
+     * A porta fechava e não abria mais: o portal continua mandando a linha em todo ciclo, e todo
+     * ciclo ela batia no mesmo `continue`. Só se via abrindo o portal viagem por viagem.
+     */
+    const d = (
+      await db
+        .insert(drivers)
+        .values({
+          name: `MOTORISTA CONCLUIDA ${token}`,
+          ownershipType: "owned",
+          status: "active",
+          licenseExpiry: "2030-01-01",
+        })
+        .returning({ id: drivers.id })
+    )[0]!;
+    const v = (
+      await db
+        .insert(vehicles)
+        .values({
+          plate: `GGG${Math.floor(Math.random() * 9000 + 1000)}`,
+          vehicleType: "carreta",
+          ownershipType: "owned",
+          status: "active",
+          documentExpiry: "2030-01-01",
+        })
+        .returning({ id: vehicles.id, plate: vehicles.plate })
+    )[0]!;
+    criados.push(d.id, v.id);
+
+    // Uma viagem que rodou do começo ao fim, e que o portal ainda não tinha creditado a ninguém.
+    const rodou = [
+      {
+        sequence_number: 1,
+        station: 920001,
+        station_name: "Origem",
+        sta: NOVE,
+        std: NOVE + HORA,
+        ata: NOVE,
+        atd: NOVE + HORA,
+      },
+      {
+        sequence_number: 2,
+        station: 920002,
+        station_name: "Destino",
+        sta: NOVE + 7 * HORA,
+        std: 0,
+        ata: NOVE + 7 * HORA,
+        atd: 0,
+        unseal_time: NOVE + 8 * HORA,
+        unload_time: NOVE + 8 * HORA + 1800,
+      },
+    ];
+    const ext = `LH-FIM-${token}`;
+    await ingestPortalFeed({
+      payload: payload({
+        trip_number: ext,
+        trip_status: 90,
+        driver_name: null,
+        vehicle_number: null,
+        trip_station: rodou,
+      }),
+      mode: "history",
+      customerCode,
+    });
+
+    const fechada = (
+      await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1)
+    )[0]!;
+    expect(fechada.currentStatus).toBe("completed");
+    expect(
+      (await db.select().from(tripAssignments).where(eq(tripAssignments.tripId, fechada.id)))
+        .length,
+    ).toBe(0);
+
+    // O ciclo seguinte traz o motorista. A viagem está fechada — e é exatamente aí que a regra
+    // antiga desistia.
+    await ingestPortalFeed({
+      payload: payload({
+        trip_number: ext,
+        trip_status: 90,
+        driver_name: `Motorista Concluida ${token}`,
+        vehicle_number: v.plate,
+        trip_station: rodou,
+      }),
+      mode: "history",
+      customerCode,
+    });
+
+    const depois = (
+      await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1)
+    )[0]!;
+    // Registrar quem dirigiu NÃO reabre a viagem.
+    expect(depois.currentStatus).toBe("completed");
+
+    const atrib = (
+      await db.select().from(tripAssignments).where(eq(tripAssignments.tripId, depois.id))
+    )[0]!;
+    expect(atrib.driverId).toBe(d.id);
+    expect(atrib.isCurrent).toBe(true);
   });
 });
