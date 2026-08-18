@@ -1,6 +1,8 @@
 {
   "Common": {
     "appName": "Brazil Transports TMS",
+    "collapseMenu": "Recolher menu",
+    "expandMenu": "Expandir menu",
     "save": "Salvar",
     "cancel": "Cancelar",
     "create": "Criar",
