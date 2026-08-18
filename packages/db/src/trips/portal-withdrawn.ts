@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNotNull, lt, sql, type SQL } from "drizzle-orm";
-import { ACTIVE_TRIP_STATUSES } from "@brazil-tms/shared";
+import { ACTIVE_TRIP_STATUSES, type TripQueue } from "@brazil-tms/shared";
 import { db } from "../client";
 import { trips } from "../../schema";
 import { closeTripFromSource } from "./source-status";
@@ -40,13 +40,29 @@ import { closeTripFromSource } from "./source-status";
  */
 
 /**
- * "Ninguém decidiu esta proposta ainda" — a metade EM ANÁLISE do que era "Recebida".
+ * As TRÊS filas do que era "Recebida", cada uma como um predicado (2026-08-18).
  *
- * Fica ao lado de `awaitingAssignmentSql` porque as duas são a mesma pergunta em eixos opostos da
- * aceitação, e escrever uma sem olhar a outra é como elas passam a se sobrepor ou a deixar buraco.
+ * Ficam juntas de propósito: são a mesma pergunta em posições diferentes do ciclo, e escrever uma
+ * sem olhar as outras é exatamente como elas passam a se sobrepor ou a deixar buraco. Juntas cobrem
+ * `received` inteiro — a soma das três é o total, e há teste contra o banco provando isso.
+ *
+ * A ordem importa e é a do ciclo de vida: `awaiting_arrival` é testada ANTES da aceitação, porque
+ * toda viagem `Assigned` também está `Accepted`. Invertido, ela cairia em "p/atribuir" e mandaria a
+ * operação fazer um trabalho que o cliente já fez.
  */
-export function inAnalysisSql(): SQL<boolean> {
-  return sql<boolean>`((${trips.customerFields} ->> 'Aceitação (portal)') = 'Pending')`;
+export function tripQueueSql(queue: TripQueue): SQL<boolean> {
+  const aceitacao = sql`(${trips.customerFields} ->> 'Aceitação (portal)')`;
+  const statusPortal = sql`(${trips.customerFields} ->> 'Status (portal)')`;
+  if (queue === "awaiting_arrival") {
+    return sql<boolean>`(${statusPortal} = 'Assigned')`;
+  }
+  if (queue === "in_analysis") {
+    return sql<boolean>`(${statusPortal} IS DISTINCT FROM 'Assigned' AND ${aceitacao} = 'Pending')`;
+  }
+  // `to_assign` é o resto, e é escrito como resto MESMO: `IS DISTINCT FROM` em vez de `NOT (… = …)`
+  // porque viagem sem aceitação gravada tem de cair aqui — é o que `displayStatusOf` faz. Com `NOT`,
+  // o nulo devolve nulo e ela sumiria da lista, divergindo calada da regra em TypeScript.
+  return sql<boolean>`(${statusPortal} IS DISTINCT FROM 'Assigned' AND ${aceitacao} IS DISTINCT FROM 'Pending')`;
 }
 
 /** Marca as viagens desta página como VISTAS agora. Uma instrução por página, não uma por viagem. */

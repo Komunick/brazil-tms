@@ -39,6 +39,15 @@ const STATUS_CLASS: Record<TripDisplayStatus, string> = {
     "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-400/25",
   to_assign:
     "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-300 dark:border-violet-400/20",
+  /**
+   * O cliente já pôs motorista e confirmou; espera-se o comparecimento para a rota começar.
+   *
+   * Verde-água, o mesmo tom das etapas de destino, porque aqui NÃO há trabalho de despacho pendente
+   * — é uma espera saudável. Mandar essa linha para "p/atribuir" seria pedir à operação um trabalho
+   * que o cliente já fez.
+   */
+  awaiting_arrival:
+    "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-500/10 dark:text-teal-300 dark:border-teal-400/20",
   // `received` continua existindo na MÁQUINA e no histórico: um evento antigo aponta para ele, e
   // sem esta entrada a linha do tempo ficaria sem cor. Na tela ele nunca aparece sozinho — quem
   // decide o rótulo é `displayStatusOf`.
@@ -86,14 +95,20 @@ export function TripStatusBadge({
    * "P/Atribuir". Ausente, a viagem cai em "P/Atribuir" — ver `displayStatusOf` para o porquê.
    */
   portalAcceptance,
+  /** O que o portal chama a viagem — `Assigned` quer dizer que já tem motorista lá. */
+  portalStatus,
 }: {
   status: TripDisplayStatus;
   portalAcceptance?: string | null;
+  portalStatus?: string | null;
 }) {
   const t = useTranslations("Trips.status");
   // Já veio desdobrado (contagem do painel, ficha do quadro)? Passa direto. Veio cru (uma linha do
   // quadro, a linha do tempo)? Desdobra aqui, com um só lugar decidindo.
-  const chave = status === "received" ? displayStatusOf(status, portalAcceptance ?? null) : status;
+  const chave =
+    status === "received"
+      ? displayStatusOf(status, portalAcceptance ?? null, portalStatus ?? null)
+      : status;
   return (
     <Badge variant="outline" className={cn("font-medium", STATUS_CLASS[chave])}>
       {t(chave)}

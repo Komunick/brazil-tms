@@ -28,25 +28,37 @@ import { TRIP_STATUSES, type TripStatus } from "./trip-status";
  *
  * `Assigned` no portal quer dizer que JÁ TEM motorista lá — é o oposto de "para atribuir".
  */
-export const TRIP_DISPLAY_EXTRA = ["in_analysis", "to_assign"] as const;
+export const TRIP_QUEUES = ["in_analysis", "to_assign", "awaiting_arrival"] as const;
 
-export type TripDisplayStatus = TripStatus | (typeof TRIP_DISPLAY_EXTRA)[number];
+export type TripQueue = (typeof TRIP_QUEUES)[number];
+
+export type TripDisplayStatus = TripStatus | TripQueue;
 
 /** A palavra do portal para "ninguém decidiu ainda". */
 export const ACEITACAO_PENDENTE = "Pending";
 
+/** A palavra do portal para "já tem motorista nesta viagem". */
+export const PORTAL_ATRIBUIDA = "Assigned";
+
 /**
  * O rótulo a mostrar para esta viagem. Só `received` se desdobra; todo o resto passa direto.
  *
- * Sem informação de aceitação — viagem digitada à mão, ou vinda de antes de o TMS ler esse eixo —
- * cai em `to_assign`. É a afirmação que se sustenta sem o portal: o TMS não tem ninguém escalado.
- * "Em análise" seria uma afirmação sobre o cliente, e essa não dá para fazer sem ele ter falado.
+ * A ORDEM DOS TESTES É A DO CICLO DE VIDA, e não é arbitrária: "já tem motorista" é o estado mais
+ * avançado dos três e por isso vem primeiro. Uma viagem `Assigned` também está `Accepted`, então
+ * testar a aceitação antes a jogaria em "p/atribuir" — mandando a operação fazer um trabalho que o
+ * cliente já fez.
+ *
+ * Sem informação nenhuma — viagem digitada à mão, ou vinda de antes de o TMS ler esses eixos — cai
+ * em `to_assign`. É a afirmação que se sustenta sem o portal: não há ninguém escalado aqui. As
+ * outras duas seriam afirmações sobre o CLIENTE, e essas não dá para fazer sem ele ter falado.
  */
 export function displayStatusOf(
   status: TripStatus,
   portalAcceptance: string | null | undefined,
+  portalStatus?: string | null,
 ): TripDisplayStatus {
   if (status !== "received") return status;
+  if (portalStatus === PORTAL_ATRIBUIDA) return "awaiting_arrival";
   return portalAcceptance === ACEITACAO_PENDENTE ? "in_analysis" : "to_assign";
 }
 
@@ -58,19 +70,21 @@ export function displayStatusOf(
  * acontecem, e uma lista que reordena obriga a procurar de novo o que já se sabia onde era.
  */
 export const TRIP_DISPLAY_ORDER: readonly TripDisplayStatus[] = TRIP_STATUSES.flatMap((s) =>
-  s === "received" ? (["in_analysis", "to_assign"] as TripDisplayStatus[]) : [s],
+  s === "received" ? ([...TRIP_QUEUES] as TripDisplayStatus[]) : [s],
 );
+
+export function isTripQueue(status: TripDisplayStatus): status is TripQueue {
+  return (TRIP_QUEUES as readonly string[]).includes(status);
+}
 
 /**
  * O trecho de URL que abre o quadro exatamente neste rótulo.
  *
  * Existe para que a contagem e a lista nunca discordem: quem clica num número tem de cair na lista
- * que o produziu. As duas filas compartilham o mesmo status real (`received`) e se separam pelo
- * parâmetro `inAnalysis` — que é exaustivo por construção, `true` e `false` cobrindo tudo sem
- * sobreposição.
+ * que o produziu. As três filas compartilham o mesmo status real (`received`) e se separam por UM
+ * parâmetro com três valores — não por dois booleanos, que permitiriam pedir combinações que não
+ * existem ("em análise E já atribuída") e deixariam o quadro vazio sem explicar por quê.
  */
 export function boardQueryForDisplayStatus(status: TripDisplayStatus): string {
-  if (status === "in_analysis") return "status=received&inAnalysis=true";
-  if (status === "to_assign") return "status=received&inAnalysis=false";
-  return `status=${status}`;
+  return isTripQueue(status) ? `status=received&queue=${status}` : `status=${status}`;
 }

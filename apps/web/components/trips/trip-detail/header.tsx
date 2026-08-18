@@ -23,6 +23,7 @@ export function TripDetailHeader({ trip }: { trip: TripDetailView }) {
         <TripStatusBadge
           status={trip.currentStatus}
           portalAcceptance={trip.customerFields?.["Aceitação (portal)"] ?? null}
+          portalStatus={trip.customerFields?.["Status (portal)"] ?? null}
         />
       ),
     },
