@@ -1642,8 +1642,8 @@
     "stamp": "BSC de {at}",
     "gaugeAlt": "Nota {score} no velocímetro do BSC",
     "period": {
-      "day": "Hoje",
-      "week": "Semana",
+      "day": "Ontem",
+      "week": "9 dias",
       "month": "Mês"
     }
   }
