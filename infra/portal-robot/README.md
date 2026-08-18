@@ -5,7 +5,7 @@ Alimenta o TMS com o que o portal do cliente já sabe, sem ninguém exportar pla
 ## Como funciona
 
 ```
-Chrome logado na VM ──GET──> portal (2 listagens)
+Chrome logado na VM ──GET──> portal (3 listagens)
         │
         └──POST /api/imports/portal-feed──> TMS ──> mesma tubulação do upload
 ```
@@ -14,7 +14,7 @@ O script (`portal-feed.user.js`) é **burro de propósito**: busca e entrega o J
 mapeamento vive no TMS (`packages/shared/src/import/portal-api.ts`), sob teste — script em VM é
 difícil de atualizar e impossível de testar.
 
-**Somente leitura.** Só existe `GET`, e só para as duas listagens. Nenhum clique, nenhuma escrita no
+**Somente leitura.** Só existe `GET`, e só para as três listagens. Nenhum clique, nenhuma escrita no
 portal, nada de atribuir ou aceitar.
 
 ## Instalação
@@ -39,8 +39,19 @@ Gerar um token: `openssl rand -base64 48`
 
 ## O que esperar
 
-- **Plano** (aba Planejado) a cada 15 min: cria e atualiza viagens da janela de ontem até 7 dias à frente.
-- **Execução** (aba Concluído) a cada 5 min: grava chegada/saída/chegada ao destino com o horário real.
+- **Plano** (aba Planejado) a cada 15 min: cria e atualiza viagens de **15 dias atrás a 7 à frente**.
+  A janela era de um dia e custou caro: uma viagem fica esperando aceitação por dias, e ao passar de
+  um dia ela saía do campo de visão e **congelava** no TMS — parada, alertando, enquanto no portal
+  seguia viva e já precificada.
+- **Em curso** (aba Aceito) a cada 5 min: as viagens que estão acontecendo. Elas somem do Planejado
+  ao serem aceitas e só reaparecem no Concluído ao terminar; sem esta aba, o TMS achava que dezenas
+  de caminhões nunca tinham chegado para carregar.
+- **Execução** (aba Concluído) a cada 5 min: grava chegada/saída/chegada ao destino com o horário
+  real. A janela é o que mudou nas últimas 6 horas — mas **a primeira execução após subir olha 45
+  dias**, para que qualquer interrupção se resolva sozinha no arranque seguinte.
+- Toda viagem vista em qualquer das três ganha um **carimbo de "vista agora"**
+  (`trips.portal_last_seen_at`). É a ausência desse carimbo, horas depois, que denuncia a viagem que
+  o cliente retirou — ver a varredura de retiradas em `docs/OPERACAO.md`.
 - Ciclo silencioso **não** escreve no Histórico de Importações. Só aparece lá o que mudou alguma
   coisa, ou o que precisa de alguém — estação sem cadastro, falha, viagem rejeitada.
 
