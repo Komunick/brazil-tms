@@ -70,7 +70,7 @@ export {
 } from "./trips/trips-read";
 export { queryWallboard, ON_THE_ROAD_STATUSES } from "./trips/wallboard-read";
 export type { WallboardSummary, WallboardTrip } from "./trips/wallboard-read";
-export { recordSpotOffer, readRecentSpotOffers, OFERTAS_JANELA_MIN } from "./trips/spot-offers";
+export { recordSpotOffer, readSpotOffersToday } from "./trips/spot-offers";
 export type { SpotOfferView } from "./trips/spot-offers";
 export type {
   TripBoardRow,

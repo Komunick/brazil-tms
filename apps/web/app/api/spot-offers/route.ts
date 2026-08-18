@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { readRecentSpotOffers } from "@brazil-tms/db";
+import { readSpotOffersToday } from "@brazil-tms/db";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
 import { handleRouteError } from "@/lib/api/respond";
 
@@ -19,7 +19,7 @@ export async function GET(): Promise<NextResponse> {
   try {
     const ctx = await requireAuth();
     requirePermission(ctx, "view_all_trips");
-    return NextResponse.json({ ofertas: await readRecentSpotOffers() });
+    return NextResponse.json({ ofertas: await readSpotOffersToday() });
   } catch (error) {
     return handleRouteError(error);
   }
