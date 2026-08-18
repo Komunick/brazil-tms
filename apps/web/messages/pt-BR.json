@@ -1647,6 +1647,7 @@
     "source": "BSC · Shopee",
     "stamp": "BSC de {at}",
     "gaugeAlt": "Nota {score} no velocímetro do BSC",
+    "target": "meta {value}",
     "period": {
       "day": "Ontem",
       "week": "9 dias",
