@@ -41,6 +41,7 @@ import type {
   TripFilterOptions,
   DashboardSummary,
   BscSnapshotView,
+  SpotOfferView,
   WallboardSummary,
   ExceptionListItem,
   ReasonCodeOption,
@@ -240,10 +241,11 @@ export function useDashboardSummary(): UseQueryResult<{
  * ativa", e o padrão do TanStack Query é pausar quando a janela perde o foco, que é exatamente o que
  * congelaria a tela numa máquina que ninguém toca.
  */
-export function useWallboard(): UseQueryResult<{ wallboard: WallboardSummary }> {
+export function useWallboard(): UseQueryResult<{ wallboard: WallboardSummary; ofertas: SpotOfferView[] }> {
   return useQuery({
     queryKey: wallboardKey(),
-    queryFn: async () => asJson<{ wallboard: WallboardSummary }>(await fetch(`/api/wallboard`)),
+    queryFn: async () =>
+      asJson<{ wallboard: WallboardSummary; ofertas: SpotOfferView[] }>(await fetch(`/api/wallboard`)),
     refetchInterval: WALLBOARD_POLL_MS,
     refetchIntervalInBackground: true,
   });

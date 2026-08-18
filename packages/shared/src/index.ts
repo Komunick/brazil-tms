@@ -40,3 +40,4 @@ export * from "./domain/reporting";
 // feature 016 — freight rate lookup (agregados): sheet normalizer + query filters.
 export * from "./domain/freight-rates";
 export * from "./schemas/freight-rate";
+export * from "./schemas/spot-offer";

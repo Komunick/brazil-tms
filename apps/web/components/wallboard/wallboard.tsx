@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import type { TripStatus } from "@brazil-tms/shared";
 import type { WallboardSummary, WallboardTrip } from "@brazil-tms/db";
 import { useWallboard } from "@/lib/trips/client";
+import { OfertaDeSpot } from "@/components/wallboard/oferta-de-spot";
 import { useReconexao } from "@/lib/ui/reconexao";
 
 /**
@@ -134,6 +135,9 @@ export function Wallboard() {
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-slate-950 font-sans">
+      {/* Fica FORA do fluxo (posicionado sobre a tela) — o quadro atrás continua desenhado e
+          vivo; o aviso só cobre o centro pelos seus 30 segundos. */}
+      <OfertaDeSpot ofertas={data?.ofertas} />
       {/* Cabeçalho: quem, quando, e se o que está na tela ainda vale. */}
       <header className="flex shrink-0 items-center justify-between border-b border-slate-800 px-[1.6vw] py-[1.6vh]">
         <h1 className="text-[1.7vw] font-bold uppercase tracking-[0.2em] text-white">
