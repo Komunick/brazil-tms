@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { formatDateTime } from "@brazil-tms/shared";
 import type { BscPeriod, BscSnapshotView } from "@brazil-tms/db";
 import { Card, CardTitle } from "@/components/ui/card";
+import { frescorDoBsc, idadeEmTexto } from "@/lib/bsc/frescor";
 import {
   faixaDo,
   indicadoresNaTela,
@@ -86,6 +87,10 @@ export function BscCard({ snapshots }: { snapshots: BscSnapshotView[] }) {
   const atual = snapshots.find((s) => s.period === periodo) ?? snapshots[0];
   if (!atual) return null;
 
+  // `new Date()` no render é de propósito: este cartão já vive dentro de uma tela que se recarrega
+  // sozinha, então a idade se atualiza junto com o resto — e um relógio congelado no primeiro render
+  // seria a mesma classe de mentira que o aviso existe para acusar.
+  const frescor = frescorDoBsc(atual.capturedAt, new Date());
   const nota = atual.score;
   // O velocímetro do BSC vai a 110, não a 100: o Scheduling passa de 100 legitimamente.
   const fracao = nota == null ? 0 : Math.max(0, Math.min(1, nota / 110));
@@ -165,6 +170,16 @@ export function BscCard({ snapshots }: { snapshots: BscSnapshotView[] }) {
             <div className="mt-0.5 text-[0.7rem] text-muted-foreground">
               {t("stamp", { at: formatDateTime(atual.capturedAt) })}
             </div>
+            {/* O AVISO DE PARADA (2026-08-18).
+                O modo como este cartão falha é ficar parado: o robô se recusa a mandar quando o
+                relatório está sem o filtro "Transportador" — o que é o certo —, e o painel segue
+                mostrando o último número, com a cor certa, parecendo atual. Só o carimbo denuncia,
+                e carimbo é a linha que ninguém lê. Aqui ele passa a gritar. */}
+            {frescor.velho ? (
+              <div className="mt-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[0.7rem] font-semibold text-destructive">
+                {t("stale", { age: idadeEmTexto(frescor.horas) })}
+              </div>
+            ) : null}
           </div>
         </div>
 
