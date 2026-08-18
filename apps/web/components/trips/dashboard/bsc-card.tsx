@@ -52,6 +52,9 @@ import {
  * invenção sai: verde é ter batido a meta, amarelo é estar entre o mínimo e ela, vermelho é estar
  * abaixo do mínimo. É o que o cliente vê, e conferir os dois lados deixa de exigir tradução.
  */
+/** A meia-lua do velocímetro: raio 74, de (16,95) a (164,95). Ver `raio` — os dois andam juntos. */
+const ARCO = "M16 95 A74 74 0 0 1 164 95";
+
 const TEXTO: Record<Faixa, string> = {
   acima: "text-success",
   atencao: "text-warning",
@@ -86,7 +89,10 @@ export function BscCard({ snapshots }: { snapshots: BscSnapshotView[] }) {
   const nota = atual.score;
   // O velocímetro do BSC vai a 110, não a 100: o Scheduling passa de 100 legitimamente.
   const fracao = nota == null ? 0 : Math.max(0, Math.min(1, nota / 110));
-  const raio = 42;
+  // Meia-lua de raio 74 num quadro de 180×104: começa em (16,95) e termina em (164,95). O raio e o
+  // desenho saem da MESMA constante porque já erraram juntos — arco redesenhado à mão e comprimento
+  // esquecido faz a barra parar antes do fim sem nada quebrar na tela.
+  const raio = 74;
   const comprimento = Math.PI * raio;
 
   return (
@@ -121,38 +127,42 @@ export function BscCard({ snapshots }: { snapshots: BscSnapshotView[] }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-4">
-        <div className="flex items-center gap-3">
+        {/* A NOTA CRESCEU JUNTO COM O BLOCO (2026-08-18).
+            Com seis indicadores, um velocímetro de 104px equilibrava a fileira. Com vinte, o bloco
+            ficou cinco vezes mais alto e a nota — que é o número que decide contrato — virou o menor
+            elemento do cartão, boiando num vazio à esquerda. Tamanho aqui é hierarquia. */}
+        <div className="flex flex-col items-center gap-1 px-2">
           <svg
-            width="104"
-            height="60"
-            viewBox="0 0 104 60"
+            width="180"
+            height="104"
+            viewBox="0 0 180 104"
             role="img"
             aria-label={t("gaugeAlt", { score: nota ?? 0 })}
           >
             <path
-              d="M10 55 A42 42 0 0 1 94 55"
+              d={ARCO}
               fill="none"
               stroke="hsl(var(--muted))"
-              strokeWidth="10"
+              strokeWidth="16"
               strokeLinecap="round"
             />
             <path
-              d="M10 55 A42 42 0 0 1 94 55"
+              d={ARCO}
               fill="none"
               stroke="hsl(var(--warning))"
-              strokeWidth="10"
+              strokeWidth="16"
               strokeLinecap="round"
               strokeDasharray={`${comprimento * fracao} ${comprimento}`}
             />
           </svg>
-          <div className="min-w-0">
-            <div className="text-2xl font-bold leading-none tabular-nums">
+          <div className="-mt-6 flex flex-col items-center">
+            <div className="text-4xl font-bold leading-none tabular-nums">
               {nota == null ? "—" : nota.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </div>
             {atual.zone ? (
-              <div className="text-xs font-semibold text-warning">{atual.zone}</div>
+              <div className="mt-1 text-sm font-semibold text-warning">{atual.zone}</div>
             ) : null}
-            <div className="text-[0.68rem] text-muted-foreground">
+            <div className="mt-0.5 text-[0.7rem] text-muted-foreground">
               {t("stamp", { at: formatDateTime(atual.capturedAt) })}
             </div>
           </div>
