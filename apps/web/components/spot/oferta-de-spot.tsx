@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import type { SpotOfferView } from "@brazil-tms/db";
-import { estadoInicial, novasOfertas } from "@/lib/wallboard/ofertas";
+import { useSpotOffers } from "@/lib/trips/client";
+import { estadoInicial, novasOfertas } from "@/lib/spot/ofertas";
 
 /**
  * O AVISO DE OFERTA no meio da TV (2026-08-18).
@@ -27,10 +28,14 @@ import { estadoInicial, novasOfertas } from "@/lib/wallboard/ofertas";
 /** Quanto tempo cada aviso fica na tela. Pedido do usuário, e é tempo de ler três linhas de longe. */
 const DURACAO_MS = 30_000;
 
-export function OfertaDeSpot({ ofertas }: { ofertas: SpotOfferView[] | undefined }) {
+export function OfertaDeSpot() {
   // A memória de "já anunciei" vive na sessão da TV, não em estado do React: recriá-la a cada render
   // faria a mesma oferta voltar a ser novidade. Ver `novasOfertas`.
   const t = useTranslations("Wallboard");
+  // Busca própria, com ritmo próprio: o componente é montado em telas de cadências diferentes e não
+  // pode herdar a lentidão de nenhuma delas. Ver `useSpotOffers`.
+  const { data } = useSpotOffers();
+  const ofertas = data?.ofertas;
   const memoria = useRef(estadoInicial());
   const [fila, setFila] = useState<SpotOfferView[]>([]);
 

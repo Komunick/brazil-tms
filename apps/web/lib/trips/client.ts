@@ -85,6 +85,8 @@ export const FILTER_OPTIONS_POLL_MS = 60_000;
  * um painel apagado: a sala toma decisão em cima de um retrato velho sem saber.
  */
 export const WALLBOARD_POLL_MS = 30_000;
+/** O aviso de oferta dura 30s na tela; buscar mais devagar que isso seria avisar tarde. */
+export const SPOT_OFFERS_POLL_MS = 30_000;
 /** Synchronous CSV export row cap (R13); single source in @brazil-tms/shared, re-exported for UI copy. */
 export { EXPORT_ROW_CAP };
 
@@ -241,12 +243,29 @@ export function useDashboardSummary(): UseQueryResult<{
  * ativa", e o padrão do TanStack Query é pausar quando a janela perde o foco, que é exatamente o que
  * congelaria a tela numa máquina que ninguém toca.
  */
-export function useWallboard(): UseQueryResult<{ wallboard: WallboardSummary; ofertas: SpotOfferView[] }> {
+export function useWallboard(): UseQueryResult<{ wallboard: WallboardSummary }> {
   return useQuery({
     queryKey: wallboardKey(),
-    queryFn: async () =>
-      asJson<{ wallboard: WallboardSummary; ofertas: SpotOfferView[] }>(await fetch(`/api/wallboard`)),
+    queryFn: async () => asJson<{ wallboard: WallboardSummary }>(await fetch(`/api/wallboard`)),
     refetchInterval: WALLBOARD_POLL_MS,
+    refetchIntervalInBackground: true,
+  });
+}
+
+/**
+ * As ofertas de leilão que o monitor mandou — usadas pelo painel de parede E pelo Painel do dia.
+ *
+ * Ritmo PRÓPRIO, de 30 segundos, e não o da tela que a hospeda: o Painel do dia se atualiza de
+ * minuto em minuto, o que é generoso para contagem de viagens e lento demais para um aviso que dura
+ * trinta segundos — na pior hora, o cartão apareceria depois de o leilão ter esfriado.
+ *
+ * Segue buscando em segundo plano pelo mesmo motivo do painel: a TV não tem aba ativa.
+ */
+export function useSpotOffers(): UseQueryResult<{ ofertas: SpotOfferView[] }> {
+  return useQuery({
+    queryKey: [...TRIPS_ROOT, "spot-offers"],
+    queryFn: async () => asJson<{ ofertas: SpotOfferView[] }>(await fetch(`/api/spot-offers`)),
+    refetchInterval: SPOT_OFFERS_POLL_MS,
     refetchIntervalInBackground: true,
   });
 }
