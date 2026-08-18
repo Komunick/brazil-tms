@@ -286,12 +286,6 @@ export async function applyPortalPlan(
   options: PortalPlanOptions = {},
 ): Promise<PortalPlanSummary> {
   const stationMap = await loadStationMap(customerId);
-  // Quem apareceu NESTA leitura ganha carimbo de agora. É a ausência desse carimbo, horas depois,
-  // que denuncia a viagem que o cliente retirou do Planejado — ver `marcarRetiradasDoPortal`.
-  await marcarVistasNoPortal(
-    customerId,
-    portalTrips.map((t) => t.externalTripId),
-  );
   const outcomes: PortalPlanOutcome[] = [];
   const links: FleetLinkResult[] = [];
   let milestones = 0;
@@ -309,6 +303,27 @@ export async function applyPortalPlan(
     links.push(...result.links);
     milestones += result.milestones;
   }
+
+  /**
+   * O carimbo vem DEPOIS do laço, e a ordem é o conserto de um defeito real (2026-08-18).
+   *
+   * Estava antes, e parecia igual: a lista lida é a mesma nos dois pontos. Só que `marcarVistasNoPortal`
+   * é um UPDATE — ele só alcança viagem que JÁ EXISTE. Antes do laço, a viagem que está aparecendo
+   * pela PRIMEIRA vez ainda não foi criada, e não recebe carimbo nenhum.
+   *
+   * Numa leitura seguinte ela existiria e seria carimbada, então na maioria das vezes isso se
+   * corrigia sozinho e não dava sinal. O caso que não se corrige é justamente o que interessa: a
+   * viagem que aparece UMA vez e o cliente retira em seguida nasce com carimbo nulo e morre com ele.
+   * E carimbo nulo é a primeira trava da varredura — "nunca esteve no portal" —, então ela fica
+   * imortal, alertando para sempre, exatamente o que a varredura existia para acabar.
+   *
+   * Aconteceu com duas viagens no dia em que a varredura entrou (LT1Q8I02EDRN2, LT1Q8I02EDSH1), e
+   * elas apareceram no quadro de alertas ativos justamente porque eram intocáveis.
+   */
+  await marcarVistasNoPortal(
+    customerId,
+    portalTrips.map((t) => t.externalTripId),
+  );
 
   const count = (s: PortalPlanOutcome["status"]): number =>
     outcomes.filter((o) => o.status === s).length;

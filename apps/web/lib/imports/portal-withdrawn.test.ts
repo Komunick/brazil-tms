@@ -34,9 +34,21 @@ describe.skipIf(!hasDb)("marcarRetiradasDoPortal (integration)", () => {
 
   const uniq = (p: string): string => `${p}-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
-  /** Uma viagem em "Recebida", com coleta amanhã (dentro da janela que o robô varre). */
+  /**
+   * Uma viagem em "Recebida", com coleta amanhã (dentro da janela que o robô varre).
+   *
+   * `Status (portal)` em `customer_fields` é o que marca a viagem como VINDA DO PORTAL — é a chave
+   * que só o robô escreve, e é por ela que a varredura separa o que ele trouxe do que alguém digitou
+   * à mão. Sem essa marca, nada aqui seria candidato. `doPortal: false` produz de propósito a viagem
+   * digitada, para o caso que exige a recusa.
+   */
   async function criar(
-    over: { vistaHa?: string | null; status?: "received" | "cancelled" } = {},
+    over: {
+      vistaHa?: string | null;
+      status?: "received" | "cancelled";
+      doPortal?: boolean;
+      criadaHa?: string;
+    } = {},
   ): Promise<string> {
     const ext = uniq("LH-RET");
     const id = (
@@ -50,10 +62,18 @@ describe.skipIf(!hasDb)("marcarRetiradasDoPortal (integration)", () => {
           destinationLocationId: destId,
           currentStatus: over.status ?? "received",
           plannedPickupWindowStart: sql`now() + interval '1 day'`,
+          customerFields:
+            over.doPortal === false ? {} : { "Status (portal)": "Assigning" },
           originalPlan: {},
         })
         .returning({ id: trips.id })
     )[0]!.id;
+    if (over.criadaHa) {
+      await db
+        .update(trips)
+        .set({ createdAt: sql`now() - ${over.criadaHa}::interval` })
+        .where(eq(trips.id, id));
+    }
     criadas.push(id);
     if (over.vistaHa !== null) {
       await db
@@ -140,17 +160,52 @@ describe.skipIf(!hasDb)("marcarRetiradasDoPortal (integration)", () => {
     expect(registro[0]!.motivo).toContain("retirada do portal");
   });
 
-  it("NUNCA toca em viagem que jamais apareceu numa listagem", async () => {
+  it("NUNCA toca em viagem que não veio do portal", async () => {
     /**
-     * `portalLastSeenAt` nulo é "nunca esteve no portal" — viagem digitada à mão, planilha antiga.
-     * Ausência não significa nada para quem nunca esteve lá, e tratar as duas coisas como iguais
-     * apagaria em massa tudo o que não vem do robô.
+     * Viagem digitada à mão ou vinda de planilha nunca esteve numa listagem, e ausência não
+     * significa nada para quem nunca esteve lá. Tratar as duas coisas como iguais apagaria em massa
+     * tudo o que não vem do robô.
+     *
+     * A marca é `Status (portal)` em `customer_fields`, que só o robô escreve. Antes a trava olhava
+     * o carimbo de "vista pela última vez", o que parecia equivalente e não era — ver o caso abaixo.
      */
-    const manual = await criar({ vistaHa: null });
+    const manual = await criar({ vistaHa: null, doPortal: false, criadaHa: "10 hours" });
 
     await marcarRetiradasDoPortal(actorId, { minimoVistas: 1 });
 
     expect(await existe(manual)).toBe(true);
+  });
+
+  it("apaga a que veio do portal e NUNCA chegou a ser carimbada", async () => {
+    /**
+     * O buraco que deixou duas viagens imortais no quadro de alertas (LT1Q8I02EDRN2, LT1Q8I02EDSH1).
+     *
+     * O carimbo é um UPDATE, e por isso não alcança quem ainda não existe: a viagem que aparece pela
+     * PRIMEIRA vez é criada durante a leitura e sai dela sem carimbo. Na leitura seguinte isso se
+     * corrigia sozinho — a não ser no caso que interessa, o da viagem que aparece uma única vez e o
+     * cliente retira em seguida. Essa nascia nula e morria nula, e carimbo nulo era a trava que
+     * dizia "nunca esteve no portal". Ficava alertando para sempre, imune justamente à varredura
+     * feita para removê-la.
+     *
+     * A ordem foi consertada nos dois robôs, mas quem já nasceu assim não tem conserto pela leitura:
+     * nunca mais vai aparecer numa listagem. Por isso a trava passou a perguntar a ORIGEM da viagem,
+     * e a usar a criação como piso do relógio.
+     */
+    const semCarimbo = await criar({ vistaHa: null, criadaHa: "10 hours" });
+
+    await marcarRetiradasDoPortal(actorId, { minimoVistas: 1 });
+
+    expect(await existe(semCarimbo)).toBe(false);
+  });
+
+  it("a recém-criada tem as 3 horas de folga como qualquer outra", async () => {
+    // O piso é a criação, não o zero: sem isso, toda viagem nova do portal seria candidata no
+    // instante em que nascesse — e a varredura apagaria a operação do dia inteiro.
+    const novinha = await criar({ vistaHa: null });
+
+    await marcarRetiradasDoPortal(actorId, { minimoVistas: 1 });
+
+    expect(await existe(novinha)).toBe(true);
   });
 
   it("NUNCA apaga a que o portal cancelou — essa é história, não fantasma", async () => {

@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, lt, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { ACTIVE_TRIP_STATUSES, type TripQueue } from "@brazil-tms/shared";
 import { db } from "../client";
 import { alerts, importRows, tripEvents, trips } from "../../schema";
@@ -173,8 +173,25 @@ export async function marcarRetiradasDoPortal(
     .where(
       and(
         eq(trips.currentStatus, "received"),
-        isNotNull(trips.portalLastSeenAt),
-        lt(trips.portalLastSeenAt, sql`now() - ${`${silencioHoras} hours`}::interval`),
+        /**
+         * "VEIO DO PORTAL", e não "tem carimbo" (corrigido em 2026-08-18, horas depois de nascer).
+         *
+         * A trava era `portal_last_seen_at IS NOT NULL`, lendo carimbo nulo como "nunca esteve no
+         * portal — viagem digitada à mão". A intenção continua certa e é intocada; o proxy é que
+         * estava errado, porque havia um jeito de uma viagem do portal ficar sem carimbo: ela nasce
+         * durante a leitura, e o carimbo (um UPDATE) só alcançava quem já existia. A ordem foi
+         * consertada em `applyPortalPlan`, mas quem já nasceu torto não tem como se consertar — a
+         * viagem retirada nunca mais aparece numa listagem para ser carimbada.
+         *
+         * Então a pergunta passa a ser a original: esta viagem veio do portal? Só o robô escreve
+         * `Status (portal)` em `customer_fields`, e é isso que separa a viagem do portal da digitada
+         * à mão — que continua, e agora de verdade, fora do alcance desta varredura.
+         *
+         * `created_at` como piso é honesto: a viagem foi vista ao menos uma vez, no instante em que
+         * o robô a criou a partir de uma listagem.
+         */
+        sql`${trips.customerFields} ? 'Status (portal)'`,
+        sql`coalesce(${trips.portalLastSeenAt}, ${trips.createdAt}) < now() - ${`${silencioHoras} hours`}::interval`,
         sql`${trips.plannedPickupWindowStart} >= now() - ${`${diasAtras} days`}::interval`,
         sql`${trips.plannedPickupWindowStart} <= now() + ${`${diasAdiante} days`}::interval`,
         // Redundante com `received`, e de propósito: se um dia alguém alargar o status acima, a
