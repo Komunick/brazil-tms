@@ -1,14 +1,6 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 import { eq, inArray } from "drizzle-orm";
-import {
-  auditLogs,
-  customers,
-  db,
-  importBatches,
-  locations,
-  trips,
-  users,
-} from "@brazil-tms/db";
+import { auditLogs, customers, db, importBatches, locations, trips, users } from "@brazil-tms/db";
 import { testAccounts, routes } from "./test-config";
 
 /**
@@ -65,7 +57,9 @@ test.describe("US1 — import endpoint authorization", () => {
       expect((await ctx.get(`${STATUS_MAPPINGS}?customerId=${SOME_UUID}`)).status()).toBe(403);
       expect((await ctx.post(`${IMPORTS}/${SOME_UUID}/confirm`)).status()).toBe(403);
       // FR-009: the upload itself stays gated on `import_trips` after slice 013 (no template needed).
-      expect((await ctx.post(IMPORTS, { multipart: { customerId: SOME_UUID } })).status()).toBe(403);
+      expect((await ctx.post(IMPORTS, { multipart: { customerId: SOME_UUID } })).status()).toBe(
+        403,
+      );
       await ctx.dispose();
     }
   });
@@ -91,9 +85,7 @@ test.describe("US1/US2 — Trip Import screen (no template step + provisional ba
   }) => {
     await signIn(page, testAccounts.opsManager);
     await page.goto("/imports");
-    await expect(
-      page.getByText(/formato de importação padrão provisório/i),
-    ).toBeVisible();
+    await expect(page.getByText(/formato de importação padrão provisório/i)).toBeVisible();
   });
 });
 
@@ -163,7 +155,11 @@ test.describe("US1/US3 — upload fast path (predefined standard format)", () =>
     const wrong = await ctx.post(IMPORTS, {
       multipart: {
         customerId,
-        file: { name: "wrong.csv", mimeType: "text/csv", buffer: Buffer.from("coluna_a,coluna_b\nfoo,bar\n") },
+        file: {
+          name: "wrong.csv",
+          mimeType: "text/csv",
+          buffer: Buffer.from("coluna_a,coluna_b\nfoo,bar\n"),
+        },
       },
     });
     expect(wrong.status()).toBe(202);
@@ -272,7 +268,7 @@ test.describe("US1 — imported trips are born received (slice 015)", () => {
     if (customerId) await db.delete(customers).where(eq(customers.id, customerId));
   });
 
-  test("a confirm-created import trip shows status 'Recebida' on the Control Tower (not 'Validada')", async ({
+  test("a confirm-created import trip shows status 'P/Atribuir' on the Control Tower (not 'Validada')", async ({
     page,
   }) => {
     await signIn(page, testAccounts.opsManager);
@@ -280,9 +276,11 @@ test.describe("US1 — imported trips are born received (slice 015)", () => {
 
     const row = page.getByRole("row", { name: new RegExp(externalId) });
     await expect(row).toBeVisible({ timeout: 15_000 });
-    // Slice 015: the status badge shows "Recebida" — imported trips are dispatch-ready at `received`
-    // itself; the separate "Validada" hop was collapsed away.
-    await expect(row.getByText("Recebida")).toBeVisible();
+    // Slice 015 deixou a viagem importada nascer em `received`, pronta para despacho, e a etapa
+    // "Validada" foi colapsada. Em 2026-08-18 o rótulo dessa espera passou a dizer o que FALTA em vez
+    // de descrever o TMS: sem resposta do cliente no portal, ela cai em "P/Atribuir" — a afirmação
+    // que se sustenta sem o portal ter falado. Ver `displayStatusOf`.
+    await expect(row.getByText("P/Atribuir")).toBeVisible();
     await expect(row.getByText("Validada")).toHaveCount(0);
   });
 });

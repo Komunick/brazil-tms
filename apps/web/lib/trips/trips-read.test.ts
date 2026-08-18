@@ -236,7 +236,11 @@ describe.skipIf(!hasDb)("trips-read (integration)", () => {
     // status the ACTIVE scope hides, and even while a different chip is already selected.
     const active = await queryTripBoard(boardQuery());
     expect(active.statusCounts.completed).toBe(1);
-    expect(active.statusCounts.received).toBe(1);
+    // 2026-08-18: a ficha conta pelo rótulo que a tela mostra, e `received` se desdobra pelo eixo da
+    // aceitação do cliente. Sem resposta do portal — o caso desta semente — a viagem é "P/Atribuir",
+    // que é a afirmação que se sustenta sem o cliente ter falado.
+    expect(active.statusCounts.to_assign).toBe(1);
+    expect(active.statusCounts.received).toBeUndefined();
     expect(active.statusCounts.in_transit).toBe(2);
     expect(active.rows.map((r) => r.id)).not.toContain(completedId);
 
@@ -255,7 +259,7 @@ describe.skipIf(!hasDb)("trips-read (integration)", () => {
     const day = await queryTripBoard(
       boardQuery({ pickupFrom: "2026-06-02", pickupTo: "2026-06-02" }),
     );
-    expect(day.statusCounts.received).toBe(1);
+    expect(day.statusCounts.to_assign).toBe(1);
     expect(day.statusCounts.in_transit).toBeUndefined();
   });
 

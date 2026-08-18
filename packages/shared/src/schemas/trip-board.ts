@@ -84,6 +84,14 @@ export const tripBoardQuerySchema = z.object({
    * divergem, e um atalho que abre uma lista com outro total é pior do que não abrir nada.
    */
   awaitingAssignment: optParam(z.enum(["true", "false"])),
+  /**
+   * A outra metade do que era "Recebida": a proposta que ninguém decidiu ainda (2026-08-18).
+   *
+   * Irmão de `awaitingAssignment`, e os dois juntos cobrem a fila inteira sem sobreposição —
+   * aceitação `Pending` de um lado, `Accepted` do outro. Existem porque o painel mostra os dois
+   * números separados e cada um precisa abrir a lista dele.
+   */
+  inAnalysis: optParam(z.enum(["true", "false"])),
   q: z.preprocess(
     (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
     z.string().trim().min(1).max(200).optional(),
@@ -127,6 +135,7 @@ const PARAM_KEYS = [
   "atRisk",
   "missingDocuments",
   "awaitingAssignment",
+  "inAnalysis",
   "q",
   "scope",
   "sort",

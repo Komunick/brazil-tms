@@ -4,6 +4,7 @@ export * from "./formatting";
 export * from "./auth/permissions";
 export * from "./audit/actions";
 export * from "./domain/trip-status";
+export * from "./domain/trip-display-status";
 export * from "./domain/assignment-eligibility";
 export * from "./domain/sla-risk";
 export * from "./domain/exceptions";
