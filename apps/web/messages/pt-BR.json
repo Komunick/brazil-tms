@@ -1545,7 +1545,7 @@
     "confirming": "Confirmando...",
     "unassigning": "Removendo...",
     "unassignConfirmTitle": "Remover atribuição",
-    "unassignConfirmBody": "Os recursos serão removidos e a viagem voltará para Recebida. O histórico é mantido.",
+    "unassignConfirmBody": "Os recursos serão removidos e a viagem voltará para a fila de despacho. O histórico é mantido.",
     "unassignConfirmAction": "Remover",
     "assignSuccess": "Atribuição salva.",
     "confirmSuccess": "Atribuição confirmada.",
