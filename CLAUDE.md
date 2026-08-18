@@ -16,6 +16,9 @@ docs + GitHub Spec Kit scaffolding. Build work happens feature-by-feature via Sp
 - `docs/STACK.md` — authoritative tech & infra decisions (the HOW).
 - `docs/PRINCIPLES.md` — KISS / DRY / YAGNI rules (the ≥3 rule for abstraction).
 - `docs/DELIVERY-WORKFLOW.md` — branching, PRs, deploys, quality gates.
+- `docs/OPERACAO.md` — **a máquina ligada**: as três fontes de dado (robôs), onde cada deploy roda,
+  segredos, o que o deploy NÃO faz, os jobs do worker e o diagnóstico de "parou de chegar dado".
+  Leia antes de tocar em produção — `devops/` não é versionado, então essa história só existe ali.
 - `docs/SPEC-SLICING.md` — how the PRD is sliced into 9 Spec Kit features (+ ownership matrix).
 - `.specify/memory/constitution.md` — governing rules; prevails on technical/process conflict.
 
