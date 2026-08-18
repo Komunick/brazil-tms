@@ -1,13 +1,18 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.7.0
+// @version      1.8.0
 // @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
 // @connect      tms.braziltransports.com.br
 // @grant        GM_xmlhttpRequest
 // @run-at       document-idle
+// Sem estas duas linhas o Tampermonkey nunca procura versão nova, e toda correção vira "abra a URL e
+// clique em Reinstalar" — com o agravante de que os dois robôs desta VM têm nome parecido e moram no
+// mesmo servidor, o que já causou uma instalação no arquivo errado.
+// @updateURL    http://127.0.0.1:8899/portal-feed.user.js
+// @downloadURL  http://127.0.0.1:8899/portal-feed.user.js
 // ==/UserScript==
 
 /**
@@ -95,8 +100,17 @@
      * o que aconteceu no intervalo, porque o portal filtra por data de MODIFICAÇÃO e uma viagem
      * concluída não é modificada de novo. Uma varredura larga no arranque faz o robô se curar
      * sozinho, e é barata: acontece uma vez por sessão.
+     *
+     * Eram 30 dias, e 30 é exatamente o número que não serve (2026-08-18). Uma correção no TMS —
+     * fechar a viagem que o portal diz Completed sem hora de descarga — precisava que o robô
+     * relesse as viagens afetadas, e a mais antiga delas tinha `mtime` de 30,3 dias. A varredura
+     * passou raspando por fora e o conserto não alcançou nada.
+     *
+     * O portal guarda por volta de 45 dias de histórico. Cobrir a janela INTEIRA é o que faz
+     * "reinicie o robô" ser uma resposta verdadeira quando o TMS aprende a ler algo melhor — com 30
+     * dias, era uma resposta que parecia certa e não era.
      */
-    execucaoHorasPrimeiroCiclo: 24 * 30,
+    execucaoHorasPrimeiroCiclo: 24 * 45,
   };
 
   const log = (...a) => console.log("[TMS robô]", ...a);
