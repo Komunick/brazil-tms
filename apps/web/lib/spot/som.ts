@@ -20,6 +20,26 @@
  *   virar condição, a tela deixa de avisar em silêncio e ninguém entende por quê.
  */
 
+/**
+ * O VOLUME, e por que ele mudou (2026-08-18).
+ *
+ * Nasceu em 0.06 pensando em sala de trabalho — "um aviso que assusta é desligado na mesma semana".
+ * O destino real é outro: uma TV de parede, com alto-falante de TV, numa sala com gente conversando.
+ * Lá, 0.06 simplesmente não se ouve.
+ *
+ * Este é o único número aqui que é escolha e não medição. Se ficar alto demais na sala, é o que se
+ * mexe — e é o motivo de ele estar sozinho no topo do arquivo, e não perdido no meio da função.
+ */
+const VOLUME = 0.28;
+
+/**
+ * Três notas subindo, e não duas.
+ *
+ * Duas notas soam como notificação de sistema — a sala aprende a ignorar em uma semana. Três subindo
+ * é o padrão que o ouvido lê como "chegou algo para você", e ainda dura pouco menos de meio segundo.
+ */
+const NOTAS = [784, 1046, 1318];
+
 let ctx: AudioContext | null = null;
 let destravando = false;
 
@@ -49,9 +69,10 @@ function agendarDestrave(c: AudioContext): void {
 }
 
 /**
- * Duas notas curtas, subindo — o padrão que o ouvido lê como "chegou algo", e não como erro.
+ * Três notas curtas, subindo — o padrão que o ouvido lê como "chegou algo", e não como erro.
  *
- * Volume baixo (0.06): a sala é de trabalho, e um aviso que assusta é desligado na mesma semana.
+ * Os dois números para mexer quando a sala reclamar (ou não ouvir) estão no topo do arquivo, e não
+ * perdidos aqui dentro: `VOLUME` e `NOTAS`.
  */
 export function tocarAviso(): void {
   const c = contexto();
@@ -64,20 +85,23 @@ export function tocarAviso(): void {
   }
   try {
     const agora = c.currentTime;
-    for (const [i, hz] of [880, 1175].entries()) {
+    for (const [i, hz] of NOTAS.entries()) {
       const osc = c.createOscillator();
       const vol = c.createGain();
-      osc.type = "sine";
+      // TRIANGULAR, e não senoidal (2026-08-18). A senoide é o tom mais "limpo" que existe — e é
+      // justamente por isso que ela some numa sala: não tem harmônicos para atravessar ruído de fundo
+      // e alto-falante de TV. A triangular carrega no mesmo volume de pico.
+      osc.type = "triangle";
       osc.frequency.value = hz;
-      // Envelope curto: sem ele o oscilador começa e termina com um estalo audível.
-      const inicio = agora + i * 0.13;
+      // Envelope: sem ele o oscilador começa e termina com um estalo audível.
+      const inicio = agora + i * 0.14;
       vol.gain.setValueAtTime(0.0001, inicio);
-      vol.gain.exponentialRampToValueAtTime(0.06, inicio + 0.02);
-      vol.gain.exponentialRampToValueAtTime(0.0001, inicio + 0.12);
+      vol.gain.exponentialRampToValueAtTime(VOLUME, inicio + 0.02);
+      vol.gain.exponentialRampToValueAtTime(0.0001, inicio + 0.13);
       osc.connect(vol);
       vol.connect(c.destination);
       osc.start(inicio);
-      osc.stop(inicio + 0.14);
+      osc.stop(inicio + 0.15);
     }
   } catch {
     // Áudio bloqueado ou indisponível. O aviso visual já está na tela; nada a fazer aqui.
