@@ -35,4 +35,6 @@ export async function registerJobHandlers(boss: PgBoss): Promise<void> {
   await registerDocumentChecks(boss);
   // Feature 008 (T094): the on-demand billing-export job (heavy ExcelJS generation off the request path).
   await registerBillingExport(boss);
+  // 2026-08-18: o TERCEIRO job agendado — a varredura das viagens que o cliente retirou do portal.
+  await registerPortalWithdrawn(boss);
 }
