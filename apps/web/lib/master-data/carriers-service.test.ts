@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { auditLogs, carriers, db, users } from "@brazil-tms/db";
-import { Conflict } from "@/lib/api/respond";
+import { NotFound } from "@/lib/api/respond";
 import { archiveCarrier, createCarrier, listCarriers, updateCarrier } from "./carriers-service";
 
 /**
@@ -97,6 +97,6 @@ describe.skipIf(!hasDb)("carriers-service (integration)", () => {
   it("update of a missing carrier throws NOT_FOUND", async () => {
     await expect(
       updateCarrier("00000000-0000-0000-0000-000000000000", { name: "X" }, actorId),
-    ).rejects.toBeInstanceOf(Conflict);
+    ).rejects.toBeInstanceOf(NotFound);
   });
 });

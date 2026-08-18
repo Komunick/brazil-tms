@@ -1,0 +1,1 @@
+ALTER TABLE "trips" ADD COLUMN "customer_fields" jsonb;

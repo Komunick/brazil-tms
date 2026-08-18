@@ -83,7 +83,12 @@ export async function acknowledgeAlert(alertId: string, actorUserId: string): Pr
   const now = new Date();
   const updated = await db
     .update(alerts)
-    .set({ state: "acknowledged", acknowledgedByUserId: actorUserId, acknowledgedAt: now, updatedAt: now })
+    .set({
+      state: "acknowledged",
+      acknowledgedByUserId: actorUserId,
+      acknowledgedAt: now,
+      updatedAt: now,
+    })
     .where(and(eq(alerts.id, alertId), inArray(alerts.state, ["active", "acknowledged"])))
     .returning();
   const row = updated[0];
@@ -91,6 +96,36 @@ export async function acknowledgeAlert(alertId: string, actorUserId: string): Pr
     // Either the id does not exist or it is already resolved (auto-cleared).
     throw new Conflict("STALE_ALERT", "O alerta já foi resolvido.");
   }
+  return {
+    id: row.id,
+    tripId: row.tripId,
+    alertCase: row.alertCase,
+    severity: row.severity,
+    state: row.state,
+    createdAt: row.createdAt.toISOString(),
+    acknowledgedByUserId: row.acknowledgedByUserId,
+    acknowledgedByName: null,
+    acknowledgedAt: row.acknowledgedAt ? row.acknowledgedAt.toISOString() : null,
+    autoResolvedAt: row.autoResolvedAt ? row.autoResolvedAt.toISOString() : null,
+  };
+}
+
+/**
+ * Undo an acknowledgement (2026-08-15): acknowledged → active, forgetting who/when. Acknowledging is
+ * one click and silences the alert until its condition clears, so a misclick needed a way back — and
+ * without one the surface was a one-way door. Idempotent on an already-active alert; a `resolved` one
+ * is stale (its condition cleared on its own) ⇒ `STALE_ALERT`. Like acknowledging, NOT an audit
+ * action: this is view triage, not a domain mutation.
+ */
+export async function unacknowledgeAlert(alertId: string): Promise<AlertDto> {
+  const now = new Date();
+  const updated = await db
+    .update(alerts)
+    .set({ state: "active", acknowledgedByUserId: null, acknowledgedAt: null, updatedAt: now })
+    .where(and(eq(alerts.id, alertId), inArray(alerts.state, ["active", "acknowledged"])))
+    .returning();
+  const row = updated[0];
+  if (!row) throw new Conflict("STALE_ALERT", "O alerta já foi resolvido.");
   return {
     id: row.id,
     tripId: row.tripId,
@@ -115,6 +150,8 @@ export interface AlertListItem {
   state: string;
   createdAt: string;
   acknowledgedAt: string | null;
+  /** Who silenced it — a name, never the raw user id: the list is read by people, not by machines. */
+  acknowledgedByName: string | null;
 }
 
 export interface AlertListResult {
@@ -131,7 +168,9 @@ export interface AlertListResult {
  * for the board + dashboard surfaces (FR-023). Optional `state`/`tripId` narrow the list; resolved
  * rows are always excluded.
  */
-export async function listAlerts(filters: { state?: string; tripId?: string } = {}): Promise<AlertListResult> {
+export async function listAlerts(
+  filters: { state?: string; tripId?: string } = {},
+): Promise<AlertListResult> {
   const conditions = [inArray(alerts.state, ["active", "acknowledged"])];
   if (filters.state === "active" || filters.state === "acknowledged") {
     conditions[0] = eq(alerts.state, filters.state);
@@ -143,12 +182,17 @@ export async function listAlerts(filters: { state?: string; tripId?: string } = 
       id: alerts.id,
       tripId: alerts.tripId,
       externalTripId: trips.externalTripId,
-      customerName: sql<string | null>`(select c.name from customers c where c.id = ${trips.customerId})`,
+      customerName: sql<
+        string | null
+      >`(select c.name from customers c where c.id = ${trips.customerId})`,
       alertCase: alerts.alertCase,
       severity: alerts.severity,
       state: alerts.state,
       createdAt: alerts.createdAt,
       acknowledgedAt: alerts.acknowledgedAt,
+      acknowledgedByName: sql<
+        string | null
+      >`(select u.name from users u where u.id = ${alerts.acknowledgedByUserId})`,
     })
     .from(alerts)
     .leftJoin(trips, eq(alerts.tripId, trips.id))
@@ -173,6 +217,7 @@ export async function listAlerts(filters: { state?: string; tripId?: string } = 
       state: r.state,
       createdAt: r.createdAt.toISOString(),
       acknowledgedAt: r.acknowledgedAt ? r.acknowledgedAt.toISOString() : null,
+      acknowledgedByName: r.acknowledgedByName,
     })),
     counts: { total: rows.length, byCase, bySeverity },
   };

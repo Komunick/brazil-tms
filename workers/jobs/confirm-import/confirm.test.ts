@@ -10,10 +10,13 @@ import {
   importBatches,
   importRows,
   importTemplates,
+  lanes,
   locations,
+  statusMappings,
   tripAssignments,
   tripEvents,
   trips,
+  updateOperationalFields,
   users,
   vehicles,
 } from "@brazil-tms/db";
@@ -84,6 +87,7 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
           { source: "destination", target: "destinationCode" },
           { source: "pickup_start", target: "plannedPickupWindowStart" },
           { source: "vehicle", target: "plannedVehicleType" },
+          { source: "status", target: "statusLabel" },
         ],
         parsingRules: {
           dateFormats: ["yyyy-MM-dd HH:mm"],
@@ -92,9 +96,17 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
           thousandSeparator: ".",
         },
         requiredOverrides: [],
+        // The customer's words for "this one is over" — the config the closing/cancelling path reads.
+        closedStatusLabels: ["FINALIZADA", "CANCELADA"],
       })
       .returning();
     templateId = template[0]!.id;
+
+    // The customer's word for "on the road" (`status_mappings` — the config that lets the import say
+    // where a trip IS, not just that it ended).
+    await db
+      .insert(statusMappings)
+      .values({ customerId, customerLabel: "EM VIAGEM", internalStatus: "in_transit" });
 
     // Resources for the in-test assignment (owned ⇒ no carrier required; far-future expiries ⇒ no
     // documentation finding; `truck` matches the CSV `Truck` vehicle so no type-mismatch BLOCK).
@@ -112,7 +124,10 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
     const vehicle = await db
       .insert(vehicles)
       .values({
-        plate: uniq("PLT").slice(0, 12),
+        // Unique WITHIN the 12 chars a plate allows: `uniq(...)` puts its randomness at the end, so
+        // slicing the front kept only the timestamp and two runs in the same second collided on
+        // `vehicles_plate_unique` — a flake that only showed up when the suite ran back to back.
+        plate: `PLT${Math.random().toString(36).slice(2, 11).toUpperCase()}`,
         vehicleType: "truck",
         ownershipType: "owned",
         status: "active",
@@ -147,6 +162,9 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
     }
     for (const cid of createdCustomerIds) {
       await db.delete(importTemplates).where(eq(importTemplates.customerId, cid));
+      await db.delete(statusMappings).where(eq(statusMappings.customerId, cid));
+      // Creating a trip registers its route, and that lane points at these locations.
+      await db.delete(lanes).where(eq(lanes.customerId, cid));
       await db.delete(locations).where(eq(locations.customerId, cid));
       await db.delete(auditLogs).where(eq(auditLogs.entityId, cid));
       await db.delete(customers).where(eq(customers.id, cid));
@@ -198,10 +216,7 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
 
     await runConfirm({ batchId, actorUserId: actorId });
 
-    const created = await db
-      .select()
-      .from(trips)
-      .where(eq(trips.importBatchId, batchId));
+    const created = await db.select().from(trips).where(eq(trips.importBatchId, batchId));
     for (const t of created) createdTripIds.push(t.id);
 
     expect(created).toHaveLength(2);
@@ -215,10 +230,7 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
     expect(externalIds).toEqual([extA, extB].sort());
 
     // Rows are linked + applied.
-    const rows = await db
-      .select()
-      .from(importRows)
-      .where(eq(importRows.importBatchId, batchId));
+    const rows = await db.select().from(importRows).where(eq(importRows.importBatchId, batchId));
     for (const r of rows) {
       expect(r.appliedAt).not.toBeNull();
       expect(r.targetTripId).not.toBeNull();
@@ -376,7 +388,12 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
 
     const { trip: assigned } = await assignTrip(
       tripId,
-      { driverId, vehicleId, expectedFromStatus: "received", overrideReason: "Slice 015 — US2 setup" },
+      {
+        driverId,
+        vehicleId,
+        expectedFromStatus: "received",
+        overrideReason: "Slice 015 — US2 setup",
+      },
       actorId,
     );
     expect(assigned.currentStatus).toBe("assigned");
@@ -419,7 +436,12 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
     createdTripIds.push(trip.id);
     await assignTrip(
       trip.id,
-      { driverId, vehicleId, expectedFromStatus: "received", overrideReason: "Slice 015 — race setup" },
+      {
+        driverId,
+        vehicleId,
+        expectedFromStatus: "received",
+        overrideReason: "Slice 015 — race setup",
+      },
       actorId,
     );
 
@@ -464,5 +486,128 @@ describe.skipIf(!hasDb)("confirm job — full pipeline (integration)", () => {
     expect(after.id).toBe(trip.id);
     expect(after.currentStatus).toBe("assigned"); // never reverted to received.
     expect(after.plannedRouteNotes).toBe("RACE-UPDATED");
+  });
+
+  it("a re-import NEVER overwrites what the operation typed (the reason the spreadsheet can die)", async () => {
+    const ext = uniq("SH-OPFIELDS");
+    const csv = [
+      "trip_id,origin,destination,pickup_start,vehicle,status",
+      `${ext},ORIG,DEST,2026-08-20 07:00,Truck,`,
+    ].join("\n");
+    const batch1 = await seedBatchWithCsv(csv);
+    await runParse({ batchId: batch1, storageKey: originalStorageKey(batch1) });
+    await runValidate({ batchId: batch1 });
+    await runDetectDuplicates({ batchId: batch1 });
+    await runConfirm({ batchId: batch1, actorUserId: actorId });
+
+    const trip = (await db.select().from(trips).where(eq(trips.importBatchId, batch1)))[0]!;
+    createdTripIds.push(trip.id);
+
+    // The operation fills in its own fields here, in the TMS.
+    await updateOperationalFields(trip.id, { smRaster: "SM-4477", cte: "35260812" }, actorId);
+
+    // Next week's file arrives with the same trip, a corrected pickup, and no idea those exist.
+    const csv2 = [
+      "trip_id,origin,destination,pickup_start,vehicle,status",
+      `${ext},ORIG,DEST,2026-08-20 09:30,Truck,`,
+    ].join("\n");
+    const batch2 = await seedBatchWithCsv(csv2);
+    await runParse({ batchId: batch2, storageKey: originalStorageKey(batch2) });
+    await runValidate({ batchId: batch2 });
+    await runDetectDuplicates({ batchId: batch2 });
+    await runConfirm({ batchId: batch2, actorUserId: actorId });
+
+    const after = (await db.select().from(trips).where(eq(trips.id, trip.id)).limit(1))[0]!;
+    // The plan followed the file …
+    expect(after.plannedPickupWindowStart).not.toEqual(trip.plannedPickupWindowStart);
+    // … and the operation's own entries were left exactly alone.
+    expect(after.operationalFields).toEqual({ smRaster: "SM-4477", cte: "35260812" });
+  });
+
+  it("a CANCELLED row the TMS never had is imported and cancelled; a FINISHED one is skipped", async () => {
+    const cancelled = uniq("SH-CANC");
+    const finished = uniq("SH-FIN");
+    const csv = [
+      "trip_id,origin,destination,pickup_start,vehicle,status",
+      `${cancelled},ORIG,DEST,2026-08-12 07:00,Truck,CANCELADA`,
+      `${finished},ORIG,DEST,2026-08-12 08:00,Truck,FINALIZADA`,
+    ].join("\n");
+    const batchId = await seedBatchWithCsv(csv);
+    await runParse({ batchId, storageKey: originalStorageKey(batchId) });
+    await runValidate({ batchId });
+    await runDetectDuplicates({ batchId });
+    await runConfirm({ batchId, actorUserId: actorId });
+
+    // The cancelled one EXISTS, so the operation can answer "why didn't this run?" …
+    const canc = await db
+      .select()
+      .from(trips)
+      .where(and(eq(trips.customerId, customerId), eq(trips.externalTripId, cancelled)));
+    expect(canc).toHaveLength(1);
+    createdTripIds.push(canc[0]!.id);
+    expect(canc[0]!.currentStatus).toBe("cancelled");
+    expect(canc[0]!.cancellationReasonCode).toBe("CANCELADA");
+    expect(canc[0]!.cancelledAt).not.toBeNull();
+    // … born terminal: it never sat in the queue, and the walk is recorded as coming from the import.
+    const events = await db.select().from(tripEvents).where(eq(tripEvents.tripId, canc[0]!.id));
+    expect(events.every((e) => e.source === "import" && e.eventTimestamp === null)).toBe(true);
+    expect(events.some((e) => e.statusAfter === "cancelled")).toBe(true);
+
+    // … while a trip that simply ran to the end is NOT created: nobody can act on it.
+    const fin = await db
+      .select()
+      .from(trips)
+      .where(and(eq(trips.customerId, customerId), eq(trips.externalTripId, finished)));
+    expect(fin).toHaveLength(0);
+  });
+
+  it("the customer's status column moves an assigned trip to in_transit (status_mappings)", async () => {
+    const ext = uniq("SH-STATUS");
+    // Batch 1 — the trip is created and assigned: it has a driver, so "on the road" is honest.
+    const csv1 = [
+      "trip_id,origin,destination,pickup_start,vehicle,status",
+      `${ext},ORIG,DEST,2026-08-11 07:00,Truck,FALTA ATRIBUIR`,
+    ].join("\n");
+    const batch1 = await seedBatchWithCsv(csv1);
+    await runParse({ batchId: batch1, storageKey: originalStorageKey(batch1) });
+    await runValidate({ batchId: batch1 });
+    await runDetectDuplicates({ batchId: batch1 });
+    await runConfirm({ batchId: batch1, actorUserId: actorId });
+    const trip = (await db.select().from(trips).where(eq(trips.importBatchId, batch1)))[0]!;
+    createdTripIds.push(trip.id);
+    // An unmapped label ("FALTA ATRIBUIR" is not configured here) moves nothing.
+    expect(trip.currentStatus).toBe("received");
+    await assignTrip(
+      trip.id,
+      {
+        driverId,
+        vehicleId,
+        expectedFromStatus: "received",
+        overrideReason: "Status vindo da origem — preparação",
+      },
+      actorId,
+    );
+
+    // Batch 2 — the same trip, now reported EM VIAGEM by the customer's own system.
+    const csv2 = [
+      "trip_id,origin,destination,pickup_start,vehicle,status",
+      `${ext},ORIG,DEST,2026-08-11 07:00,Truck,EM VIAGEM`,
+    ].join("\n");
+    const batch2 = await seedBatchWithCsv(csv2);
+    await runParse({ batchId: batch2, storageKey: originalStorageKey(batch2) });
+    await runValidate({ batchId: batch2 });
+    await runDetectDuplicates({ batchId: batch2 });
+    await runConfirm({ batchId: batch2, actorUserId: actorId });
+
+    const after = (await db.select().from(trips).where(eq(trips.id, trip.id)).limit(1))[0]!;
+    expect(after.currentStatus).toBe("in_transit");
+
+    // The trip carries the intermediate hops, all sourced `import` and none with an invented time.
+    const events = await db.select().from(tripEvents).where(eq(tripEvents.tripId, trip.id));
+    const fromImport = events.filter((e) => e.source === "import");
+    expect(fromImport.map((e) => e.statusAfter)).toEqual(
+      expect.arrayContaining(["confirmed", "at_origin", "in_transit"]),
+    );
+    expect(fromImport.every((e) => e.eventTimestamp === null)).toBe(true);
   });
 });

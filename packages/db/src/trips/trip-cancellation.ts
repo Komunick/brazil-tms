@@ -8,7 +8,7 @@ import {
   type TripStatus,
 } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
-import { Conflict } from "../errors";
+import { Conflict, NotFound } from "../errors";
 import { recomputeTripSla } from "./sla";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
 
@@ -64,7 +64,7 @@ export async function cancelTrip(
 
   const currentRows = await db.select().from(trips).where(eq(trips.id, tripId)).limit(1);
   const row = currentRows[0];
-  if (!row) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+  if (!row) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
 
   // Role-scoped source-status limit (017 FR-007 — §18 Dispatcher "Limited"), before the generic
   // legality check so the caller gets the precise refusal reason.
@@ -138,7 +138,7 @@ export async function cancelTrip(
     await recomputeTripSla(tx, tripId);
 
     const detail = await loadTripDetail(tx, tripId);
-    if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+    if (!detail) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
     return detail;
   });
 }

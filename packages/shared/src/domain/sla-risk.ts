@@ -69,6 +69,38 @@ export interface SlaContext {
   openHighSeverityExceptionCount: number;
   /** Latest `status_change` event ts for the current status (time-in-status leg). */
   currentStatusEnteredAt: Date | null;
+  /**
+   * The lane's measured transit (`lanes.expected_transit_minutes`), used ONLY as the last resort for
+   * a delivery deadline — see `deliveryDeadline`. Null when the lane is unknown or unmeasured.
+   */
+  laneExpectedTransitMinutes?: number | null;
+}
+
+/**
+ * When is this trip due at destination? (2026-08-16)
+ *
+ * In order of authority:
+ *   1. the delivery window's END — what the customer committed to;
+ *   2. its START — a promise stated as an instant (the customer's portal names an arrival and no
+ *      departure, since nothing departs the last stop);
+ *   3. departure + the LANE's measured transit — our own history, when the customer stated no
+ *      delivery time at all.
+ *
+ * Step 3 is a safety net, not a preference: a customer's word always outranks our average. It exists
+ * because a trip with no stated delivery time was invisible to `delayed_destination_arrival` — it
+ * could run a week late in silence. What it costs to be honest about: an alert raised on step 3 says
+ * "late against what this lane usually takes", not "late against what was promised".
+ */
+export function deliveryDeadline(ctx: SlaContext): Date | null {
+  if (ctx.plannedDeliveryWindowEnd != null) return ctx.plannedDeliveryWindowEnd;
+  if (ctx.plannedDeliveryWindowStart != null) return ctx.plannedDeliveryWindowStart;
+
+  const transit = ctx.laneExpectedTransitMinutes;
+  if (transit == null || transit <= 0) return null;
+  // Measured from DEPARTURE, which is what the lane's transit measures (`departed` →
+  // `destination_arrived`). Falls back to the window's start when the customer states only that.
+  const departure = ctx.plannedPickupWindowEnd ?? ctx.plannedPickupWindowStart;
+  return departure == null ? null : plusMinutes(departure, transit);
 }
 
 /**
@@ -132,13 +164,25 @@ export function evaluateSlaRisk(
       ? minusMinutes(ctx.plannedPickupWindowStart, policy.confirmationCutoffMinutes)
       : null;
 
+  // Both assignment alarms only make sense BEFORE the truck leaves (2026-08-16). Asking "who is
+  // driving this?" about a trip that already departed — or already delivered — is noise about a
+  // decision whose moment has passed: on tmsdev that was 244 alerts, every one of them on a trip that
+  // had arrived at its destination. What the trip needs then is its record closed, not a driver.
+  const beforeDeparture = idx < STATUS_INDEX("in_transit");
+
   // missing_assignment (At Risk) — no current assignment past the lead-time point (FR-017).
-  if (!ctx.assignmentPresent && confirmationDeadline != null && ctx.now >= confirmationDeadline) {
+  if (
+    beforeDeparture &&
+    !ctx.assignmentPresent &&
+    confirmationDeadline != null &&
+    ctx.now >= confirmationDeadline
+  ) {
     fired.add("missing_assignment");
   }
 
   // missed_confirmation (At Risk) — assigned but not confirmed by the lead-time point (FR-017).
   if (
+    beforeDeparture &&
     ctx.assignmentPresent &&
     ctx.confirmedAt == null &&
     confirmationDeadline != null &&
@@ -174,11 +218,14 @@ export function evaluateSlaRisk(
     fired.add("delayed_departure");
   }
 
-  // delayed_destination_arrival (Late) — not yet at destination past delivery window + tol (FR-015).
+  // delayed_destination_arrival (Late) — not yet at destination past the delivery deadline + tol
+  // (FR-015). The deadline is the customer's word when there is one, and the lane's measured transit
+  // when there is none (`deliveryDeadline`).
+  const dueAtDestination = deliveryDeadline(ctx);
   if (
     beforeDestination &&
-    ctx.plannedDeliveryWindowEnd != null &&
-    ctx.now > plusMinutes(ctx.plannedDeliveryWindowEnd, policy.deliveryToleranceMinutes)
+    dueAtDestination != null &&
+    ctx.now > plusMinutes(dueAtDestination, policy.deliveryToleranceMinutes)
   ) {
     fired.add("delayed_destination_arrival");
   }

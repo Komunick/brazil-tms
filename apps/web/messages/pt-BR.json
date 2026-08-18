@@ -1,6 +1,8 @@
 {
   "Common": {
     "appName": "Brazil Transports TMS",
+    "collapseMenu": "Recolher menu",
+    "expandMenu": "Expandir menu",
     "save": "Salvar",
     "cancel": "Cancelar",
     "create": "Criar",
@@ -327,8 +329,10 @@
     "trailer_status_change": "Status do reboque alterado",
     "trip_create": "Viagem criada",
     "trip_plan_update": "Plano da viagem atualizado",
+    "trip_fields_update": "Dados da operação atualizados",
     "trip_status_change": "Status da viagem alterado",
     "trip_cancel": "Viagem cancelada",
+    "trip_purge_withdrawn": "Viagem retirada do portal (removida)",
     "trip_assign": "Viagem atribuída",
     "trip_reassign": "Atribuição substituída",
     "trip_unassign": "Atribuição removida",
@@ -630,6 +634,67 @@
       "archivedMsg": "Rota arquivada."
     }
   },
+  "PortalImport": {
+    "title": "Execução do portal",
+    "subtitle": "Registra os horários reais das viagens que já existem no TMS — chegada, saída e chegada no destino, como o portal do cliente registrou.",
+    "fileLabel": "Arquivo do portal (.csv)",
+    "modeLabel": "De qual aba do portal é este arquivo?",
+    "mode": {
+      "execution": "Concluído (execução)",
+      "plan": "Planejado (plano)"
+    },
+    "modeHint": {
+      "execution": "Registra os horários reais nas viagens que já existem. Nunca cria viagem.",
+      "plan": "Cria as viagens do período e atualiza o plano das que já existem."
+    },
+    "planApplied": "{created} viagens criadas · {updated} planos atualizados",
+    "planMilestones": "{count} pernas já vieram com horário real e foram registradas.",
+    "cancelledAtPortal": "Criadas já canceladas",
+    "cancelledAtPortalHint": "O portal reporta cancelada — entram para consulta.",
+    "unchanged": "Sem mudança",
+    "unchangedHint": "O plano no TMS já era esse.",
+    "failed": "Falharam",
+    "failedHint": "Reportadas com o motivo; o resto do arquivo entrou.",
+    "hint": "Use o export da aba \"Concluído\" do portal. Esta importação nunca cria viagem: ela só marca o que aconteceu nas viagens que o TMS já tem.",
+    "import": "Importar execução",
+    "importing": "Registrando a execução…",
+    "importingHint": "Uma linha por parada; cada viagem é atualizada com os horários que o cliente registrou.",
+    "genericError": "Não foi possível importar o arquivo.",
+    "applied": "{count} pernas atualizadas com horário real",
+    "readSummary": "{rows} linhas lidas · {trips} viagens · {legs} pernas",
+    "notFound": "Sem viagem no TMS",
+    "notFoundHint": "A viagem não foi importada da programação.",
+    "closed": "Já encerradas",
+    "closedHint": "Concluídas ou canceladas — não alteradas.",
+    "alreadyAhead": "TMS já à frente",
+    "alreadyAheadHint": "O arquivo não traz nada novo.",
+    "noMilestones": "Sem horário ainda",
+    "noMilestonesHint": "O portal ainda não registrou a chegada.",
+    "unknownStations": "{count} estações não reconhecidas",
+    "unknownStationsHint": "Estas pernas não foram atualizadas. Cadastre o local ou vincule o código da estação.",
+    "rejected": "{count} linhas não utilizadas",
+    "rejectedRow": "linha {row} · {id}"
+  },
+  "RegistryImport": {
+    "title": "Importar cadastro (motoristas, veículos e reboques)",
+    "subtitle": "Envie a planilha de programação: as abas MOTORISTAS e VEÍCULOSCARRETAS alimentam os cadastros de frota.",
+    "fileLabel": "Planilha (.xlsx)",
+    "import": "Importar cadastro",
+    "importing": "Importando cadastro...",
+    "importingHint": "Lendo as abas e gravando. Pode levar alguns segundos em planilhas grandes — não feche a página.",
+    "mappingHint": "MOTORISTA → Nome · CPF → CPF · TELEFONE → Telefone · VENCIMENTO CNH → Validade da CNH · PLACA → Placa · TIPO → Tipo · TECNOLOGIA → Rastreador · CARRETA e CARRETA 2 → Reboques. Reenviar a planilha corrigida atualiza os cadastros; nada é duplicado.",
+    "counts": "{created} criados · {updated} atualizados · {unchanged} sem mudança",
+    "entity": {
+      "drivers": "Motoristas",
+      "vehicles": "Veículos",
+      "trailers": "Reboques"
+    },
+    "row": "linha {row}",
+    "warnings": "{count} avisos",
+    "warningsHint": "Importado assim mesmo — confira e corrija na origem.",
+    "missingSheets": "Abas não encontradas na planilha: {sheets}.",
+    "genericError": "Não foi possível importar o cadastro."
+  },
   "Imports": {
     "title": "Importar Viagens",
     "subtitle": "Importe viagens pré-planejadas dos clientes a partir de arquivos CSV ou XLSX.",
@@ -639,6 +704,17 @@
     "customer": "Cliente",
     "selectCustomer": "Selecione um cliente",
     "customersLoadError": "Não foi possível carregar os clientes.",
+    "working": {
+      "received": "Arquivo recebido, entrando na fila...",
+      "parsing": "Lendo a planilha...",
+      "validating": "Validando as linhas...",
+      "confirming": "Criando as viagens e vinculando os recursos..."
+    },
+    "workingApplied": "{done} de {total} aplicadas",
+    "workingHint": "Pode levar alguns minutos em arquivos grandes. A tela se atualiza sozinha — você pode sair e voltar depois.",
+    "template": "Modelo de importação",
+    "templateStandard": "Formato padrão",
+    "templateHint": "O modelo do cliente lê a planilha dele como ela é. O formato padrão espera as colunas do modelo de exemplo.",
     "file": "Arquivo",
     "fileHint": "Formatos aceitos: .csv ou .xlsx.",
     "downloadSample": "Baixar modelo (.csv)",
@@ -651,21 +727,42 @@
     "expectedFormatExample": "ex.",
     "expectedFormatNote": "Os exemplos abaixo são ilustrativos. As datas seguem o formato dia/mês/ano horas:minutos (ex.: 01/06/2026 08:00, fuso America/São Paulo). Os códigos de origem e destino variam por cliente — use os locais cadastrados do cliente selecionado, não os códigos de exemplo.",
     "expectedColumns": {
-      "id_viagem": { "label": "ID externo da viagem", "example": "VIAGEM-001" },
-      "origem": { "label": "Código do local de origem", "example": "CD-SP" },
-      "destino": { "label": "Código do local de destino", "example": "CD-RJ" },
+      "id_viagem": {
+        "label": "ID externo da viagem",
+        "example": "VIAGEM-001"
+      },
+      "origem": {
+        "label": "Código do local de origem",
+        "example": "CD-SP"
+      },
+      "destino": {
+        "label": "Código do local de destino",
+        "example": "CD-RJ"
+      },
       "janela_coleta_inicio": {
         "label": "Início da janela de coleta",
         "example": "01/06/2026 08:00"
       },
-      "janela_coleta_fim": { "label": "Fim da janela de coleta", "example": "01/06/2026 12:00" },
+      "janela_coleta_fim": {
+        "label": "Fim da janela de coleta",
+        "example": "01/06/2026 12:00"
+      },
       "janela_entrega_inicio": {
         "label": "Início da janela de entrega",
         "example": "02/06/2026 08:00"
       },
-      "janela_entrega_fim": { "label": "Fim da janela de entrega", "example": "02/06/2026 12:00" },
-      "tipo_veiculo": { "label": "Tipo de veículo", "example": "truck" },
-      "status": { "label": "Situação informada pelo cliente", "example": "Planejada" }
+      "janela_entrega_fim": {
+        "label": "Fim da janela de entrega",
+        "example": "02/06/2026 12:00"
+      },
+      "tipo_veiculo": {
+        "label": "Tipo de veículo",
+        "example": "truck"
+      },
+      "status": {
+        "label": "Situação informada pelo cliente",
+        "example": "Planejada"
+      }
     },
     "import": "Importar",
     "uploading": "Enviando...",
@@ -715,6 +812,19 @@
     "manualError": "Não foi possível criar a viagem. Verifique os dados e tente novamente.",
     "historyTitle": "Histórico de Importações",
     "historySubtitle": "Lotes de importação enviados, do mais recente ao mais antigo.",
+    "historySource": "Origem",
+    "source": {
+      "spreadsheet": "Planilha",
+      "portal_plan": "Portal · Planejado",
+      "portal_execution": "Portal · Execução",
+      "portal_robot_plan": "Robô · Planejado",
+      "portal_robot_in_progress": "Robô · Em curso",
+      "portal_robot_execution": "Robô · Execução",
+      "portal_robot_history": "Robô · Histórico"
+    },
+    "summaryPlan": "{created} criadas · {updated} atualizadas · {unchanged} sem mudança · {cancelled} canceladas",
+    "summaryExecution": "{applied} com horário real · {notFound} sem viagem · {ahead} já à frente",
+    "historyUnknownStations": "{count} estações não reconhecidas",
     "historyFileName": "Arquivo",
     "historyTime": "Data/Hora",
     "historyCounts": "Resumo",
@@ -879,6 +989,7 @@
     "toco": "Toco",
     "truck": "Truck",
     "bitruck": "Bitruck",
+    "cavalo": "Cavalo",
     "carreta": "Carreta",
     "carreta_ls": "Carreta LS",
     "bitrem": "Bitrem",
@@ -907,8 +1018,20 @@
   "Trips": {
     "title": "Torre de Controle",
     "subtitle": "Acompanhe, busque e filtre todas as viagens.",
+    "operationalFields": {
+      "title": "Dados da operação",
+      "hint": "Preenchidos por vocês, aqui. A importação nunca sobrescreve o que for digitado neste bloco.",
+      "save": "Salvar",
+      "saving": "Salvando…",
+      "saved": "Salvo.",
+      "errorClosed": "A viagem está encerrada: estes campos não podem mais ser alterados.",
+      "errorGeneric": "Não foi possível salvar. Tente novamente."
+    },
     "status": {
-      "received": "Recebida",
+      "received": "P/Atribuir",
+      "in_analysis": "Em Análise",
+      "to_assign": "P/Atribuir",
+      "awaiting_arrival": "Ag. comparecimento",
       "assigned": "Atribuída",
       "confirmed": "Confirmada",
       "at_origin": "Na origem",
@@ -947,6 +1070,8 @@
       "filterSlaStatus": "Risco de SLA",
       "filterCustomer": "Cliente",
       "filterStatus": "Status",
+      "filterStatusEmptyShow": "+{count} sem viagens",
+      "filterStatusEmptyHide": "Ocultar status sem viagens",
       "filterBillingStatus": "Faturamento",
       "filterOrigin": "Origem",
       "filterDestination": "Destino",
@@ -959,6 +1084,8 @@
       "assignedAll": "Todas",
       "assignedYes": "Atribuídas",
       "assignedNo": "Não atribuídas",
+      "filterDispatchQueue": "Fila do despacho",
+      "awaitingAssignment": "Aguardando atribuição",
       "filterPickupFrom": "Coleta de",
       "filterPickupTo": "Coleta até",
       "filterScope": "Abrangência",
@@ -1094,6 +1221,7 @@
       "trip": {
         "create": "Viagem criada",
         "plan_update": "Plano atualizado",
+        "fields_update": "Dados da operação atualizados",
         "status_change": "Status alterado",
         "cancel": "Viagem cancelada",
         "assign": "Viagem atribuída",
@@ -1168,17 +1296,17 @@
       "title": "Painel do dia",
       "subtitle": "O que precisa de atenção hoje.",
       "tripsToday": "Viagens de hoje por status",
-      "billingPending": "Faturamento pendente",
+      "tripsTomorrow": "Viagens de amanhã por status",
+      "tripsMonth": "Viagens do mês por status",
       "tripsAtRisk": "Viagens em risco de SLA",
-      "unassignedTrips": "Viagens sem atribuição",
-      "activeExceptions": "Exceções ativas",
-      "onTimePickup": "Coletas no prazo",
-      "onTimeArrival": "Entregas no prazo",
-      "completedMissingDocuments": "Concluídas sem documentos",
+      "awaitingAssignment": "Aguardando atribuição",
       "placeholder": "Disponível em uma próxima etapa.",
       "viewInBoard": "Ver na Torre de Controle",
       "empty": "Nenhuma viagem com coleta hoje.",
+      "emptyTomorrow": "Nenhuma viagem com coleta amanhã.",
+      "emptyMonth": "Nenhuma viagem neste mês.",
       "loadError": "Não foi possível carregar o painel.",
+      "reconnecting": "Sem conexão com o servidor — mostrando os últimos números. A tela se atualiza sozinha quando voltar.",
       "trips": "{count} viagens"
     }
   },
@@ -1320,9 +1448,16 @@
   "Alerts": {
     "title": "Alertas",
     "surfaceTitle": "Alertas ativos",
+    "activeTrips": "{count, plural, =0 {nenhuma viagem} one {# viagem} other {# viagens}}",
+    "activeAlerts": "{count, plural, one {# aviso} other {# avisos}}",
     "acknowledge": "Reconhecer",
     "acknowledged": "Reconhecido",
     "acknowledgedBy": "Reconhecido por",
+    "acknowledgedByAt": "Reconhecido por {name} · {at}",
+    "showAcknowledged": "Mostrar reconhecidos",
+    "hideAcknowledged": "Ocultar reconhecidos ({count})",
+    "undoAcknowledge": "Desfazer",
+    "emptyIncludingAcknowledged": "Nenhum alerta ativo ou reconhecido.",
     "empty": "Nenhum alerta ativo.",
     "loadError": "Não foi possível carregar os alertas.",
     "trip": "Viagem",
@@ -1344,7 +1479,10 @@
       "STALE_ALERT": "O alerta já foi resolvido.",
       "FORBIDDEN": "Você não tem permissão para esta ação.",
       "REQUEST_FAILED": "Não foi possível concluir a operação. Tente novamente."
-    }
+    },
+    "page": "Página {current} de {total}",
+    "previous": "Anterior",
+    "next": "Próxima"
   },
   "Dispatch": {
     "title": "Expedição",
@@ -1352,6 +1490,17 @@
     "boardEmpty": "Nenhuma viagem aguardando atribuição.",
     "boardLoadError": "Não foi possível carregar o quadro de expedição.",
     "queueTitle": "Fila de atribuição",
+    "searchPlaceholder": "Buscar por ID, cliente ou origem/destino",
+    "searchEmpty": "Nenhuma viagem na fila para \"{term}\".",
+    "pickupFrom": "Coleta de",
+    "pickupTo": "até",
+    "dateEmpty": "Nenhuma viagem na fila no período selecionado.",
+    "datePreset": {
+      "today": "Hoje",
+      "next7": "Próximos 7 dias",
+      "fromToday": "De hoje em diante",
+      "all": "Tudo"
+    },
     "tripLabel": "Viagem",
     "noExternalId": "(sem ID externo)",
     "pickup": "Coleta",
@@ -1362,6 +1511,11 @@
     "openAssign": "Atribuir recursos",
     "panelTitle": "Atribuição de recursos",
     "currentAssignment": "Atribuição atual",
+    "legsTitle": "Programação {id} · Perna {leg} de {total}",
+    "legsCurrent": "← você está aqui",
+    "legsOpen": "abrir",
+    "customerFields": "Dados do cliente",
+    "customerFieldsHint": "Colunas da planilha do cliente que o TMS não tem campo próprio — informativas, vindas da importação.",
     "noCurrentAssignment": "Nenhum recurso atribuído a esta viagem.",
     "history": "Histórico de atribuições",
     "noHistory": "Sem histórico de atribuições anteriores.",
@@ -1394,7 +1548,7 @@
     "confirming": "Confirmando...",
     "unassigning": "Removendo...",
     "unassignConfirmTitle": "Remover atribuição",
-    "unassignConfirmBody": "Os recursos serão removidos e a viagem voltará para Recebida. O histórico é mantido.",
+    "unassignConfirmBody": "Os recursos serão removidos e a viagem voltará para a fila de despacho. O histórico é mantido.",
     "unassignConfirmAction": "Remover",
     "assignSuccess": "Atribuição salva.",
     "confirmSuccess": "Atribuição confirmada.",
@@ -1456,6 +1610,61 @@
       "NOT_FOUND": "Viagem não encontrada.",
       "VALIDATION": "Verifique os campos destacados.",
       "REQUEST_FAILED": "Não foi possível concluir a operação. Tente novamente."
+    }
+  },
+  "Spot": {
+    "newOffer": "Nova oferta de spot",
+    "dismiss": "Fechar aviso",
+    "departure": "Saída",
+    "vehicle": "Veículo",
+    "queued": "+{count} na fila",
+    "todayTitle": "Ofertas de spot hoje",
+    "todayEmpty": "Nenhuma oferta hoje.",
+    "todayMore": "e mais {count}"
+  },
+  "Wallboard": {
+    "title": "Brazil Transports · Torre",
+    "live": "ao vivo",
+    "stale": "sem atualizar",
+    "onTheRoad": "Na estrada agora",
+    "empty": "Nenhum caminhão na estrada.",
+    "late": "atraso",
+    "lateTrips": "atrasadas hoje",
+    "unassigned": "sem motorista hoje",
+    "today": "viagens hoje",
+    "more": "… e mais {count} na estrada",
+    "status": {
+      "received": "P/Atribuir",
+      "in_analysis": "Em Análise",
+      "to_assign": "P/Atribuir",
+      "awaiting_arrival": "Ag. comparecimento",
+      "assigned": "Atribuída",
+      "confirmed": "Confirmada",
+      "at_origin": "Na origem",
+      "loading": "Carregando",
+      "loaded": "Carregada",
+      "in_transit": "Em trânsito",
+      "at_destination": "No destino",
+      "unloading": "Descarregando",
+      "unloaded": "Descarregada",
+      "completed": "Concluída",
+      "billing_pending": "Faturamento pendente",
+      "billing_ready": "Pronta p/ faturar",
+      "billed": "Faturada",
+      "cancelled": "Cancelada",
+      "disputed": "Em disputa"
+    }
+  },
+  "Bsc": {
+    "source": "BSC · Shopee",
+    "stamp": "BSC de {at}",
+    "gaugeAlt": "Nota {score} no velocímetro do BSC",
+    "target": "meta {value}",
+    "stale": "sem atualizar há {age}",
+    "period": {
+      "day": "Ontem",
+      "week": "Semana",
+      "month": "Mês"
     }
   }
 }

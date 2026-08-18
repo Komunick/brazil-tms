@@ -3,7 +3,7 @@ import { db } from "../client";
 import { tripEvents, trips } from "../../schema";
 import { type AddTripNoteInput } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
-import { Conflict } from "../errors";
+import { NotFound } from "../errors";
 import { recomputeTripSla } from "./sla";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
 
@@ -20,7 +20,7 @@ export async function addTripNote(
   actorUserId: string,
 ): Promise<TripDetail> {
   const exists = await db.select({ id: trips.id }).from(trips).where(eq(trips.id, tripId)).limit(1);
-  if (!exists[0]) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+  if (!exists[0]) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
 
   return db.transaction(async (tx) => {
     await tx.insert(tripEvents).values({
@@ -46,7 +46,7 @@ export async function addTripNote(
     await recomputeTripSla(tx, tripId);
 
     const detail = await loadTripDetail(tx, tripId);
-    if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+    if (!detail) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
     return detail;
   });
 }

@@ -7,7 +7,15 @@ import {
   type SlaPolicy,
 } from "@brazil-tms/shared";
 import type { DB } from "../client";
-import { alerts, customerSlaRules, exceptions, tripAssignments, tripEvents, trips } from "../../schema";
+import {
+  alerts,
+  customerSlaRules,
+  exceptions,
+  lanes,
+  tripAssignments,
+  tripEvents,
+  trips,
+} from "../../schema";
 
 /**
  * Feature 007 — the single on-change SLA recompute (data-model §11.2, R11). Gathers the per-trip facts
@@ -84,7 +92,9 @@ export async function resolveSlaPolicy(
     .limit(1);
 
   const rule = rows[0];
-  return rule ? { policy: toPolicy(rule), ruleId: rule.id } : { policy: DEFAULT_SLA_POLICY, ruleId: null };
+  return rule
+    ? { policy: toPolicy(rule), ruleId: rule.id }
+    : { policy: DEFAULT_SLA_POLICY, ruleId: null };
 }
 
 /**
@@ -105,8 +115,13 @@ export async function recomputeTripSla(ex: SlaExecutor, tripId: string): Promise
       plannedPickupWindowEnd: trips.plannedPickupWindowEnd,
       plannedDeliveryWindowStart: trips.plannedDeliveryWindowStart,
       plannedDeliveryWindowEnd: trips.plannedDeliveryWindowEnd,
+      // The lane's measured transit — the last-resort delivery deadline for a trip whose plan states
+      // none (`deliveryDeadline`). Joined here, not stored on the trip, so a lane re-measured by
+      // `db:lanes:transit` takes effect on the next sweep instead of freezing at import time.
+      laneExpectedTransitMinutes: lanes.expectedTransitMinutes,
     })
     .from(trips)
+    .leftJoin(lanes, eq(trips.laneId, lanes.id))
     .where(eq(trips.id, tripId))
     .limit(1);
   const trip = tripRows[0];
@@ -183,6 +198,7 @@ export async function recomputeTripSla(ex: SlaExecutor, tripId: string): Promise
     assignmentPresent,
     openHighSeverityExceptionCount,
     currentStatusEnteredAt,
+    laneExpectedTransitMinutes: trip.laneExpectedTransitMinutes,
   };
 
   const { status, reasons } = evaluateSlaRisk(ctx, policy);

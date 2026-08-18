@@ -15,13 +15,7 @@ export interface ImportRowDto {
 interface ImportRowRow {
   rowNumber: number;
   outcome: "valid" | "warning" | "error" | null;
-  matchDecision:
-    | "new"
-    | "update"
-    | "no_op"
-    | "potential_duplicate"
-    | "unresolved"
-    | null;
+  matchDecision: "new" | "update" | "no_op" | "potential_duplicate" | "unresolved" | null;
   reasons: unknown;
   mapped: unknown;
   targetTripId: string | null;
@@ -54,9 +48,7 @@ export async function listRows(
 ): Promise<{ items: ImportRowDto[]; total: number }> {
   const filters: SQL[] = [eq(importRows.importBatchId, batchId)];
   if (opts.outcome) {
-    filters.push(
-      eq(importRows.outcome, opts.outcome as "valid" | "warning" | "error"),
-    );
+    filters.push(eq(importRows.outcome, opts.outcome as "valid" | "warning" | "error"));
   }
   if (opts.match) {
     filters.push(
@@ -82,14 +74,11 @@ export async function listRows(
     })
     .from(importRows)
     .where(where)
-    .orderBy(asc(importRows.rowNumber))
+    .orderBy(asc(importRows.rowNumber), asc(importRows.legNumber))
     .limit(limit)
     .offset(offset);
 
-  const totalRows = await db
-    .select({ value: count() })
-    .from(importRows)
-    .where(where);
+  const totalRows = await db.select({ value: count() }).from(importRows).where(where);
   const total = totalRows[0]?.value ?? 0;
 
   return { items: rows.map(toDto), total };

@@ -3,7 +3,7 @@ import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
 import { carriers, db } from "@brazil-tms/db";
 import type { CreateCarrierInput, UpdateCarrierInput } from "@brazil-tms/shared";
 import { writeAudit } from "@/lib/audit/write-audit";
-import { Conflict } from "@/lib/api/respond";
+import { Conflict, NotFound } from "@/lib/api/respond";
 
 /** Carrier contact (data-model §7; R8) — distinct from the customer `Contact` (has `address`, no `role`). */
 export interface CarrierContact {
@@ -110,7 +110,7 @@ export async function listCarriers(opts: ListCarriersOptions = {}): Promise<Carr
 export async function getCarrier(id: string): Promise<CarrierDto> {
   const rows = await db.select().from(carriers).where(eq(carriers.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new Conflict("NOT_FOUND", "Transportadora não encontrada.");
+  if (!row) throw new NotFound("NOT_FOUND", "Transportadora não encontrada.");
   return toDto(row);
 }
 
@@ -156,7 +156,7 @@ export async function updateCarrier(
 ): Promise<CarrierDto> {
   const currentRows = await db.select().from(carriers).where(eq(carriers.id, id)).limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Transportadora não encontrada.");
+  if (!current) throw new NotFound("NOT_FOUND", "Transportadora não encontrada.");
 
   // Build the partial update + before/after snapshots from only the provided fields.
   const set: Record<string, unknown> = { updatedAt: new Date() };
@@ -185,7 +185,7 @@ export async function updateCarrier(
         .where(eq(carriers.id, id))
         .returning();
       const row = updated[0];
-      if (!row) throw new Conflict("NOT_FOUND", "Transportadora não encontrada.");
+      if (!row) throw new NotFound("NOT_FOUND", "Transportadora não encontrada.");
       await writeAudit(tx, {
         entityType: "carrier",
         entityId: id,
@@ -206,7 +206,7 @@ export async function updateCarrier(
 export async function archiveCarrier(id: string, actorUserId: string): Promise<CarrierDto> {
   const currentRows = await db.select().from(carriers).where(eq(carriers.id, id)).limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Transportadora não encontrada.");
+  if (!current) throw new NotFound("NOT_FOUND", "Transportadora não encontrada.");
   if (current.archivedAt) return toDto(current); // already archived — idempotent, no new audit
 
   return db.transaction(async (tx) => {
@@ -217,7 +217,7 @@ export async function archiveCarrier(id: string, actorUserId: string): Promise<C
       .where(eq(carriers.id, id))
       .returning();
     const row = updated[0];
-    if (!row) throw new Conflict("NOT_FOUND", "Transportadora não encontrada.");
+    if (!row) throw new NotFound("NOT_FOUND", "Transportadora não encontrada.");
     await writeAudit(tx, {
       entityType: "carrier",
       entityId: id,

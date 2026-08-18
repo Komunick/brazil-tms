@@ -1,0 +1,651 @@
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { eq, inArray } from "drizzle-orm";
+import {
+  auditLogs,
+  billingItems,
+  customers,
+  db,
+  importBatches,
+  lanes,
+  linkStationIds,
+  locations,
+  rates,
+  tripEvents,
+  trips,
+  users,
+} from "@brazil-tms/db";
+import { ingestPortalDetail, ingestPortalFeed } from "./portal-feed";
+
+/**
+ * The robot's path end to end: the portal's own API payload → trips, milestones and a history line.
+ *
+ * Fixtures are invented. The live payload carries drivers' real names; none of it is copied here.
+ */
+const hasDb = Boolean(process.env.DATABASE_URL);
+
+const HORA = 3600;
+const NOVE = Math.floor(Date.UTC(2026, 7, 13, 12, 0, 0) / 1000);
+
+describe.skipIf(!hasDb)("portal feed (integration)", () => {
+  let customerId = "";
+  let customerCode = "";
+  let actorEmail = "";
+  const token = `PF${Date.now()}${Math.floor(Math.random() * 1e6)}`;
+  const createdBatchIds: string[] = [];
+
+  beforeAll(async () => {
+    customerCode = `FEED-${token}`;
+    customerId = (
+      await db
+        .insert(customers)
+        .values({ name: `Cliente feed ${token}`, customerCode })
+        .returning({ id: customers.id })
+    )[0]!.id;
+
+    const locs = await db
+      .insert(locations)
+      .values([
+        { customerId, code: `FO-${token}`, name: "Origem feed" },
+        { customerId, code: `FD-${token}`, name: "Destino feed" },
+      ])
+      .returning({ id: locations.id });
+    // The reconciliation the whole portal path depends on: the customer's station id → our location.
+    await linkStationIds(customerId, [
+      { stationId: "910001", code: `FO-${token}` },
+      { stationId: "910002", code: `FD-${token}` },
+    ]);
+    expect(locs).toHaveLength(2);
+
+    const admin = (
+      await db
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.email, "admin@braziltransports.com.br"))
+        .limit(1)
+    )[0];
+    actorEmail = admin!.email;
+    process.env.PORTAL_FEED_ACTOR_EMAIL = actorEmail;
+  });
+
+  afterAll(async () => {
+    const seeded = await db
+      .select({ id: trips.id })
+      .from(trips)
+      .where(eq(trips.customerId, customerId));
+    const ids = seeded.map((t) => t.id);
+    if (ids.length) {
+      await db.delete(billingItems).where(inArray(billingItems.tripId, ids));
+      await db.delete(tripEvents).where(inArray(tripEvents.tripId, ids));
+      await db.delete(auditLogs).where(inArray(auditLogs.entityId, ids));
+      await db.delete(trips).where(inArray(trips.id, ids));
+    }
+    await db.delete(rates).where(eq(rates.customerId, customerId));
+    if (createdBatchIds.length) {
+      await db.delete(importBatches).where(inArray(importBatches.id, createdBatchIds));
+    }
+    await db.delete(lanes).where(eq(lanes.customerId, customerId));
+    await db.delete(locations).where(eq(locations.customerId, customerId));
+    await db.delete(auditLogs).where(eq(auditLogs.entityId, customerId));
+    await db.delete(customers).where(eq(customers.id, customerId));
+  });
+
+  function payload(over: Record<string, unknown> = {}) {
+    return {
+      retcode: 0,
+      data: {
+        total: 1,
+        list: [
+          {
+            trip_number: `LH-${token}`,
+            trip_status: 4,
+            vehicle_type_name: "CARRETA",
+            driver_name: "Fulano de Tal",
+            vehicle_number: "ABC1D23",
+            trip_station: [
+              {
+                sequence_number: 1,
+                station: 910001,
+                station_name: "Origem feed",
+                sta: NOVE,
+                std: NOVE + HORA,
+                ata: 0,
+                atd: 0,
+              },
+              {
+                sequence_number: 2,
+                station: 910002,
+                station_name: "Destino feed",
+                sta: NOVE + 7 * HORA,
+                std: 0,
+                ata: 0,
+                atd: 0,
+              },
+            ],
+            ...over,
+          },
+        ],
+      },
+    };
+  }
+
+  it("creates the trip the portal plans, from the API payload alone", async () => {
+    const r = await ingestPortalFeed({ payload: payload(), mode: "plan", customerCode });
+    if (r.batchId) createdBatchIds.push(r.batchId);
+
+    expect(r.planSummary?.created).toBe(1);
+    expect(r.unknownStations).toEqual([]);
+
+    const trip = (
+      await db
+        .select()
+        .from(trips)
+        .where(eq(trips.externalTripId, `LH-${token}`))
+        .limit(1)
+    )[0]!;
+    expect(trip.currentStatus).toBe("received");
+    expect(trip.plannedPickupWindowStart?.toISOString()).toBe("2026-08-13T12:00:00.000Z");
+    // The lane was registered on the way in, like any other create path.
+    expect(trip.laneId).not.toBeNull();
+  });
+
+  it("a second identical poll changes nothing AND writes no history line", async () => {
+    // The property that makes a 5-minute robot bearable: quiet runs stay invisible.
+    const r = await ingestPortalFeed({ payload: payload(), mode: "plan", customerCode });
+    expect(r.planSummary?.unchanged).toBe(1);
+    expect(r.planSummary?.created).toBe(0);
+    expect(r.batchId).toBeNull();
+  });
+
+  it("records the real milestones when the portal reports movement", async () => {
+    const movida = payload({
+      trip_status: 90,
+      trip_station: [
+        {
+          sequence_number: 1,
+          station: 910001,
+          station_name: "Origem feed",
+          sta: NOVE,
+          std: NOVE + HORA,
+          ata: NOVE + 10 * 60,
+          atd: NOVE + HORA,
+        },
+        {
+          sequence_number: 2,
+          station: 910002,
+          station_name: "Destino feed",
+          sta: NOVE + 7 * HORA,
+          std: 0,
+          ata: NOVE + 7 * HORA,
+          atd: 0,
+        },
+      ],
+    });
+    const r = await ingestPortalFeed({ payload: movida, mode: "execution", customerCode });
+    if (r.batchId) createdBatchIds.push(r.batchId);
+    expect(r.summary?.applied).toBe(1);
+    expect(r.batchId).not.toBeNull();
+
+    const trip = (
+      await db
+        .select()
+        .from(trips)
+        .where(eq(trips.externalTripId, `LH-${token}`))
+        .limit(1)
+    )[0]!;
+    const eventos = await db.select().from(tripEvents).where(eq(tripEvents.tripId, trip.id));
+    const tipos = eventos.map((e) => e.eventType);
+    expect(tipos).toContain("origin_arrived");
+    expect(tipos).toContain("departed");
+    expect(tipos).toContain("destination_arrived");
+    // The instant is the customer's, not ours.
+    const chegada = eventos.find((e) => e.eventType === "origin_arrived")!;
+    expect(chegada.eventTimestamp?.toISOString()).toBe("2026-08-13T12:10:00.000Z");
+  });
+
+  it("records the loading steps the portal times, not just arrival and departure", async () => {
+    // The timeline the customer's own screen shows: chegou 05:04, começou a carregar 06:50,
+    // carregado 07:16, partiu 07:16. The TMS used to jump straight from at_origin to in_transit.
+    const ext = `LH-CARGA-${token}`;
+    const comCarregamento = payload({
+      trip_number: ext,
+      trip_status: 90,
+      trip_station: [
+        {
+          sequence_number: 1,
+          station: 910001,
+          station_name: "Origem feed",
+          sta: NOVE,
+          std: NOVE + 2 * HORA,
+          ata: NOVE + 10 * 60,
+          loading_time: NOVE + HORA,
+          loaded_time: NOVE + 2 * HORA - 15 * 60,
+          atd: NOVE + 2 * HORA,
+        },
+        {
+          sequence_number: 2,
+          station: 910002,
+          station_name: "Destino feed",
+          sta: NOVE + 9 * HORA,
+          std: 0,
+          ata: NOVE + 9 * HORA,
+          atd: 0,
+        },
+      ],
+    });
+
+    const plano = await ingestPortalFeed({ payload: comCarregamento, mode: "plan", customerCode });
+    if (plano.batchId) createdBatchIds.push(plano.batchId);
+    const exec = await ingestPortalFeed({
+      payload: comCarregamento,
+      mode: "execution",
+      customerCode,
+    });
+    if (exec.batchId) createdBatchIds.push(exec.batchId);
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    const eventos = await db
+      .select()
+      .from(tripEvents)
+      .where(eq(tripEvents.tripId, trip.id))
+      .orderBy(tripEvents.eventTimestamp);
+
+    const percorrido = eventos
+      .filter((e) => e.eventType === "status_change" && e.statusAfter)
+      .map((e) => e.statusAfter);
+    expect(percorrido).toContain("loading");
+    expect(percorrido).toContain("loaded");
+    expect(percorrido).toContain("in_transit");
+
+    const carregando = eventos.find(
+      (e) => e.eventType === "status_change" && e.statusAfter === "loading",
+    )!;
+    expect(carregando.eventTimestamp?.toISOString()).toBe("2026-08-13T13:00:00.000Z");
+    // `loaded` also earns its own typed event, since the vocabulary has one.
+    expect(eventos.some((e) => e.eventType === "loaded")).toBe(true);
+  });
+
+  it("closes the trip the portal reports finished, and puts it in the billing queue", async () => {
+    // The 244-trip problem: a delivered trip used to stop at `at_destination` forever — still
+    // demanding a resource assignment, and never reaching the money.
+    const ext = `LH-FIM-${token}`;
+    const inteira = payload({
+      trip_number: ext,
+      trip_status: 90,
+      trip_station: [
+        {
+          sequence_number: 1,
+          station: 910001,
+          station_name: "Origem feed",
+          sta: NOVE,
+          std: NOVE + 2 * HORA,
+          ata: NOVE + 10 * 60,
+          loading_time: NOVE + HORA,
+          loaded_time: NOVE + 2 * HORA - 15 * 60,
+          atd: NOVE + 2 * HORA,
+        },
+        {
+          sequence_number: 2,
+          station: 910002,
+          station_name: "Destino feed",
+          sta: NOVE + 9 * HORA,
+          std: 0,
+          ata: NOVE + 9 * HORA,
+          unseal_time: NOVE + 9 * HORA + 20 * 60,
+          unloaded_time: NOVE + 10 * HORA,
+          atd: 0,
+        },
+      ],
+    });
+
+    // The real sequence: the plan lands first, while the trip has not moved yet…
+    const aindaParada = payload({
+      trip_number: ext,
+      trip_status: 4,
+      trip_station: [
+        {
+          sequence_number: 1,
+          station: 910001,
+          station_name: "Origem feed",
+          sta: NOVE,
+          std: NOVE + 2 * HORA,
+          ata: 0,
+          atd: 0,
+        },
+        {
+          sequence_number: 2,
+          station: 910002,
+          station_name: "Destino feed",
+          sta: NOVE + 9 * HORA,
+          std: 0,
+          ata: 0,
+          atd: 0,
+        },
+      ],
+    });
+    const plano = await ingestPortalFeed({ payload: aindaParada, mode: "plan", customerCode });
+    if (plano.batchId) createdBatchIds.push(plano.batchId);
+
+    // …and the execution arrives later, once the truck has been and gone.
+    const exec = await ingestPortalFeed({ payload: inteira, mode: "execution", customerCode });
+    if (exec.batchId) createdBatchIds.push(exec.batchId);
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    // Completion auto-advances to `billing_pending` — that IS the billing queue.
+    expect(trip.currentStatus).toBe("billing_pending");
+    expect(exec.summary?.completed).toBe(1);
+
+    // The whole journey is on the record, nothing skipped and nothing invented.
+    const eventos = await db.select().from(tripEvents).where(eq(tripEvents.tripId, trip.id));
+    const percorrido = eventos
+      .filter((e) => e.eventType === "status_change")
+      .map((e) => e.statusAfter);
+    for (const passo of [
+      "loading",
+      "loaded",
+      "in_transit",
+      "at_destination",
+      "unloading",
+      "unloaded",
+    ]) {
+      expect(percorrido).toContain(passo);
+    }
+    // And the item that lets it be invoiced exists.
+    const itens = await db.select().from(billingItems).where(eq(billingItems.tripId, trip.id));
+    expect(itens).toHaveLength(1);
+  });
+
+  it("guarda motorista e placa que o portal informa", async () => {
+    // Abrir a viagem no TMS mostrava nem placa nem motorista, embora o cliente soubesse os dois.
+    const ext = `LH-QUEM-${token}`;
+    const comMotorista = payload({
+      trip_number: ext,
+      driver_name: "Beltrano da Silva",
+      vehicle_number: "XYZ9K88",
+    });
+
+    const primeiro = await ingestPortalFeed({ payload: comMotorista, mode: "plan", customerCode });
+    if (primeiro.batchId) createdBatchIds.push(primeiro.batchId);
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    const campos = trip.customerFields as Record<string, string>;
+    expect(campos["Motorista (portal)"]).toBe("Beltrano da Silva");
+    expect(campos["Placa (portal)"]).toBe("XYZ9K88");
+
+    // Trocar o motorista no portal (acontece o tempo todo) conta como mudança, não como ciclo quieto.
+    const trocou = await ingestPortalFeed({
+      payload: payload({
+        trip_number: ext,
+        driver_name: "Cicrano de Souza",
+        vehicle_number: "XYZ9K88",
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    if (trocou.batchId) createdBatchIds.push(trocou.batchId);
+    expect(trocou.planSummary?.updated).toBe(1);
+
+    const depois = (
+      await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1)
+    )[0]!;
+    expect((depois.customerFields as Record<string, string>)["Motorista (portal)"]).toBe(
+      "Cicrano de Souza",
+    );
+  });
+
+  it("só pede o detalhe de quem tem motorista, e para de pedir depois de gravado", async () => {
+    // O portal só nomeia o operador de atribuição onde houve atribuição. Pedir detalhe de viagem sem
+    // motorista gastava a cota com quem nunca teria o dado — na primeira rodada real, zero gravados.
+    const comMotorista = `LH-DET-${token}`;
+    const semMotorista = `LH-SEMDET-${token}`;
+
+    const r1 = await ingestPortalFeed({
+      payload: payload({
+        trip_number: comMotorista,
+        driver_name: "Beltrano",
+        vehicle_number: "AAA1B22",
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    if (r1.batchId) createdBatchIds.push(r1.batchId);
+    const r2 = await ingestPortalFeed({
+      payload: payload({ trip_number: semMotorista, driver_name: null, vehicle_number: null }),
+      mode: "plan",
+      customerCode,
+    });
+    if (r2.batchId) createdBatchIds.push(r2.batchId);
+
+    expect(r1.needDetail).toContain(comMotorista);
+    expect(r2.needDetail).not.toContain(semMotorista);
+
+    // O detalhe chega e grava quem atribuiu.
+    const gravado = await ingestPortalDetail({
+      payload: {
+        retcode: 0,
+        data: {
+          trip_number: comMotorista,
+          trip_station: [{ assign_operator: "fulano@braziltransports.com.br" }, {}],
+        },
+      },
+      customerCode,
+    });
+    expect(gravado.recorded).toBe(true);
+
+    const trip = (
+      await db.select().from(trips).where(eq(trips.externalTripId, comMotorista)).limit(1)
+    )[0]!;
+    expect((trip.customerFields as Record<string, string>)["Operador de atribuição (portal)"]).toBe(
+      "fulano@braziltransports.com.br",
+    );
+
+    // E o TMS para de pedir: a lista encolhe sozinha até zerar.
+    const r3 = await ingestPortalFeed({
+      payload: payload({
+        trip_number: comMotorista,
+        driver_name: "Beltrano",
+        vehicle_number: "AAA1B22",
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    if (r3.batchId) createdBatchIds.push(r3.batchId);
+    expect(r3.needDetail).not.toContain(comMotorista);
+  });
+
+  it("guarda o valor da viagem do portal e usa como base do faturamento", async () => {
+    // O portal publica "Valor da Viagem" — o que a Brazil Transports recebe. Sem isso, as viagens
+    // chegavam ao faturamento sem preço e paravam ali, porque não existe tabela de tarifas.
+    const ext = `LH-VALOR-${token}`;
+    const comValor = payload({
+      trip_number: ext,
+      trip_status: 90,
+      cost_unit: "2471.53",
+      trip_station: [
+        {
+          sequence_number: 1,
+          station: 910001,
+          station_name: "Origem feed",
+          sta: NOVE,
+          std: NOVE + HORA,
+          ata: NOVE + 10 * 60,
+          atd: NOVE + HORA,
+        },
+        {
+          sequence_number: 2,
+          station: 910002,
+          station_name: "Destino feed",
+          sta: NOVE + 7 * HORA,
+          std: 0,
+          ata: NOVE + 7 * HORA,
+          unseal_time: NOVE + 7 * HORA + 15 * 60,
+          unloaded_time: NOVE + 8 * HORA,
+          atd: 0,
+        },
+      ],
+    });
+
+    const r = await ingestPortalFeed({ payload: comValor, mode: "plan", customerCode });
+    if (r.batchId) createdBatchIds.push(r.batchId);
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    // Centavos inteiros, sem ponto flutuante rondando dinheiro.
+    expect(trip.customerPriceCents).toBe(247153);
+    // A viagem completou no mesmo ciclo (o payload já prova a descarga) e levou o preço consigo.
+    expect(trip.currentStatus).toBe("billing_pending");
+
+    const item = (await db.select().from(billingItems).where(eq(billingItems.tripId, trip.id)))[0]!;
+    expect(item.baseFreightCents).toBe(247153);
+  });
+
+  it("uma tarifa genérica cadastrada NÃO sobrepõe o valor daquela viagem", async () => {
+    // O caso real: existe uma tarifa de R$ 1.500 que vale para qualquer rota, e ela estava sendo
+    // aplicada às 243 viagens — a de 66 horas pelo mesmo preço da transferência curta. O valor que o
+    // cliente declara viagem a viagem manda; a tarifa fica de reserva.
+    await db.insert(rates).values({ customerId, baseAmountCents: 150000, active: true });
+
+    const ext = `LH-TARIFA-${token}`;
+    const r = await ingestPortalFeed({
+      payload: payload({
+        trip_number: ext,
+        trip_status: 90,
+        cost_unit: "1935.19",
+        trip_station: [
+          {
+            sequence_number: 1,
+            station: 910001,
+            station_name: "Origem feed",
+            sta: NOVE,
+            std: NOVE + HORA,
+            ata: NOVE + 10 * 60,
+            atd: NOVE + HORA,
+          },
+          {
+            sequence_number: 2,
+            station: 910002,
+            station_name: "Destino feed",
+            sta: NOVE + 7 * HORA,
+            std: 0,
+            ata: NOVE + 7 * HORA,
+            unseal_time: NOVE + 7 * HORA + 900,
+            unloaded_time: NOVE + 8 * HORA,
+            atd: 0,
+          },
+        ],
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    if (r.batchId) createdBatchIds.push(r.batchId);
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    const item = (await db.select().from(billingItems).where(eq(billingItems.tripId, trip.id)))[0]!;
+    expect(item.baseFreightCents).toBe(193519);
+    // A tarifa foi encontrada e fica registrada no item — mas não é ela que define o valor.
+    expect(item.rateId).not.toBeNull();
+  });
+
+  it("a viagem EM CURSO ganha motorista, placa e o status real — sem esperar terminar", async () => {
+    // A aba "Aceito" do portal: 73 viagens estavam vivas lá e invisíveis aqui. A viagem sai do
+    // Planejado quando é aceita e só reaparece no Concluído quando acaba — no meio, o TMS achava que
+    // o caminhão nunca tinha chegado para carregar, e alertava por isso.
+    const ext = `LH-CURSO-${token}`;
+    const planejada = payload({ trip_number: ext, driver_name: null, vehicle_number: null });
+    const r1 = await ingestPortalFeed({ payload: planejada, mode: "plan", customerCode });
+    if (r1.batchId) createdBatchIds.push(r1.batchId);
+
+    // Agora ela está na estrada: chegou, carregou e partiu — e só a aba "Aceito" sabe disso.
+    const emCurso = payload({
+      trip_number: ext,
+      trip_status: 40,
+      driver_name: "Sicrano Rodrigues",
+      vehicle_number: "QRS4T56",
+      trip_station: [
+        {
+          sequence_number: 1,
+          station: 910001,
+          station_name: "Origem feed",
+          sta: NOVE,
+          std: NOVE + 2 * HORA,
+          ata: NOVE + 15 * 60,
+          loading_time: NOVE + HORA,
+          loaded_time: NOVE + 2 * HORA - 10 * 60,
+          atd: NOVE + 2 * HORA,
+        },
+        {
+          sequence_number: 2,
+          station: 910002,
+          station_name: "Destino feed",
+          sta: NOVE + 9 * HORA,
+          std: 0,
+          ata: 0,
+          atd: 0,
+        },
+      ],
+    });
+    const r2 = await ingestPortalFeed({ payload: emCurso, mode: "execution", customerCode });
+    if (r2.batchId) createdBatchIds.push(r2.batchId);
+    expect(r2.summary?.applied).toBe(1);
+
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    // Está EM TRÂNSITO — não mais parada em "Recebida" como se nada tivesse acontecido.
+    expect(trip.currentStatus).toBe("in_transit");
+    // E o motorista veio junto, mesmo tendo aparecido só depois do planejamento.
+    const campos = trip.customerFields as Record<string, string>;
+    expect(campos["Motorista (portal)"]).toBe("Sicrano Rodrigues");
+    expect(campos["Placa (portal)"]).toBe("QRS4T56");
+
+    // Um status que ninguém mapeou não pode encerrar viagem: 40 passa adiante sem fechar nada.
+    expect(trip.cancelledAt).toBeNull();
+  });
+
+  it("refuses a portal error page instead of reading it as a quiet day", async () => {
+    await expect(
+      ingestPortalFeed({
+        payload: { retcode: 131207003, message: "Você não tem permissão nesta estação.", data: {} },
+        mode: "plan",
+        customerCode,
+      }),
+    ).rejects.toMatchObject({ code: "PORTAL_ERROR" });
+  });
+
+  it("reports an unregistered station instead of inventing a location", async () => {
+    const desconhecida = payload({
+      trip_number: `LH-X-${token}`,
+      trip_station: [
+        {
+          sequence_number: 1,
+          station: 910001,
+          station_name: "Origem feed",
+          sta: NOVE,
+          std: NOVE + HORA,
+          ata: 0,
+          atd: 0,
+        },
+        {
+          sequence_number: 2,
+          station: 999999,
+          station_name: "Estação que ninguém cadastrou",
+          sta: NOVE + 5 * HORA,
+          std: 0,
+          ata: 0,
+          atd: 0,
+        },
+      ],
+    });
+    const r = await ingestPortalFeed({ payload: desconhecida, mode: "plan", customerCode });
+    if (r.batchId) createdBatchIds.push(r.batchId);
+    expect(r.unknownStations.length).toBe(1);
+    expect(r.planSummary?.created).toBe(0);
+    // Something a person must act on IS worth a history line, even though nothing moved.
+    expect(r.batchId).not.toBeNull();
+  });
+
+  it("refuses to act without a configured service account", async () => {
+    const antes = process.env.PORTAL_FEED_ACTOR_EMAIL;
+    delete process.env.PORTAL_FEED_ACTOR_EMAIL;
+    await expect(
+      ingestPortalFeed({ payload: payload(), mode: "plan", customerCode }),
+    ).rejects.toMatchObject({ code: "FEED_ACTOR_UNSET" });
+    process.env.PORTAL_FEED_ACTOR_EMAIL = antes;
+  });
+});

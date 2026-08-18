@@ -4,7 +4,42 @@ export * from "./errors";
 export * from "./audit/write-audit";
 export * from "./trips/trip-dto";
 export { createTrip, getTrip, listTrips } from "./trips/trips-service";
+export { resolveLaneId } from "./trips/lane-resolution";
 export { updateTripPlan } from "./trips/trip-plan";
+export { updateOperationalFields } from "./trips/trip-operational-fields";
+export {
+  advanceTripFromSource,
+  closeTripFromSource,
+  isCancellationLabel,
+  isClosedAtSource,
+} from "./trips/source-status";
+export type { AdvanceOutcome, CloseOutcome } from "./trips/source-status";
+export {
+  applyPortalExecution,
+  applyPortalTrip,
+  existingTripIds,
+  linkStationIds,
+  loadStationMap,
+} from "./trips/portal-execution-apply";
+export type {
+  PortalApplyOutcome,
+  PortalApplySummary,
+  PortalApplyOptions,
+} from "./trips/portal-execution-apply";
+export { applyPortalPlan, applyPortalPlanTrip } from "./trips/portal-plan-apply";
+export { resolvePortalActorId } from "./trips/portal-actor";
+export {
+  marcarVistasNoPortal,
+  marcarRetiradasDoPortal,
+  SILENCIO_HORAS,
+  TETO,
+  type RetiradasResumo,
+} from "./trips/portal-withdrawn";
+export type {
+  PortalPlanOutcome,
+  PortalPlanSummary,
+  PortalPlanOptions,
+} from "./trips/portal-plan-apply";
 export { transitionTripStatus } from "./trips/trip-transitions";
 export {
   cancelTrip,
@@ -33,6 +68,10 @@ export {
   queryReasonCodes,
   queryCustomerSlaRules,
 } from "./trips/trips-read";
+export { queryWallboard, ON_THE_ROAD_STATUSES } from "./trips/wallboard-read";
+export type { WallboardSummary, WallboardTrip } from "./trips/wallboard-read";
+export { recordSpotOffer, readSpotOffersToday } from "./trips/spot-offers";
+export type { SpotOfferView } from "./trips/spot-offers";
 export type {
   TripBoardRow,
   TripBoardResult,
@@ -59,6 +98,7 @@ export {
   generateAlert,
   autoResolveAlert,
   acknowledgeAlert,
+  unacknowledgeAlert,
   listAlerts,
   type AlertCase,
   type AlertSeverity,
@@ -111,3 +151,7 @@ export {
   type DocumentRequirementView,
   type DocumentTypeView,
 } from "./trips/trips-read";
+// O BSC do cliente, espelhado (2026-08-17): grava o que a Shopee publicou e devolve o mais recente
+// de cada recorte, com a idade colada.
+export { saveBscSnapshot, queryLatestBsc, BSC_PERIODS } from "./reporting/bsc";
+export type { BscPeriod, BscSnapshotInput, BscSnapshotView } from "./reporting/bsc";

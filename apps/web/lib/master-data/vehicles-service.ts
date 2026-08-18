@@ -11,7 +11,7 @@ import {
   type VehicleType,
 } from "@brazil-tms/shared";
 import { writeAudit } from "@/lib/audit/write-audit";
-import { Conflict } from "@/lib/api/respond";
+import { Conflict, NotFound } from "@/lib/api/respond";
 
 /**
  * Vehicle master-data service (US3/US4; data-model §5, contract §Vehicles). Mirrors drivers; adds the
@@ -165,7 +165,7 @@ export async function listVehicles(opts: ListVehiclesOptions = {}): Promise<Vehi
 export async function getVehicle(id: string): Promise<VehicleDto> {
   const rows = await db.select().from(vehicles).where(eq(vehicles.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new Conflict("NOT_FOUND", "Veículo não encontrado.");
+  if (!row) throw new NotFound("NOT_FOUND", "Veículo não encontrado.");
   return toDto(row);
 }
 
@@ -219,7 +219,7 @@ export async function updateVehicle(
 ): Promise<VehicleDto> {
   const currentRows = await db.select().from(vehicles).where(eq(vehicles.id, id)).limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Veículo não encontrado.");
+  if (!current) throw new NotFound("NOT_FOUND", "Veículo não encontrado.");
 
   // Build the partial update + before/after snapshots from only the provided fields.
   const set: Record<string, unknown> = { updatedAt: new Date() };
@@ -266,7 +266,7 @@ export async function updateVehicle(
     return await db.transaction(async (tx) => {
       const updated = await tx.update(vehicles).set(set).where(eq(vehicles.id, id)).returning();
       const row = updated[0];
-      if (!row) throw new Conflict("NOT_FOUND", "Veículo não encontrado.");
+      if (!row) throw new NotFound("NOT_FOUND", "Veículo não encontrado.");
       await writeAudit(tx, {
         entityType: "vehicle",
         entityId: id,
@@ -296,7 +296,7 @@ export async function updateVehicle(
 export async function archiveVehicle(id: string, actorUserId: string): Promise<VehicleDto> {
   const currentRows = await db.select().from(vehicles).where(eq(vehicles.id, id)).limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Veículo não encontrado.");
+  if (!current) throw new NotFound("NOT_FOUND", "Veículo não encontrado.");
   if (current.archivedAt) return toDto(current); // already archived — idempotent, no new audit
 
   return db.transaction(async (tx) => {
@@ -307,7 +307,7 @@ export async function archiveVehicle(id: string, actorUserId: string): Promise<V
       .where(eq(vehicles.id, id))
       .returning();
     const row = updated[0];
-    if (!row) throw new Conflict("NOT_FOUND", "Veículo não encontrado.");
+    if (!row) throw new NotFound("NOT_FOUND", "Veículo não encontrado.");
     await writeAudit(tx, {
       entityType: "vehicle",
       entityId: id,

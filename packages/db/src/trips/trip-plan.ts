@@ -3,7 +3,7 @@ import { db } from "../client";
 import { trips } from "../../schema";
 import { TRIP_CRITICAL_FIELDS, TRIP_STATUSES, type TripPlanFields } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
-import { Conflict } from "../errors";
+import { Conflict, NotFound } from "../errors";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
 
 /**
@@ -55,7 +55,7 @@ export async function updateTripPlan(
       .for("update")
       .limit(1);
     const current = currentRows[0];
-    if (!current) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+    if (!current) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
 
     // Post-confirmed review gate (FR-005), re-checked against the LOCKED status.
     const pastConfirmed =
@@ -127,7 +127,7 @@ export async function updateTripPlan(
     }
 
     const detail = await loadTripDetail(tx, tripId);
-    if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+    if (!detail) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
     return detail;
   });
 }

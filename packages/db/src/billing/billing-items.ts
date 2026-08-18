@@ -8,9 +8,14 @@ import {
   type UpdateBillingItemInput,
 } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
-import { Conflict, NotFound } from "../errors";
+import { NotFound } from "../errors";
 import { resolveRate } from "./rates";
-import { loadChecklistStatus, type ChecklistStatus, type DocRef, type TripScope } from "../documents/requirements";
+import {
+  loadChecklistStatus,
+  type ChecklistStatus,
+  type DocRef,
+  type TripScope,
+} from "../documents/requirements";
 
 /**
  * Feature 008 — billing-item reads + lifecycle helpers (data-model §11, R5/R7). `ensureBillingItem`
@@ -91,12 +96,13 @@ export async function ensureBillingItem(tx: TxLike, tripId: string): Promise<voi
       laneId: trips.laneId,
       plannedVehicleType: trips.plannedVehicleType,
       plannedPickupWindowStart: trips.plannedPickupWindowStart,
+      customerPriceCents: trips.customerPriceCents,
     })
     .from(trips)
     .where(eq(trips.id, tripId))
     .limit(1);
   const trip = tripRows[0];
-  if (!trip) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+  if (!trip) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
 
   const rate = await resolveRate(trip, tx);
 
@@ -104,7 +110,21 @@ export async function ensureBillingItem(tx: TxLike, tripId: string): Promise<voi
     tripId,
     customerId: trip.customerId,
     rateId: rate?.id ?? null,
-    baseFreightCents: rate?.baseAmountCents ?? null,
+    /**
+     * O preço que o CLIENTE declarou POR ESTA VIAGEM primeiro; a tabela de tarifas como reserva
+     * (decisão do usuário, 2026-08-16).
+     *
+     * A ordem parece contra-intuitiva — tarifa cadastrada soa mais autoritativa — e foi invertida
+     * por um fato medido: as 243 viagens em faturamento estavam TODAS com R$ 1.500,00, porque existe
+     * uma tarifa genérica que vale para qualquer rota. Uma transferência curta e uma viagem de 66
+     * horas saíam pelo mesmo valor, e uma que o portal diz valer R$ 19.351 estava registrada como
+     * R$ 1.500. O portal informa o valor viagem a viagem, e é o que a Brazil Transports realmente
+     * recebe.
+     *
+     * A tarifa continua servindo para o que ela é boa: quando o portal não precifica (viagem ainda
+     * não fechada), o valor cadastrado entra no lugar em vez de deixar o item sem preço.
+     */
+    baseFreightCents: trip.customerPriceCents ?? rate?.baseAmountCents ?? null,
     billingPeriod: billingPeriodSaoPaulo(new Date()),
   });
 }
@@ -217,7 +237,9 @@ export async function updateBillingItem(
     await tx
       .update(billingItems)
       .set({
-        ...(input.baseFreightCents !== undefined ? { baseFreightCents: input.baseFreightCents } : {}),
+        ...(input.baseFreightCents !== undefined
+          ? { baseFreightCents: input.baseFreightCents }
+          : {}),
         ...(input.billingPeriod !== undefined ? { billingPeriod: input.billingPeriod } : {}),
         ...(input.disputeStatus !== undefined ? { disputeStatus: input.disputeStatus } : {}),
         ...(input.notes !== undefined ? { notes: input.notes ?? null } : {}),

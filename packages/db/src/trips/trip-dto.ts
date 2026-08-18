@@ -53,6 +53,8 @@ export interface TripSummary {
   id: string;
   customerId: string;
   externalTripId: string | null;
+  /** Leg of the customer's programming (1 unless the import found a chained milk run). */
+  legNumber: number;
   originLocationId: string;
   destinationLocationId: string;
   laneId: string | null;
@@ -184,8 +186,11 @@ export interface TripAssignmentDto {
   overrideReason: string | null;
   isCurrent: boolean;
   assignedByUserId: string;
+  /** Display name of who assigned/confirmed — the panel shows this, not the raw id. */
+  assignedByName: string | null;
   assignedAt: string;
   confirmedByUserId: string | null;
+  confirmedByName: string | null;
   confirmedAt: string | null;
   supersededByAssignmentId: string | null;
   supersededAt: string | null;
@@ -237,6 +242,7 @@ export function toTripSummary(row: TripRow): TripSummary {
     id: row.id,
     customerId: row.customerId,
     externalTripId: row.externalTripId,
+    legNumber: row.legNumber ?? 1,
     originLocationId: row.originLocationId,
     destinationLocationId: row.destinationLocationId,
     laneId: row.laneId,
@@ -294,6 +300,9 @@ const asgDriver = alias(drivers, "asg_driver");
 const asgVehicle = alias(vehicles, "asg_vehicle");
 const asgTrailer = alias(trailers, "asg_trailer");
 const asgCarrier = alias(carriers, "asg_carrier");
+// Who assigned/confirmed — the panel showed the raw user UUID, which tells a dispatcher nothing.
+const asgAssignedBy = alias(users, "asg_assigned_by");
+const asgConfirmedBy = alias(users, "asg_confirmed_by");
 // Feature 007 — the exception owner + alert acknowledger display-name joins (aliased copies of users).
 const excOwner = alias(users, "exc_owner");
 const alertAck = alias(users, "alert_ack");
@@ -313,8 +322,10 @@ const assignmentColumns = {
   overrideReason: tripAssignments.overrideReason,
   isCurrent: tripAssignments.isCurrent,
   assignedByUserId: tripAssignments.assignedByUserId,
+  assignedByName: asgAssignedBy.name,
   assignedAt: tripAssignments.assignedAt,
   confirmedByUserId: tripAssignments.confirmedByUserId,
+  confirmedByName: asgConfirmedBy.name,
   confirmedAt: tripAssignments.confirmedAt,
   supersededByAssignmentId: tripAssignments.supersededByAssignmentId,
   supersededAt: tripAssignments.supersededAt,
@@ -334,8 +345,10 @@ type AssignmentRow = {
   overrideReason: string | null;
   isCurrent: boolean;
   assignedByUserId: string;
+  assignedByName: string | null;
   assignedAt: Date;
   confirmedByUserId: string | null;
+  confirmedByName: string | null;
   confirmedAt: Date | null;
   supersededByAssignmentId: string | null;
   supersededAt: Date | null;
@@ -357,8 +370,10 @@ function toAssignmentDto(row: AssignmentRow): TripAssignmentDto {
     overrideReason: row.overrideReason,
     isCurrent: row.isCurrent,
     assignedByUserId: row.assignedByUserId,
+    assignedByName: row.assignedByName,
     assignedAt: row.assignedAt.toISOString(),
     confirmedByUserId: row.confirmedByUserId,
+    confirmedByName: row.confirmedByName,
     confirmedAt: iso(row.confirmedAt),
     supersededByAssignmentId: row.supersededByAssignmentId,
     supersededAt: iso(row.supersededAt),
@@ -403,6 +418,8 @@ export async function loadTripDetail(
     .leftJoin(asgVehicle, eq(tripAssignments.vehicleId, asgVehicle.id))
     .leftJoin(asgTrailer, eq(tripAssignments.trailerId, asgTrailer.id))
     .leftJoin(asgCarrier, eq(tripAssignments.carrierId, asgCarrier.id))
+    .leftJoin(asgAssignedBy, eq(tripAssignments.assignedByUserId, asgAssignedBy.id))
+    .leftJoin(asgConfirmedBy, eq(tripAssignments.confirmedByUserId, asgConfirmedBy.id))
     .where(eq(tripAssignments.tripId, tripId))
     .orderBy(desc(tripAssignments.assignedAt));
 

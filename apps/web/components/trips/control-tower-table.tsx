@@ -1,14 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, X } from "lucide-react";
-import {
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-  type ColumnDef,
-} from "@tanstack/react-table";
+import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import {
   formatDateTime,
@@ -26,12 +21,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { TripFilters } from "@/components/trips/trip-filters";
 import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
@@ -41,6 +31,12 @@ import { useFilterOptions, useTripBoard, useTripBoardFilters } from "@/lib/trips
 
 /** Board `sort` values that map to a column header (R2 whitelist). */
 type SortKey = TripBoardQuery["sort"];
+
+/**
+ * O nome da âncora, exportado porque quem LINKA precisa dele tanto quanto quem ancora — deixar os
+ * dois lados repetirem a string é como um deles acorda quebrado sem ninguém notar.
+ */
+export const BOARD_ANCHOR = "viagens";
 
 /**
  * The Control Tower board (feature 005, US1): filters + a dense server-side
@@ -84,6 +80,25 @@ export function ControlTowerTable({
   }
   const board = useTripBoard(search);
 
+  /**
+   * Rolar até o quadro quando se chega por um atalho do painel do dia.
+   *
+   * O `#viagens` no link sozinho não resolve: quando o navegador processa a âncora, o quadro ainda
+   * não existe — ele nasce depois da primeira resposta da consulta. Então a rolagem espera o dado
+   * chegar, acontece UMA vez (a bandeira impede que cada poll de 30s jogue a página de volta para
+   * cima enquanto a pessoa lê) e respeita quem pediu menos movimento no sistema.
+   */
+  const jaRolou = useRef(false);
+  useEffect(() => {
+    if (jaRolou.current || board.isLoading) return;
+    if (window.location.hash !== `#${BOARD_ANCHOR}`) return;
+    jaRolou.current = true;
+    const alvo = document.getElementById(BOARD_ANCHOR);
+    if (!alvo) return;
+    const semAnimacao = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    alvo.scrollIntoView({ behavior: semAnimacao ? "auto" : "smooth", block: "start" });
+  }, [board.isLoading]);
+
   const items = board.data?.items ?? [];
   const total = board.data?.total ?? 0;
   const limit = query.limit;
@@ -119,7 +134,10 @@ export function ControlTowerTable({
       id: "externalTripId",
       header: () => t("board.colExternalId"),
       cell: ({ row }) => (
-        <Link href={`/trips/${row.original.id}`} className="font-medium text-primary hover:underline">
+        <Link
+          href={`/trips/${row.original.id}`}
+          className="font-medium text-primary hover:underline"
+        >
           {row.original.externalTripId ?? "—"}
         </Link>
       ),
@@ -151,7 +169,14 @@ export function ControlTowerTable({
     {
       id: "status",
       header: () => <SortableHeader label={t("board.colStatus")} sortKey="status" />,
-      cell: ({ row }) => <TripStatusBadge status={row.original.currentStatus} />,
+      cell: ({ row }) => (
+        // A aceitação vai junto: é ela que separa "Em análise" de "P/Atribuir" na mesma linha.
+        <TripStatusBadge
+          status={row.original.currentStatus}
+          portalAcceptance={row.original.portalAcceptance}
+          portalStatus={row.original.portalStatus}
+        />
+      ),
     },
     {
       // 007 — server-computed SLA-risk indicator (the UI never computes it).
@@ -248,13 +273,23 @@ export function ControlTowerTable({
   const canNext = offset + limit < total;
 
   return (
-    <div className="space-y-4">
+    /**
+     * A âncora do quadro (2026-08-17).
+     *
+     * Clicar num status no painel do dia levava para cá — e para o TOPO da página, com os avisos na
+     * frente. A pessoa clicava em "Em trânsito" e tinha de rolar tudo até achar as LH que pediu.
+     *
+     * `scroll-mt-20` existe por causa da barra de topo fixa: sem essa margem, o navegador encosta a
+     * âncora no zero e a barra come as primeiras linhas.
+     */
+    <div id={BOARD_ANCHOR} className="scroll-mt-20 space-y-4">
       <TripFilters
         query={query}
         setFilters={setFilters}
         reset={reset}
         search={search}
         options={filterOptions}
+        statusCounts={board.data?.statusCounts}
       />
 
       <div className="rounded-md border">
@@ -415,7 +450,9 @@ function AssignmentCell({ row }: { row: TripBoardRow }) {
   return (
     <span className="inline-flex items-center gap-1" title={parts.join(" · ")}>
       <Check className="h-3.5 w-3.5 text-green-600" aria-hidden />
-      <span className="text-sm">{parts.length > 0 ? parts.join(" · ") : t("board.assignedYes")}</span>
+      <span className="text-sm">
+        {parts.length > 0 ? parts.join(" · ") : t("board.assignedYes")}
+      </span>
     </span>
   );
 }

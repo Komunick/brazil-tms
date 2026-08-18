@@ -10,6 +10,7 @@ import {
   listAlerts,
   locations,
   trips,
+  unacknowledgeAlert,
   users,
 } from "@brazil-tms/db";
 
@@ -42,15 +43,30 @@ describe.skipIf(!hasDb)("alerts (integration)", () => {
     actorId = admin[0]?.id ?? "";
     expect(actorId, "seeded admin must exist").not.toBe("");
 
-    const cust = await db.insert(customers).values({ name: "Cliente Alerts", customerCode: code("CUST") }).returning();
+    const cust = await db
+      .insert(customers)
+      .values({ name: "Cliente Alerts", customerCode: code("CUST") })
+      .returning();
     customerId = cust[0]!.id;
-    const origin = await db.insert(locations).values({ customerId, code: code("ORIG"), name: "Origem" }).returning();
+    const origin = await db
+      .insert(locations)
+      .values({ customerId, code: code("ORIG"), name: "Origem" })
+      .returning();
     originId = origin[0]!.id;
-    const dest = await db.insert(locations).values({ customerId, code: code("DEST"), name: "Destino" }).returning();
+    const dest = await db
+      .insert(locations)
+      .values({ customerId, code: code("DEST"), name: "Destino" })
+      .returning();
     destId = dest[0]!.id;
     const trip = await db
       .insert(trips)
-      .values({ customerId, originLocationId: originId, destinationLocationId: destId, originalPlan: {}, currentStatus: "confirmed" })
+      .values({
+        customerId,
+        originLocationId: originId,
+        destinationLocationId: destId,
+        originalPlan: {},
+        currentStatus: "confirmed",
+      })
       .returning();
     tripId = trip[0]!.id;
   });
@@ -63,10 +79,7 @@ describe.skipIf(!hasDb)("alerts (integration)", () => {
   });
 
   async function activeCount(): Promise<number> {
-    const rows = await db
-      .select({ id: alerts.id })
-      .from(alerts)
-      .where(eq(alerts.tripId, tripId));
+    const rows = await db.select({ id: alerts.id }).from(alerts).where(eq(alerts.tripId, tripId));
     return rows.length;
   }
 
@@ -75,10 +88,7 @@ describe.skipIf(!hasDb)("alerts (integration)", () => {
     expect(first).toBe(true); // inserted
     const second = await generateAlert(db, tripId, "missed_origin_arrival", "high");
     expect(second).toBe(false); // ON CONFLICT DO NOTHING — no duplicate
-    const open = await db
-      .select({ id: alerts.id })
-      .from(alerts)
-      .where(eq(alerts.tripId, tripId));
+    const open = await db.select({ id: alerts.id }).from(alerts).where(eq(alerts.tripId, tripId));
     expect(open.length).toBe(1);
   });
 
@@ -117,6 +127,38 @@ describe.skipIf(!hasDb)("alerts (integration)", () => {
     const dep = before.items.find((a) => a.alertCase === "missed_departure")!;
     await autoResolveAlert(db, tripId, "missed_departure");
     await expect(acknowledgeAlert(dep.id, actorId)).rejects.toMatchObject({ code: "STALE_ALERT" });
+  });
+
+  it("unacknowledgeAlert puts a silenced alert back on the active surface, forgetting who/when", async () => {
+    await generateAlert(db, tripId, "unassigned_within_window", "medium");
+    const listed = await listAlerts({ tripId });
+    const target = listed.items.find((a) => a.alertCase === "unassigned_within_window")!;
+
+    const ack = await acknowledgeAlert(target.id, actorId);
+    expect(ack.state).toBe("acknowledged");
+    // The list names the person who silenced it — a name, never the raw id.
+    const whileAck = await listAlerts({ tripId, state: "acknowledged" });
+    const acked = whileAck.items.find((a) => a.id === target.id)!;
+    expect(acked.acknowledgedByName).toBeTruthy();
+    expect(acked.acknowledgedAt).not.toBeNull();
+
+    const undone = await unacknowledgeAlert(target.id);
+    expect(undone.state).toBe("active");
+    expect(undone.acknowledgedByUserId).toBeNull();
+    expect(undone.acknowledgedAt).toBeNull();
+
+    // Back on the working list, and idempotent: undoing an already-active alert is a no-op.
+    const after = await listAlerts({ tripId, state: "active" });
+    expect(after.items.some((a) => a.id === target.id)).toBe(true);
+    expect((await unacknowledgeAlert(target.id)).state).toBe("active");
+  });
+
+  it("unacknowledgeAlert on an already-resolved alert ⇒ STALE_ALERT (nothing left to un-silence)", async () => {
+    await generateAlert(db, tripId, "missed_destination_arrival", "high");
+    const before = await listAlerts({ tripId });
+    const target = before.items.find((a) => a.alertCase === "missed_destination_arrival")!;
+    await autoResolveAlert(db, tripId, "missed_destination_arrival");
+    await expect(unacknowledgeAlert(target.id)).rejects.toMatchObject({ code: "STALE_ALERT" });
   });
 
   it("listAlerts excludes resolved rows and reports per-case/severity counts", async () => {

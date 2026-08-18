@@ -36,3 +36,6 @@ export * from "./export-batches";
 export * from "./billing-items";
 export * from "./billing-adjustments";
 export * from "./freight-rates";
+export * from "./bsc-snapshots";
+// Oferta de spot vinda do monitor de leilão (VM Windows) — avisada na TV.
+export * from "./spot-offers";

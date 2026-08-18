@@ -5,10 +5,11 @@ import { useTranslations } from "next-intl";
 import {
   BILLING_PHASE_STATUSES,
   SLA_STATUSES,
-  TRIP_STATUSES,
+  isTripQueue,
+  TRIP_DISPLAY_ORDER,
   VEHICLE_TYPE_VALUES,
   type TripBoardQuery,
-  type TripStatus,
+  type TripDisplayStatus,
 } from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -50,12 +51,19 @@ export function TripFilters({
   reset,
   search,
   options,
+  statusCounts,
 }: {
   query: TripBoardQuery;
   setFilters: (next: Partial<Record<string, FilterValue>>) => void;
   reset: () => void;
   search: string;
   options: TripFilterOptions;
+  /**
+   * How many trips each status holds under the CURRENT filters (from the board response, so it moves
+   * with them). Undefined on first paint, before the board answers — then every chip is shown, since
+   * "no count yet" must never be read as "no trips".
+   */
+  statusCounts?: Partial<Record<TripDisplayStatus, number>>;
 }) {
   const t = useTranslations("Trips");
   const tCommon = useTranslations("Common");
@@ -72,13 +80,45 @@ export function TripFilters({
   const locationList = options.locations;
   const codeOf = new Map(locationList.map((l) => [l.id, l.code]));
 
-  const statusSet = new Set<TripStatus>(query.status ?? []);
+  // A ficha marcada é o status real da URL — MENOS as filas, que se identificam pelo parâmetro
+  // próprio delas: as três moram no mesmo `received`, e olhar só o status acenderia as três juntas.
+  const statusSet = new Set<TripDisplayStatus>(query.queue ? [query.queue] : (query.status ?? []));
 
-  function toggleStatus(status: TripStatus) {
+  // With 16 statuses the chip row is long enough that the one you want hides in the middle of the
+  // ones you never use. A status with no trips under the current filters is dead weight, so it is
+  // folded away behind a counter — unless it is selected (you must always be able to unselect it).
+  const [showEmptyStatuses, setShowEmptyStatuses] = useState(false);
+  const visibleStatuses = TRIP_DISPLAY_ORDER.filter(
+    (status) =>
+      showEmptyStatuses ||
+      statusCounts === undefined ||
+      (statusCounts[status] ?? 0) > 0 ||
+      statusSet.has(status),
+  );
+  const hiddenStatusCount = TRIP_DISPLAY_ORDER.length - visibleStatuses.length;
+
+  /**
+   * As três filas do que era "Recebida" são fichas próprias, e ligar uma DESLIGA as outras.
+   *
+   * Elas compartilham o mesmo status real e se separam por um parâmetro só, que não comporta duas ao
+   * mesmo tempo. Isso não é limitação: pedir todas é exatamente pedir "Recebida" inteira, que é o
+   * que acontece quando nenhuma está marcada. Ida e volta existem, e nenhum estado fica inalcançável.
+   */
+  function toggleStatus(status: TripDisplayStatus) {
+    if (isTripQueue(status)) {
+      const ligando = query.queue !== status;
+      setFilters({
+        status: ligando ? ["received"] : [],
+        queue: ligando ? status : undefined,
+      });
+      return;
+    }
     const next = new Set(statusSet);
     if (next.has(status)) next.delete(status);
     else next.add(status);
-    setFilters({ status: Array.from(next) });
+    // Sair de uma fila para um status comum solta o recorte da fila junto, senão o quadro fica
+    // filtrando por uma coisa que a tela não mostra mais.
+    setFilters({ status: Array.from(next).filter((v) => !isTripQueue(v)), queue: undefined });
   }
 
   function applySearch() {
@@ -148,6 +188,35 @@ export function TripFilters({
                 </Button>
               ))}
             </div>
+          </div>
+
+          {/**
+           * A fila do despacho, com controle PRÓPRIO (2026-08-18).
+           *
+           * O filtro nasceu só como atalho do painel, e quem clicava no cartão caía numa lista
+           * filtrada sem nada na tela dizendo por quê — nem como voltar. Filtro que não aparece é
+           * filtro em que ninguém confia: a pessoa vê 326 linhas onde esperava milhares e conclui
+           * que a torre está quebrada.
+           *
+           * Não é o mesmo que "sem atribuição" ao lado. Aquele pergunta se o TMS tem atribuição;
+           * este pergunta se o PORTAL já tem motorista. Por isso vive em botão separado, e não
+           * como um quarto estado daquele grupo.
+           */}
+          <div className="space-y-1.5">
+            <Label>{t("board.filterDispatchQueue")}</Label>
+            <Button
+              type="button"
+              size="sm"
+              variant={query.awaitingAssignment === "true" ? "default" : "outline"}
+              aria-pressed={query.awaitingAssignment === "true"}
+              onClick={() =>
+                setFilters({
+                  awaitingAssignment: query.awaitingAssignment === "true" ? undefined : "true",
+                })
+              }
+            >
+              {t("board.awaitingAssignment")}
+            </Button>
           </div>
         </div>
 
@@ -312,7 +381,7 @@ export function TripFilters({
                 <SelectItem value="__all__">{t("board.all")}</SelectItem>
                 {options.lanes.map((lane) => (
                   <SelectItem key={lane.id} value={lane.id}>
-                    {(codeOf.get(lane.originLocationId) ?? "?")} →{" "}
+                    {codeOf.get(lane.originLocationId) ?? "?"} →{" "}
                     {codeOf.get(lane.destinationLocationId) ?? "?"}
                   </SelectItem>
                 ))}
@@ -389,9 +458,10 @@ export function TripFilters({
         {/* Status multi-select (toggle chips) ---------------------------------------------- */}
         <div className="space-y-1.5">
           <Label>{t("board.filterStatus")}</Label>
-          <div className="flex flex-wrap gap-1.5">
-            {TRIP_STATUSES.map((status) => {
+          <div className="flex flex-wrap items-center gap-1.5">
+            {visibleStatuses.map((status) => {
               const active = statusSet.has(status);
+              const chipCount = statusCounts?.[status];
               return (
                 <button
                   key={status}
@@ -399,14 +469,36 @@ export function TripFilters({
                   onClick={() => toggleStatus(status)}
                   aria-pressed={active}
                   className={cn(
-                    "rounded-full transition-opacity",
-                    active ? "opacity-100 ring-2 ring-ring ring-offset-1" : "opacity-60 hover:opacity-100",
+                    "flex items-center gap-1 rounded-full transition-opacity",
+                    active
+                      ? "opacity-100 ring-2 ring-ring ring-offset-1"
+                      : "opacity-60 hover:opacity-100",
                   )}
                 >
                   <TripStatusBadge status={status} />
+                  {chipCount === undefined ? null : (
+                    <span className="pr-1 text-xs tabular-nums text-muted-foreground">
+                      {chipCount}
+                    </span>
+                  )}
                 </button>
               );
             })}
+            {/* An empty status is hidden, not deleted: the count is a fact about the current filters,
+                not about the machine, so the operator can always bring the rest back. */}
+            {hiddenStatusCount > 0 || showEmptyStatuses ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-xs"
+                onClick={() => setShowEmptyStatuses((prev) => !prev)}
+              >
+                {showEmptyStatuses
+                  ? t("board.filterStatusEmptyHide")
+                  : t("board.filterStatusEmptyShow", { count: hiddenStatusCount })}
+              </Button>
+            ) : null}
           </div>
         </div>
 

@@ -3,7 +3,7 @@ import { db, type DB } from "../client";
 import { tripEvents, trips } from "../../schema";
 import { canTransition, type TransitionTripInput } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
-import { Conflict } from "../errors";
+import { Conflict, NotFound } from "../errors";
 import { recomputeTripSla } from "./sla";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
 
@@ -42,7 +42,7 @@ export async function transitionTripStatus(
     .where(eq(trips.id, tripId))
     .limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+  if (!current) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
 
   // Legality is judged against the CALLER's belief (expectedFromStatus); the row's actual status is
   // re-checked atomically by the guarded update below. Rejected here = no transaction, no state change.
@@ -103,7 +103,7 @@ export async function transitionTripStatus(
     if (txHook) await txHook(tx);
 
     const detail = await loadTripDetail(tx, tripId);
-    if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+    if (!detail) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
     return detail;
   });
 }

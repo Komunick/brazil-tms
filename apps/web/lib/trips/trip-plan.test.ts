@@ -1,7 +1,16 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
-import { auditLogs, customers, db, locations, tripEvents, trips, users } from "@brazil-tms/db";
-import { Conflict } from "@/lib/api/respond";
+import { and, eq, inArray } from "drizzle-orm";
+import {
+  auditLogs,
+  customers,
+  db,
+  lanes,
+  locations,
+  tripEvents,
+  trips,
+  users,
+} from "@brazil-tms/db";
+import { NotFound } from "@/lib/api/respond";
 import { createTrip } from "./trips-service";
 import { updateTripPlan } from "./trip-plan";
 
@@ -67,6 +76,10 @@ describe.skipIf(!hasDb)("trip-plan updateTripPlan (integration)", () => {
       await db.delete(auditLogs).where(eq(auditLogs.entityId, id));
       await db.delete(trips).where(eq(trips.id, id));
     }
+    // Creating a trip registers its route, and that lane points at these locations.
+    if (createdCustomerIds.length) {
+      await db.delete(lanes).where(inArray(lanes.customerId, createdCustomerIds));
+    }
     for (const id of createdLocationIds) {
       await db.delete(auditLogs).where(eq(auditLogs.entityId, id));
       await db.delete(locations).where(eq(locations.id, id));
@@ -98,12 +111,7 @@ describe.skipIf(!hasDb)("trip-plan updateTripPlan (integration)", () => {
     const before = await db.select().from(trips).where(eq(trips.id, tripId)).limit(1);
     const originalSnapshot = before[0]!.originalPlan;
 
-    const updated = await updateTripPlan(
-      tripId,
-      { plannedVehicleType: "carreta" },
-      {},
-      actorId,
-    );
+    const updated = await updateTripPlan(tripId, { plannedVehicleType: "carreta" }, {}, actorId);
 
     // Live column changed...
     expect(updated.plannedVehicleType).toBe("carreta");
@@ -216,6 +224,6 @@ describe.skipIf(!hasDb)("trip-plan updateTripPlan (integration)", () => {
         {},
         actorId,
       ),
-    ).rejects.toBeInstanceOf(Conflict);
+    ).rejects.toBeInstanceOf(NotFound);
   });
 });

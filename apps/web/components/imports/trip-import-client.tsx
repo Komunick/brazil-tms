@@ -7,15 +7,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { STANDARD_IMPORT_TEMPLATE, VEHICLE_TYPE_VALUES } from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -46,13 +41,17 @@ type ImportBatchStatus =
 
 type RowOutcome = "valid" | "warning" | "error" | null;
 
-type MatchDecision =
-  | "new"
-  | "update"
-  | "no_op"
-  | "potential_duplicate"
-  | "unresolved"
-  | null;
+type MatchDecision = "new" | "update" | "no_op" | "potential_duplicate" | "unresolved" | null;
+
+/** Radix Select forbids an empty-string item value, so the standard format needs a sentinel. */
+const STANDARD_TEMPLATE_VALUE = "__standard__";
+
+interface TemplateOption {
+  id: string;
+  name: string;
+  fileType: string;
+  version: number;
+}
 
 interface CustomerOption {
   id: string;
@@ -105,6 +104,14 @@ const TERMINAL_STATUSES: ReadonlySet<ImportBatchStatus> = new Set([
   "failed",
 ]);
 
+/** Statuses where the worker is doing the work and the screen must show it is not stuck. */
+const WORKING_STATUSES: ReadonlySet<ImportBatchStatus> = new Set([
+  "received",
+  "parsing",
+  "validating",
+  "confirming",
+]);
+
 function statusBadgeVariant(
   status: ImportBatchStatus,
 ): "default" | "secondary" | "destructive" | "outline" {
@@ -134,10 +141,7 @@ function unknownLocationReason(
  * The unresolved file value to map for an UNKNOWN_LOCATION row (T050). Prefer the mapped code that the
  * reason's `field` points at (originCode/destinationCode); fall back to originCode, then "".
  */
-function unknownLocationFileValue(
-  row: ImportRow,
-  reason: { field?: string } | undefined,
-): string {
+function unknownLocationFileValue(row: ImportRow, reason: { field?: string } | undefined): string {
   const mapped = row.mapped ?? {};
   const fromField =
     reason?.field && typeof mapped[reason.field] === "string"
@@ -157,18 +161,29 @@ export function TripImportClient() {
   const queryClient = useQueryClient();
 
   const [customerId, setCustomerId] = useState<string>("");
+  /** "" = the built-in standard format; otherwise the chosen per-customer template. */
+  const [templateId, setTemplateId] = useState<string>("");
   const [file, setFile] = useState<File | null>(null);
   const [batchId, setBatchId] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [formatOpen, setFormatOpen] = useState(false);
 
   // 1. Customers (reuse the master-data query key, same endpoint).
+  // Import templates for the chosen customer. Empty list → the customer has none, and the picker
+  // stays hidden: the built-in standard format is the only option, exactly as before.
+  const templatesQuery = useQuery({
+    queryKey: ["import-templates", customerId],
+    queryFn: () =>
+      fetchJson<{ items: TemplateOption[] }>(
+        `/api/imports/templates?customerId=${encodeURIComponent(customerId)}`,
+      ).then((r) => r.items),
+    enabled: Boolean(customerId),
+  });
+
   const customersQuery = useQuery({
     queryKey: ["master-data", "customers"],
     queryFn: () =>
-      fetchJson<{ items: CustomerOption[] }>("/api/master-data/customers").then(
-        (b) => b.items,
-      ),
+      fetchJson<{ items: CustomerOption[] }>("/api/master-data/customers").then((b) => b.items),
     staleTime: 30_000,
   });
 
@@ -176,9 +191,7 @@ export function TripImportClient() {
   const batchQuery = useQuery({
     queryKey: ["import-batch", batchId],
     queryFn: () =>
-      fetchJson<{ item: ImportBatchDetail }>(
-        `/api/imports/${batchId}`,
-      ).then((b) => b.item),
+      fetchJson<{ item: ImportBatchDetail }>(`/api/imports/${batchId}`).then((b) => b.item),
     enabled: Boolean(batchId),
     refetchInterval: (query) => {
       const data = query.state.data;
@@ -204,9 +217,7 @@ export function TripImportClient() {
   const rowsQuery = useQuery({
     queryKey: ["import-rows", batchId],
     queryFn: () =>
-      fetchJson<{ items: ImportRow[]; total: number }>(
-        `/api/imports/${batchId}/rows?limit=200`,
-      ),
+      fetchJson<{ items: ImportRow[]; total: number }>(`/api/imports/${batchId}/rows?limit=200`),
     enabled: Boolean(batchId) && isValidatedOrLater,
     staleTime: 5_000,
   });
@@ -218,6 +229,9 @@ export function TripImportClient() {
       const form = new FormData();
       form.append("file", file);
       form.append("customerId", customerId);
+      // Empty = the built-in standard format (the long-standing behaviour); a chosen template makes
+      // the engine read that customer's own file shape instead.
+      if (templateId) form.append("templateId", templateId);
       const res = await fetch("/api/imports", { method: "POST", body: form });
       if (!res.ok) throw new Error(`UPLOAD_FAILED:${res.status}`);
       return (await res.json()) as { id: string };
@@ -401,7 +415,10 @@ export function TripImportClient() {
               <Label htmlFor="import-customer">{t("customer")}</Label>
               <Select
                 value={customerId}
-                onValueChange={setCustomerId}
+                onValueChange={(value) => {
+                  setCustomerId(value);
+                  setTemplateId(""); // a template belongs to one customer
+                }}
                 disabled={customersQuery.isLoading || Boolean(batchId)}
               >
                 <SelectTrigger id="import-customer">
@@ -419,6 +436,33 @@ export function TripImportClient() {
                 <p className="text-sm text-destructive">{t("customersLoadError")}</p>
               ) : null}
             </div>
+
+            {/* Template — only offered when the customer HAS one; otherwise the standard format. */}
+            {(templatesQuery.data ?? []).length > 0 ? (
+              <div className="space-y-2">
+                <Label htmlFor="import-template">{t("template")}</Label>
+                <Select
+                  value={templateId === "" ? STANDARD_TEMPLATE_VALUE : templateId}
+                  onValueChange={(value) =>
+                    setTemplateId(value === STANDARD_TEMPLATE_VALUE ? "" : value)
+                  }
+                  disabled={Boolean(batchId)}
+                >
+                  <SelectTrigger id="import-template">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={STANDARD_TEMPLATE_VALUE}>{t("templateStandard")}</SelectItem>
+                    {(templatesQuery.data ?? []).map((tpl) => (
+                      <SelectItem key={tpl.id} value={tpl.id}>
+                        {tpl.name} (.{tpl.fileType})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">{t("templateHint")}</p>
+              </div>
+            ) : null}
 
             {/* File */}
             <div className="space-y-2">
@@ -453,7 +497,10 @@ export function TripImportClient() {
               </div>
 
               {formatOpen ? (
-                <div id="import-expected-format" className="rounded-md border bg-muted/30 p-3 text-sm">
+                <div
+                  id="import-expected-format"
+                  className="rounded-md border bg-muted/30 p-3 text-sm"
+                >
                   <p className="font-medium">{t("expectedFormatTitle")}</p>
                   <p className="mt-1 text-muted-foreground">{t("expectedFormatSubtitle")}</p>
                   <ul className="mt-3 space-y-1">
@@ -488,12 +535,7 @@ export function TripImportClient() {
             <div className="flex items-center gap-3">
               <Button
                 type="submit"
-                disabled={
-                  !customerId ||
-                  !file ||
-                  uploadMutation.isPending ||
-                  Boolean(batchId)
-                }
+                disabled={!customerId || !file || uploadMutation.isPending || Boolean(batchId)}
               >
                 {uploadMutation.isPending ? t("uploading") : t("import")}
               </Button>
@@ -514,18 +556,37 @@ export function TripImportClient() {
             <CardTitle className="flex items-center gap-3">
               {t("progressTitle")}
               {status ? (
-                <Badge variant={statusBadgeVariant(status)}>
-                  {t(`status.${status}`)}
-                </Badge>
+                <Badge variant={statusBadgeVariant(status)}>{t(`status.${status}`)}</Badge>
               ) : null}
             </CardTitle>
-            {batch ? (
-              <CardDescription>{batch.fileName}</CardDescription>
-            ) : null}
+            {batch ? <CardDescription>{batch.fileName}</CardDescription> : null}
           </CardHeader>
           <CardContent className="space-y-4">
             {batchQuery.isLoading && !batch ? (
               <p className="text-sm text-muted-foreground">{t("loadingProgress")}</p>
+            ) : null}
+
+            {/* Working card. A real customer file is thousands of rows: reading and validating take
+                a while, and confirming writes a trip AND an eligibility-checked assignment per row.
+                Without this the screen looked frozen on a badge. During `confirming` the worker
+                publishes running tallies, so this shows real movement, not a spinner. */}
+            {status && WORKING_STATUSES.has(status) ? (
+              <div className="space-y-3 rounded-md border p-4" aria-busy="true" role="status">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm font-medium">{t(`working.${status}`)}</p>
+                  {status === "confirming" && batch ? (
+                    <p className="text-sm tabular-nums text-muted-foreground">
+                      {t("workingApplied", {
+                        done: batch.createdCount + batch.updatedCount,
+                        total: Math.max(batch.totalRows - batch.errorCount, 0),
+                      })}
+                    </p>
+                  ) : null}
+                </div>
+                <p className="text-xs text-muted-foreground">{t("workingHint")}</p>
+                <Skeleton className="h-3 w-full" />
+                <Skeleton className="h-3 w-2/3" />
+              </div>
             ) : null}
 
             {batch?.errorMessage ? (
@@ -582,9 +643,7 @@ export function TripImportClient() {
                   {confirmMutation.isPending ? t("confirming") : t("confirm")}
                 </Button>
                 {status === "validated" ? (
-                  <span className="text-sm text-muted-foreground">
-                    {t("confirmHint")}
-                  </span>
+                  <span className="text-sm text-muted-foreground">{t("confirmHint")}</span>
                 ) : null}
               </div>
             ) : null}
@@ -746,10 +805,7 @@ export function TripImportClient() {
                 {/* Vehicle type (optional) */}
                 <div className="space-y-2">
                   <Label htmlFor="manual-vehicle-type">{t("manualVehicleType")}</Label>
-                  <Select
-                    value={manualVehicleType}
-                    onValueChange={setManualVehicleType}
-                  >
+                  <Select value={manualVehicleType} onValueChange={setManualVehicleType}>
                     <SelectTrigger id="manual-vehicle-type">
                       <SelectValue placeholder={t("manualSelectVehicleType")} />
                     </SelectTrigger>
@@ -764,9 +820,7 @@ export function TripImportClient() {
                 </div>
               </div>
 
-              {manualOriginId &&
-              manualDestinationId &&
-              manualOriginId === manualDestinationId ? (
+              {manualOriginId && manualDestinationId && manualOriginId === manualDestinationId ? (
                 <p className="text-sm text-destructive" role="alert">
                   {t("manualSameLocation")}
                 </p>
@@ -794,9 +848,7 @@ export function TripImportClient() {
                   manualCreateMutation.isPending
                 }
               >
-                {manualCreateMutation.isPending
-                  ? t("manualCreating")
-                  : t("manualCreate")}
+                {manualCreateMutation.isPending ? t("manualCreating") : t("manualCreate")}
               </Button>
             </form>
           </CardContent>
@@ -834,9 +886,7 @@ function PreviewRow({
       <TableCell className="font-medium">{row.rowNumber}</TableCell>
       <TableCell>
         {row.outcome ? (
-          <Badge className={outcomeBadgeClass(row.outcome)}>
-            {t(`outcomes.${row.outcome}`)}
-          </Badge>
+          <Badge className={outcomeBadgeClass(row.outcome)}>{t(`outcomes.${row.outcome}`)}</Badge>
         ) : (
           <span className="text-muted-foreground">—</span>
         )}
@@ -853,9 +903,7 @@ function PreviewRow({
         )}
       </TableCell>
       <TableCell className="text-muted-foreground">
-        {row.reasons.length > 0
-          ? row.reasons.map((r) => r.message).join(" · ")
-          : "—"}
+        {row.reasons.length > 0 ? row.reasons.map((r) => r.message).join(" · ") : "—"}
       </TableCell>
       <TableCell>
         {reason ? (

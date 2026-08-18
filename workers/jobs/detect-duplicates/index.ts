@@ -1,8 +1,8 @@
 import type { PgBoss } from "pg-boss";
 import { and, asc, eq } from "drizzle-orm";
 import { db, importBatches, importRows, trips } from "@brazil-tms/db";
-import { buildFuzzyKey, detectInFileCollisions } from "@brazil-tms/shared";
-import type { DetectDuplicatesPayload } from "@brazil-tms/shared";
+import { buildFuzzyKey, classifySharedExternalId } from "@brazil-tms/shared";
+import type { DetectDuplicatesPayload, SharedIdRow } from "@brazil-tms/shared";
 import { setBatchCounts, setBatchStatus } from "../../lib/batch-progress";
 import { JOB, enqueue, work } from "../../lib/queue";
 
@@ -41,6 +41,28 @@ const PLAN_COMPARE_FIELDS = [
   "plannedRouteNotes",
   "plannedServiceRequirements",
 ] as const;
+
+/**
+ * Everything that identifies the MOVEMENT a row describes: the plan, the two ends, and the resources
+ * the file names. Two rows with the same fingerprint are the same trip typed twice — safe to keep
+ * once. The resources are part of it on purpose: same lane and hour with a different driver is NOT
+ * the same movement, it is two trucks (or a mistake), and that must stay a conflict for a human.
+ */
+function movementFingerprint(mapped: Record<string, unknown>): string {
+  const at = (key: string): string => {
+    const value = mapped[key];
+    return value == null ? "" : String(value).trim().toUpperCase();
+  };
+  return [
+    at("originCode"),
+    at("destinationCode"),
+    ...PLAN_COMPARE_FIELDS.map((f) => at(f)),
+    at("resource.driverName"),
+    at("resource.driverCpf"),
+    at("resource.vehiclePlate"),
+    at("resource.trailerPlate"),
+  ].join("|");
+}
 
 type TripRow = typeof trips.$inferSelect;
 
@@ -137,26 +159,61 @@ export async function runDetectDuplicates(payload: DetectDuplicatesPayload): Pro
     .select()
     .from(importRows)
     .where(eq(importRows.importBatchId, batchId))
-    .orderBy(asc(importRows.rowNumber));
+    .orderBy(asc(importRows.rowNumber), asc(importRows.legNumber));
 
-  // IN-FILE COLLISION pass (FR-017a): scan the WHOLE batch for rows that share a non-empty external id
-  // with another row. Every colliding row is forced to `error`/`unresolved` so it is created by none.
-  const collisions = detectInFileCollisions(
-    rows.map((r) => {
-      const mapped = (r.mapped ?? {}) as Record<string, unknown>;
-      const ext = mapped.externalTripId;
-      return {
+  // SHARED-ID pass (FR-017a, revised 2026-08-15). Rows sharing a non-empty external id used to be
+  // refused wholesale. They are now classified, because a real file mixes three situations under one
+  // id: a copy-pasted row (keep one), the legs of a milk run (keep all, numbered), and a genuine
+  // conflict (still refused — but now the message names the twin row and what differs).
+  // Legs the PARSE already split out of one stacked source line are not "rows sharing an id" — the
+  // file said they belong together and in what order. They are excluded from the grouping (and any
+  // group that touches such a line is left alone), so the classifier never re-decides a settled
+  // question, and the two same-numbered records never collide in the row-keyed maps below.
+  const stackedLines = new Set(rows.filter((r) => r.legNumber > 1).map((r) => r.rowNumber));
+
+  const sharedIdRows = new Map<string, SharedIdRow[]>();
+  for (const r of rows) {
+    if (stackedLines.has(r.rowNumber)) continue;
+    const mapped = (r.mapped ?? {}) as Record<string, unknown>;
+    const ext = mapped.externalTripId == null ? "" : String(mapped.externalTripId).trim();
+    if (!ext) continue;
+    sharedIdRows.set(ext, [
+      ...(sharedIdRows.get(ext) ?? []),
+      {
         rowNumber: r.rowNumber,
-        externalTripId: ext == null ? null : String(ext),
-      };
-    }),
-  );
+        originCode: mapped.originCode == null ? null : String(mapped.originCode),
+        destinationCode: mapped.destinationCode == null ? null : String(mapped.destinationCode),
+        pickupStart:
+          mapped.plannedPickupWindowStart == null
+            ? null
+            : new Date(String(mapped.plannedPickupWindowStart)).toISOString(),
+        fingerprint: movementFingerprint(mapped),
+      },
+    ]);
+  }
+
+  /** rowNumber → what to do with it, for every row that shares its id with another. */
+  const skipRows = new Map<number, number>(); // row → the row that was kept instead
+  const legByRow = new Map<number, number>();
+  const conflictRows = new Map<number, { twin: number; differs: string }>();
+  for (const [, group] of sharedIdRows) {
+    if (group.length < 2) continue;
+    const verdict = classifySharedExternalId(group);
+    if (verdict.kind === "identical") {
+      for (const skipped of verdict.skip) skipRows.set(skipped, verdict.keep);
+    } else if (verdict.kind === "legs") {
+      for (const [rowNumber, leg] of verdict.legByRow) legByRow.set(rowNumber, leg);
+    } else {
+      const first = group[0]!.rowNumber;
+      for (const [rowNumber, differs] of verdict.differences) {
+        conflictRows.set(rowNumber, { twin: first, differs });
+        conflictRows.set(first, { twin: rowNumber, differs });
+      }
+    }
+  }
 
   // Existing trips of the SAME customer, for the fuzzy look-alike comparison (built once, in memory).
-  const existingTrips = await db
-    .select()
-    .from(trips)
-    .where(eq(trips.customerId, batch.customerId));
+  const existingTrips = await db.select().from(trips).where(eq(trips.customerId, batch.customerId));
   const existingFuzzyKeys = new Set(existingTrips.map(fuzzyKeyForTrip));
 
   let createdCount = 0;
@@ -165,9 +222,35 @@ export async function runDetectDuplicates(payload: DetectDuplicatesPayload): Pro
   let errorCount = 0;
 
   for (const row of rows) {
-    // In-file collision wins: mark error + unresolved BEFORE any exact/fuzzy match (excluded from apply).
-    if (collisions.has(row.rowNumber)) {
-      const existingReasons = Array.isArray(row.reasons) ? (row.reasons as Reason[]) : [];
+    const existingReasons = Array.isArray(row.reasons) ? (row.reasons as Reason[]) : [];
+
+    // A row the file repeats verbatim: keep the first, record why this one was left out. Not an
+    // error — nothing is lost, so it must not block the operator.
+    const keptInstead = skipRows.get(row.rowNumber);
+    if (keptInstead !== undefined) {
+      duplicateCount += 1;
+      await db
+        .update(importRows)
+        .set({
+          outcome: "warning",
+          matchDecision: "unresolved", // excluded from apply: the kept row creates the trip
+          reasons: [
+            ...existingReasons,
+            {
+              code: "DUPLICATE_ROW_SKIPPED",
+              field: "externalTripId",
+              message: `Linha idêntica à linha ${keptInstead}: importada uma única vez.`,
+            },
+          ],
+        })
+        .where(eq(importRows.id, row.id));
+      continue;
+    }
+
+    // Same id, movements that neither match nor chain: still refused, but now the message says where
+    // the twin is and what differs, so the fix takes seconds instead of a hunt.
+    const conflict = conflictRows.get(row.rowNumber);
+    if (conflict) {
       errorCount += 1;
       await db
         .update(importRows)
@@ -179,8 +262,7 @@ export async function runDetectDuplicates(payload: DetectDuplicatesPayload): Pro
             {
               code: "IN_FILE_COLLISION",
               field: "externalTripId",
-              message:
-                "Identificador externo duplicado dentro do mesmo arquivo: linha ambígua, não importada.",
+              message: `Mesmo identificador da linha ${conflict.twin}, com ${conflict.differs} diferente(s) — não importada. Corrija o identificador na origem.`,
             },
           ],
         })
@@ -200,6 +282,15 @@ export async function runDetectDuplicates(payload: DetectDuplicatesPayload): Pro
     const mapped = (row.mapped ?? {}) as Record<string, unknown>;
     const externalTripId = mapped.externalTripId;
 
+    // Milk run: stamp which leg this row is, so the confirm writes it on the trip and matches the
+    // right leg on the next import. A row with no twin is leg 1 — the overwhelming majority. A leg
+    // the parse already split off a stacked line keeps ITS number: that reading came from the file.
+    const legNumber = row.legNumber > 1 ? row.legNumber : (legByRow.get(row.rowNumber) ?? 1);
+    if (legNumber !== 1 || legByRow.has(row.rowNumber)) {
+      mapped.legNumber = legNumber;
+      await db.update(importRows).set({ mapped }).where(eq(importRows.id, row.id));
+    }
+
     let decision: "new" | "update" | "no_op" | "potential_duplicate";
     if (externalTripId == null || String(externalTripId).trim() === "") {
       // Should not reach here (validate flags missing id as error), but guard defensively.
@@ -212,6 +303,7 @@ export async function runDetectDuplicates(payload: DetectDuplicatesPayload): Pro
           and(
             eq(trips.customerId, batch.customerId),
             eq(trips.externalTripId, String(externalTripId)),
+            eq(trips.legNumber, legNumber),
           ),
         )
         .limit(1);
@@ -253,10 +345,7 @@ export async function runDetectDuplicates(payload: DetectDuplicatesPayload): Pro
     if (decision === "new") createdCount += 1;
     else if (decision === "update") updatedCount += 1;
 
-    await db
-      .update(importRows)
-      .set({ matchDecision: decision })
-      .where(eq(importRows.id, row.id));
+    await db.update(importRows).set({ matchDecision: decision }).where(eq(importRows.id, row.id));
   }
 
   await setBatchCounts(batchId, {

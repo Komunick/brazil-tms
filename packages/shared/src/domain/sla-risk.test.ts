@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SLA_POLICY,
+  deliveryDeadline,
   evaluateSlaRisk,
   SLA_REASONS,
   SLA_STATUSES,
@@ -227,6 +228,136 @@ describe("evaluateSlaRisk — branches", () => {
       }),
     );
     expect(r.status).not.toBe("breached");
+  });
+});
+
+describe("as duas cobranças de atribuição param quando o caminhão sai", () => {
+  const semAtribuicao = {
+    assignmentPresent: false,
+    confirmedAt: null,
+    plannedPickupWindowStart: new Date(NOW.getTime() - 5 * HOUR),
+  } as const;
+
+  it("cobra antes de sair", () => {
+    const r = evaluateSlaRisk(baseCtx({ ...semAtribuicao, currentStatus: "confirmed" }));
+    expect(r.reasons).toContain("missing_assignment");
+  });
+
+  it("cala depois de sair — a decisão já passou", () => {
+    // O caso real: 244 alertas dizendo "sem atribuição" para viagens JÁ ENTREGUES.
+    for (const status of ["in_transit", "at_destination", "unloaded"] as TripStatus[]) {
+      const r = evaluateSlaRisk(baseCtx({ ...semAtribuicao, currentStatus: status }));
+      expect(r.reasons).not.toContain("missing_assignment");
+      expect(r.reasons).not.toContain("missed_confirmation");
+    }
+  });
+
+  it("o mesmo vale para a confirmação pendente", () => {
+    const antes = evaluateSlaRisk(
+      baseCtx({
+        assignmentPresent: true,
+        confirmedAt: null,
+        currentStatus: "assigned",
+        plannedPickupWindowStart: new Date(NOW.getTime() - 5 * HOUR),
+      }),
+    );
+    expect(antes.reasons).toContain("missed_confirmation");
+  });
+});
+
+describe("deliveryDeadline — where the destination deadline comes from", () => {
+  const DEPARTURE = new Date(NOW.getTime() - 4 * HOUR);
+
+  it("prefers the customer's stated window end over everything else", () => {
+    const end = new Date(NOW.getTime() + 3 * HOUR);
+    expect(
+      deliveryDeadline(
+        baseCtx({
+          plannedDeliveryWindowEnd: end,
+          plannedDeliveryWindowStart: new Date(NOW.getTime() + HOUR),
+          laneExpectedTransitMinutes: 60,
+        }),
+      ),
+    ).toEqual(end);
+  });
+
+  it("falls back to the stated arrival — a promise made as an instant still outranks our average", () => {
+    const arrival = new Date(NOW.getTime() + HOUR);
+    expect(
+      deliveryDeadline(
+        baseCtx({
+          plannedDeliveryWindowEnd: null,
+          plannedDeliveryWindowStart: arrival,
+          laneExpectedTransitMinutes: 60,
+        }),
+      ),
+    ).toEqual(arrival);
+  });
+
+  it("derives departure + the lane's measured transit when the customer stated no delivery time", () => {
+    const deadline = deliveryDeadline(
+      baseCtx({
+        plannedDeliveryWindowEnd: null,
+        plannedDeliveryWindowStart: null,
+        plannedPickupWindowEnd: DEPARTURE,
+        laneExpectedTransitMinutes: 180,
+      }),
+    );
+    expect(deadline).toEqual(new Date(DEPARTURE.getTime() + 3 * HOUR));
+  });
+
+  it("stays silent rather than guessing: no stated time and no measured lane ⇒ no deadline", () => {
+    for (const transit of [null, 0]) {
+      expect(
+        deliveryDeadline(
+          baseCtx({
+            plannedDeliveryWindowEnd: null,
+            plannedDeliveryWindowStart: null,
+            laneExpectedTransitMinutes: transit,
+          }),
+        ),
+      ).toBeNull();
+    }
+    // A measured lane with no departure to count from is equally unanswerable.
+    expect(
+      deliveryDeadline(
+        baseCtx({
+          plannedDeliveryWindowEnd: null,
+          plannedDeliveryWindowStart: null,
+          plannedPickupWindowStart: null,
+          plannedPickupWindowEnd: null,
+          laneExpectedTransitMinutes: 180,
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("a trip with no stated delivery time IS late against the lane's transit (was invisible before)", () => {
+    const late = evaluateSlaRisk(
+      baseCtx({
+        currentStatus: "in_transit",
+        plannedDeliveryWindowEnd: null,
+        plannedDeliveryWindowStart: null,
+        plannedPickupWindowStart: new Date(NOW.getTime() - 5 * HOUR),
+        plannedPickupWindowEnd: DEPARTURE,
+        laneExpectedTransitMinutes: 120, // due 2h after departure ⇒ 2h ago
+      }),
+    );
+    expect(late.reasons).toContain("delayed_destination_arrival");
+    expect(late.status).toBe("late");
+
+    // Still within the lane's usual transit ⇒ nothing fires.
+    const onTime = evaluateSlaRisk(
+      baseCtx({
+        currentStatus: "in_transit",
+        plannedDeliveryWindowEnd: null,
+        plannedDeliveryWindowStart: null,
+        plannedPickupWindowStart: new Date(NOW.getTime() - 5 * HOUR),
+        plannedPickupWindowEnd: DEPARTURE,
+        laneExpectedTransitMinutes: 600,
+      }),
+    );
+    expect(onTime.reasons).not.toContain("delayed_destination_arrival");
   });
 });
 

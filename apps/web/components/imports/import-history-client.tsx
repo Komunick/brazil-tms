@@ -3,21 +3,11 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  flexRender,
-  getCoreRowModel,
-  useReactTable,
-  type ColumnDef,
-} from "@tanstack/react-table";
+import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -51,6 +41,36 @@ interface ImportBatchSummary {
   uploadedBy: string;
   createdAt: string; // ISO UTC
   hasErrorReport: boolean;
+  /** Which import produced this row: the spreadsheet path, or one of the two portal exports. */
+  source: string;
+  summary: PortalSummary | null;
+}
+
+/**
+ * What a PORTAL import recorded — the part the five count columns cannot hold. A portal import is
+ * described by its own words: "criadas / atualizadas / duplicadas / erros" says nothing about legs
+ * that were already ahead, or about a station nobody has registered yet.
+ */
+interface PortalSummary {
+  mode?: "plan" | "execution";
+  trips?: number;
+  legs?: number;
+  plan?: {
+    created: number;
+    updated: number;
+    unchanged: number;
+    cancelled: number;
+    failed: number;
+    milestones: number;
+  } | null;
+  execution?: {
+    applied: number;
+    notFound: number;
+    alreadyAhead: number;
+    noMilestones: number;
+    closed: number;
+  } | null;
+  unknownStations?: string[];
 }
 
 interface CustomerOption {
@@ -94,9 +114,7 @@ export function ImportHistoryClient() {
   const historyQuery = useQuery({
     queryKey: ["import-history"],
     queryFn: () =>
-      fetchJson<{ items: ImportBatchSummary[] }>("/api/imports?limit=50").then(
-        (b) => b.items,
-      ),
+      fetchJson<{ items: ImportBatchSummary[] }>("/api/imports?limit=50").then((b) => b.items),
     staleTime: 10_000,
   });
 
@@ -104,9 +122,7 @@ export function ImportHistoryClient() {
   const customersQuery = useQuery({
     queryKey: ["master-data", "customers"],
     queryFn: () =>
-      fetchJson<{ items: CustomerOption[] }>("/api/master-data/customers").then(
-        (b) => b.items,
-      ),
+      fetchJson<{ items: CustomerOption[] }>("/api/master-data/customers").then((b) => b.items),
     staleTime: 30_000,
   });
 
@@ -122,8 +138,15 @@ export function ImportHistoryClient() {
     {
       accessorKey: "fileName",
       header: () => t("historyFileName"),
+      cell: ({ row }) => <span className="font-medium">{row.original.fileName}</span>,
+    },
+    {
+      accessorKey: "source",
+      header: () => t("historySource"),
       cell: ({ row }) => (
-        <span className="font-medium">{row.original.fileName}</span>
+        <Badge variant="outline">
+          {t(`source.${row.original.source}` as "source.spreadsheet")}
+        </Badge>
       ),
     },
     {
@@ -139,16 +162,44 @@ export function ImportHistoryClient() {
     {
       id: "_counts",
       header: () => t("historyCounts"),
-      cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground">
-          {t("summary", {
-            created: row.original.createdCount,
-            updated: row.original.updatedCount,
-            duplicate: row.original.duplicateCount,
-            error: row.original.errorCount,
-          })}
-        </span>
-      ),
+      // Each import speaks its own vocabulary: an execution import that "applied 8" has nothing to
+      // say about duplicates, and a plan import's "unchanged" is not an error.
+      cell: ({ row }) => {
+        const detail = row.original.summary;
+        if (detail?.execution) {
+          return (
+            <span className="text-sm text-muted-foreground">
+              {t("summaryExecution", {
+                applied: detail.execution.applied,
+                notFound: detail.execution.notFound,
+                ahead: detail.execution.alreadyAhead,
+              })}
+            </span>
+          );
+        }
+        if (detail?.plan) {
+          return (
+            <span className="text-sm text-muted-foreground">
+              {t("summaryPlan", {
+                created: detail.plan.created,
+                updated: detail.plan.updated,
+                unchanged: detail.plan.unchanged,
+                cancelled: detail.plan.cancelled,
+              })}
+            </span>
+          );
+        }
+        return (
+          <span className="text-sm text-muted-foreground">
+            {t("summary", {
+              created: row.original.createdCount,
+              updated: row.original.updatedCount,
+              duplicate: row.original.duplicateCount,
+              error: row.original.errorCount,
+            })}
+          </span>
+        );
+      },
     },
     {
       accessorKey: "status",
@@ -165,8 +216,19 @@ export function ImportHistoryClient() {
       // Show the download only when a report actually exists in Storage (hasErrorReport), not merely
       // when errorCount > 0 — otherwise the link would 404. It is a plain navigation to the endpoint
       // (which 302-redirects to a fresh signed URL), so no fetch + window.open (popup-block safe).
-      cell: ({ row }) =>
-        row.original.hasErrorReport ? (
+      //
+      // A portal import has no error report; what it has is a list of stations nobody registered,
+      // which is the one thing an operator must act on — so it is shown here in the report's place.
+      cell: ({ row }) => {
+        const stations = row.original.summary?.unknownStations ?? [];
+        if (stations.length > 0) {
+          return (
+            <span className="text-xs text-destructive" title={stations.join("\n")}>
+              {t("historyUnknownStations", { count: stations.length })}
+            </span>
+          );
+        }
+        return row.original.hasErrorReport ? (
           <Button asChild size="sm" variant="outline">
             <a
               href={`/api/imports/${row.original.id}/error-report`}
@@ -178,7 +240,8 @@ export function ImportHistoryClient() {
           </Button>
         ) : (
           <span className="text-muted-foreground">—</span>
-        ),
+        );
+      },
     },
   ];
 
@@ -221,10 +284,7 @@ export function ImportHistoryClient() {
                       <TableHead key={header.id}>
                         {header.isPlaceholder
                           ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext(),
-                            )}
+                          : flexRender(header.column.columnDef.header, header.getContext())}
                       </TableHead>
                     ))}
                   </TableRow>
@@ -237,10 +297,7 @@ export function ImportHistoryClient() {
                   </TableRow>
                 ) : rows.length === 0 ? (
                   <TableRow>
-                    <TableCell
-                      colSpan={columnCount}
-                      className="text-muted-foreground"
-                    >
+                    <TableCell colSpan={columnCount} className="text-muted-foreground">
                       {t("historyEmpty")}
                     </TableCell>
                   </TableRow>
@@ -249,10 +306,7 @@ export function ImportHistoryClient() {
                     <TableRow key={row.id}>
                       {row.getVisibleCells().map((cell) => (
                         <TableCell key={cell.id}>
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext(),
-                          )}
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </TableCell>
                       ))}
                     </TableRow>

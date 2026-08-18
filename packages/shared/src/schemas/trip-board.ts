@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { BILLING_PHASE_STATUSES, TRIP_STATUSES } from "../domain/trip-status";
+import { TRIP_QUEUES } from "../domain/trip-display-status";
 import { SLA_STATUSES } from "../domain/sla-risk";
 import { dateStringSchema, vehicleTypeSchema } from "./master-data";
 
@@ -76,6 +77,26 @@ export const tripBoardQuerySchema = z.object({
   // feature 008 — the "Missing documents" board view: billing-phase trips with an unmet
   // required-for-billing document (data-model §10, R13).
   missingDocuments: optParam(z.enum(["true", "false"])),
+  /**
+   * A fila do despacho: aceita pelo cliente e ainda SEM motorista no portal (2026-08-17).
+   *
+   * Existe porque o cartão do painel precisa levar ao quadro, e `assigned=false` não serve: aquele
+   * filtro pergunta se o TMS tem atribuição, este pergunta se o PORTAL tem motorista. Os dois números
+   * divergem, e um atalho que abre uma lista com outro total é pior do que não abrir nada.
+   */
+  awaitingAssignment: optParam(z.enum(["true", "false"])),
+  /**
+   * QUAL das três filas do que era "Recebida" (2026-08-18).
+   *
+   *   `in_analysis`      — o cliente não decidiu a proposta
+   *   `to_assign`        — decidiu, e falta motorista
+   *   `awaiting_arrival` — o portal já tem motorista; espera-se o comparecimento
+   *
+   * Um parâmetro com TRÊS valores, e não dois booleanos. Booleanos deixariam pedir combinações que
+   * não existem ("em análise E já atribuída") e o quadro voltaria vazio sem dizer por quê. As três
+   * são exaustivas e mutuamente exclusivas por construção: juntas somam `received` inteiro.
+   */
+  queue: optParam(z.enum(TRIP_QUEUES)),
   q: z.preprocess(
     (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
     z.string().trim().min(1).max(200).optional(),
@@ -118,6 +139,8 @@ const PARAM_KEYS = [
   "pickupTo",
   "atRisk",
   "missingDocuments",
+  "awaitingAssignment",
+  "queue",
   "q",
   "scope",
   "sort",

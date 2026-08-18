@@ -3,7 +3,7 @@ import { db } from "../client";
 import { customers, customerSlaRules, lanes } from "../../schema";
 import { type CreateSlaRuleInput, type UpdateSlaRuleInput } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
-import { Conflict } from "../errors";
+import { NotFound } from "../errors";
 
 /**
  * Feature 007 US5 — per-customer SLA-rule admin services (data-model §11, CUST-005). The precedence
@@ -29,7 +29,7 @@ export async function createCustomerSlaRule(
     .from(customers)
     .where(eq(customers.id, input.customerId))
     .limit(1);
-  if (!cust[0]) throw new Conflict("NOT_FOUND", "Cliente não encontrado.");
+  if (!cust[0]) throw new NotFound("NOT_FOUND", "Cliente não encontrado.");
 
   if (input.laneId) {
     const lane = await db
@@ -37,7 +37,7 @@ export async function createCustomerSlaRule(
       .from(lanes)
       .where(and(eq(lanes.id, input.laneId), eq(lanes.customerId, input.customerId)))
       .limit(1);
-    if (!lane[0]) throw new Conflict("NOT_FOUND", "Rota não encontrada para este cliente.");
+    if (!lane[0]) throw new NotFound("NOT_FOUND", "Rota não encontrada para este cliente.");
   }
 
   return db.transaction(async (tx) => {
@@ -82,7 +82,7 @@ export async function updateCustomerSlaRule(
     .from(customerSlaRules)
     .where(eq(customerSlaRules.id, ruleId))
     .limit(1);
-  if (!existing[0]) throw new Conflict("NOT_FOUND", "Regra de SLA não encontrada.");
+  if (!existing[0]) throw new NotFound("NOT_FOUND", "Regra de SLA não encontrada.");
 
   if (input.laneId) {
     const lane = await db
@@ -90,7 +90,7 @@ export async function updateCustomerSlaRule(
       .from(lanes)
       .where(and(eq(lanes.id, input.laneId), eq(lanes.customerId, existing[0].customerId)))
       .limit(1);
-    if (!lane[0]) throw new Conflict("NOT_FOUND", "Rota não encontrada para este cliente.");
+    if (!lane[0]) throw new NotFound("NOT_FOUND", "Rota não encontrada para este cliente.");
   }
 
   const patch: Partial<typeof customerSlaRules.$inferInsert> = { updatedAt: new Date() };

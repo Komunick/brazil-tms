@@ -220,7 +220,9 @@ test.describe("US5 — Dispatch Board", () => {
     // Slice 015 (INVERTED, FR-006): the `status=received` queue INCLUDES a `received` trip — it is the
     // first dispatchable status, so its "Atribuir" succeeds (`received → assigned`). (Under slice 014's
     // validated-only queue this trip was EXCLUDED; the collapse flips that.)
-    await expect(page.getByRole("link", { name: receivedExternalId })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("link", { name: receivedExternalId })).toBeVisible({
+      timeout: 15_000,
+    });
 
     // The per-row assign action ("Atribuir") opens the shared assignment form dialog.
     const row = page.getByRole("listitem").filter({ hasText: unassignedExternalId });
@@ -229,6 +231,95 @@ test.describe("US5 — Dispatch Board", () => {
     await expect(dialog).toBeVisible();
     // The shared AssignmentForm exposes the driver picker (label "Motorista").
     await expect(dialog.getByText("Motorista", { exact: true })).toBeVisible();
+  });
+
+  test("the queue search narrows it by trip id and never widens it", async ({ page }) => {
+    await login(page, testAccounts.opsManager);
+    await page.goto("/dispatch");
+    await expect(page.getByText("Fila de atribuição")).toBeVisible({ timeout: 15_000 });
+
+    // Assert through the SEARCH, never through "is it on page 1": the queue paginates, so on an
+    // environment carrying a bulk-imported season the seeded rows sit pages deep.
+    const search = page.getByPlaceholder("Buscar por ID, cliente ou origem/destino");
+    await search.fill(unassignedExternalId);
+    await expect(page.getByRole("link", { name: unassignedExternalId })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByRole("link", { name: receivedExternalId })).toHaveCount(0);
+
+    // A term outside the queue matches nothing — the search is ANDed with the pinned queue filters,
+    // so it can never surface an assigned or non-`received` trip.
+    await search.fill("ZZZ-INEXISTENTE-000");
+    await expect(page.getByText(/Nenhuma viagem na fila para/)).toBeVisible({ timeout: 15_000 });
+
+    // The other queued trip is reachable by its own id.
+    await search.fill(receivedExternalId);
+    await expect(page.getByRole("link", { name: receivedExternalId })).toBeVisible({
+      timeout: 15_000,
+    });
+  });
+
+  test("the queue paginates at BOTH ends and reports the range it is showing", async ({ page }) => {
+    await login(page, testAccounts.opsManager);
+    await page.goto("/dispatch");
+    await expect(page.getByText("Fila de atribuição")).toBeVisible({ timeout: 15_000 });
+
+    // Volume-independent assertion: narrowing to ONE trip must summarise as "1–1 de 1" with both
+    // page buttons disabled (there is no page 0 and no page 2). The control is rendered TWICE —
+    // pinned above the list and repeated after the last row — so a page turn never costs a scroll
+    // down and back up. Both copies are asserted: a disabled twin is as important as a disabled one.
+    await page
+      .getByPlaceholder("Buscar por ID, cliente ou origem/destino")
+      .fill(unassignedExternalId);
+    await expect(page.getByText("1–1 de 1")).toHaveCount(2, { timeout: 15_000 });
+    for (const label of ["Anterior", "Próxima"]) {
+      const buttons = page.getByRole("button", { name: label });
+      await expect(buttons).toHaveCount(2);
+      await expect(buttons.first()).toBeDisabled();
+      await expect(buttons.last()).toBeDisabled();
+    }
+
+    // With the whole queue, both copies still report a range (the counts depend on the environment).
+    await page.getByPlaceholder("Buscar por ID, cliente ou origem/destino").fill("");
+    await page.getByRole("button", { name: "Tudo", exact: true }).click();
+    await expect(page.getByText(/\d+–\d+ de \d+/).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/\d+–\d+ de \d+/)).toHaveCount(2);
+  });
+
+  test("the pickup-date filter narrows the queue and the presets drive it", async ({ page }) => {
+    await login(page, testAccounts.opsManager);
+    await page.goto("/dispatch");
+    await expect(page.getByText("Fila de atribuição")).toBeVisible({ timeout: 15_000 });
+
+    // Pin the queue to the seeded trip first: the date assertions must hold whatever else the
+    // environment carries (a bulk-imported season would push this row off page 1).
+    await page
+      .getByPlaceholder("Buscar por ID, cliente ou origem/destino")
+      .fill(unassignedExternalId);
+
+    // Its pickup is TODAY (BRT), so the default "de hoje em diante" already shows it.
+    const row = page.getByRole("link", { name: unassignedExternalId });
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    const from = page.locator("#dispatch-pickup-from");
+    const to = page.locator("#dispatch-pickup-to");
+    await expect(from).not.toHaveValue("");
+
+    // A window that closed years ago cannot contain it (the search term stays applied, so the
+    // "no trips for <term>" message is the one that renders).
+    await from.fill("2020-01-01");
+    await to.fill("2020-01-02");
+    await expect(row).toHaveCount(0, { timeout: 15_000 });
+
+    // "Tudo" clears both bounds and brings it back.
+    await page.getByRole("button", { name: "Tudo", exact: true }).click();
+    await expect(from).toHaveValue("");
+    await expect(to).toHaveValue("");
+    await expect(row).toBeVisible({ timeout: 15_000 });
+
+    // "Hoje" pins both ends to the same BRT day — the seeded trip qualifies.
+    await page.getByRole("button", { name: "Hoje", exact: true }).click();
+    await expect(from).toHaveValue(await to.inputValue());
+    await expect(row).toBeVisible({ timeout: 15_000 });
   });
 
   test("a complete assignment from the received queue succeeds (received → assigned) (slice 015)", async ({
@@ -268,9 +359,9 @@ test.describe("US5 — Control Tower assignment integration", () => {
     await page.goto("/trips");
 
     // The assignment row-indicator column header is present (fills 005 FR-007).
-    await expect(
-      page.getByRole("columnheader", { name: "Atribuição" }).first(),
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("columnheader", { name: "Atribuição" }).first()).toBeVisible({
+      timeout: 15_000,
+    });
 
     // Apply the "Não atribuídas" (Unassigned) quick-view — sets ?assigned=false&scope=active. The same
     // label is used by the assigned tri-state filter AND the quick-view, so scope to the "Visões"
@@ -279,7 +370,9 @@ test.describe("US5 — Control Tower assignment integration", () => {
       .locator("div.space-y-1\\.5")
       .filter({ has: page.getByText("Visões", { exact: true }) });
     await viewsGroup.getByRole("button", { name: "Não atribuídas", exact: true }).click();
-    await page.waitForFunction(() => new URLSearchParams(location.search).get("assigned") === "false");
+    await page.waitForFunction(
+      () => new URLSearchParams(location.search).get("assigned") === "false",
+    );
 
     // The seeded unassigned trip shows in the narrowed list with the "Não atribuídas" row indicator
     // (the `assignedNo` label rendered by the assignment column for an unassigned row).
@@ -303,22 +396,28 @@ test.describe("US5 — Control Tower assignment integration", () => {
   });
 });
 
-test.describe("US5 — Home Dashboard unassigned-trips widget", () => {
-  test("the 'Viagens sem atribuição' widget shows a count and deep-links to the Unassigned view", async ({
+test.describe("US5 — Home Dashboard dispatch-queue widget", () => {
+  /**
+   * Este teste apontava para o cartão "Viagens sem atribuição", retirado do painel a pedido em
+   * 2026-08-17 junto com outros quatro. Quem ficou no lugar dele responde a MESMA pergunta com a
+   * definição que a operação usa: aceita pelo cliente e ainda sem motorista no portal.
+   *
+   * Mudou também a forma do atalho — o cartão inteiro virou link, em vez de trazer uma linha extra
+   * escrita "Ver na Torre de Controle". Por isso o alvo aqui é o `href`, e não mais o texto.
+   */
+  test("o cartão 'Aguardando atribuição' abre o quadro com o MESMO filtro que o contou", async ({
     page,
   }) => {
     await login(page, testAccounts.opsManager);
     await page.goto(routes.home);
 
-    // The unassigned-trips widget card title (Trips.dashboard.unassignedTrips).
-    await expect(page.getByText("Viagens sem atribuição", { exact: true })).toBeVisible({
+    await expect(page.getByText("Aguardando atribuição", { exact: true })).toBeVisible({
       timeout: 15_000,
     });
 
-    // The unassigned widget's "Ver na Torre de Controle" deep-link is the ONLY one carrying the
-    // Unassigned-view query (?assigned=false…); the other widget deep-links use different params.
-    const deepLink = page.locator('a[href*="assigned=false"]', { hasText: "Ver na Torre de Controle" });
-    await expect(deepLink).toBeVisible();
-    await expect(deepLink).toHaveAttribute("href", /assigned=false/);
+    const atalho = page.locator('a[href*="awaitingAssignment=true"]');
+    await expect(atalho).toBeVisible();
+    // O recorte tem que ser o mesmo da contagem: viagens VIVAS esperando despacho.
+    await expect(atalho).toHaveAttribute("href", /scope=active/);
   });
 });

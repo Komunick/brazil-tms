@@ -3,7 +3,7 @@ import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
 import { customers, db, locations } from "@brazil-tms/db";
 import type { CreateLocationInput, UpdateLocationInput } from "@brazil-tms/shared";
 import { writeAudit } from "@/lib/audit/write-audit";
-import { Conflict } from "@/lib/api/respond";
+import { Conflict, NotFound } from "@/lib/api/respond";
 
 /** API response shape for a location (contract: bff-endpoints.md §Locations; timestamps ISO). */
 export interface LocationDto {
@@ -134,7 +134,7 @@ export async function listLocations(opts: ListLocationsOptions = {}): Promise<Lo
 export async function getLocation(id: string): Promise<LocationDto> {
   const rows = await db.select().from(locations).where(eq(locations.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new Conflict("NOT_FOUND", "Local não encontrado.");
+  if (!row) throw new NotFound("NOT_FOUND", "Local não encontrado.");
   return toDto(row);
 }
 
@@ -185,7 +185,7 @@ export async function updateLocation(
 ): Promise<LocationDto> {
   const currentRows = await db.select().from(locations).where(eq(locations.id, id)).limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Local não encontrado.");
+  if (!current) throw new NotFound("NOT_FOUND", "Local não encontrado.");
 
   // Re-pointing a location to a different customer must target an ACTIVE customer.
   if (input.customerId !== undefined) await assertActiveCustomer(input.customerId);
@@ -221,7 +221,7 @@ export async function updateLocation(
         .where(eq(locations.id, id))
         .returning();
       const row = updated[0];
-      if (!row) throw new Conflict("NOT_FOUND", "Local não encontrado.");
+      if (!row) throw new NotFound("NOT_FOUND", "Local não encontrado.");
       await writeAudit(tx, {
         entityType: "location",
         entityId: id,
@@ -242,7 +242,7 @@ export async function updateLocation(
 export async function archiveLocation(id: string, actorUserId: string): Promise<LocationDto> {
   const currentRows = await db.select().from(locations).where(eq(locations.id, id)).limit(1);
   const current = currentRows[0];
-  if (!current) throw new Conflict("NOT_FOUND", "Local não encontrado.");
+  if (!current) throw new NotFound("NOT_FOUND", "Local não encontrado.");
   if (current.archivedAt) return toDto(current); // already archived — idempotent, no new audit
 
   return db.transaction(async (tx) => {
@@ -253,7 +253,7 @@ export async function archiveLocation(id: string, actorUserId: string): Promise<
       .where(eq(locations.id, id))
       .returning();
     const row = updated[0];
-    if (!row) throw new Conflict("NOT_FOUND", "Local não encontrado.");
+    if (!row) throw new NotFound("NOT_FOUND", "Local não encontrado.");
     await writeAudit(tx, {
       entityType: "location",
       entityId: id,

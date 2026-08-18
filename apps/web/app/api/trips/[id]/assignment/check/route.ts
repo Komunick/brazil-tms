@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkAssignmentSchema } from "@brazil-tms/shared";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
-import { apiError, Conflict, handleRouteError } from "@/lib/api/respond";
+import { handleRouteError } from "@/lib/api/respond";
 import { checkAssignment } from "@/lib/trips/trip-assignments";
 
 export const dynamic = "force-dynamic";
@@ -25,9 +25,7 @@ export async function POST(
     const findings = await checkAssignment(id, input);
     return NextResponse.json({ findings });
   } catch (error) {
-    if (error instanceof Conflict && error.code === "NOT_FOUND") {
-      return apiError(404, "NOT_FOUND", error.message);
-    }
+    // A missing trip is 404, straight from `handleRouteError` now that the service throws `NotFound`.
     return handleRouteError(error);
   }
 }

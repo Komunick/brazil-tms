@@ -9,7 +9,7 @@ import {
   type MarkCompletedInput,
 } from "@brazil-tms/shared";
 import { writeAudit } from "../audit/write-audit";
-import { Conflict } from "../errors";
+import { Conflict, NotFound } from "../errors";
 import { transitionTripStatus } from "./trip-transitions";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
 import { ensureBillingItem } from "../billing/billing-items";
@@ -81,7 +81,7 @@ async function recordWaivers(
 
 async function reload(tripId: string): Promise<TripDetail> {
   const detail = await loadTripDetail(db, tripId);
-  if (!detail) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+  if (!detail) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
   return detail;
 }
 
@@ -96,7 +96,7 @@ export async function markCompleted(
   actorUserId: string,
 ): Promise<TripDetail> {
   const trip = await loadTripScope(tripId);
-  if (!trip) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+  if (!trip) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
 
   const required = await resolveRequiredTypes(trip);
   const satisfied = await satisfiedDocumentTypeIds(tripId);
@@ -142,7 +142,7 @@ export async function markBillingReady(
   actorUserId: string,
 ): Promise<TripDetail> {
   const trip = await loadTripScope(tripId);
-  if (!trip) throw new Conflict("NOT_FOUND", "Viagem não encontrada.");
+  if (!trip) throw new NotFound("NOT_FOUND", "Viagem não encontrada.");
 
   const required = await resolveRequiredTypes(trip);
   const satisfied = await satisfiedDocumentTypeIds(tripId);

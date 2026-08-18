@@ -51,6 +51,17 @@ export const templateConfigSchema = z.object({
   columnMappings: z.array(columnMappingSchema).min(1),
   parsingRules: parsingRulesSchema,
   requiredOverrides: z.array(z.string()).default([]),
+  /**
+   * The customer's own labels for "this trip is over" (e.g. FINALIZADA, CANCELADA, NO SHOW), matched
+   * against the `statusLabel` target, accent- and case-insensitively.
+   *
+   * A cumulative schedule re-sent every week is mostly history: of one real 3.7k-row file, 3.265 rows
+   * were already closed at the source. Importing those as fresh `received` trips floods the dispatch
+   * queue and makes the SLA sweep alert on every one of them. With this list, a closed row that the
+   * TMS does not know is SKIPPED, and a trip the TMS already has is CLOSED to match. Empty (the
+   * default) keeps the old behaviour: status is ignored entirely and the TMS owns the lifecycle.
+   */
+  closedStatusLabels: z.array(z.string()).default([]),
 });
 
 export type TemplateConfig = z.infer<typeof templateConfigSchema>;

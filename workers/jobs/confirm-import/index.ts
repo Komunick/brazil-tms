@@ -1,11 +1,17 @@
 import type { PgBoss } from "pg-boss";
 import { and, asc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import {
+  advanceTripFromSource,
+  closeTripFromSource,
   Conflict,
   createTrip,
   db,
+  isCancellationLabel,
+  isClosedAtSource,
   importBatches,
   importRows,
+  importTemplates,
+  statusMappings,
   trips,
   updateTripPlan,
   writeAudit,
@@ -14,10 +20,18 @@ import {
   createTripSchema,
   type ConfirmPayload,
   type TripPlanFields,
+  type TripStatus,
 } from "@brazil-tms/shared";
 import { setBatchCounts, setBatchStatus } from "../../lib/batch-progress";
 import { JOB, work } from "../../lib/queue";
 import { runGenerateErrorReport } from "../generate-error-report";
+import {
+  buildResourceIndex,
+  hasResourceRequest,
+  linkResources,
+  resourceRequestFrom,
+  type ResourceIndex,
+} from "./resources";
 
 /**
  * T033 — `import.confirm` job (data-model R8; contract §C/§A). Per row best-effort + idempotent: for
@@ -26,8 +40,13 @@ import { runGenerateErrorReport } from "../generate-error-report";
  * audit. Newly created trips are born `received` (slice 015, superseding slice 014's born-`validated`):
  * the validation states were collapsed into `received`, which is itself the first dispatchable status,
  * so a passing imported row is a `received` trip — `createTrip` is called with no status argument. Import
- * never changes an EXISTING trip's status: the `updateTripPlan` paths (update + unique-race fallback)
- * and `no_op` are status-neutral, so an already-`assigned`/`in_transit` trip keeps its status (FR-002).
+ * writes no status through the PLAN paths: `updateTripPlan` (update + unique-race fallback) and `no_op`
+ * are status-neutral (FR-002). A trip's status moves only through the customer's own status column, and
+ * only for a customer that has the words configured (`status_mappings`): closing it when the file
+ * reports it over, advancing it — forward only, never unmanned — when the file reports it underway.
+ * A row the file reports CANCELLED that the TMS never had is created and cancelled (2026-08-15, at
+ * the operation's request): "why didn't this one run?" has to have an answer in the TMS. One that
+ * simply ran to the end is still skipped — historical deliveries nobody can act on.
  *
  * IDEMPOTENCY: a row's `applied_at`/`target_trip_id` guard makes a re-run skip already-applied rows,
  * so re-running creates 0 new trips. The trips partial unique index `(customer_id, external_trip_id)`
@@ -66,9 +85,7 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 /** The plan-only subset of the parsed create input (what `updateTripPlan` accepts). */
-function planChangesFrom(
-  input: ReturnType<typeof createTripSchema.parse>,
-): TripPlanFields {
+function planChangesFrom(input: ReturnType<typeof createTripSchema.parse>): TripPlanFields {
   return {
     plannedPickupWindowStart: input.plannedPickupWindowStart ?? null,
     plannedPickupWindowEnd: input.plannedPickupWindowEnd ?? null,
@@ -83,17 +100,85 @@ function planChangesFrom(
   };
 }
 
-/** Find an existing trip by the match key (customer, external_trip_id); null when absent. */
+/**
+ * Find an existing trip by the match key (customer, external_trip_id, leg); null when absent.
+ * The leg keeps a milk run's second movement from overwriting its first — they share the customer's
+ * id on purpose.
+ */
 async function findExistingTrip(
   customerId: string,
   externalTripId: string,
+  legNumber = 1,
 ): Promise<{ id: string } | null> {
   const rows = await db
     .select({ id: trips.id })
     .from(trips)
-    .where(and(eq(trips.customerId, customerId), eq(trips.externalTripId, externalTripId)))
+    .where(
+      and(
+        eq(trips.customerId, customerId),
+        eq(trips.externalTripId, externalTripId),
+        eq(trips.legNumber, legNumber),
+      ),
+    )
     .limit(1);
   return rows[0] ?? null;
+}
+
+/**
+ * Collect the `customer.<rótulo>` targets the engine stored on the mapped row into the jsonb bag
+ * kept on the trip. Returns null when the template maps none, so trips from other customers keep a
+ * null column instead of an empty object.
+ */
+function customerFieldsFrom(mapped: Record<string, unknown>): Record<string, string> | null {
+  const fields: Record<string, string> = {};
+  for (const [key, value] of Object.entries(mapped)) {
+    if (!key.startsWith("customer.")) continue;
+    if (value === null || value === undefined || String(value).trim() === "") continue;
+    fields[key.slice("customer.".length)] = String(value).trim();
+  }
+  return Object.keys(fields).length ? fields : null;
+}
+
+/** Accent/case-folded label, so "EM VIAGEM", "Em viagem" and "em  viagem" are one key. */
+function foldLabel(value: unknown): string {
+  if (value == null) return "";
+  return String(value)
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toUpperCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * The customer's active status vocabulary: file label → internal `trip_status` (data-model §4). This
+ * is the config that lets the import say where a trip IS, not just that it ended — one engine, the
+ * words live in the database (Constitution V).
+ */
+async function loadStatusMappings(customerId: string): Promise<Map<string, TripStatus>> {
+  const rows = await db
+    .select({ label: statusMappings.customerLabel, status: statusMappings.internalStatus })
+    .from(statusMappings)
+    .where(
+      and(
+        eq(statusMappings.customerId, customerId),
+        eq(statusMappings.active, true),
+        isNull(statusMappings.archivedAt),
+      ),
+    );
+  return new Map(rows.map((r) => [foldLabel(r.label), r.status]));
+}
+
+/** The template's `closedStatusLabels`, or none when the batch used the built-in standard format. */
+async function closedStatusLabelsFor(templateId: string | null): Promise<string[]> {
+  if (!templateId) return [];
+  const rows = await db
+    .select({ config: importTemplates.closedStatusLabels })
+    .from(importTemplates)
+    .where(eq(importTemplates.id, templateId))
+    .limit(1);
+  const value = rows[0]?.config;
+  return Array.isArray(value) ? (value as string[]) : [];
 }
 
 export async function runConfirm(payload: ConfirmPayload): Promise<void> {
@@ -112,12 +197,37 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
     .select()
     .from(importRows)
     .where(
-      and(
-        eq(importRows.importBatchId, batchId),
-        inArray(importRows.outcome, ["valid", "warning"]),
-      ),
+      and(eq(importRows.importBatchId, batchId), inArray(importRows.outcome, ["valid", "warning"])),
     )
-    .orderBy(asc(importRows.rowNumber));
+    .orderBy(asc(importRows.rowNumber), asc(importRows.legNumber));
+
+  // Registry snapshot for the resource linking below — read once, not per row.
+  const needsResources = pending.some((row) =>
+    hasResourceRequest(resourceRequestFrom((row.mapped ?? {}) as Record<string, unknown>)),
+  );
+  const resourceIndex: ResourceIndex | null = needsResources ? await buildResourceIndex() : null;
+  const linkTally = { assigned: 0, blocked: 0, unresolved: 0 };
+
+  // The customer's "this is over" labels, from the template. Empty → status is ignored, which is the
+  // behaviour every other customer keeps.
+  const closedLabels = await closedStatusLabelsFor(batch.templateId);
+  const closedTally = { skipped: 0, closed: 0, cancelledCreated: 0 };
+
+  // The customer's words for where a RUNNING trip is (`status_mappings` config — no per-customer
+  // code). Empty for a customer with no mappings, and then nothing below ever fires.
+  const statusByLabel = await loadStatusMappings(batch.customerId);
+  const statusTally = { advanced: 0, noResource: 0, behind: 0 };
+
+  /**
+   * Live progress. Confirming a real customer file means thousands of rows, each one a trip write
+   * plus an eligibility-checked assignment — minutes of work. Publishing the running tallies every
+   * `PROGRESS_EVERY` rows lets the screen show movement instead of a frozen "confirmando"; the
+   * authoritative recount still happens at the end.
+   */
+  const PROGRESS_EVERY = 50;
+  let appliedNew = 0;
+  let appliedUpdated = 0;
+  let processed = 0;
 
   for (const row of pending) {
     if (row.appliedAt != null) continue; // idempotency guard: already applied
@@ -126,9 +236,99 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
     let targetTripId: string | null = null;
 
     try {
+      // Which leg of the customer's programming this row is (detect-duplicates stamped it).
+      const legNumber = typeof mapped.legNumber === "number" ? mapped.legNumber : 1;
+
+      /**
+       * The row says the trip is already over. Three outcomes, and the difference between the last
+       * two is a business decision (2026-08-15), not a technicality:
+       *  - the TMS already has it (imported last week, still open here) → CLOSE it to match, so it
+       *    stops being an open trip forever;
+       *  - the TMS does not know it and the customer CALLED IT OFF → CREATE it and cancel it. The
+       *    operation has to be able to answer "why didn't this one run?", and a row that never
+       *    existed in the TMS answers nothing. It is born terminal, so it never reaches the
+       *    dispatch queue and never raises an alert;
+       *  - the TMS does not know it and it simply RAN to the end → SKIP. Thousands of historical
+       *    deliveries would be created with a pickup in the past for no one to act on.
+       */
+      if (isClosedAtSource(mapped.statusLabel, closedLabels)) {
+        const externalId = mapped.externalTripId ? String(mapped.externalTripId) : "";
+        const existing = externalId
+          ? await findExistingTrip(batch.customerId, externalId, legNumber)
+          : null;
+        const label = String(mapped.statusLabel);
+        const cancelled = isCancellationLabel(label);
+
+        if (existing) {
+          const outcome = await closeTripFromSource(
+            existing.id,
+            label,
+            actorUserId,
+            batch.fileName,
+          );
+          if (outcome === "closed") closedTally.closed++;
+          targetTripId = existing.id;
+        } else if (cancelled && mapped.originLocationId && mapped.destinationLocationId) {
+          // Same write path as any other imported trip — created `received`, then walked to
+          // `cancelled` through the declared transition, carrying the customer's own reason label.
+          const trip = await createTrip(
+            createTripSchema.parse({
+              customerId: batch.customerId,
+              externalTripId: mapped.externalTripId ?? null,
+              legNumber,
+              importBatchId: batchId,
+              originLocationId: mapped.originLocationId,
+              destinationLocationId: mapped.destinationLocationId,
+              plannedPickupWindowStart: mapped.plannedPickupWindowStart ?? null,
+              plannedPickupWindowEnd: mapped.plannedPickupWindowEnd ?? null,
+              plannedDeliveryWindowStart: mapped.plannedDeliveryWindowStart ?? null,
+              plannedDeliveryWindowEnd: mapped.plannedDeliveryWindowEnd ?? null,
+              plannedVehicleType: mapped.plannedVehicleType ?? null,
+              plannedRouteNotes: mapped.plannedRouteNotes ?? null,
+            }),
+            actorUserId,
+          );
+          const customerFields = customerFieldsFrom(mapped);
+          if (customerFields) {
+            await db
+              .update(trips)
+              .set({ customerFields, updatedAt: new Date() })
+              .where(eq(trips.id, trip.id));
+          }
+          await closeTripFromSource(trip.id, label, actorUserId, batch.fileName);
+          closedTally.cancelledCreated++;
+          targetTripId = trip.id;
+        } else {
+          closedTally.skipped++;
+        }
+
+        const priorReasons = Array.isArray(row.reasons)
+          ? (row.reasons as { code: string; field?: string; message: string }[])
+          : [];
+        await db
+          .update(importRows)
+          .set({
+            targetTripId,
+            appliedAt: new Date(),
+            reasons: [
+              ...priorReasons,
+              {
+                code: "CLOSED_AT_SOURCE",
+                message: existing
+                  ? `O cliente reporta "${label}": viagem encerrada no TMS.`
+                  : targetTripId
+                    ? `O cliente reporta "${label}": viagem importada já cancelada, para consulta.`
+                    : `O cliente reporta "${label}": linha não importada (viagem já encerrada na origem).`,
+              },
+            ],
+          })
+          .where(eq(importRows.id, row.id));
+        continue;
+      }
       const input = createTripSchema.parse({
         customerId: batch.customerId,
         externalTripId: mapped.externalTripId ?? null,
+        legNumber,
         importBatchId: batchId,
         originLocationId: mapped.originLocationId,
         destinationLocationId: mapped.destinationLocationId,
@@ -157,7 +357,7 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
         } catch (err) {
           // Race backstop: a concurrent insert won the partial-unique index → re-resolve as update.
           if (isUniqueViolation(err) && externalTripId) {
-            const existing = await findExistingTrip(batch.customerId, externalTripId);
+            const existing = await findExistingTrip(batch.customerId, externalTripId, legNumber);
             if (!existing) throw err;
             await updateTripPlan(existing.id, planChanges, {}, actorUserId);
             targetTripId = existing.id;
@@ -167,7 +367,7 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
         }
       } else if (row.matchDecision === "update") {
         const existing = externalTripId
-          ? await findExistingTrip(batch.customerId, externalTripId)
+          ? await findExistingTrip(batch.customerId, externalTripId, legNumber)
           : null;
         if (existing) {
           await updateTripPlan(existing.id, planChanges, {}, actorUserId);
@@ -179,15 +379,94 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
         }
       } else if (row.matchDecision === "no_op") {
         const existing = externalTripId
-          ? await findExistingTrip(batch.customerId, externalTripId)
+          ? await findExistingTrip(batch.customerId, externalTripId, legNumber)
           : null;
         targetTripId = existing?.id ?? null;
+      }
+
+      // The columns the customer's file carries that the TMS has no field for (região, solicitação,
+      // CT-e…) ride along on the trip so they show on its screen — display-only, no migration per
+      // column. Written after the plan write so it applies to created and updated trips alike.
+      const customerFields = customerFieldsFrom(mapped);
+      if (targetTripId && customerFields) {
+        await db
+          .update(trips)
+          .set({ customerFields, updatedAt: new Date() })
+          .where(eq(trips.id, targetTripId));
+      }
+
+      // Link the resources the schedule already names (driver / tractor / trailer). Never fatal to
+      // the row: the trip exists either way, and what could not be linked is reported.
+      const outcome =
+        targetTripId && resourceIndex
+          ? await linkResources(
+              targetTripId,
+              resourceRequestFrom(mapped),
+              resourceIndex,
+              actorUserId,
+              batch.fileName,
+            )
+          : null;
+      if (outcome?.status === "assigned") linkTally.assigned++;
+      if (outcome?.status === "blocked" || outcome?.status === "unresolved") {
+        if (outcome.status === "blocked") linkTally.blocked++;
+        else linkTally.unresolved++;
+        const priorReasons = Array.isArray(row.reasons)
+          ? (row.reasons as { code: string; field?: string; message: string }[])
+          : [];
+        await db
+          .update(importRows)
+          .set({
+            reasons: [
+              ...priorReasons,
+              outcome.status === "blocked"
+                ? {
+                    code: "ASSIGNMENT_BLOCKED",
+                    message: `Recursos não vinculados: ${outcome.detail}`,
+                  }
+                : {
+                    code: "RESOURCE_NOT_FOUND",
+                    message: `Recursos não vinculados — sem cadastro: ${outcome.missing.join(", ")}.`,
+                  },
+            ],
+          })
+          .where(eq(importRows.id, row.id));
+      }
+
+      /**
+       * Where the customer says this trip IS. Runs AFTER the resource linking on purpose: the file
+       * names the driver, `linkResources` assigns, and only then can the trip honestly be reported
+       * underway. `advanceTripFromSource` refuses anything backwards or unmanned by itself.
+       */
+      const sourceStatus = statusByLabel.get(foldLabel(mapped.statusLabel));
+      if (targetTripId && sourceStatus) {
+        const moved = await advanceTripFromSource(
+          targetTripId,
+          sourceStatus,
+          String(mapped.statusLabel),
+          actorUserId,
+          batch.fileName,
+        );
+        if (moved === "advanced") statusTally.advanced++;
+        else if (moved === "no_resource") statusTally.noResource++;
+        else if (moved === "backwards") statusTally.behind++;
       }
 
       await db
         .update(importRows)
         .set({ targetTripId, appliedAt: new Date() })
         .where(eq(importRows.id, row.id));
+
+      if (row.matchDecision === "new" || row.matchDecision === "potential_duplicate") appliedNew++;
+      else if (row.matchDecision === "update") appliedUpdated++;
+      processed++;
+      if (processed % PROGRESS_EVERY === 0) {
+        await setBatchCounts(batchId, {
+          createdCount: appliedNew,
+          updatedCount: appliedUpdated,
+          errorCount: batch.errorCount,
+        });
+      }
     } catch (err) {
       // Per-row failure: record + continue (never abort the batch). Two distinct kinds:
       //  - REVIEW_REQUIRED (the trip is past `confirmed`): TERMINAL for import — a re-run hits the same
@@ -223,7 +502,7 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
     .select({ matchDecision: importRows.matchDecision })
     .from(importRows)
     .where(and(eq(importRows.importBatchId, batchId), isNotNull(importRows.appliedAt)))
-    .orderBy(asc(importRows.rowNumber));
+    .orderBy(asc(importRows.rowNumber), asc(importRows.legNumber));
 
   // A `potential_duplicate` row that applied also created a NEW trip, so it counts toward created.
   const createdCount = applied.filter(
@@ -264,7 +543,16 @@ export async function runConfirm(payload: ConfirmPayload): Promise<void> {
     entityId: batchId,
     action: "import.confirm",
     previousValue: null,
-    newValue: { createdCount, updatedCount, errorCount },
+    // The link tallies ride on the same audit row: how many trips the file itself resourced, and how
+    // many it could not (blocked by the eligibility rules, or naming a resource with no registry).
+    newValue: {
+      createdCount,
+      updatedCount,
+      errorCount,
+      ...linkTally,
+      ...closedTally,
+      ...statusTally,
+    },
     actorUserId,
   });
 }

@@ -37,8 +37,18 @@ export type AuditAction =
   // lifecycle action writes exactly one immutable audit row (SC-003).
   | "trip.create" // newValue = original_plan summary + initial status
   | "trip.plan_update" // accepted customer update to live planned_* fields (per-field prev/new)
+  | "trip.fields_update" // the operation's own annotations (solicitação, checklist, SM Raster, CT-e, doca)
   | "trip.status_change" // prev/new current_status (also recorded as a trip_event)
   | "trip.cancel" // reason_code, responsible_party, billing_impact, cancelled_at
+  /**
+   * A viagem que o cliente RETIROU do portal antes de qualquer coisa acontecer (2026-08-18).
+   *
+   * É a ÚNICA ação neste arquivo que registra uma linha que deixou de existir — e existe exatamente
+   * por isso. A auditoria não tem chave estrangeira para `trips`, então ela sobrevive à remoção: é o
+   * que resta para responder "e a LT1Q8I02EDDT1, que eu vi ontem?". `newValue` guarda o número da
+   * viagem, o cliente e há quantas horas ela não aparecia; `reason`, a varredura que a removeu.
+   */
+  | "trip.purge_withdrawn"
   // feature 004 — trip import (data-model.md §Audit actions). Batch upload + confirm, plus the
   // config surfaces (templates, status mappings, location aliases). Per-trip `trip.create` /
   // `trip.plan_update` (003) also fire during confirm, with `reason` referencing the batch id.
@@ -135,8 +145,10 @@ export const ALL_AUDIT_ACTIONS = [
   "trailer.status_change",
   "trip.create",
   "trip.plan_update",
+  "trip.fields_update",
   "trip.status_change",
   "trip.cancel",
+  "trip.purge_withdrawn",
   "import.create",
   "import.confirm",
   "import_template.create",

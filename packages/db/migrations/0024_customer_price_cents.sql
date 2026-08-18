@@ -1,0 +1,13 @@
+-- O preço que o CLIENTE declara por esta viagem (2026-08-16).
+--
+-- O portal publica "Valor da Viagem" em cada viagem planejada — e é o que a Brazil Transports
+-- recebe por ela (confirmado com o usuário). Sem isso, faturar dependia de alguém manter uma tabela
+-- de tarifas por rota que hoje não existe: 243 viagens chegaram à fila de cobrança sem preço nenhum
+-- e paravam ali.
+--
+-- Fica em coluna própria, não em `customer_fields`: dinheiro não deve morar num campo de texto de
+-- exibição. Centavos inteiros, como todo o resto do domínio (R7).
+--
+-- O valor aparece no PLANEJADO e some depois da conclusão (2 de 50 concluídas ainda o traziam), por
+-- isso é capturado no ciclo do plano — quem esperar a viagem terminar não encontra mais.
+ALTER TABLE "trips" ADD COLUMN "customer_price_cents" bigint;

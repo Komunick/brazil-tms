@@ -2,26 +2,18 @@ import { parse as parseCsv } from "csv-parse/sync";
 import ExcelJS from "exceljs";
 import type { PgBoss } from "pg-boss";
 import { and, eq } from "drizzle-orm";
-import {
-  db,
-  importBatches,
-  importRows,
-  importTemplates,
-} from "@brazil-tms/db";
+import { db, importBatches, importRows, importTemplates } from "@brazil-tms/db";
 import { downloadObject } from "@brazil-tms/db/storage";
 import {
   applyTemplate,
+  expandStackedRow,
   inferFileType,
   STANDARD_IMPORT_TEMPLATE,
   templateConfigSchema,
   type ParsePayload,
   type TemplateConfig,
 } from "@brazil-tms/shared";
-import {
-  setBatchFailed,
-  setBatchStatus,
-  setBatchTotalRows,
-} from "../../lib/batch-progress";
+import { setBatchFailed, setBatchStatus, setBatchTotalRows } from "../../lib/batch-progress";
 import { JOB, enqueue, work } from "../../lib/queue";
 
 /**
@@ -72,19 +64,35 @@ function parseCsvBytes(bytes: Buffer): ParsedRecord[] {
   return rows.map((raw, index) => ({ rowNumber: index + 1, raw }));
 }
 
-/** Stringify an ExcelJS cell value to the same string shape the engine expects from CSV. */
-function cellToString(value: ExcelJS.CellValue): string {
+/**
+ * Stringify an ExcelJS cell value to the same string shape the engine expects from CSV.
+ *
+ * An INVALID date reads as empty, never as the literal "Invalid Date". Real workbooks carry cells
+ * typed as date that hold no usable date — a text column left with a date format, or a formula whose
+ * cached result is a broken date. Stringifying those blindly wrote "Invalid Date" into the imported
+ * data (seen on the Shopee `REGIÃO` column); empty is the honest reading, and the row's required
+ * fields still catch it when the column mattered.
+ */
+export function cellToString(value: ExcelJS.CellValue): string {
   if (value === null || value === undefined) return "";
-  if (value instanceof Date) return value.toISOString();
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? "" : value.toISOString();
   if (typeof value === "object") {
     const obj = value as unknown as Record<string, unknown>;
     // ExcelJS rich-text / hyperlink / formula result shapes.
     if (typeof obj.text === "string") return obj.text;
-    if ("result" in obj && obj.result != null) return String(obj.result);
     if (Array.isArray((obj as { richText?: unknown }).richText)) {
       return (obj as { richText: { text: string }[] }).richText.map((r) => r.text).join("");
     }
+    // A formula cell: its cached result, or EMPTY when the export saved none — never the object
+    // itself. Google Sheets and "save as" routinely drop cached values, and stringifying the wrapper
+    // would write "[object Object]" into the imported data.
+    if ("formula" in obj || "sharedFormula" in obj) {
+      return obj.result == null ? "" : cellToString(obj.result as ExcelJS.CellValue);
+    }
+    if ("result" in obj && obj.result != null) return cellToString(obj.result as ExcelJS.CellValue);
     if (typeof obj.hyperlink === "string") return obj.hyperlink;
+    // An unrecognized object shape is not data: better empty than "[object Object]".
+    return "";
   }
   return String(value);
 }
@@ -196,34 +204,52 @@ export async function runParse(payload: ParsePayload): Promise<void> {
   await db.delete(importRows).where(eq(importRows.importBatchId, batchId));
 
   // Stage each row. A per-row mapping throw is recorded (not fatal): mapped null + MAPPING_ERROR.
+  // A row that stacks a milk run inside its cells becomes one staged record per leg, all keeping the
+  // SOURCE line number so the operator's own file remains the reference (`expandStackedRow`).
+  let stagedCount = 0;
   for (const { rowNumber, raw } of records) {
-    let mapped: unknown = null;
-    let outcome: "error" | null = null;
-    let reasons: { code: string; field?: string; message: string }[] = [];
-    try {
-      mapped = applyTemplate(raw, template);
-    } catch (err) {
-      mapped = null;
-      outcome = "error";
-      reasons = [
-        {
-          code: "MAPPING_ERROR",
-          message: `Falha ao interpretar a linha: ${(err as Error).message}`,
-        },
-      ];
-    }
+    const legs = expandStackedRow(raw, template);
+    stagedCount += legs.length;
+    for (const [index, legRaw] of legs.entries()) {
+      const legNumber = index + 1;
+      let mapped: Record<string, unknown> | null = null;
+      let outcome: "error" | null = null;
+      let reasons: { code: string; field?: string; message: string }[] = [];
+      try {
+        mapped = applyTemplate(legRaw, template) as unknown as Record<string, unknown>;
+        // Stamp the leg only when the source line really held several: a lone movement must stay
+        // indistinguishable from every other row (leg 1 implicit) for the downstream comparison.
+        if (legs.length > 1) mapped.legNumber = legNumber;
+      } catch (err) {
+        mapped = null;
+        outcome = "error";
+        reasons = [
+          {
+            code: "MAPPING_ERROR",
+            message:
+              legs.length > 1
+                ? `Falha ao interpretar a perna ${legNumber} da linha: ${(err as Error).message}`
+                : `Falha ao interpretar a linha: ${(err as Error).message}`,
+          },
+        ];
+      }
 
-    await db.insert(importRows).values({
-      importBatchId: batchId,
-      rowNumber,
-      raw,
-      mapped: mapped as object | null,
-      outcome,
-      reasons,
-    });
+      await db.insert(importRows).values({
+        importBatchId: batchId,
+        rowNumber,
+        legNumber,
+        raw: legRaw,
+        mapped: mapped as object | null,
+        outcome,
+        reasons,
+      });
+    }
   }
 
-  await setBatchTotalRows(batchId, records.length);
+  // Staged records, not source lines: every other tally on the batch (created/updated/duplicate/
+  // error) counts records, and the confirm progress divides by this. They differ only when a row
+  // stacked several movements — 3.828 lines staged 3.866 records in the first real file.
+  await setBatchTotalRows(batchId, stagedCount);
 }
 
 export async function registerParse(boss: PgBoss): Promise<void> {

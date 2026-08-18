@@ -4,6 +4,7 @@ import {
   TRIP_EVENT_SOURCES,
   TRIP_STATUSES,
 } from "../domain/trip-status";
+import { OPERATIONAL_FIELDS, OPERATIONAL_FIELD_MAX_LENGTH } from "../domain/operational-fields";
 import { vehicleTypeSchema } from "./master-data";
 
 /**
@@ -38,6 +39,11 @@ export const createTripSchema = z
   .object({
     customerId: uuid("Cliente"),
     externalTripId: z.string().trim().min(1).max(200).nullable().optional(),
+    /**
+     * Which leg of the customer's programming this is (default 1). A milk run shares ONE customer id
+     * across chained movements, so the id alone no longer identifies a trip — see `trips.leg_number`.
+     */
+    legNumber: z.number().int().min(1).max(50).optional(),
     importBatchId: uuid("Lote de importação").nullable().optional(),
     originLocationId: uuid("Local de origem"),
     destinationLocationId: uuid("Local de destino"),
@@ -153,3 +159,40 @@ export const cancelTripSchema = z.object({
 });
 
 export type CancelTripInput = z.infer<typeof cancelTripSchema>;
+
+// ---------------------------------------------------------------------------
+// updateOperationalFields — the annotations the TEAM owns (2026-08-15)
+// ---------------------------------------------------------------------------
+
+/**
+ * Every operational field is optional and independently clearable: the screen sends only what
+ * changed. An empty string CLEARS the field (the operator wiped the box) and is normalized to null
+ * here, so "absent" and "cleared" stay distinguishable all the way to the service — `undefined`
+ * leaves the stored value alone, `null` removes it.
+ */
+export const updateOperationalFieldsSchema = z
+  .object(
+    Object.fromEntries(
+      OPERATIONAL_FIELDS.map((field) => [
+        field,
+        z
+          .string()
+          .trim()
+          .max(
+            OPERATIONAL_FIELD_MAX_LENGTH,
+            `Máximo de ${OPERATIONAL_FIELD_MAX_LENGTH} caracteres.`,
+          )
+          .transform((value) => (value === "" ? null : value))
+          .nullable()
+          .optional(),
+      ]),
+    ) as Record<
+      (typeof OPERATIONAL_FIELDS)[number],
+      z.ZodOptional<z.ZodNullable<z.ZodEffects<z.ZodString, string | null, string>>>
+    >,
+  )
+  .refine((value) => Object.values(value).some((v) => v !== undefined), {
+    message: "Informe ao menos um campo.",
+  });
+
+export type UpdateOperationalFieldsInput = z.infer<typeof updateOperationalFieldsSchema>;

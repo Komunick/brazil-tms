@@ -5,6 +5,7 @@ import {
   documentExpiryState,
   formatBRL,
   formatDate,
+  monthRangeSaoPaulo,
 } from "./formatting";
 
 describe("documentExpiryState (R9)", () => {
@@ -75,6 +76,22 @@ describe("dayRangeSaoPaulo (R6) — BRT calendar day → half-open UTC range", (
     const { from, to } = dayRangeSaoPaulo("2026-01-15");
     expect(new Date(to).getTime() - new Date(from).getTime()).toBe(24 * 60 * 60 * 1000);
   });
+
+  it("desloca por DIA DE CALENDÁRIO — é assim que o painel monta o quadro de amanhã", () => {
+    const hoje = dayRangeSaoPaulo("2026-05-29");
+    const amanha = dayRangeSaoPaulo("2026-05-29", 1);
+    // Amanhã começa exatamente onde hoje termina: sem buraco e sem sobreposição entre os dois
+    // cartões do painel. Uma viagem contada nos dois lugares (ou em nenhum) seria invisível como erro.
+    expect(amanha.from).toBe(hoje.to);
+    expect(amanha.to).toBe("2026-05-31T03:00:00.000Z");
+  });
+
+  it("o deslocamento parte do DIA em São Paulo, não do instante", () => {
+    // 30/05 01:00Z é 29/05 22:00 em São Paulo — o dia BRT é 29, então "amanhã" é 30, não 31.
+    const amanha = dayRangeSaoPaulo(new Date("2026-05-30T01:00:00.000Z"), 1);
+    expect(amanha.from).toBe("2026-05-30T03:00:00.000Z");
+    expect(amanha.to).toBe("2026-05-31T03:00:00.000Z");
+  });
 });
 
 describe("formatBRL", () => {
@@ -82,5 +99,34 @@ describe("formatBRL", () => {
     // Non-breaking spaces in the Intl output — assert on the digits/symbol loosely.
     expect(formatBRL(123456)).toContain("1.234,56");
     expect(formatBRL(0)).toContain("0,00");
+  });
+});
+
+describe("monthRangeSaoPaulo — mês do NEGÓCIO, não do servidor", () => {
+  it("mapeia um mês para meia-noite..meia-noite de São Paulo, em UTC", () => {
+    const { from, to } = monthRangeSaoPaulo("2026-08-17");
+    expect({ from, to }).toEqual({
+      from: "2026-08-01T03:00:00.000Z",
+      to: "2026-09-01T03:00:00.000Z",
+    });
+  });
+
+  it("na virada do mês usa o mês de SÃO PAULO, não o de UTC", () => {
+    /**
+     * O caso que erra em silêncio: 01/09 às 01:00Z ainda é 31/08 às 22:00 em São Paulo. Sem o fuso
+     * do negócio, o painel mostraria setembro enquanto a operação ainda está em agosto — e só na
+     * virada, que é quando ninguém está olhando.
+     */
+    const { from, to } = monthRangeSaoPaulo(new Date("2026-09-01T01:00:00.000Z"));
+    expect({ from, to }).toEqual({
+      from: "2026-08-01T03:00:00.000Z",
+      to: "2026-09-01T03:00:00.000Z",
+    });
+  });
+
+  it("a janela é meio-aberta: o primeiro instante do mês seguinte fica DE FORA", () => {
+    const { to } = monthRangeSaoPaulo("2026-02-10");
+    // Fevereiro de 2026 tem 28 dias; o fim é 01/03 em São Paulo, não 28/02.
+    expect(to).toBe("2026-03-01T03:00:00.000Z");
   });
 });

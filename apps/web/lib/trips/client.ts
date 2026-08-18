@@ -33,12 +33,16 @@ import {
   type ExceptionReport,
   type BillingReadinessReport,
   type AuditLogPage,
+  type TripStatus,
 } from "@brazil-tms/shared";
 import type {
   TripBoardRow,
   TripDetailView,
   TripFilterOptions,
   DashboardSummary,
+  BscSnapshotView,
+  SpotOfferView,
+  WallboardSummary,
   ExceptionListItem,
   ReasonCodeOption,
   CancellationOptionItem,
@@ -73,6 +77,16 @@ export const TRIP_DETAIL_POLL_MS = 30_000;
 export const REPORTS_POLL_MS = 60_000;
 /** Filter/resource option lists — bounded master data; 60s polling + focus refetch (019, issue #26). */
 export const FILTER_OPTIONS_POLL_MS = 60_000;
+/**
+ * Painel de parede — 30s, o mesmo passo do quadro da Torre.
+ *
+ * A TV fica ligada o dia inteiro e ninguém a recarrega, então o que importa não é o intervalo em si
+ * e sim que a tela DIGA a hora do último dado. Um painel que congela e continua bonito é pior que
+ * um painel apagado: a sala toma decisão em cima de um retrato velho sem saber.
+ */
+export const WALLBOARD_POLL_MS = 30_000;
+/** O aviso de oferta dura 30s na tela; buscar mais devagar que isso seria avisar tarde. */
+export const SPOT_OFFERS_POLL_MS = 30_000;
 /** Synchronous CSV export row cap (R13); single source in @brazil-tms/shared, re-exported for UI copy. */
 export { EXPORT_ROW_CAP };
 
@@ -110,7 +124,10 @@ export async function readApiError(res: Response): Promise<ParsedApiError> {
  */
 export class TripsError extends Error {
   readonly findings?: Finding[];
-  constructor(readonly code: string, findings?: Finding[]) {
+  constructor(
+    readonly code: string,
+    findings?: Finding[],
+  ) {
     super(code);
     this.name = "TripsError";
     this.findings = findings;
@@ -142,6 +159,10 @@ export function dashboardKey(): unknown[] {
   return [...TRIPS_ROOT, "dashboard"];
 }
 
+export function wallboardKey(): unknown[] {
+  return [...TRIPS_ROOT, "wallboard"];
+}
+
 // feature 009 — reports + audit-view query keys.
 const REPORTS_ROOT = ["reports"] as const;
 const AUDIT_ROOT = ["audit-logs"] as const;
@@ -151,6 +172,8 @@ const AUDIT_ROOT = ["audit-logs"] as const;
 export interface TripBoardResponse {
   items: TripBoardRow[];
   total: number;
+  /** Per-status match counts for the filter chips (absent key = zero). Ignores the status filter. */
+  statusCounts: Partial<Record<TripStatus, number>>;
   limit: number;
   offset: number;
 }
@@ -197,11 +220,53 @@ export function useTripDetail(id: string): UseQueryResult<{ item: TripDetailView
 }
 
 /** Home daily dashboard aggregates. */
-export function useDashboardSummary(): UseQueryResult<{ summary: DashboardSummary }> {
+/**
+ * O resumo do painel traz o BSC junto (2026-08-17) — mesma tela, mesmo passo de atualização. Numa
+ * chamada separada, o cartão do cliente piscaria fora de sincronia com o resto.
+ */
+export function useDashboardSummary(): UseQueryResult<{
+  summary: DashboardSummary;
+  bsc: BscSnapshotView[];
+}> {
   return useQuery({
     queryKey: dashboardKey(),
-    queryFn: async () => asJson<{ summary: DashboardSummary }>(await fetch(`/api/dashboard/summary`)),
+    queryFn: async () =>
+      asJson<{ summary: DashboardSummary; bsc: BscSnapshotView[] }>(
+        await fetch(`/api/dashboard/summary`),
+      ),
     refetchInterval: DASHBOARD_POLL_MS,
+  });
+}
+
+/**
+ * O painel da TV. Continua buscando com a aba em segundo plano — uma TV de parede não tem "aba
+ * ativa", e o padrão do TanStack Query é pausar quando a janela perde o foco, que é exatamente o que
+ * congelaria a tela numa máquina que ninguém toca.
+ */
+export function useWallboard(): UseQueryResult<{ wallboard: WallboardSummary }> {
+  return useQuery({
+    queryKey: wallboardKey(),
+    queryFn: async () => asJson<{ wallboard: WallboardSummary }>(await fetch(`/api/wallboard`)),
+    refetchInterval: WALLBOARD_POLL_MS,
+    refetchIntervalInBackground: true,
+  });
+}
+
+/**
+ * As ofertas de leilão que o monitor mandou — usadas pelo painel de parede E pelo Painel do dia.
+ *
+ * Ritmo PRÓPRIO, de 30 segundos, e não o da tela que a hospeda: o Painel do dia se atualiza de
+ * minuto em minuto, o que é generoso para contagem de viagens e lento demais para um aviso que dura
+ * trinta segundos — na pior hora, o cartão apareceria depois de o leilão ter esfriado.
+ *
+ * Segue buscando em segundo plano pelo mesmo motivo do painel: a TV não tem aba ativa.
+ */
+export function useSpotOffers(): UseQueryResult<{ ofertas: SpotOfferView[] }> {
+  return useQuery({
+    queryKey: [...TRIPS_ROOT, "spot-offers"],
+    queryFn: async () => asJson<{ ofertas: SpotOfferView[] }>(await fetch(`/api/spot-offers`)),
+    refetchInterval: SPOT_OFFERS_POLL_MS,
+    refetchIntervalInBackground: true,
   });
 }
 
@@ -256,6 +321,27 @@ export function useUpdateTripPlan(id: string) {
   return useMutation({
     mutationFn: async (input: UpdateTripPlanInput) => {
       const res = await fetch(`/api/trips/${id}/plan`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: TripDetailView }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/**
+ * Save the operation's own annotations (PATCH /api/trips/:id/operational-fields) — solicitação,
+ * checklist, SM Raster, CT-e, doca. Only the changed fields are sent; blank clears one.
+ */
+export function useUpdateOperationalFields(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: Record<string, string>) => {
+      const res = await fetch(`/api/trips/${id}/operational-fields`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
@@ -450,7 +536,13 @@ export function useCreateException(id: string) {
 export function useUpdateException() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ exceptionId, input }: { exceptionId: string; input: UpdateExceptionInput }) => {
+    mutationFn: async ({
+      exceptionId,
+      input,
+    }: {
+      exceptionId: string;
+      input: UpdateExceptionInput;
+    }) => {
       const res = await fetch(`/api/exceptions/${exceptionId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -494,7 +586,8 @@ export function useTransitionException() {
 export function useExceptions(search: string): UseQueryResult<{ items: ExceptionListItem[] }> {
   return useQuery({
     queryKey: [...EXCEPTIONS_ROOT, "list", search],
-    queryFn: async () => asJson<{ items: ExceptionListItem[] }>(await fetch(`/api/exceptions?${search}`)),
+    queryFn: async () =>
+      asJson<{ items: ExceptionListItem[] }>(await fetch(`/api/exceptions?${search}`)),
     refetchInterval: CONTROL_TOWER_POLL_MS,
   });
 }
@@ -532,6 +625,28 @@ export function useAcknowledgeAlert() {
   return useMutation({
     mutationFn: async (alertId: string) => {
       const res = await fetch(`/api/alerts/${alertId}/acknowledge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+      });
+      return asJson<{ item: AlertListItem }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ALERTS_ROOT });
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
+}
+
+/**
+ * Undo an acknowledgement (POST /api/alerts/:id/unacknowledge) — the alert returns to the active
+ * surface. Same invalidations as acknowledging: the two are one toggle from the operator's side.
+ */
+export function useUnacknowledgeAlert() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (alertId: string) => {
+      const res = await fetch(`/api/alerts/${alertId}/unacknowledge`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: "{}",

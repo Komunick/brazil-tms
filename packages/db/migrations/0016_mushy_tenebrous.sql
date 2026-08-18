@@ -1,0 +1,1 @@
+ALTER TABLE "import_templates" ADD COLUMN "closed_status_labels" jsonb DEFAULT '[]'::jsonb NOT NULL;

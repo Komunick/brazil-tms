@@ -35,6 +35,18 @@ export function formatDateTime(value: string | Date | null | undefined): string 
   return dt.isValid ? dt.toFormat("dd/MM/yyyy HH:mm") : EMPTY;
 }
 
+/**
+ * HH:mm em São Paulo — a hora sem a data.
+ *
+ * Existe para lista de coisas que aconteceram HOJE, onde repetir "18/08" em cada linha só ocupa
+ * espaço e empurra o que importa para fora do cartão.
+ */
+export function formatTime(value: string | Date | null | undefined): string {
+  if (value == null) return EMPTY;
+  const dt = fromUtc(value);
+  return dt.isValid ? dt.toFormat("HH:mm") : EMPTY;
+}
+
 /** Localized relative time (e.g. "há 2 horas"), or an em dash for null/invalid input. */
 export function formatRelative(value: string | Date | null | undefined): string {
   if (value == null) return EMPTY;
@@ -55,10 +67,55 @@ export function toUtcIso(value: DateTime | Date): string {
  * "trips today by status" dashboard count against UTC-stored `planned_pickup_window_start`. Computing
  * the boundary in the business timezone avoids the off-by-one-day bug near midnight BRT.
  */
-export function dayRangeSaoPaulo(date: string | Date): { from: string; to: string } {
-  const start = fromUtc(date).startOf("day");
+export function dayRangeSaoPaulo(
+  date: string | Date,
+  /**
+   * Dias a somar ao dia de `date` — `1` é amanhã, e é como o painel monta o quadro do dia seguinte.
+   *
+   * Some DIAS DE CALENDÁRIO, não 24 horas: somar milissegundos ao instante erraria a virada em
+   * qualquer fuso com horário de verão. O Brasil não tem mais, mas o helper é do sistema inteiro e a
+   * conta certa não custa nada.
+   */
+  offsetDays = 0,
+): { from: string; to: string } {
+  const start = fromUtc(date).startOf("day").plus({ days: offsetDays });
   const end = start.plus({ days: 1 });
   return { from: start.toUTC().toISO() ?? "", to: end.toUTC().toISO() ?? "" };
+}
+
+/**
+ * O mês corrente em São Paulo, meia-noite a meia-noite, em UTC.
+ *
+ * Mesma forma de `dayRangeSaoPaulo` e pelo mesmo motivo: o mês tem que virar no fuso do negócio, não
+ * no do servidor. Sem isso, no dia 1º entre 00:00 e 03:00 (BRT) a consulta ainda estaria no mês
+ * anterior em UTC, e o painel mostraria o mês errado justamente na virada.
+ */
+export function monthRangeSaoPaulo(date: string | Date): { from: string; to: string } {
+  const start = fromUtc(date).startOf("month");
+  const end = start.plus({ months: 1 });
+  return { from: start.toUTC().toISO() ?? "", to: end.toUTC().toISO() ?? "" };
+}
+
+/**
+ * Today in São Paulo as `yyyy-MM-dd`, optionally shifted by whole days — the shape every date-range
+ * board filter and `<input type="date">` speaks. Computed in the business zone so a request made
+ * after 21:00 BRT (already "tomorrow" in UTC) still says today.
+ */
+export function saoPauloDate(offsetDays = 0): string {
+  return DateTime.now().setZone(APP_TIME_ZONE).plus({ days: offsetDays }).toISODate() ?? "";
+}
+
+/**
+ * O primeiro e o último dia do mês corrente em São Paulo, como `yyyy-MM-dd` — o formato que o filtro
+ * de data do quadro fala. É o par que faz o link do painel abrir a Torre no MESMO recorte que o
+ * cartão contou.
+ */
+export function saoPauloMonthBounds(): { first: string; last: string } {
+  const start = DateTime.now().setZone(APP_TIME_ZONE).startOf("month");
+  return {
+    first: start.toISODate() ?? "",
+    last: start.endOf("month").toISODate() ?? "",
+  };
 }
 
 /**

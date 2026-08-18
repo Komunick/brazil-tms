@@ -17,7 +17,16 @@ export function TripDetailHeader({ trip }: { trip: TripDetailView }) {
     { label: t("customer"), value: trip.customerName },
     { label: t("externalId"), value: trip.externalTripId ?? "—" },
     { label: t("lane"), value: trip.laneLabel ?? "—" },
-    { label: t("status"), value: <TripStatusBadge status={trip.currentStatus} /> },
+    {
+      label: t("status"),
+      value: (
+        <TripStatusBadge
+          status={trip.currentStatus}
+          portalAcceptance={trip.customerFields?.["Aceitação (portal)"] ?? null}
+          portalStatus={trip.customerFields?.["Status (portal)"] ?? null}
+        />
+      ),
+    },
     { label: t("sla"), value: trip.slaStatus ?? "—" },
     { label: t("billing"), value: tBilling(trip.billingStatus ?? "none") },
     { label: t("importBatch"), value: trip.importBatchId ?? "—" },

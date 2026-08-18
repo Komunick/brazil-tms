@@ -25,13 +25,20 @@
     "db:seed:sla-rules": "tsx ./seed/sla-rules.ts",
     "db:seed:document-types": "tsx ./seed/document-types.ts",
     "db:seed:rates": "tsx ./seed/rates.ts",
-    "db:seed:buckets": "tsx ./seed/storage-buckets.ts"
+    "db:seed:buckets": "tsx ./seed/storage-buckets.ts",
+    "db:seed:shopee": "tsx ./seed/shopee-registry.ts",
+    "db:seed:shopee-template": "tsx ./seed/shopee-import-template.ts",
+    "db:seed:shopee-assign": "tsx ./seed/shopee-assignments.ts",
+    "db:seed:shopee-stations": "tsx ./seed/shopee-station-ids.ts",
+    "db:lanes:transit": "tsx ./seed/lane-transit.ts",
+    "db:seed:service-account": "tsx ./seed/service-account.ts"
   },
   "dependencies": {
     "@brazil-tms/shared": "workspace:*",
     "@supabase/supabase-js": "^2.45.0",
     "dotenv": "^16.4.5",
     "drizzle-orm": ">=0.36.0",
+    "exceljs": "^4.4.0",
     "postgres": "^3.4.4"
   },
   "devDependencies": {

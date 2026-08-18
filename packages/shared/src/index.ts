@@ -4,10 +4,13 @@ export * from "./formatting";
 export * from "./auth/permissions";
 export * from "./audit/actions";
 export * from "./domain/trip-status";
+export * from "./domain/trip-display-status";
 export * from "./domain/assignment-eligibility";
 export * from "./domain/sla-risk";
 export * from "./domain/exceptions";
+export * from "./domain/operational-fields";
 export * from "./sla/jobs";
+export * from "./import/portal-jobs";
 // feature 008 — documents, completion, billing readiness, rates & export.
 export * from "./domain/documents";
 export * from "./domain/billing";
@@ -37,3 +40,4 @@ export * from "./domain/reporting";
 // feature 016 — freight rate lookup (agregados): sheet normalizer + query filters.
 export * from "./domain/freight-rates";
 export * from "./schemas/freight-rate";
+export * from "./schemas/spot-offer";

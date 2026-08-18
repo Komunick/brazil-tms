@@ -60,15 +60,30 @@ async function seedTrip(): Promise<string> {
 }
 
 test.beforeAll(async () => {
-  const cust = await db.insert(customers).values({ name: "Cliente Alerts E2E", customerCode: code("CUST") }).returning({ id: customers.id });
+  const cust = await db
+    .insert(customers)
+    .values({ name: "Cliente Alerts E2E", customerCode: code("CUST") })
+    .returning({ id: customers.id });
   customerId = cust[0]!.id;
-  const origin = await db.insert(locations).values({ customerId, code: code("ORIG"), name: "Origem Alr" }).returning({ id: locations.id });
+  const origin = await db
+    .insert(locations)
+    .values({ customerId, code: code("ORIG"), name: "Origem Alr" })
+    .returning({ id: locations.id });
   originId = origin[0]!.id;
-  const dest = await db.insert(locations).values({ customerId, code: code("DEST"), name: "Destino Alr" }).returning({ id: locations.id });
+  const dest = await db
+    .insert(locations)
+    .values({ customerId, code: code("DEST"), name: "Destino Alr" })
+    .returning({ id: locations.id });
   destId = dest[0]!.id;
   const rc = await db
     .insert(reasonCodes)
-    .values({ code: code("RC"), category: "breakdown", labelPt: "Pane Alr", defaultSeverity: "high", defaultResponsibleParty: "carrier_caused" })
+    .values({
+      code: code("RC"),
+      category: "breakdown",
+      labelPt: "Pane Alr",
+      defaultSeverity: "high",
+      defaultResponsibleParty: "carrier_caused",
+    })
     .returning({ id: reasonCodes.id });
   highReasonId = rc[0]!.id;
 });
@@ -81,7 +96,8 @@ test.afterAll(async () => {
     await db.delete(trips).where(inArray(trips.id, tripIds));
   }
   if (highReasonId) await db.delete(reasonCodes).where(eq(reasonCodes.id, highReasonId));
-  for (const id of [originId, destId]) if (id) await db.delete(locations).where(eq(locations.id, id));
+  for (const id of [originId, destId])
+    if (id) await db.delete(locations).where(eq(locations.id, id));
   if (customerId) await db.delete(customers).where(eq(customers.id, customerId));
 });
 
@@ -129,6 +145,27 @@ test.describe("007 US4 — in-app alerts", () => {
     await apiLogin(request, testAccounts.nonAdmin);
     const reAck = await request.post(`/api/alerts/${hi.id}/acknowledge`, { data: {} });
     expect(reAck.ok()).toBeTruthy();
+
+    // …and the door opens both ways: undoing returns it to the ACTIVE list, with who/when forgotten,
+    // so a misclick is recoverable and the acknowledged list stays truthful about who silenced what.
+    const undo = await request.post(`/api/alerts/${hi.id}/unacknowledge`, { data: {} });
+    expect(undo.ok()).toBeTruthy();
+    const { item: back } = (await undo.json()) as {
+      item: { state: string; acknowledgedAt: string | null };
+    };
+    expect(back.state).toBe("active");
+    expect(back.acknowledgedAt).toBeNull();
+
+    const active = await request.get(`/api/alerts?tripId=${tripId}&state=active`);
+    const { items: activeItems } = (await active.json()) as { items: Array<{ id: string }> };
+    expect(activeItems.some((a) => a.id === hi.id)).toBe(true);
+  });
+
+  test("unacknowledge requires a session, like every other alert action", async ({ request }) => {
+    const res = await request.post(
+      `/api/alerts/00000000-0000-4000-8000-000000000000/unacknowledge`,
+    );
+    expect(res.status()).toBe(401);
   });
 
   test("unauthenticated → 401 on the alert list", async ({ request }) => {

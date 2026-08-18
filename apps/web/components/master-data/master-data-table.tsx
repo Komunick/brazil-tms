@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
 import {
   flexRender,
   getCoreRowModel,
+  getPaginationRowModel,
   useReactTable,
   type ColumnDef,
 } from "@tanstack/react-table";
@@ -27,6 +29,10 @@ import {
  * Entity screens supply only their TanStack Table `columns`; this component appends the shared
  * status + actions columns. Freshness is the caller's TanStack Query polling — never Realtime.
  */
+
+/** Rows rendered per page. A real fleet registry is ~1k rows; rendering it whole froze the screen. */
+const PAGE_SIZE = 50;
+
 export interface MasterDataRow {
   id: string;
   archived: boolean;
@@ -67,6 +73,8 @@ export function MasterDataTable<T extends MasterDataRow>({
 }: MasterDataTableProps<T>) {
   const t = useTranslations("MasterData");
   const tCommon = useTranslations("Common");
+  // Same pagination wording as the trip boards — one vocabulary across every list in the product.
+  const tBoard = useTranslations("Trips.board");
 
   const allColumns: ColumnDef<T>[] = [
     ...columns,
@@ -107,9 +115,24 @@ export function MasterDataTable<T extends MasterDataRow>({
     data: rows,
     columns: allColumns,
     getCoreRowModel: getCoreRowModel(),
+    // Paged in the browser: these endpoints return the whole (small) registry in one request, and a
+    // real fleet is ~1k rows — rendering all of them at once left the screen on "Carregando…" for
+    // seconds. Paging the RENDER keeps the list instant without touching the API contract.
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: { pagination: { pageSize: PAGE_SIZE } },
   });
 
+  // Searching/toggling archived shrinks the data under the current page — go back to the first one
+  // so a filter never lands on a page that no longer exists (blank list, looks broken).
+  useEffect(() => {
+    table.setPageIndex(0);
+  }, [search, includeArchived, table]);
+
   const columnCount = allColumns.length;
+  const pageCount = table.getPageCount();
+  const pageIndex = table.getState().pagination.pageIndex;
+  const firstShown = rows.length === 0 ? 0 : pageIndex * PAGE_SIZE + 1;
+  const lastShown = Math.min((pageIndex + 1) * PAGE_SIZE, rows.length);
 
   return (
     <div className="space-y-4">
@@ -180,6 +203,42 @@ export function MasterDataTable<T extends MasterDataRow>({
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination footer — same wording as the trip boards. Hidden when everything fits one page. */}
+      {rows.length > PAGE_SIZE ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
+          <span>
+            {tBoard("paginationSummary", {
+              from: firstShown,
+              to: lastShown,
+              total: rows.length,
+            })}
+          </span>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!table.getCanPreviousPage()}
+              onClick={() => table.previousPage()}
+            >
+              {tBoard("previous")}
+            </Button>
+            <span className="self-center">
+              {pageIndex + 1}/{pageCount}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!table.getCanNextPage()}
+              onClick={() => table.nextPage()}
+            >
+              {tBoard("next")}
+            </Button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

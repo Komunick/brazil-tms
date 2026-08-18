@@ -10,11 +10,7 @@ import {
   locations,
   statusMappings,
 } from "@brazil-tms/db";
-import {
-  VEHICLE_TYPE_VALUES,
-  type MappedRow,
-  type ValidatePayload,
-} from "@brazil-tms/shared";
+import { normalizeVehicleType, type MappedRow, type ValidatePayload } from "@brazil-tms/shared";
 import { setBatchStatus } from "../../lib/batch-progress";
 import { JOB, enqueue, work } from "../../lib/queue";
 
@@ -59,11 +55,6 @@ const REQUIRABLE_FIELDS = new Set<keyof MappedRow>([
   "plannedRouteNotes",
 ]);
 
-/** Case-insensitive normalized lookup of the `vehicle_type` enum members. */
-const VEHICLE_TYPE_BY_LOWER = new Map<string, string>(
-  VEHICLE_TYPE_VALUES.map((v) => [v.toLowerCase(), v]),
-);
-
 /** Parse a jsonb date field (ISO string after round-trip) back to a Date; null when absent/invalid. */
 function toDate(value: unknown): Date | null {
   if (value == null) return null;
@@ -94,7 +85,8 @@ async function validateRow(
   customerId: string,
   rawMapped: Record<string, unknown> | null,
   requiredOverrides: string[],
-  knownStatusLabels: Set<string>,
+  /** null when the template uses the status only to close trips — then no unmapped warning. */
+  knownStatusLabels: Set<string> | null,
 ): Promise<ValidationResult> {
   if (rawMapped == null) {
     return {
@@ -189,10 +181,11 @@ async function validateRow(
     reasons,
   );
 
-  // vehicle type: case-insensitive map to the fixed enum; unmappable = warning (never blocks).
+  // vehicle type: mapped through the shared pt-BR vocabulary (accents, "3/4", a trailing " - EX"
+  // qualifier); unmappable = warning (never blocks).
   const vehicleRaw = mapped.plannedVehicleType;
   if (!isBlank(vehicleRaw)) {
-    const matched = VEHICLE_TYPE_BY_LOWER.get(String(vehicleRaw).trim().toLowerCase());
+    const matched = normalizeVehicleType(String(vehicleRaw));
     if (matched) {
       mapped.plannedVehicleType = matched;
     } else {
@@ -213,11 +206,28 @@ async function validateRow(
   // never blocks): the customer's status vocabulary is config (`status_mappings`), BLOCKED on real
   // files (PRD §29), so an unmapped label is surfaced for an operator to map rather than silently kept.
   const statusLabel = mapped.statusLabel;
-  if (!isBlank(statusLabel) && !knownStatusLabels.has(String(statusLabel).trim().toLowerCase())) {
+  if (
+    knownStatusLabels !== null &&
+    !isBlank(statusLabel) &&
+    !knownStatusLabels.has(String(statusLabel).trim().toLowerCase())
+  ) {
     reasons.push({
       code: "UNMAPPED_STATUS",
       field: "statusLabel",
       message: `Status do cliente sem mapeamento: ${String(statusLabel)}.`,
+    });
+  }
+
+  // A leg the parse split out of a stacked line (`legNumber` stamped) MUST carry its own pickup
+  // time. Leg 1's time is never copied down — so when the source line typed only one, the later leg
+  // arrives with none, and a trip with no planned pickup would slip past the dispatch date filter
+  // and be seen by nobody. Refuse it and say exactly what to fill in.
+  const legNumber = mapped.legNumber;
+  if (typeof legNumber === "number" && legNumber > 1 && isBlank(mapped.plannedPickupWindowStart)) {
+    reasons.push({
+      code: "MISSING_REQUIRED_FIELD",
+      field: "plannedPickupWindowStart",
+      message: `Perna ${legNumber} sem horário de coleta: a linha empilha ${legNumber} viagens mas informa um horário só. Preencha o horário de cada perna.`,
     });
   }
 
@@ -334,8 +344,18 @@ export async function runValidate(payload: ValidatePayload): Promise<void> {
   // Template overrides for required fields (the batch may have no template — then none).
   const requiredOverrides = await loadRequiredOverrides(batch.templateId);
 
-  // The customer's configured status vocabulary (active mappings) — used to flag unmapped labels (R10).
-  const knownStatusLabels = await loadStatusLabels(batch.customerId);
+  /**
+   * The customer's configured status vocabulary (active mappings) — used to flag unmapped labels (R10).
+   *
+   * Skipped entirely when the template declares `closedStatusLabels`: there the label is read ONLY to
+   * decide "already over at the source", never to translate into a TMS status, so warning that it is
+   * unmapped is noise. On the first real file it fired on 3.483 of 3.828 rows, burying the reasons
+   * that actually needed a human.
+   */
+  const usesStatusForClosingOnly = (await loadClosedStatusLabels(batch.templateId)).length > 0;
+  const knownStatusLabels = usesStatusForClosingOnly
+    ? null
+    : await loadStatusLabels(batch.customerId);
 
   const rows = await db
     .select()
@@ -364,11 +384,18 @@ export async function runValidate(payload: ValidatePayload): Promise<void> {
       knownStatusLabels,
     );
 
+    // A row parse could not map keeps PARSE's reason: it names the value and, for a stacked line,
+    // the leg ("perna 2 … UNPARSEABLE_DATE: 06/088/2026"). Overwriting it with the generic sentence
+    // costs the operator the one detail that says what to fix.
+    const parseReasons = Array.isArray(row.reasons) ? (row.reasons as Reason[]) : [];
+    const reasons =
+      result.mapped == null && parseReasons.length > 0 ? parseReasons : result.reasons;
+
     await db
       .update(importRows)
       .set({
         outcome: result.outcome,
-        reasons: result.reasons,
+        reasons,
         mapped: result.mapped as object | null,
       })
       .where(eq(importRows.id, row.id));
@@ -391,6 +418,18 @@ async function loadStatusLabels(customerId: string): Promise<Set<string>> {
 }
 
 /** Read the template's `requiredOverrides` (string[]) for the batch, or [] when none. */
+/** The template's closed-status labels; empty when there is no template or none configured. */
+async function loadClosedStatusLabels(templateId: string | null): Promise<string[]> {
+  if (!templateId) return [];
+  const rows = await db
+    .select({ labels: importTemplates.closedStatusLabels })
+    .from(importTemplates)
+    .where(eq(importTemplates.id, templateId))
+    .limit(1);
+  const raw = rows[0]?.labels;
+  return Array.isArray(raw) ? (raw as string[]) : [];
+}
+
 async function loadRequiredOverrides(templateId: string | null): Promise<string[]> {
   if (!templateId) return [];
   const rows = await db

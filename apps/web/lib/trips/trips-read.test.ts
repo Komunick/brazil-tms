@@ -153,7 +153,12 @@ describe.skipIf(!hasDb)("trips-read (integration)", () => {
 
     const vehicle = await db
       .insert(vehicles)
-      .values({ plate: `RT${seedToken}`.slice(0, 12), vehicleType: "truck", ownershipType: "owned", status: "active" })
+      .values({
+        plate: `RT${Math.random().toString(36).slice(2, 11).toUpperCase()}`,
+        vehicleType: "truck",
+        ownershipType: "owned",
+        status: "active",
+      })
       .returning({ id: vehicles.id });
     asgVehicleId = vehicle[0]!.id;
     createdVehicleIds.push(asgVehicleId);
@@ -226,6 +231,38 @@ describe.skipIf(!hasDb)("trips-read (integration)", () => {
     expect(ids).not.toContain(inTransitId);
   });
 
+  it("statusCounts count every status under the filters, ignoring scope and the status filter", async () => {
+    // The chip promise: the number shown equals the rows you get when you click it — even for a
+    // status the ACTIVE scope hides, and even while a different chip is already selected.
+    const active = await queryTripBoard(boardQuery());
+    expect(active.statusCounts.completed).toBe(1);
+    // 2026-08-18: a ficha conta pelo rótulo que a tela mostra, e `received` se desdobra pelo eixo da
+    // aceitação do cliente. Sem resposta do portal — o caso desta semente — a viagem é "P/Atribuir",
+    // que é a afirmação que se sustenta sem o cliente ter falado.
+    expect(active.statusCounts.to_assign).toBe(1);
+    expect(active.statusCounts.received).toBeUndefined();
+    expect(active.statusCounts.in_transit).toBe(2);
+    expect(active.rows.map((r) => r.id)).not.toContain(completedId);
+
+    const filtered = await queryTripBoard(boardQuery({ status: ["received"] }));
+    expect(filtered.statusCounts.completed).toBe(1);
+
+    const clicked = await queryTripBoard(boardQuery({ status: ["completed"] }));
+    expect(clicked.rows).toHaveLength(active.statusCounts.completed!);
+
+    // A status with no trips is absent (the chip is hidden), not reported as zero.
+    expect(active.statusCounts.disputed).toBeUndefined();
+  });
+
+  it("statusCounts narrow with the other filters", async () => {
+    // Only the 02/06 trip (received) falls in this window — the two in_transit ones do not.
+    const day = await queryTripBoard(
+      boardQuery({ pickupFrom: "2026-06-02", pickupTo: "2026-06-02" }),
+    );
+    expect(day.statusCounts.to_assign).toBe(1);
+    expect(day.statusCounts.in_transit).toBeUndefined();
+  });
+
   it("billingStatus filter maps to the matching current_status", async () => {
     const { rows } = await queryTripBoard(boardQuery({ billingStatus: "billing_pending" }));
     const ids = rows.map((r) => r.id);
@@ -261,7 +298,8 @@ describe.skipIf(!hasDb)("trips-read (integration)", () => {
     expect(options.locations.some((l) => l.id === destId)).toBe(true);
     expect(
       options.lanes.some(
-        (l) => l.id === laneId && l.originLocationId === originId && l.destinationLocationId === destId,
+        (l) =>
+          l.id === laneId && l.originLocationId === originId && l.destinationLocationId === destId,
       ),
     ).toBe(true);
   });
@@ -337,8 +375,12 @@ describe.skipIf(!hasDb)("trips-read (integration)", () => {
     // are a number or null (null only when there is no denominator).
     expect(typeof metrics.tripsAtRisk).toBe("number");
     expect(typeof metrics.activeExceptions).toBe("number");
-    expect(metrics.onTimePickupPct === null || typeof metrics.onTimePickupPct === "number").toBe(true);
-    expect(metrics.onTimeArrivalPct === null || typeof metrics.onTimeArrivalPct === "number").toBe(true);
+    expect(metrics.onTimePickupPct === null || typeof metrics.onTimePickupPct === "number").toBe(
+      true,
+    );
+    expect(metrics.onTimeArrivalPct === null || typeof metrics.onTimeArrivalPct === "number").toBe(
+      true,
+    );
     // 008 — completedMissingDocuments is now a COUNT (billing-phase trips missing required-for-billing
     // proof), no longer the null placeholder.
     expect(typeof metrics.completedMissingDocuments).toBe("number");
@@ -382,7 +424,9 @@ describe.skipIf(!hasDb)("trips-read (integration)", () => {
 
     // The assigned received trip must NOT be in the count: the board's assigned=false lens (the same
     // "no current assignment" predicate the dashboard uses) excludes it.
-    const unassignedBoard = await queryTripBoard(boardQuery({ scope: "active", assigned: "false" }));
+    const unassignedBoard = await queryTripBoard(
+      boardQuery({ scope: "active", assigned: "false" }),
+    );
     expect(unassignedBoard.rows.map((r) => r.id)).not.toContain(receivedId);
   });
 

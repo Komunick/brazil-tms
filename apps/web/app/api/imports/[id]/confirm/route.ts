@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Conflict, apiError, handleRouteError } from "@/lib/api/respond";
+import { handleRouteError } from "@/lib/api/respond";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
 import { confirmBatch } from "@/lib/imports/import-batches-service";
 
@@ -21,11 +21,8 @@ export async function POST(
     const result = await confirmBatch(id, ctx.userId);
     return NextResponse.json({ id: result.id }, { status: 202 });
   } catch (error) {
-    // A missing batch is a 404 per the contract; `confirmBatch` signals it via Conflict("NOT_FOUND"),
-    // so remap that one code here (NOT_CONFIRMABLE stays a 409 through handleRouteError).
-    if (error instanceof Conflict && error.code === "NOT_FOUND") {
-      return apiError(404, "NOT_FOUND", error.message);
-    }
+    // A missing batch is a 404 and `confirmBatch` now throws `NotFound`, which `handleRouteError`
+    // maps for every route alike — the local remap this route used to carry is gone with the cause.
     return handleRouteError(error);
   }
 }

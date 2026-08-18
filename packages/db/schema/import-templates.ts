@@ -31,6 +31,12 @@ export const importTemplates = pgTable(
     columnMappings: jsonb("column_mappings").notNull(),
     parsingRules: jsonb("parsing_rules").notNull().default({}),
     requiredOverrides: jsonb("required_overrides").notNull().default([]),
+    /**
+     * The customer's labels for "this trip is over" (FINALIZADA, CANCELADA…). A cumulative schedule
+     * re-sent weekly is mostly history; with this list the confirm SKIPS closed rows it does not
+     * know and CLOSES the trips it does. Empty (default) = status ignored, TMS owns the lifecycle.
+     */
+    closedStatusLabels: jsonb("closed_status_labels").notNull().default([]),
     active: boolean("active").notNull().default(true),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

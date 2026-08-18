@@ -23,6 +23,16 @@ export const locations = pgTable(
       .notNull()
       .references(() => customers.id),
     code: text("code").notNull(),
+    /**
+     * The id this site carries in the CUSTOMER's own system, when they expose one (2026-08-16).
+     * Their portal names a station as "[8300]SoC_RJ_Duque de Caxias" — an id plus a display name —
+     * while `code` is the operational code ("SOC-RJ2"). The id is the only exact key: the same
+     * customer runs both "SoC_BA_Simoes Filho" (SOC-BA2) and "LM Hub_BA_Simões Filho" (HUB-LBA-17),
+     * different sites whose names differ by one accent, so matching their files by name is not
+     * merely incomplete — it silently merges two places. Unique per customer; null for sites the
+     * customer's system does not name.
+     */
+    externalStationId: text("external_station_id"),
     name: text("name").notNull(),
     address: text("address"),
     city: text("city"),
@@ -37,6 +47,12 @@ export const locations = pgTable(
   },
   (table) => [
     unique("locations_customer_code_unique").on(table.customerId, table.code),
+    // One customer id maps to exactly one site: the guard that keeps a reconciliation mistake from
+    // pointing two locations at the same station.
+    unique("locations_customer_external_station_unique").on(
+      table.customerId,
+      table.externalStationId,
+    ),
     index("locations_customer_idx").on(table.customerId),
   ],
 );
