@@ -5,7 +5,13 @@ import { useTranslations } from "next-intl";
 import { formatDateTime } from "@brazil-tms/shared";
 import type { BscPeriod, BscSnapshotView } from "@brazil-tms/db";
 import { Card, CardTitle } from "@/components/ui/card";
-import { indicadoresNaTela } from "@/lib/bsc/indicadores";
+import {
+  faixaDo,
+  indicadoresNaTela,
+  PREMISSAS,
+  type Faixa,
+  type Premissa,
+} from "@/lib/bsc/indicadores";
 
 /**
  * O BSC do cliente dentro do painel (2026-08-17).
@@ -28,50 +34,43 @@ import { indicadoresNaTela } from "@/lib/bsc/indicadores";
  */
 
 /**
- * Os pisos que a Shopee publica na página "Premissas" do próprio relatório.
- *
- * Ficam aqui, e não no banco, porque são a REGRA DO CLIENTE e mudam junto com a versão do scorecard
- * (o relatório já se chama "V3"). Guardá-los numa tabela criaria a ilusão de que a operação os
- * controla. Um indicador sem piso conhecido aparece com o número e sem barra — nunca com um alvo
- * inventado.
- */
-const PISO: Record<string, number> = {
-  SPOT: 77,
-  "ETA Origem": 97,
-  "ETA Destino": 93,
-  Telemetria: 97,
-  "No Show": 97,
-  Reversa: 97.5,
-};
-
-/**
  * OS VINTE, e não seis (2026-08-18).
  *
  * O robô sempre leu o painel KPI inteiro e o banco sempre guardou os vinte; a TELA é que mostrava um
  * recorte de seis. Quem olhava o TMS via seis números e o BSC do cliente, vinte — e a diferença não
  * estava escrita em lugar nenhum, que é a pior forma de um painel mentir: por omissão silenciosa.
  *
- * A ordem e a regra de quem entra moram em `@/lib/bsc/indicadores`, fora do componente e sob teste.
+ * As premissas (mínimo, meta, peso), a ordem e as três faixas moram em `@/lib/bsc/indicadores`,
+ * fora do componente e sob teste.
  */
 
-function tom(valor: number, piso: number | undefined): string {
-  if (piso == null) return "text-foreground";
-  if (valor >= piso) return "text-success";
-  // Metade do caminho até o piso separa "quase lá" de "longe" — sem isso, tudo abaixo vira vermelho
-  // e o cartão perde a capacidade de dizer o que é urgente.
-  return valor >= piso * 0.85 ? "text-warning" : "text-destructive";
-}
+/**
+ * As mesmas três cores do BSC, e por isso derivadas da MESMA faixa (2026-08-18).
+ *
+ * A versão anterior tinha uma regra própria — "85% do caminho até o piso vira amarelo" — inventada
+ * porque só se conhecia o mínimo de seis indicadores. Com a meta publicada dos vinte em mãos, a
+ * invenção sai: verde é ter batido a meta, amarelo é estar entre o mínimo e ela, vermelho é estar
+ * abaixo do mínimo. É o que o cliente vê, e conferir os dois lados deixa de exigir tradução.
+ */
+const TEXTO: Record<Faixa, string> = {
+  acima: "text-success",
+  atencao: "text-warning",
+  abaixo: "text-destructive",
+  sem_premissa: "text-foreground",
+};
 
-function barra(valor: number, piso: number | undefined): { largura: string; cor: string } {
-  if (piso == null) return { largura: "0%", cor: "transparent" };
-  const pct = Math.max(0, Math.min(100, (valor / piso) * 100));
-  const cor =
-    valor >= piso
-      ? "hsl(var(--success))"
-      : valor >= piso * 0.85
-        ? "hsl(var(--warning))"
-        : "hsl(var(--destructive))";
-  return { largura: `${pct}%`, cor };
+const FUNDO: Record<Faixa, string> = {
+  acima: "hsl(var(--success))",
+  atencao: "hsl(var(--warning))",
+  abaixo: "hsl(var(--destructive))",
+  sem_premissa: "transparent",
+};
+
+/** A barra mede a distância até a META, que é o alvo — não até o mínimo, que é só o piso do vexame. */
+function larguraAteAMeta(valor: number, premissa: Premissa | undefined): string {
+  // Meta zero (Acidente Fatal) já está cumprida por definição — dividir por ela daria infinito.
+  if (!premissa || premissa.target <= 0) return "100%";
+  return `${Math.max(0, Math.min(100, (valor / premissa.target) * 100))}%`;
 }
 
 export function BscCard({ snapshots }: { snapshots: BscSnapshotView[] }) {
@@ -159,34 +158,42 @@ export function BscCard({ snapshots }: { snapshots: BscSnapshotView[] }) {
           </div>
         </div>
 
-        {/* Vinte cartões pedem mais colunas que seis: numa TV larga eles fecham em duas fileiras. */}
-        <ul className="grid min-w-[280px] flex-1 grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-7 2xl:grid-cols-10">
+        {/* Quatro colunas nas telas largas porque o BSC também usa quatro: cada fileira é um pilar,
+            na mesma sequência do relatório. Quem confere os dois lado a lado não precisa procurar. */}
+        <ul className="grid min-w-[280px] flex-1 grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
           {indicadoresNaTela(atual.indicators).map((nome) => {
             const valor = atual.indicators[nome]!;
-            const piso = PISO[nome];
-            const { largura, cor } = barra(valor, piso);
+            const premissa: Premissa | undefined = PREMISSAS[nome];
+            const faixa = faixaDo(valor, premissa);
             return (
-              <li key={nome} className="flex min-w-0 flex-col gap-1 rounded border p-1.5">
+              <li key={nome} className="flex min-w-0 flex-col gap-1.5 rounded-md border p-2.5">
                 {/* Duas linhas em vez de reticências: "Atendimento Check List" cortado vira
                     "Atendimento Chec…", e numa TV ninguém passa o mouse para descobrir o resto. */}
                 <span
                   title={nome}
-                  className="line-clamp-2 min-h-[1.7em] text-[0.64rem] uppercase leading-tight tracking-wide text-muted-foreground"
+                  className="line-clamp-2 min-h-[2.1em] text-[0.72rem] uppercase leading-tight tracking-wide text-muted-foreground"
                 >
                   {nome}
                 </span>
                 <span className="flex items-baseline justify-between gap-1">
-                  <span className={`text-base font-bold leading-none ${tom(valor, piso)}`}>
-                    {valor.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%
+                  <span className={`text-xl font-bold leading-none ${TEXTO[faixa]}`}>
+                    {valor.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%
                   </span>
-                  {piso != null ? (
-                    <span className="text-[0.62rem] text-muted-foreground">{piso}</span>
+                  {premissa ? (
+                    // A meta ao lado do número transforma "83,61%" em "83,61% de 95" — sem ela, só
+                    // a cor diz que há problema, e cor sozinha não diz o TAMANHO do problema.
+                    <span className="text-[0.68rem] text-muted-foreground">
+                      {t("target", { value: premissa.target.toLocaleString("pt-BR") })}
+                    </span>
                   ) : null}
                 </span>
-                <span className="h-[3px] overflow-hidden rounded-sm bg-muted">
+                <span className="h-[4px] overflow-hidden rounded-sm bg-muted">
                   <span
                     className="block h-full rounded-sm"
-                    style={{ width: largura, backgroundColor: cor }}
+                    style={{
+                      width: larguraAteAMeta(valor, premissa),
+                      backgroundColor: FUNDO[faixa],
+                    }}
                   />
                 </span>
               </li>
