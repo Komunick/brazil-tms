@@ -1614,6 +1614,8 @@
   },
   "Wallboard": {
     "title": "Brazil Transports · Torre",
+    "spotOffer": "Nova oferta de spot",
+    "spotDeparture": "Saída",
     "live": "ao vivo",
     "stale": "sem atualizar",
     "onTheRoad": "Na estrada agora",

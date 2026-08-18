@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
 import { handleRouteError } from "@/lib/api/respond";
+import { readRecentSpotOffers } from "@brazil-tms/db";
 import { queryWallboard } from "@/lib/trips/trips-read";
 
 export const dynamic = "force-dynamic";
@@ -20,8 +21,9 @@ export async function GET(): Promise<NextResponse> {
   try {
     const ctx = await requireAuth();
     requirePermission(ctx, "view_all_trips");
-    const wallboard = await queryWallboard();
-    return NextResponse.json({ wallboard });
+    // As duas em paralelo: são consultas independentes e a TV desenha as duas no mesmo ciclo.
+    const [wallboard, ofertas] = await Promise.all([queryWallboard(), readRecentSpotOffers()]);
+    return NextResponse.json({ wallboard, ofertas });
   } catch (error) {
     return handleRouteError(error);
   }
