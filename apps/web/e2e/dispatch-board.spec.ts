@@ -396,24 +396,28 @@ test.describe("US5 — Control Tower assignment integration", () => {
   });
 });
 
-test.describe("US5 — Home Dashboard unassigned-trips widget", () => {
-  test("the 'Viagens sem atribuição' widget shows a count and deep-links to the Unassigned view", async ({
+test.describe("US5 — Home Dashboard dispatch-queue widget", () => {
+  /**
+   * Este teste apontava para o cartão "Viagens sem atribuição", retirado do painel a pedido em
+   * 2026-08-17 junto com outros quatro. Quem ficou no lugar dele responde a MESMA pergunta com a
+   * definição que a operação usa: aceita pelo cliente e ainda sem motorista no portal.
+   *
+   * Mudou também a forma do atalho — o cartão inteiro virou link, em vez de trazer uma linha extra
+   * escrita "Ver na Torre de Controle". Por isso o alvo aqui é o `href`, e não mais o texto.
+   */
+  test("o cartão 'Aguardando atribuição' abre o quadro com o MESMO filtro que o contou", async ({
     page,
   }) => {
     await login(page, testAccounts.opsManager);
     await page.goto(routes.home);
 
-    // The unassigned-trips widget card title (Trips.dashboard.unassignedTrips).
-    await expect(page.getByText("Viagens sem atribuição", { exact: true })).toBeVisible({
+    await expect(page.getByText("Aguardando atribuição", { exact: true })).toBeVisible({
       timeout: 15_000,
     });
 
-    // The unassigned widget's "Ver na Torre de Controle" deep-link is the ONLY one carrying the
-    // Unassigned-view query (?assigned=false…); the other widget deep-links use different params.
-    const deepLink = page.locator('a[href*="assigned=false"]', {
-      hasText: "Ver na Torre de Controle",
-    });
-    await expect(deepLink).toBeVisible();
-    await expect(deepLink).toHaveAttribute("href", /assigned=false/);
+    const atalho = page.locator('a[href*="awaitingAssignment=true"]');
+    await expect(atalho).toBeVisible();
+    // O recorte tem que ser o mesmo da contagem: viagens VIVAS esperando despacho.
+    await expect(atalho).toHaveAttribute("href", /scope=active/);
   });
 });

@@ -143,6 +143,14 @@ export type TripDetailView = TripDetail & {
 export interface DashboardSummary {
   tripsTodayByStatus: { status: TripStatus; count: number }[];
   /**
+   * As viagens de AMANHÃ por status (2026-08-17, a pedido).
+   *
+   * O painel fica numa TV no meio da sala, e quem passa por ela de tarde não está resolvendo hoje —
+   * está montando amanhã. "Hoje" responde o que está acontecendo; "amanhã" responde o que ainda dá
+   * tempo de arrumar, que é onde a operação consegue agir.
+   */
+  tripsTomorrowByStatus: { status: TripStatus; count: number }[];
+  /**
    * As viagens DO MÊS por status (2026-08-17).
    *
    * Nasceu sem recorte de data e virou mensal no mesmo dia, a pedido — e o pedido está certo. Com o
@@ -152,13 +160,12 @@ export interface DashboardSummary {
    */
   tripsByStatus: { status: TripStatus; count: number }[];
   /**
-   * As duas filas do PLANEJADO, que são decisões de gente e não estados de caminhão (2026-08-17).
+   * A fila do DESPACHO: aceita pelo cliente e ainda sem motorista no portal (2026-08-17).
    *
-   * O portal tem dois eixos: se a proposta foi aceita (`Aceitação`) e se há motorista (`Status`). O
-   * cruzamento deles descreve o que a operação precisa FAZER, e o TMS só enxergava o segundo — as
-   * duas filas viviam amontoadas em "Recebida", indistinguíveis.
+   * É decisão de GENTE, não estado de caminhão — por isso vem antes dos quadros de status. Nasceu
+   * junto com a fila de aceitação; esta última saiu do painel a pedido, porque aceitar ou recusar
+   * proposta não é trabalho desta operação, e um número que ninguém aciona é ruído numa TV.
    */
-  awaitingAcceptance: number;
   awaitingAssignment: number;
   billingPendingCount: number;
   tripsAtRisk: number | null;
@@ -321,6 +328,25 @@ function toBoardRow(row: BoardRow): TripBoardRow {
 }
 
 /**
+ * A fila do DESPACHO: o cliente já aceitou a proposta e ainda não há motorista no portal.
+ *
+ * Fica num só lugar porque o número aparece em dois — o cartão do painel conta, o quadro filtra — e
+ * duas escritas do mesmo predicado divergem no primeiro ajuste. Um cartão que abre uma lista com
+ * outro total destrói a confiança no painel inteiro, e o erro não se anuncia: os dois números
+ * parecem certos, cada um na sua tela.
+ *
+ * Note que isto NÃO é `assigned=false`. Aquele filtro pergunta se o TMS tem atribuição; este
+ * pergunta se o PORTAL tem motorista. São perguntas diferentes e os totais divergem de propósito —
+ * uma viagem pode ter motorista no portal e ainda não ter sido espelhada aqui.
+ */
+export function awaitingAssignmentSql(): SQL<boolean> {
+  return sql<boolean>`(
+    (${trips.customerFields} ->> 'Aceitação (portal)') = 'Accepted'
+    AND (${trips.customerFields} ->> 'Motorista (portal)') IS NULL
+  )`;
+}
+
+/**
  * Feature 008 — the "trip is missing a required-for-billing proof document" predicate (R13, COV-001),
  * as a reusable boolean SQL fragment over the `trips` table. True when EITHER (a) an applicable active
  * `required_for_billing` requirement (unscoped OR matching lane/vehicle-type) lacks an accepted-or-
@@ -418,6 +444,12 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
   }
   if (query.atRisk === "true") {
     conditions.push(inArray(trips.slaStatus, ["at_risk", "late", "breached"]));
+  }
+
+  // A fila do despacho — o MESMO predicado que o cartão do painel conta. Ver `awaitingAssignmentSql`.
+  if (query.awaitingAssignment === "true") {
+    conditions.push(inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]));
+    conditions.push(awaitingAssignmentSql());
   }
 
   // Feature 006 — assignment filters (data-model.md §5). These reference the LEFT-joined current
@@ -661,16 +693,18 @@ export async function getTripDetailView(id: string): Promise<TripDetailView | nu
  * not invented.
  */
 export async function queryDashboardMetrics(): Promise<DashboardSummary> {
-  const { from, to } = dayRangeSaoPaulo(new Date());
-  const mes = monthRangeSaoPaulo(new Date());
+  const agora = new Date();
+  const { from, to } = dayRangeSaoPaulo(agora);
+  const amanha = dayRangeSaoPaulo(agora, 1);
+  const mes = monthRangeSaoPaulo(agora);
   // 009 — the shared on-time predicate (R2): one source of truth with the SLA report.
   const pickup = onTimeExpr("pickup");
   const arrival = onTimeExpr("arrival");
 
   const [
     byStatus,
+    byStatusAmanha,
     allByStatus,
-    aguardandoAceite,
     aguardandoAtribuicao,
     billingPending,
     unassigned,
@@ -690,6 +724,17 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
         ),
       )
       .groupBy(trips.currentStatus),
+    // O mesmo recorte, no dia SEGUINTE — o que ainda dá tempo de arrumar.
+    db
+      .select({ status: trips.currentStatus, value: count() })
+      .from(trips)
+      .where(
+        and(
+          gte(trips.plannedPickupWindowStart, new Date(amanha.from)),
+          lt(trips.plannedPickupWindowStart, new Date(amanha.to)),
+        ),
+      )
+      .groupBy(trips.currentStatus),
     // O mesmo recorte, no MÊS corrente — o ciclo em que a operação e o faturamento pensam.
     db
       .select({ status: trips.currentStatus, value: count() })
@@ -702,21 +747,12 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
       )
       .groupBy(trips.currentStatus),
     /**
-     * Esperando ACEITAÇÃO: a proposta chegou e ninguém decidiu. Só viagem viva conta — uma proposta
-     * de uma viagem já cancelada não é pendência de ninguém.
-     */
-    db
-      .select({ value: count() })
-      .from(trips)
-      .where(
-        and(
-          inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
-          sql`(${trips.customerFields} ->> 'Aceitação (portal)') = 'Pending'`,
-        ),
-      ),
-    /**
      * Aceitas e esperando ATRIBUIÇÃO: o cliente já disse sim e ainda não há motorista. É a fila do
-     * despacho, e era a maior das duas — 359 no portal contra 44 esperando aceitação.
+     * despacho — 359 no portal quando foi medida.
+     *
+     * O predicado vem de `awaitingAssignmentSql`, o MESMO que o filtro do quadro usa, porque este
+     * número tem um atalho que abre aquela lista. Escrito duas vezes, o cartão e a lista divergiriam
+     * sem que nenhum dos dois parecesse errado.
      */
     db
       .select({ value: count() })
@@ -724,8 +760,7 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
       .where(
         and(
           inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
-          sql`(${trips.customerFields} ->> 'Aceitação (portal)') = 'Accepted'`,
-          sql`(${trips.customerFields} ->> 'Motorista (portal)') is null`,
+          awaitingAssignmentSql(),
         ),
       ),
     db.select({ value: count() }).from(trips).where(eq(trips.currentStatus, "billing_pending")),
@@ -807,8 +842,8 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
 
   return {
     tripsTodayByStatus: byStatus.map((r) => ({ status: r.status, count: r.value })),
+    tripsTomorrowByStatus: byStatusAmanha.map((r) => ({ status: r.status, count: r.value })),
     tripsByStatus: allByStatus.map((r) => ({ status: r.status, count: r.value })),
-    awaitingAcceptance: aguardandoAceite[0]?.value ?? 0,
     awaitingAssignment: aguardandoAtribuicao[0]?.value ?? 0,
     billingPendingCount: billingPending[0]?.value ?? 0,
     tripsAtRisk: atRisk[0]?.value ?? 0,

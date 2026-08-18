@@ -1288,21 +1288,17 @@
       "title": "Painel do dia",
       "subtitle": "O que precisa de atenção hoje.",
       "tripsToday": "Viagens de hoje por status",
+      "tripsTomorrow": "Viagens de amanhã por status",
+      "tripsMonth": "Viagens do mês por status",
       "tripsAtRisk": "Viagens em risco de SLA",
-      "unassignedTrips": "Viagens sem atribuição",
-      "activeExceptions": "Exceções ativas",
-      "onTimePickup": "Coletas no prazo",
-      "onTimeArrival": "Entregas no prazo",
-      "completedMissingDocuments": "Concluídas sem documentos",
+      "awaitingAssignment": "Aguardando atribuição",
       "placeholder": "Disponível em uma próxima etapa.",
       "viewInBoard": "Ver na Torre de Controle",
       "empty": "Nenhuma viagem com coleta hoje.",
-      "loadError": "Não foi possível carregar o painel.",
-      "trips": "{count} viagens",
-      "tripsMonth": "Viagens do mês por status",
+      "emptyTomorrow": "Nenhuma viagem com coleta amanhã.",
       "emptyMonth": "Nenhuma viagem neste mês.",
-      "awaitingAcceptance": "Aguardando aceitação",
-      "awaitingAssignment": "Aguardando atribuição"
+      "loadError": "Não foi possível carregar o painel.",
+      "trips": "{count} viagens"
     }
   },
   "Sla": {
