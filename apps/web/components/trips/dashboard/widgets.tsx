@@ -44,38 +44,49 @@ type MetricCardProps = {
  * deles o painel virava rolagem. Um painel que não cabe na tela deixa de ser painel: a pessoa lê os
  * quatro primeiros e para.
  *
- * O aperto veio em duas rodadas, ambas a pedido. Na segunda, o que sobrava era espaço VAZIO dentro do
+ * O aperto veio em três rodadas, todas a pedido. Na segunda, o que sobrava era espaço VAZIO dentro do
  * cartão: o "ver no quadro" ocupava uma terceira linha só para repetir, em todos eles, a mesma frase.
- * Agora o cartão INTEIRO é o link quando há para onde ir — a área clicável cresce, a frase some, e a
- * altura cai de três linhas para duas. O cartão sem destino continua sendo um bloco morto, e é bom
- * que seja: a diferença entre "dá para abrir" e "é só um número" passou a ser visível.
+ * O cartão INTEIRO virou o link — a área clicável cresce e a frase some.
+ *
+ * Na terceira, o que restava não era altura demais: era ESTICAMENTO. Estes cartões dividem a linha do
+ * grid com os quadros de status, que são altos por natureza (uma linha por status), e o item de grid
+ * cresce até a altura da linha. Um número de três dígitos ficava boiando num retângulo do tamanho de
+ * uma lista de dez status.
+ *
+ * Duas mudanças resolvem, e nenhuma delas é diminuir a fonte:
+ *
+ *   `self-start` — o cartão para de esticar e passa a ter a altura do próprio conteúdo. É a correção
+ *   de verdade; o resto seria maquiagem em cima de um retângulo que continuaria grande.
+ *
+ *   Rótulo e número na MESMA linha. Com o cartão livre para encolher, empilhar os dois em duas linhas
+ *   só desperdiçava a largura que sobra ao lado de um número curto.
  */
 function MetricCard({ titleKey, value, href, placeholder }: MetricCardProps) {
   const t = useTranslations("Trips.dashboard");
 
   const conteudo = (
-    <>
+    <div className="flex items-center justify-between gap-2">
       <CardTitle className="text-[0.68rem] font-medium uppercase leading-tight tracking-wide text-muted-foreground">
         {t(titleKey)}
       </CardTitle>
       {placeholder ? (
-        <p className="mt-0.5 text-xs text-muted-foreground">{t("placeholder")}</p>
+        <span className="shrink-0 text-xs text-muted-foreground">{t("placeholder")}</span>
       ) : (
-        <div className="mt-0.5 text-xl font-semibold leading-none tabular-nums">{value}</div>
+        <span className="shrink-0 text-xl font-semibold leading-none tabular-nums">{value}</span>
       )}
-    </>
+    </div>
   );
 
   if (href && !placeholder) {
     return (
-      <Card className="p-0 transition-colors hover:bg-muted/60">
-        <Link href={href} className="block p-2.5" title={t("viewInBoard")}>
+      <Card className="self-start p-0 transition-colors hover:bg-muted/60">
+        <Link href={href} className="block px-2.5 py-2" title={t("viewInBoard")}>
           {conteudo}
         </Link>
       </Card>
     );
   }
-  return <Card className="p-2.5">{conteudo}</Card>;
+  return <Card className="self-start px-2.5 py-2">{conteudo}</Card>;
 }
 
 /**
@@ -233,7 +244,6 @@ export function DashboardWidgets() {
     const alvo = href.startsWith("/trips") ? `${href}#${BOARD_ANCHOR}` : href;
     return { titleKey, value: format(value), href: alvo };
   }
-
 
   // 007 — the "At risk" view deep-link (matches the DEFAULT_TRIP_VIEWS "atRisk" preset).
   const atRiskHref = "/trips?atRisk=true&scope=active&sort=pickupStart";

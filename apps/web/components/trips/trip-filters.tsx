@@ -169,6 +169,35 @@ export function TripFilters({
               ))}
             </div>
           </div>
+
+          {/**
+           * A fila do despacho, com controle PRÓPRIO (2026-08-18).
+           *
+           * O filtro nasceu só como atalho do painel, e quem clicava no cartão caía numa lista
+           * filtrada sem nada na tela dizendo por quê — nem como voltar. Filtro que não aparece é
+           * filtro em que ninguém confia: a pessoa vê 326 linhas onde esperava milhares e conclui
+           * que a torre está quebrada.
+           *
+           * Não é o mesmo que "sem atribuição" ao lado. Aquele pergunta se o TMS tem atribuição;
+           * este pergunta se o PORTAL já tem motorista. Por isso vive em botão separado, e não
+           * como um quarto estado daquele grupo.
+           */}
+          <div className="space-y-1.5">
+            <Label>{t("board.filterDispatchQueue")}</Label>
+            <Button
+              type="button"
+              size="sm"
+              variant={query.awaitingAssignment === "true" ? "default" : "outline"}
+              aria-pressed={query.awaitingAssignment === "true"}
+              onClick={() =>
+                setFilters({
+                  awaitingAssignment: query.awaitingAssignment === "true" ? undefined : "true",
+                })
+              }
+            >
+              {t("board.awaitingAssignment")}
+            </Button>
+          </div>
         </div>
 
         {/* Quick views --------------------------------------------------------------------- */}
