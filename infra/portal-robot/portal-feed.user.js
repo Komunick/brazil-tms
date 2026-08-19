@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.8.0
+// @version      1.10.0
 // @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -49,8 +49,24 @@
     token: "COLE_AQUI_O_TOKEN",
     /** Código do cliente no TMS. */
     customerCode: "SHOPEE",
-    /** De quanto em quanto tempo perguntar ao portal. */
-    intervaloPlanoMs: 15 * 60 * 1000,
+    /**
+     * De quanto em quanto tempo perguntar ao portal. Os TRÊS ciclos agora andam juntos, a cada cinco
+     * minutos (2026-08-19, a pedido) — antes o plano ia de quinze em quinze.
+     *
+     * O quinze nasceu de uma conta que envelheceu: o comentário da janela de 15 dias falava em "~12
+     * páginas por ciclo", e num volume desses ler de cinco em cinco seria pesado para o portal do
+     * cliente. Medido hoje, o plano tem 292 viagens — TRÊS páginas de 100, a 1,5 s cada. O custo real
+     * é de segundos, e ~85% das linhas voltam sem mudança nenhuma.
+     *
+     * O que isso corta é a espera de quem CONSULTA. A aceitação do cliente e a atribuição de motorista
+     * dele chegam pelo plano; até aqui elas podiam levar quinze minutos para aparecer na Torre,
+     * enquanto o caminhão em movimento já era lido de cinco em cinco. Duas velocidades na mesma tela
+     * é o tipo de coisa que faz a pessoa desconfiar da tela inteira.
+     *
+     * Se um ciclo demorar mais que o intervalo, nada se acumula: `repetir` só agenda o próximo depois
+     * que o anterior termina.
+     */
+    intervaloPlanoMs: 5 * 60 * 1000,
     intervaloExecucaoMs: 5 * 60 * 1000,
     /** Viagens por página. O portal aceita 100; o TMS aplica uma página por vez. */
     porPagina: 100,
@@ -70,8 +86,9 @@
      *
      * O corte era visível a olho nu: nenhuma viagem com data anterior a ontem tinha valor. Nenhuma.
      *
-     * Quinze dias custa ~12 páginas por ciclo em vez de 2, bem abaixo do teto de 40, a cada 15
-     * minutos. É barato perto de perder de vista uma viagem que o cliente ainda considera dele.
+     * Quinze dias custa TRÊS páginas por ciclo em vez de 2 (292 viagens, medido em 2026-08-19),
+     * bem abaixo do teto de 40. É barato perto de perder de vista uma viagem que o cliente ainda
+     * considera dele — e barato o bastante para o ciclo rodar de cinco em cinco minutos.
      */
     planoDiasAtras: 15,
     planoDiasAdiante: 7,
