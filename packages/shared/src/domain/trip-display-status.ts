@@ -57,6 +57,20 @@ export function displayStatusOf(
   portalAcceptance: string | null | undefined,
   portalStatus?: string | null,
 ): TripDisplayStatus {
+  /**
+   * `at_origin` E a fila `awaiting_arrival` mostram a MESMA linha: "NA ORIGEM" (2026-08-19, a pedido).
+   *
+   * São dois estados de verdade diferentes — um é "o cliente escalou motorista e espera-se que ele
+   * apareça", o outro é "o caminhão chegou, com hora registrada" — e o quadro deixou de distingui-los
+   * porque a operação não distingue: para quem olha a tela, os dois querem dizer que aquela viagem
+   * está na origem.
+   *
+   * O que NÃO muda: o status real da viagem, a máquina de estados, a linha do tempo da viagem e o
+   * botão de marco continuam com `at_origin` separado e escrito "Na origem". A fusão é só de
+   * EXIBIÇÃO no quadro — misturar as duas coisas apagaria a diferença entre planejado e acontecido,
+   * que é o que alimenta o cálculo de pontualidade.
+   */
+  if (status === "at_origin") return "awaiting_arrival";
   if (status !== "received") return status;
   if (portalStatus === PORTAL_ATRIBUIDA) return "awaiting_arrival";
   return portalAcceptance === ACEITACAO_PENDENTE ? "in_analysis" : "to_assign";
@@ -70,7 +84,14 @@ export function displayStatusOf(
  * acontecem, e uma lista que reordena obriga a procurar de novo o que já se sabia onde era.
  */
 export const TRIP_DISPLAY_ORDER: readonly TripDisplayStatus[] = TRIP_STATUSES.flatMap((s) =>
-  s === "received" ? ([...TRIP_QUEUES] as TripDisplayStatus[]) : [s],
+  s === "received"
+    ? ([...TRIP_QUEUES] as TripDisplayStatus[])
+    : // `at_origin` sai da lista porque nada é exibido com esse rótulo: `displayStatusOf` o funde em
+      // `awaiting_arrival` ("NA ORIGEM"). Deixá-lo aqui criaria uma opção de filtro que não conta
+      // nada e um cartão eternamente zerado.
+      s === "at_origin"
+      ? []
+      : [s],
 );
 
 export function isTripQueue(status: TripDisplayStatus): status is TripQueue {

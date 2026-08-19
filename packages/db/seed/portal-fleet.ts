@@ -2,7 +2,8 @@ import "dotenv/config";
 import { readFileSync } from "node:fs";
 import { parse as parseCsv } from "csv-parse/sync";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { carriers, db, drivers } from "../src";
+import type { VehicleType } from "@brazil-tms/shared";
+import { carriers, db, drivers, trailers, vehicles } from "../src";
 
 /**
  * Carga do cadastro de motoristas a partir da EXPORTAÇÃO DO PORTAL DO CLIENTE (2026-08-18).
@@ -150,6 +151,134 @@ async function transportadora(): Promise<string> {
   return criada[0]!.id;
 }
 
+/**
+ * O TIPO DO VEÍCULO, do vocabulário do cliente para o enum fechado do TMS.
+ *
+ * O mapeamento é o MESMO de `shopee-registry.ts`, de propósito: os dois carregam a mesma frota de
+ * fontes diferentes, e dois mapas divergentes fariam a mesma placa entrar como `carreta` por um
+ * caminho e `truck` pelo outro, conforme quem rodou por último.
+ *
+ * "- EXPRESSA" é marcador comercial, não tipo. `CAVALO`/`CARRETA` viram `carreta` porque é assim que
+ * o cadastro existente já os chama — a unidade tratora que puxa o semirreboque.
+ *
+ * Um rótulo que não casa devolve `null` e a linha é PULADA, com o rótulo impresso no fim. Chutar um
+ * tipo aqui poria um caminhão errado na tela de despacho, e a regra de compatibilidade de veículo
+ * decide atribuição.
+ */
+function tipoDeVeiculo(bruto: string | undefined): VehicleType | null {
+  const v = (bruto ?? "")
+    .toUpperCase()
+    .trim()
+    .replace(/\s*-\s*EXPRESSA$/, "");
+  if (v.startsWith("CARRET") || v === "CAVALO") return "carreta";
+  if (v.startsWith("TRUCK") || v.startsWith("TRUK")) return "truck";
+  if (v.startsWith("TOCO")) return "toco";
+  if (v.startsWith("3/4") || v.startsWith("TRES")) return "tres_quartos";
+  if (v.startsWith("VUC")) return "vuc";
+  if (v.startsWith("BITREM")) return "bitrem";
+  if (v.startsWith("FIORINO")) return "van";
+  return null;
+}
+
+/** Placa sem hífen nem espaço, maiúscula — o mesmo dobramento que `portal-fleet-link.ts` usa. */
+const dobrarPlaca = (p: string): string => p.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+
+/**
+ * A FROTA, tirada da MESMA exportação de motoristas (2026-08-19).
+ *
+ * O campo `License Plate` do portal traz até duas placas: a tratora primeiro, o semirreboque depois
+ * — exatamente como o robô as entrega em `Placa (portal)`. É por isso que esta carga cabe aqui e não
+ * numa exportação própria: são as placas que as VIAGENS citam, não um cadastro paralelo.
+ *
+ * Por que isso importa: uma viagem só recebe motorista se o veículo TAMBÉM estiver cadastrado. Em
+ * 2026-08-19, das 23 viagens "NA ORIGEM" sem atribuição, as 23 tinham o motorista cadastrado e
+ * nenhuma tinha o veículo — 17 delas com a placa aqui nesta planilha.
+ *
+ * SÓ CRIA, nunca atualiza. Um veículo que já existe pode ter sido corrigido à mão, ter documento,
+ * rastreador, transportadora própria — e esta planilha não sabe nada disso. Sobrescrever seria
+ * apagar trabalho de gente com dado de robô.
+ */
+async function carregarFrota(
+  linhas: Linha[],
+  aplicar: boolean,
+  carrierId: string | null,
+): Promise<{ veiculosCriados: number; carretasCriadas: number; tiposDesconhecidos: string[] }> {
+  // Uma placa aparece em muitas linhas (o mesmo caminhão roda com motoristas diferentes). O mapa
+  // colapsa isso antes de tocar o banco: sem ele, seriam mil e trezentas idas para 900 placas.
+  const tratoras = new Map<string, { tipo: VehicleType; renavam: string | null }>();
+  const carretas = new Set<string>();
+  const desconhecidos = new Set<string>();
+
+  for (const linha of linhas) {
+    const placas = (linha["License Plate"] ?? "")
+      .split(/[,;/]/)
+      .map(dobrarPlaca)
+      .filter(Boolean);
+    if (placas.length === 0) continue;
+    const bruto = linha["Vehicle Type"] ?? "";
+    const tipo = tipoDeVeiculo(bruto);
+    if (!tipo) {
+      desconhecidos.add(bruto.trim() || "(vazio)");
+      continue;
+    }
+    if (!tratoras.has(placas[0]!)) {
+      tratoras.set(placas[0]!, { tipo, renavam: soDigitos(linha["RENAVAM"]) });
+    }
+    // A segunda placa é o semirreboque. O tipo dele NÃO vem na exportação, e continua entrando como
+    // `bau` — o padrão do linehaul, e a mesma escolha que o carregador da planilha já fazia.
+    if (placas[1]) carretas.add(placas[1]);
+  }
+
+  let veiculosCriados = 0;
+  let carretasCriadas = 0;
+
+  for (const [placa, dados] of tratoras) {
+    const existe = await db
+      .select({ id: vehicles.id })
+      .from(vehicles)
+      .where(sql`upper(regexp_replace(${vehicles.plate}, '[^A-Za-z0-9]', '', 'g')) = ${placa}`)
+      .limit(1);
+    if (existe[0]) continue;
+    veiculosCriados += 1;
+    if (aplicar) {
+      await db.insert(vehicles).values({
+        plate: placa,
+        vehicleType: dados.tipo,
+        renavam: dados.renavam,
+        ownershipType: "subcontracted",
+        carrierId: carrierId ?? undefined,
+        status: "active",
+        notes: `${MARCA} — frota da exportação de Motoristas 3PL.`,
+      });
+    }
+  }
+
+  for (const placa of carretas) {
+    // Uma placa que já é veículo não pode virar semirreboque também: o portal ora manda a tratora
+    // primeiro, ora só uma placa, e uma inversão criaria o mesmo caminhão nas duas tabelas.
+    if (tratoras.has(placa)) continue;
+    const existe = await db
+      .select({ id: trailers.id })
+      .from(trailers)
+      .where(sql`upper(regexp_replace(${trailers.plate}, '[^A-Za-z0-9]', '', 'g')) = ${placa}`)
+      .limit(1);
+    if (existe[0]) continue;
+    carretasCriadas += 1;
+    if (aplicar) {
+      await db.insert(trailers).values({
+        plate: placa,
+        trailerType: "bau",
+        ownershipType: "subcontracted",
+        carrierId: carrierId ?? undefined,
+        status: "active",
+        notes: `${MARCA} — frota da exportação de Motoristas 3PL.`,
+      });
+    }
+  }
+
+  return { veiculosCriados, carretasCriadas, tiposDesconhecidos: [...desconhecidos] };
+}
+
 async function main(): Promise<void> {
   const caminho = process.argv[2];
   const aplicar = process.argv.includes("--aplicar");
@@ -264,10 +393,17 @@ async function main(): Promise<void> {
     }
   }
 
+  const frota = await carregarFrota(linhas, aplicar, carrierId);
+
   console.log(aplicar ? "=== APLICADO" : "=== SIMULAÇÃO (sem --aplicar nada foi escrito)");
-  console.log(`  criados      ${contagem.criados}`);
-  console.log(`  atualizados  ${contagem.atualizados}`);
-  console.log(`  por status   ${JSON.stringify(porStatus)}`);
+  console.log(`  motoristas criados      ${contagem.criados}`);
+  console.log(`  motoristas atualizados  ${contagem.atualizados}`);
+  console.log(`  por status              ${JSON.stringify(porStatus)}`);
+  console.log(`  veículos criados        ${frota.veiculosCriados}`);
+  console.log(`  carretas criadas        ${frota.carretasCriadas}`);
+  if (frota.tiposDesconhecidos.length > 0) {
+    console.log(`  tipos ignorados         ${frota.tiposDesconhecidos.join(", ")}`);
+  }
 
   const repetidos = [...nomesRepetidos].filter(([, n]) => n > 1);
   if (repetidos.length > 0) {

@@ -480,7 +480,20 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
    */
   // Uma das três filas do que era "Recebida". O predicado vem de `tripQueueSql`, o MESMO que a
   // contagem da ficha usa — escritos separados, a lista e o número que a anuncia divergiriam.
-  if (query.queue) {
+  if (query.queue === "awaiting_arrival") {
+    /**
+     * "NA ORIGEM" abrange DOIS status reais (2026-08-19): a viagem que o cliente escalou e ainda
+     * está em `received`, e a que já chegou e está em `at_origin`. O filtro precisa dizer isso, ou
+     * quem clicar no cartão cai numa lista menor que o número que a anunciou — e a discordância
+     * entre contagem e lista é justamente o que o resto deste arquivo trabalha para impedir.
+     */
+    conditions.push(
+      or(
+        eq(trips.currentStatus, "at_origin"),
+        and(eq(trips.currentStatus, "received"), tripQueueSql("awaiting_arrival")),
+      )!,
+    );
+  } else if (query.queue) {
     conditions.push(eq(trips.currentStatus, "received"));
     conditions.push(tripQueueSql(query.queue));
   }
@@ -573,6 +586,10 @@ function boardSelect() {
  * inteira para a memória. O teste de contrato entre as duas é o que impede a divergência.
  */
 const displayStatusSql = sql<string>`CASE
+  -- "NA ORIGEM" e UMA linha so: a fila do portal e a chegada de verdade (2026-08-19, a pedido).
+  -- Espelha displayStatusOf; se as duas divergirem, o cartao e a lista mostram numeros diferentes
+  -- para a mesma pergunta e nenhum dos dois parece errado sozinho.
+  WHEN ${trips.currentStatus} = 'at_origin' THEN 'awaiting_arrival'
   WHEN ${trips.currentStatus} <> 'received' THEN ${trips.currentStatus}::text
   WHEN (${trips.customerFields} ->> 'Status (portal)') = 'Assigned' THEN 'awaiting_arrival'
   WHEN (${trips.customerFields} ->> 'Aceitação (portal)') = 'Pending' THEN 'in_analysis'

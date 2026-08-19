@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TRIP_STATUSES } from "./trip-status";
-import { displayStatusOf } from "./trip-display-status";
+import { displayStatusOf, TRIP_DISPLAY_ORDER } from "./trip-display-status";
 
 /**
  * O desdobramento de "Recebida" nas duas filas que a operação enxerga.
@@ -47,13 +47,42 @@ describe("displayStatusOf", () => {
 
   it("NENHUM outro status é tocado, com ou sem aceitação na viagem", () => {
     // A aceitação continua gravada numa viagem que já saiu — e não pode virar rótulo depois que ela
-    // deixou de ser proposta. Só `received` se desdobra; todo o resto passa idêntico.
-    const outros = TRIP_STATUSES.filter((s) => s !== "received");
+    // deixou de ser proposta. Só `received` se desdobra; todo o resto passa idêntico. A exceção é
+    // `at_origin`, que tem o caso dedicado abaixo.
+    const outros = TRIP_STATUSES.filter((s) => s !== "received" && s !== "at_origin");
     for (const status of outros) {
       expect(displayStatusOf(status, "Pending")).toBe(status);
       expect(displayStatusOf(status, "Accepted")).toBe(status);
       expect(displayStatusOf(status, null)).toBe(status);
     }
+  });
+});
+
+describe("displayStatusOf — 'NA ORIGEM' é uma linha só", () => {
+  it("a viagem que já CHEGOU aparece na mesma fila da que foi escalada", () => {
+    /**
+     * Decisão de 2026-08-19, do usuário: a operação não distingue "o cliente escalou motorista" de
+     * "o caminhão chegou" — para quem olha o quadro, as duas querem dizer que a viagem está na
+     * origem. Antes eram duas linhas, e uma delas se chamava "Na origem", o que tornava a lista de
+     * filtros ambígua depois do renomeio.
+     */
+    expect(displayStatusOf("at_origin", null)).toBe("awaiting_arrival");
+    expect(displayStatusOf("at_origin", "Accepted", "Departed")).toBe("awaiting_arrival");
+    expect(displayStatusOf("received", "Accepted", "Assigned")).toBe("awaiting_arrival");
+  });
+
+  it("`at_origin` sai da lista de exibição, senão vira um filtro que nunca conta nada", () => {
+    expect(TRIP_DISPLAY_ORDER).not.toContain("at_origin");
+    expect(TRIP_DISPLAY_ORDER).toContain("awaiting_arrival");
+  });
+
+  it("o status REAL não é tocado — a fusão é só de exibição", () => {
+    /**
+     * `at_origin` continua existindo na máquina de estados, na linha do tempo e no botão de marco. É
+     * ele que grava a hora de chegada, e é dessa hora que sai o cálculo de pontualidade na coleta —
+     * fundir de verdade apagaria a diferença entre planejado e acontecido.
+     */
+    expect(TRIP_STATUSES).toContain("at_origin");
   });
 });
 
