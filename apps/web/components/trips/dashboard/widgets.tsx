@@ -13,6 +13,7 @@ import {
 import type { DashboardSummary } from "@brazil-tms/db";
 import { useDashboardSummary } from "@/lib/trips/client";
 import { useReconexao } from "@/lib/ui/reconexao";
+import { frescorDoPortal, idadeDoPortalEmTexto } from "@/lib/portal/frescor";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { BOARD_ANCHOR } from "@/components/trips/control-tower-table";
 import { BscCard } from "@/components/trips/dashboard/bsc-card";
@@ -288,6 +289,12 @@ export function DashboardWidgets() {
   const amanha = saoPauloDate(1);
   const mes = saoPauloMonthBounds();
 
+  // `new Date()` no render, igual ao cartão do BSC: a tela se recarrega sozinha a cada 60 s, então a
+  // idade envelhece junto com o resto. Um relógio congelado no primeiro render seria a mesma classe
+  // de mentira que este aviso existe para acusar.
+  const portal = frescorDoPortal(summary.portalLastSeenAt, new Date());
+  const idadePortal = idadeDoPortalEmTexto(portal.minutos);
+
   return (
     <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
       {/* Uma faixa fina, e só quando há o que avisar: a tela continua inteira, mas quem olhar sabe
@@ -299,6 +306,19 @@ export function DashboardWidgets() {
         >
           <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-warning" />
           {t("reconnecting")}
+        </div>
+      ) : null}
+      {/* O ROBÔ DO PORTAL PAROU (2026-08-19). Vermelho e não âmbar, e acima dos números de propósito:
+          a tarja de reconexão diz "estes números são de um minuto atrás"; esta diz "estes números
+          podem ser de horas atrás e você não tem como saber olhando". É o aviso que faltou no dia em
+          que o robô ficou seis horas mudo com a tela inteira parecendo normal. */}
+      {portal.velho ? (
+        <div
+          role="status"
+          className="col-span-full flex items-center gap-2 rounded border border-destructive/40 bg-destructive/10 px-2.5 py-1.5 text-xs font-medium text-destructive"
+        >
+          <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-destructive" />
+          {idadePortal ? t("portalStale", { age: idadePortal }) : t("portalNever")}
         </div>
       ) : null}
       {/* O aviso de oferta de spot mora nas DUAS telas: aqui, onde a operação passa o dia, e no

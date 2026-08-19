@@ -1307,6 +1307,8 @@
       "emptyMonth": "Nenhuma viagem neste mês.",
       "loadError": "Não foi possível carregar o painel.",
       "reconnecting": "Sem conexão com o servidor — mostrando os últimos números. A tela se atualiza sozinha quando voltar.",
+      "portalStale": "O portal não chega há {age}. Os números abaixo são desse momento — viagens novas ou atribuições do cliente desde então não aparecem aqui.",
+      "portalNever": "Nenhuma viagem foi lida do portal ainda. O painel está mostrando apenas o que foi cadastrado por aqui.",
       "trips": "{count} viagens"
     }
   },
