@@ -176,6 +176,8 @@ export interface TripAssignmentDto {
   id: string;
   driverId: string | null;
   driverName: string | null;
+  /** A validade da CNH, crua. A tela decide o que é "vencida" — ver `assignmentColumns`. */
+  driverLicenseExpiry: string | null;
   vehicleId: string | null;
   vehiclePlate: string | null;
   trailerId: string | null;
@@ -312,6 +314,17 @@ const assignmentColumns = {
   id: tripAssignments.id,
   driverId: tripAssignments.driverId,
   driverName: asgDriver.name,
+  /**
+   * A validade da CNH viaja junto com o nome (2026-08-19).
+   *
+   * A tela precisa dizer "CNH vencida" em vermelho, e a decisão do usuário foi atribuir MESMO ASSIM
+   * — o portal escala, o TMS registra e avisa. Sem esta coluna, o aviso teria de sair de uma segunda
+   * consulta, e um aviso que depende de carregar depois é um aviso que às vezes não aparece.
+   *
+   * Fica CRU, sem virar booleano aqui: quem desenha decide o que é "vencida" contra o relógio de
+   * quem olha, e assim a mesma data serve para "vence em 3 dias" no dia em que isso for pedido.
+   */
+  driverLicenseExpiry: asgDriver.licenseExpiry,
   vehicleId: tripAssignments.vehicleId,
   vehiclePlate: asgVehicle.plate,
   trailerId: tripAssignments.trailerId,
@@ -335,6 +348,8 @@ type AssignmentRow = {
   id: string;
   driverId: string | null;
   driverName: string | null;
+  /** A validade da CNH, crua. A tela decide o que é "vencida" — ver `assignmentColumns`. */
+  driverLicenseExpiry: string | null;
   vehicleId: string | null;
   vehiclePlate: string | null;
   trailerId: string | null;
@@ -360,6 +375,7 @@ function toAssignmentDto(row: AssignmentRow): TripAssignmentDto {
     id: row.id,
     driverId: row.driverId,
     driverName: row.driverName,
+    driverLicenseExpiry: row.driverLicenseExpiry,
     vehicleId: row.vehicleId,
     vehiclePlate: row.vehiclePlate,
     trailerId: row.trailerId,

@@ -1,5 +1,5 @@
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
-import type { PortalTrip, TripStatus, VehicleType } from "@brazil-tms/shared";
+import type { AssignTripInput, PortalTrip, TripStatus, VehicleType } from "@brazil-tms/shared";
 import { db } from "../client";
 import { drivers, trailers, tripAssignments, trips, vehicles } from "../../schema";
 import { assignTrip, mirrorAssignmentFromPortal } from "./trip-assignments";
@@ -149,12 +149,33 @@ export async function linkFleetFromPortal(
     return { outcome: "not_assignable", detail: trip.currentStatus };
   }
 
-  const current = await db
-    .select({ id: tripAssignments.id })
-    .from(tripAssignments)
-    .where(and(eq(tripAssignments.tripId, tripId), eq(tripAssignments.isCurrent, true)))
-    .limit(1);
-  if (current[0]) return { outcome: "already_assigned" };
+  /**
+   * A atribuição que já existe — para ser COMPARADA mais abaixo, não para encerrar o assunto aqui
+   * (2026-08-19).
+   *
+   * Isto era um `return "already_assigned"` seco: atribuiu uma vez, ficava para sempre. E o cliente
+   * TROCA. Medido em produção: 15 viagens com motorista e placa diferentes do que o portal dizia,
+   * porque a troca aconteceu depois do primeiro espelho.
+   *
+   * O dano não era só o dado velho. Duas dessas viagens seguravam a placa antiga e, pela regra de
+   * conflito de agenda, BLOQUEAVAM a viagem que de fato tinha aquele caminhão — a placa velha
+   * impedindo a viagem certa. `LT0Q8J02E2LN1` guardava a `ATM8A55` enquanto o portal já dizia
+   * `MKK6B69`, e com isso a `LT0Q8J02E2LW1`, dona real da `ATM8A55`, ficava sem ninguém.
+   *
+   * A decisão (do usuário, 2026-08-19): o PORTAL manda. É nele que o cliente escala o motorista,
+   * então quando os dois discordam quem está errado é o TMS.
+   */
+  const atual = (
+    await db
+      .select({
+        id: tripAssignments.id,
+        driverId: tripAssignments.driverId,
+        vehicleId: tripAssignments.vehicleId,
+      })
+      .from(tripAssignments)
+      .where(and(eq(tripAssignments.tripId, tripId), eq(tripAssignments.isCurrent, true)))
+      .limit(1)
+  )[0];
 
   const acharVeiculo = async () =>
     (
@@ -293,8 +314,22 @@ export async function linkFleetFromPortal(
     driver.carrierId !== vehicle.carrierId,
   );
 
+  /**
+   * A COMPARAÇÃO, agora que motorista e veículo estão resolvidos.
+   *
+   * Igual ao que já está lá: nada a fazer, e o ciclo seguinte não repete trabalho. Diferente: o
+   * portal manda, e o TMS é corrigido.
+   */
+  if (atual && atual.driverId === driver.id && atual.vehicleId === vehicle.id) {
+    return { outcome: "already_assigned" };
+  }
+  const substituindo = Boolean(atual);
+
   const nota = [
     "Atribuição espelhada do portal do cliente.",
+    // Fica escrito na própria atribuição que ela SUBSTITUIU outra, e por quê. Sem isso, quem abrir a
+    // viagem amanhã vê um motorista trocado e nenhuma explicação.
+    substituindo ? "Substituiu a anterior: o cliente trocou motorista ou caminhão no portal." : null,
     emCurso ? `Registrada com a viagem já em curso (${trip.currentStatus}).` : null,
     carrierDiverges
       ? "Transportadora tomada do motorista; o veículo está cadastrado sob outra."
@@ -316,18 +351,63 @@ export async function linkFleetFromPortal(
 
   // Viagem parada em "Recebida" é atribuída de verdade e avança; viagem já andando é registrada onde
   // está. Os dois passam pelo MESMO avaliador — só o efeito no status difere.
-  const atribuir = emCurso ? mirrorAssignmentFromPortal : assignTrip;
+  /**
+   * Qual caminho, e por que são três.
+   *
+   * `received`            → `assignTrip`: atribui de verdade e move a viagem para "Atribuída".
+   * em curso, SEM atual   → `mirrorAssignmentFromPortal`: registra retroativo, sem mexer no status.
+   * em curso, COM atual   → o mesmo espelho, com `substituirAtual`, que supersede a linha antiga.
+   *
+   * `received` COM atribuição corrente não acontece: é justamente o estado que `assignTrip` recusa,
+   * e `unassignTrip` devolve a viagem para lá já sem atribuição. Se aparecer, cai no `catch` abaixo
+   * com o motivo escrito, em vez de virar silêncio.
+   */
+  const atribuir = (
+    id: string,
+    entrada: AssignTripInput,
+    ator: string,
+    bloqueiosAceitos: readonly string[] = [],
+  ) =>
+    emCurso
+      ? mirrorAssignmentFromPortal(id, entrada, ator, substituindo, bloqueiosAceitos)
+      : assignTrip(id, entrada, ator, bloqueiosAceitos);
 
   try {
     // Strict first: if nothing is wrong, the assignment carries no excuse attached to it.
     await atribuir(tripId, base, actorUserId);
-    return { outcome: "linked" };
+    return substituindo
+      ? { outcome: "linked", detail: "substituiu a atribuição anterior (o portal mudou)" }
+      : { outcome: "linked" };
   } catch (error) {
     if (!(error instanceof Conflict)) throw error;
-    // A hard refusal stands — expired documents, inactive driver, vehicle in maintenance, expired
-    // carrier contract. The customer put someone on the road the TMS would have stopped, and a robot
-    // must not wave that through.
-    if (error.code !== "OVERRIDE_REQUIRED") return { outcome: "blocked", detail: error.message };
+    /**
+     * A recusa dura continua de pé — motorista inativo, veículo em manutenção, contrato de
+     * transportadora vencido. O cliente pôs alguém na estrada que o TMS teria parado, e um robô não
+     * pode deixar passar calado.
+     *
+     * COM UMA EXCEÇÃO, decidida pelo usuário em 2026-08-19: CNH VENCIDA.
+     *
+     * A `LT0Q8J02DZHQ1` ficou sem motorista no quadro por causa disso — ELENO ALEXANDRE BISPO, CNH
+     * vencida em 09/01/2026, e o portal o escalou assim mesmo. O TMS recusar não impedia a viagem de
+     * acontecer; só escondia quem estava dirigindo. E esconder é pior: a operação perde o motorista
+     * na tela E perde o aviso.
+     *
+     * Então o vínculo aceita e REGISTRA, e a tela da viagem mostra "CNH vencida em 09/01/2026" em
+     * vermelho ao lado do nome. O risco fica visível onde alguém decide, em vez de virar uma viagem
+     * vazia que ninguém sabe por que está vazia.
+     *
+     * Isto vale SÓ para o espelho do portal. A atribuição feita à mão continua barrada — lá existe
+     * uma pessoa na frente da tela, que pode corrigir o cadastro ou escolher outro motorista.
+     *
+     * Na exportação do portal são 3 motoristas ativos com CNH vencida, de 375.
+     */
+    const cnhVencida =
+      error.code === "ASSIGNMENT_BLOCKED" &&
+      warningCodes(error.details).includes("doc_expired") &&
+      bloqueiosSaoSoDaCnh(error.details);
+    if (error.code !== "OVERRIDE_REQUIRED" && !cnhVencida) {
+      return { outcome: "blocked", detail: error.message };
+    }
 
     const avisos = warningCodes(error.details);
     // The one warning that is a real conflict RIGHT NOW rather than a gap in our own records: the
@@ -345,11 +425,12 @@ export async function linkFleetFromPortal(
         tripId,
         {
           ...base,
-          overrideReason: `Espelho da atribuição do cliente no portal. Avisos aceitos: ${
-            avisos.join(", ") || "não detalhados"
-          }.`,
+          overrideReason: `Espelho da atribuição do cliente no portal. ${
+            cnhVencida ? "CNH DO MOTORISTA VENCIDA — aceito por decisão da operação. " : ""
+          }Avisos aceitos: ${avisos.join(", ") || "não detalhados"}.`,
         },
         actorUserId,
+        cnhVencida ? [CNH_VENCIDA] : [],
       );
       return { outcome: "linked_with_warnings", detail: avisos.join(", ") };
     } catch (retry) {
@@ -357,6 +438,23 @@ export async function linkFleetFromPortal(
       throw retry;
     }
   }
+}
+
+/**
+ * A ÚNICA exceção tolerada: CNH vencida, e nada mais junto (2026-08-19).
+ *
+ * `true` só quando TODOS os bloqueios são a validade da carteira do motorista. Se vier acompanhado
+ * de motorista inativo, veículo em manutenção ou documento do caminhão vencido, a recusa continua —
+ * a decisão do usuário foi sobre a CNH, não sobre bloquear menos.
+ */
+const CNH_VENCIDA = "driver:doc_expired";
+
+function bloqueiosSaoSoDaCnh(details: unknown): boolean {
+  if (!Array.isArray(details) || details.length === 0) return false;
+  return details.every((f) => {
+    const item = f as { resourceKind?: unknown; code?: unknown };
+    return `${String(item.resourceKind)}:${String(item.code)}` === CNH_VENCIDA;
+  });
 }
 
 /** The finding codes carried by an `OVERRIDE_REQUIRED`, when it carries any. */
