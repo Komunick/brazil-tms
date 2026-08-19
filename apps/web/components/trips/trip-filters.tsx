@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import {
   BILLING_PHASE_STATUSES,
   SLA_STATUSES,
+  boardFilterForDisplayStatus,
   isTripQueue,
   TRIP_DISPLAY_ORDER,
   VEHICLE_TYPE_VALUES,
@@ -103,12 +104,16 @@ export function TripFilters({
    * Elas compartilham o mesmo status real e se separam por um parâmetro só, que não comporta duas ao
    * mesmo tempo. Isso não é limitação: pedir todas é exatamente pedir "Recebida" inteira, que é o
    * que acontece quando nenhuma está marcada. Ida e volta existem, e nenhum estado fica inalcançável.
+   *
+   * QUAL status acompanha a fila vem de `boardFilterForDisplayStatus` — a mesma função que monta o
+   * link do painel. Aqui era uma segunda escrita da regra, com `received` fixo, e foi por isso que
+   * "NA ORIGEM" abriu vazia: essa fila também tem viagens em `at_origin`, que o `received` cortava.
    */
   function toggleStatus(status: TripDisplayStatus) {
     if (isTripQueue(status)) {
       const ligando = query.queue !== status;
       setFilters({
-        status: ligando ? ["received"] : [],
+        status: ligando ? boardFilterForDisplayStatus(status).status : [],
         queue: ligando ? status : undefined,
       });
       return;
