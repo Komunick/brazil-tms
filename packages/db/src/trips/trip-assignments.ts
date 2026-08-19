@@ -531,6 +531,13 @@ export async function mirrorAssignmentFromPortal(
   tripId: string,
   input: AssignTripInput,
   actorUserId: string,
+  /**
+   * Substituir a atribuição atual em vez de recusar (2026-08-19).
+   *
+   * Só o espelho do portal passa `true`, e só quando já COMPAROU e viu que o cliente trocou de
+   * motorista ou de caminhão. Fora daí o padrão continua: quem já está lá fica.
+   */
+  substituirAtual = false,
 ): Promise<{ trip: TripDetail; findings: Finding[] }> {
   const expected = input.expectedFromStatus as TripStatus;
   // Passou do ponto onde a confirmação era uma pergunta aberta?
@@ -591,17 +598,37 @@ export async function mirrorAssignmentFromPortal(
       throw new Conflict("STALE_TRANSITION", "A viagem já mudou de status.");
     }
 
-    // Sob o mesmo lock: se alguém atribuiu enquanto avaliávamos, a decisão dessa pessoa fica.
+    /**
+     * Sob o mesmo lock: se alguém atribuiu enquanto avaliávamos, a decisão dessa pessoa fica — a
+     * menos que o chamador diga explicitamente que veio SUBSTITUIR (2026-08-19).
+     *
+     * A substituição existe porque o portal é a fonte da verdade sobre quem dirige, e ele MUDA de
+     * ideia: em produção, 15 viagens tinham motorista e placa diferentes do que o portal dizia,
+     * porque o cliente trocou depois que o TMS espelhou e o espelho parava em "já tem atribuição".
+     * Duas dessas ainda bloqueavam OUTRAS viagens por conflito de agenda com um caminhão que já não
+     * era daquela viagem.
+     *
+     * O histórico não se perde: a linha antiga é superseded, exatamente como em `reassignTrip`.
+     */
     const jaTem = await tx
       .select({ id: tripAssignments.id })
       .from(tripAssignments)
       .where(and(eq(tripAssignments.tripId, tripId), eq(tripAssignments.isCurrent, true)))
       .limit(1);
-    if (jaTem[0]) {
+    if (jaTem[0] && !substituirAtual) {
       throw new Conflict("STALE_TRANSITION", "A viagem já tem atribuição atual.");
     }
+    // O índice parcial `(trip_id) WHERE is_current` NÃO é deferido: a linha antiga precisa liberar a
+    // vaga ANTES do insert, não no commit. O elo do histórico é preenchido logo depois.
+    const superseded = jaTem[0]
+      ? await tx
+          .update(tripAssignments)
+          .set({ isCurrent: false, supersededAt: now, updatedAt: now })
+          .where(and(eq(tripAssignments.tripId, tripId), eq(tripAssignments.isCurrent, true)))
+          .returning({ id: tripAssignments.id })
+      : [];
 
-    await tx.insert(tripAssignments).values({
+    const novas = await tx.insert(tripAssignments).values({
       tripId,
       driverId: input.driverId,
       vehicleId: input.vehicleId,
@@ -618,7 +645,20 @@ export async function mirrorAssignmentFromPortal(
       // Uma viagem parada em `assigned` NÃO ganha o carimbo — lá a pergunta continua de pé.
       confirmedByUserId: jaPassouDaConfirmacao ? actorUserId : null,
       confirmedAt: jaPassouDaConfirmacao ? now : null,
-    });
+    }).returning({ id: tripAssignments.id });
+
+    // Fecha o elo do histórico: a linha antiga passa a apontar para a nova.
+    if (superseded.length > 0 && novas[0]) {
+      await tx
+        .update(tripAssignments)
+        .set({ supersededByAssignmentId: novas[0].id, updatedAt: now })
+        .where(
+          inArray(
+            tripAssignments.id,
+            superseded.map((r) => r.id),
+          ),
+        );
+    }
 
     // Auditado como `trip.assign`, com o status IGUAL nos dois lados: é o que separa este registro de
     // um despacho feito na hora, sem inventar uma ação nova no vocabulário de auditoria.

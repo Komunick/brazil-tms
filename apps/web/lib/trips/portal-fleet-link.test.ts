@@ -178,6 +178,55 @@ describe.skipIf(!hasDb)("linkFleetFromPortal — cadastro automático do veícul
     expect(v).toHaveLength(0);
   });
 
+  it("o PORTAL manda: trocou o caminhão lá, o TMS substitui aqui", async () => {
+    /**
+     * O bug (produção, 2026-08-19): o vínculo parava em "já tem atribuição" e o cliente TROCA. Quinze
+     * viagens ficaram com motorista e placa diferentes do que o portal dizia.
+     *
+     * E o dano não era só o dado velho: pela regra de conflito de agenda, a placa antiga BLOQUEAVA a
+     * viagem que de fato tinha aquele caminhão. `LT0Q8J02E2LN1` guardava a `ATM8A55` enquanto o
+     * portal já dizia `MKK6B69`, e a `LT0Q8J02E2LW1` — dona real da `ATM8A55` — ficava sem ninguém.
+     */
+    const placaVelha = placaNova();
+    const placaNoPortal = placaNova();
+    const tripId = await inserirViagem("truck");
+
+    await linkFleetFromPortal(tripId, portalTrip(placaVelha), actorId);
+    const antes = await db
+      .select({ vehicleId: tripAssignments.vehicleId })
+      .from(tripAssignments)
+      .where(and(eq(tripAssignments.tripId, tripId), eq(tripAssignments.isCurrent, true)));
+    expect(antes).toHaveLength(1);
+
+    // O cliente trocou o caminhão no portal. O ciclo seguinte traz a placa nova.
+    const r = await linkFleetFromPortal(tripId, portalTrip(placaNoPortal), actorId);
+    expect(["linked", "linked_with_warnings"]).toContain(r.outcome);
+
+    const depois = await db
+      .select({ vehicleId: tripAssignments.vehicleId })
+      .from(tripAssignments)
+      .where(and(eq(tripAssignments.tripId, tripId), eq(tripAssignments.isCurrent, true)));
+    // EXATAMENTE UMA corrente, e é a do portal — a antiga foi superseded, não apagada.
+    expect(depois).toHaveLength(1);
+    expect(depois[0]!.vehicleId).not.toBe(antes[0]!.vehicleId);
+
+    const historico = await db
+      .select({ id: tripAssignments.id })
+      .from(tripAssignments)
+      .where(eq(tripAssignments.tripId, tripId));
+    expect(historico.length).toBe(2);
+  });
+
+  it("sem troca no portal, não mexe: o mesmo par devolve 'já atribuída'", async () => {
+    // O ciclo do robô repete a cada poucos minutos. Sem esta guarda, cada passada substituiria a
+    // atribuição por uma igual e encheria o histórico de linhas idênticas.
+    const placa = placaNova();
+    const tripId = await inserirViagem("truck");
+    await linkFleetFromPortal(tripId, portalTrip(placa), actorId);
+    const r = await linkFleetFromPortal(tripId, portalTrip(placa), actorId);
+    expect(r.outcome).toBe("already_assigned");
+  });
+
   it("não duplica: rodar de novo reaproveita o veículo criado no ciclo anterior", async () => {
     // O robô repete o ciclo a cada poucos minutos. Sem esta garantia, cada passada criaria uma
     // placa nova — e placa duplicada faz o casamento escolher uma ao acaso.
