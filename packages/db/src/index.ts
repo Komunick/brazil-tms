@@ -161,4 +161,9 @@ export { saveBscSnapshot, queryLatestBsc, BSC_PERIODS } from "./reporting/bsc";
 export type { BscPeriod, BscSnapshotInput, BscSnapshotView } from "./reporting/bsc";
 // O pulso dos robôs e do worker (2026-08-19): só carimbos, sem julgamento — a régua mora na tela.
 export { queryServerStatus } from "./reporting/server-status";
-export type { ServerStatus, StatusFonte, StatusTarefa } from "./reporting/server-status";
+export type {
+  ServerStatus,
+  StatusFonte,
+  StatusTarefa,
+  StatusParPortal,
+} from "./reporting/server-status";
