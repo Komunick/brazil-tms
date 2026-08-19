@@ -9,6 +9,8 @@ const oferta = (id: string): SpotOfertaTeste => ({
   route: "SoC_BA_Simoes Filho  ->  LM Hub_SE_Aracaju_02",
   vehicle: "Truck",
   price: "R$ 4.548,30",
+  // O STA da origem — a hora de comparecer, que é a que o cartão mostra.
+  originArrival: "18/08 21:00",
   departure: "18/08 22:00",
   arrival: "19/08 06:00",
   operator: "fulano",

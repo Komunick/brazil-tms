@@ -33,6 +33,14 @@ export const spotOffers = pgTable(
     vehicle: text("vehicle"),
     /** Já formatado ("R$ 4.548,30") ou a frase que o monitor usa quando o portal não exibe preço. */
     price: text("price"),
+    /**
+     * O STA da PRIMEIRA parada: a hora de o caminhão ESTAR na origem (2026-08-19).
+     *
+     * É o instante que decide se dá para pegar o frete — os outros dois dizem quando ele sai e
+     * quando chega, e nenhum deles responde "consigo pôr um caminhão aí?".
+     */
+    originArrival: text("origin_arrival"),
+    /** O STD da primeira parada: quando ele sai da origem. */
     departure: text("departure"),
     arrival: text("arrival"),
     operator: text("operator"),

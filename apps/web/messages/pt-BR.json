@@ -1614,14 +1614,12 @@
     }
   },
   "Spot": {
-    "newOffer": "Nova oferta de spot",
     "dismiss": "Fechar aviso",
-    "departure": "Saída",
     "vehicle": "Veículo",
-    "queued": "+{count} na fila",
     "todayTitle": "Ofertas de spot hoje",
     "todayEmpty": "Nenhuma oferta hoje.",
-    "todayMore": "e mais {count}"
+    "todayMore": "e mais {count}",
+    "originArrival": "STA"
   },
   "Wallboard": {
     "title": "Brazil Transports · Torre",
