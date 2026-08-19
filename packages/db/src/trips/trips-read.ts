@@ -185,17 +185,6 @@ export interface DashboardSummary {
   onTimePickupPct: number | null;
   onTimeArrivalPct: number | null;
   completedMissingDocuments: number | null;
-  /**
-   * A ÚLTIMA VEZ que o robô do portal disse alguma coisa (2026-08-19).
-   *
-   * Não é um número da operação — é a validade de todos os outros. Enquanto o robô alimenta, este
-   * carimbo anda de quinze em quinze minutos; quando ele para, o painel continua desenhando os
-   * mesmos números com a mesma cara de atual. Foi o que aconteceu por seis horas em 2026-08-18, e
-   * só se descobriu olhando esta coluna no banco.
-   *
-   * `null` quando nenhuma viagem foi vista ainda — base nova, ou robô que nunca falou.
-   */
-  portalLastSeenAt: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -778,7 +767,6 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
     pickupPct,
     arrivalPct,
     missingDocs,
-    portalVisto,
   ] = await Promise.all([
     db
       .select({ status: displayStatusSql, value: count() })
@@ -892,10 +880,6 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
           missingBillingDocumentsSql(),
         ),
       ),
-    // O pulso do robô do portal: o carimbo mais novo de "vi esta viagem lá". Sem recorte de data de
-    // propósito — a pergunta é "o robô está vivo AGORA?", e limitar a janela devolveria vazio
-    // justamente no caso que interessa, o de ele estar calado há muito tempo.
-    db.select({ value: sql<Date | null>`max(${trips.portalLastSeenAt})` }).from(trips),
   ]);
 
   const pct = (rows: Array<{ denom: number; num: number }>): number | null => {
@@ -926,15 +910,6 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
     onTimePickupPct: pct(pickupPct),
     onTimeArrivalPct: pct(arrivalPct),
     completedMissingDocuments: missingDocs[0]?.value ?? 0,
-    // ISO, e não `Date`: isto atravessa JSON até o navegador, e um `Date` viraria string no caminho
-    // sem ninguém declarar. O driver devolve `Date` quando a coluna é timestamptz e string quando o
-    // `max()` já vem serializado, então os dois casos são tratados.
-    portalLastSeenAt: (() => {
-      const v = portalVisto[0]?.value;
-      if (!v) return null;
-      const d = v instanceof Date ? v : new Date(v);
-      return Number.isNaN(d.getTime()) ? null : d.toISOString();
-    })(),
   };
 }
 
