@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import type { ServerStatus } from "@brazil-tms/db";
+import { portalStatusAgrees, type TripStatus } from "@brazil-tms/shared";
 import { idadeEmTexto, saudeDaFonte, saudeDaTarefa, type Saude } from "@/lib/status/saude";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -92,6 +93,10 @@ export function ServerStatusClient() {
   const fontes = data.fontes.map((f) => ({ ...f, ...saudeDaFonte(f.chave, f.ultimo, agora) }));
   const tarefas = data.tarefas.map((j) => ({ ...j, ...saudeDaTarefa(j.ultimo, agora) }));
   const algoAtrasado = [...fontes, ...tarefas].some((x) => x.saude !== "ok" && x.saude !== "sem_regua");
+  // A regra do que combina mora no shared, testada sem banco. Aqui só se filtra o que ela reprovou.
+  const divergentes = data.paresDoPortal.filter(
+    (p) => !portalStatusAgrees(p.portal, p.tms as TripStatus),
+  );
 
   /**
    * O nome da fila vira chave de tradução — e o PONTO tem que sair antes.
@@ -142,6 +147,44 @@ export function ServerStatusClient() {
               </div>
             </li>
           ))}
+        </ul>
+      </Card>
+
+      {/* A COERÊNCIA COM O PORTAL. Duas perguntas diferentes, e as ações que elas pedem também:
+          divergência de status quer dizer que um marco não chegou; atribuição pendente quer dizer
+          que falta cadastro ou que há um conflito para alguém decidir. */}
+      <Card className="p-4">
+        <CardTitle className="text-sm font-semibold uppercase tracking-wide">
+          {t("coherenceTitle")}
+        </CardTitle>
+        <p className="mt-0.5 text-xs text-muted-foreground">{t("coherenceHint")}</p>
+        <ul className="mt-2">
+          <li className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 py-2.5">
+            <div className="min-w-[16rem] flex-1">
+              <p className="text-sm font-medium">{t("divergences")}</p>
+              {divergentes.length > 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {divergentes.map((d) => `${d.portal} → ${d.tms} (${d.total})`).join(" · ")}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">{t("divergencesNone")}</p>
+              )}
+            </div>
+            <Selo
+              saude={divergentes.length > 0 ? "atrasado" : "ok"}
+              texto={String(divergentes.reduce((s, d) => s + d.total, 0))}
+            />
+          </li>
+          <li className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+            <div className="min-w-[16rem] flex-1">
+              <p className="text-sm font-medium">{t("pendingAssignments")}</p>
+              <p className="text-xs text-muted-foreground">{t("pendingAssignmentsHint")}</p>
+            </div>
+            <Selo
+              saude={data.atribuicoesPendentes > 0 ? "atrasado" : "ok"}
+              texto={String(data.atribuicoesPendentes)}
+            />
+          </li>
         </ul>
       </Card>
 
