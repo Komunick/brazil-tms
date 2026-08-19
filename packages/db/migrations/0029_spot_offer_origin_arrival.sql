@@ -1,0 +1,12 @@
+-- O horário de COMPARECER na origem, na oferta de spot (2026-08-19).
+--
+-- O monitor já mandava dois instantes: a partida da origem (`STD` da primeira parada) e a chegada no
+-- destino (`STA` da última). Faltava justamente o que decide se dá para pegar o frete: o `STA` da
+-- PRIMEIRA parada — a hora em que o caminhão precisa ESTAR lá.
+--
+-- Na LT1Q8J02EEL01 os três eram 16:29, 17:29 e 01:29 do dia seguinte. O 16:29 é o único que responde
+-- "consigo pôr um caminhão aí?", e era o único que não chegava.
+--
+-- Coluna nova e opcional: as ofertas já gravadas continuam válidas sem ela, e o monitor antigo
+-- continua funcionando enquanto a VM não é atualizada.
+ALTER TABLE "spot_offers" ADD COLUMN IF NOT EXISTS "origin_arrival" text;

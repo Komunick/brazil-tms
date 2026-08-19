@@ -15,6 +15,7 @@ export interface SpotOfferView {
   route: string;
   vehicle: string | null;
   price: string | null;
+  originArrival: string | null;
   departure: string | null;
   arrival: string | null;
   operator: string | null;
@@ -39,6 +40,7 @@ export async function recordSpotOffer(offer: SpotOfferInput): Promise<{ nova: bo
       route: offer.route,
       vehicle: offer.vehicle ?? null,
       price: offer.price ?? null,
+      originArrival: offer.originArrival ?? null,
       departure: offer.departure ?? null,
       arrival: offer.arrival ?? null,
       operator: offer.operator ?? null,
@@ -80,6 +82,7 @@ function paraView(r: typeof spotOffers.$inferSelect): SpotOfferView {
     route: r.route,
     vehicle: r.vehicle,
     price: r.price,
+    originArrival: r.originArrival,
     departure: r.departure,
     arrival: r.arrival,
     operator: r.operator,

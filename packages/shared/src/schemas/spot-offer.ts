@@ -16,6 +16,8 @@ export const spotOfferSchema = z.object({
   route: z.string().trim().min(1, "Informe a rota.").max(300),
   vehicle: z.string().trim().max(120).optional(),
   price: z.string().trim().max(60).optional(),
+  /** O STA da PRIMEIRA parada — a hora de comparecer na origem. Ver o comentário da coluna. */
+  originArrival: z.string().trim().max(60).optional(),
   departure: z.string().trim().max(60).optional(),
   arrival: z.string().trim().max(60).optional(),
   operator: z.string().trim().max(120).optional(),
