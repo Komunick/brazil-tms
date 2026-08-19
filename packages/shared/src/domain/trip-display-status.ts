@@ -99,13 +99,35 @@ export function isTripQueue(status: TripDisplayStatus): status is TripQueue {
 }
 
 /**
- * O trecho de URL que abre o quadro exatamente neste rótulo.
+ * O recorte do quadro que corresponde EXATAMENTE a este rótulo.
  *
  * Existe para que a contagem e a lista nunca discordem: quem clica num número tem de cair na lista
  * que o produziu. As três filas compartilham o mesmo status real (`received`) e se separam por UM
  * parâmetro com três valores — não por dois booleanos, que permitiriam pedir combinações que não
  * existem ("em análise E já atribuída") e deixariam o quadro vazio sem explicar por quê.
+ *
+ * "NA ORIGEM" É A EXCEÇÃO, e ela custou um cartão que não filtrava nada (2026-08-19). Desde a fusão,
+ * esse rótulo abrange DOIS status reais: a viagem que o portal escalou e ainda está em `received`, e
+ * a que já chegou e está em `at_origin`. Mandar `status=received` junto com a fila cruzava os dois
+ * filtros com E — e como as viagens do dia estavam todas em `at_origin`, a ficha anunciava 2 e a
+ * lista abria vazia. A fila se basta: `queue=awaiting_arrival` já diz os dois status (ver o `or` em
+ * `buildWhere`) — o que precisa sair do caminho é o status cru.
  */
+export function boardFilterForDisplayStatus(status: TripDisplayStatus): {
+  status: TripStatus[];
+  queue?: TripQueue;
+} {
+  if (!isTripQueue(status)) return { status: [status] };
+  return status === "awaiting_arrival"
+    ? { status: [], queue: status }
+    : { status: ["received"], queue: status };
+}
+
+/** O mesmo recorte, escrito como trecho de URL. */
 export function boardQueryForDisplayStatus(status: TripDisplayStatus): string {
-  return isTripQueue(status) ? `status=received&queue=${status}` : `status=${status}`;
+  const recorte = boardFilterForDisplayStatus(status);
+  return [
+    ...recorte.status.map((s) => `status=${s}`),
+    ...(recorte.queue ? [`queue=${recorte.queue}`] : []),
+  ].join("&");
 }

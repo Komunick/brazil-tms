@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { TRIP_STATUSES } from "./trip-status";
-import { displayStatusOf, TRIP_DISPLAY_ORDER } from "./trip-display-status";
+import {
+  boardFilterForDisplayStatus,
+  boardQueryForDisplayStatus,
+  displayStatusOf,
+  TRIP_DISPLAY_ORDER,
+} from "./trip-display-status";
 
 /**
  * O desdobramento de "Recebida" nas duas filas que a operação enxerga.
@@ -111,5 +116,36 @@ describe("displayStatusOf — a terceira fila", () => {
     for (const [aceite, statusPortal] of combinacoes) {
       expect(filas.has(displayStatusOf("received", aceite, statusPortal))).toBe(true);
     }
+  });
+});
+
+/**
+ * O recorte que o cartão do painel e a ficha do quadro usam para abrir a lista.
+ *
+ * Estes casos existem porque a discordância entre o número e a lista NÃO APARECE como defeito: a
+ * tela diz "NA ORIGEM 2" e abre "nenhuma viagem encontrada", e quem olha conclui que o filtro é que
+ * está estranho. Foi o que aconteceu em 2026-08-19, com as duas viagens do dia em `at_origin`.
+ */
+describe("boardFilterForDisplayStatus", () => {
+  it("não manda status junto com a fila NA ORIGEM — ela abrange dois status reais", () => {
+    // `status=received` cruzaria com E e cortaria justamente as viagens em `at_origin`. Quem sabe
+    // dos dois status é o `or` de `buildWhere`, e ele só é alcançado pelo parâmetro da fila.
+    expect(boardFilterForDisplayStatus("awaiting_arrival")).toEqual({
+      status: [],
+      queue: "awaiting_arrival",
+    });
+    expect(boardQueryForDisplayStatus("awaiting_arrival")).toBe("queue=awaiting_arrival");
+  });
+
+  it("as outras duas filas continuam presas a `received`", () => {
+    // Elas vivem inteiramente dentro de `received`; sem o status, o recorte `scope=all` abriria a
+    // fila para viagens já despachadas que o portal ainda descreve como pendentes.
+    expect(boardQueryForDisplayStatus("in_analysis")).toBe("status=received&queue=in_analysis");
+    expect(boardQueryForDisplayStatus("to_assign")).toBe("status=received&queue=to_assign");
+  });
+
+  it("status comum vira o próprio status, sem fila", () => {
+    expect(boardFilterForDisplayStatus("in_transit")).toEqual({ status: ["in_transit"] });
+    expect(boardQueryForDisplayStatus("in_transit")).toBe("status=in_transit");
   });
 });
