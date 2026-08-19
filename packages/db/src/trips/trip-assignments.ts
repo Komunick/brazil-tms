@@ -78,6 +78,34 @@ function partitionFindings(findings: Finding[]): { blocks: Finding[]; warns: Fin
 }
 
 /**
+ * A CHAVE DE UM BLOQUEIO ACEITÁVEL: `recurso:código` (2026-08-19).
+ *
+ * Existe uma exceção, e só uma, à regra de que bloqueio é absoluto: o espelho do portal aceita
+ * `driver:doc_expired` — CNH vencida. Ver o comentário em `portal-fleet-link.ts`, onde a decisão está
+ * registrada com o caso que a motivou.
+ *
+ * A chave inclui o RECURSO de propósito. `doc_expired` é o mesmo código para motorista, veículo e
+ * carreta; aceitar por código solto liberaria junto o caminhão com documento vencido, que ninguém
+ * pediu e que é outra conversa.
+ */
+const chaveDoBloqueio = (f: Finding): string => `${f.resourceKind}:${f.code}`;
+
+/**
+ * Separa os bloqueios que o chamador declarou aceitar. Os aceitos passam a se comportar como AVISO:
+ * exigem `overrideReason` e ficam gravados na atribuição — nunca somem calados.
+ */
+function comBloqueiosAceitos(
+  blocks: Finding[],
+  aceitos: readonly string[],
+): { recusados: Finding[]; tolerados: Finding[] } {
+  if (aceitos.length === 0) return { recusados: blocks, tolerados: [] };
+  return {
+    recusados: blocks.filter((f) => !aceitos.includes(chaveDoBloqueio(f))),
+    tolerados: blocks.filter((f) => aceitos.includes(chaveDoBloqueio(f))),
+  };
+}
+
+/**
  * Derive the assignment's ownership from the chosen driver/vehicle `ownership_type` — a trip has no
  * ownership column (data-model.md §3.3). The set is `subcontracted` (⇒ carrier required) when EITHER
  * the chosen driver or vehicle is subcontracted, otherwise `owned`.
@@ -379,6 +407,12 @@ export async function assignTrip(
   tripId: string,
   input: AssignTripInput,
   actorUserId: string,
+  /**
+   * Bloqueios que este chamador declara aceitar (`recurso:código`). Vazio no caminho manual: quem
+   * está na frente da tela pode corrigir o cadastro ou escolher outro motorista. Só o espelho do
+   * portal passa algo — ver `chaveDoBloqueio`.
+   */
+  bloqueiosAceitos: readonly string[] = [],
 ): Promise<{ trip: TripDetail; findings: Finding[] }> {
   const candidate: Candidate = {
     driverId: input.driverId,
@@ -401,18 +435,20 @@ export async function assignTrip(
 
   const findings = evaluateAssignmentEligibility(context, DEFAULT_ASSIGNMENT_POLICY);
   const { blocks, warns } = partitionFindings(findings);
-  if (blocks.length > 0) {
+  const { recusados, tolerados } = comBloqueiosAceitos(blocks, bloqueiosAceitos);
+  if (recusados.length > 0) {
     throw new Conflict(
       "ASSIGNMENT_BLOCKED",
       "Atribuição bloqueada por restrições de elegibilidade.",
-      blocks,
+      recusados,
     );
   }
-  if (warns.length > 0 && !input.overrideReason) {
+  // Bloqueio tolerado vira aviso: exige motivo e fica gravado. Nunca some calado.
+  if ((warns.length > 0 || tolerados.length > 0) && !input.overrideReason) {
     throw new Conflict(
       "OVERRIDE_REQUIRED",
       "Há avisos de elegibilidade; informe o motivo da exceção para prosseguir.",
-      warns,
+      [...warns, ...tolerados],
     );
   }
 
@@ -538,6 +574,11 @@ export async function mirrorAssignmentFromPortal(
    * motorista ou de caminhão. Fora daí o padrão continua: quem já está lá fica.
    */
   substituirAtual = false,
+  /**
+   * Bloqueios que este chamador declara aceitar, no formato `recurso:código`. Hoje só o espelho do
+   * portal usa, e só com `driver:doc_expired` — ver `chaveDoBloqueio`.
+   */
+  bloqueiosAceitos: readonly string[] = [],
 ): Promise<{ trip: TripDetail; findings: Finding[] }> {
   const expected = input.expectedFromStatus as TripStatus;
   // Passou do ponto onde a confirmação era uma pergunta aberta?
@@ -569,18 +610,21 @@ export async function mirrorAssignmentFromPortal(
 
   const findings = evaluateAssignmentEligibility(context, DEFAULT_ASSIGNMENT_POLICY);
   const { blocks, warns } = partitionFindings(findings);
-  if (blocks.length > 0) {
+  // O espelho é o ÚNICO caminho que pode tolerar um bloqueio, e só o que o chamador declarou.
+  const { recusados, tolerados } = comBloqueiosAceitos(blocks, bloqueiosAceitos);
+  if (recusados.length > 0) {
     throw new Conflict(
       "ASSIGNMENT_BLOCKED",
       "Atribuição bloqueada por restrições de elegibilidade.",
-      blocks,
+      recusados,
     );
   }
-  if (warns.length > 0 && !input.overrideReason) {
+  // Bloqueio tolerado vira aviso: exige motivo e fica gravado. Nunca some calado.
+  if ((warns.length > 0 || tolerados.length > 0) && !input.overrideReason) {
     throw new Conflict(
       "OVERRIDE_REQUIRED",
       "Há avisos de elegibilidade; informe o motivo da exceção para prosseguir.",
-      warns,
+      [...warns, ...tolerados],
     );
   }
 

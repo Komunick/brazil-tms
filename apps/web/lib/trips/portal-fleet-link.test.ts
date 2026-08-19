@@ -227,6 +227,80 @@ describe.skipIf(!hasDb)("linkFleetFromPortal — cadastro automático do veícul
     expect(r.outcome).toBe("already_assigned");
   });
 
+  it("CNH vencida NÃO impede mais o vínculo — atribui e deixa o motivo gravado", async () => {
+    /**
+     * Decisão do usuário (2026-08-19), sobre a `LT0Q8J02DZHQ1`: ELENO ALEXANDRE BISPO, CNH vencida em
+     * 09/01/2026, escalado pelo portal assim mesmo. O TMS recusava — documento vencido é bloqueio
+     * duro — e a viagem ficava sem motorista no quadro.
+     *
+     * Recusar não impedia a viagem de acontecer; só escondia quem estava dirigindo. Agora atribui, e
+     * o risco fica VISÍVEL: o motivo na atribuição e um aviso vermelho na tela da viagem.
+     */
+    const vencido = `MOTORISTA CNH VENCIDA ${code("V")}`;
+    const drv = await db
+      .insert(drivers)
+      .values({
+        name: vencido,
+        ownershipType: "subcontracted",
+        carrierId,
+        status: "active",
+        licenseExpiry: "2026-01-09",
+      })
+      .returning();
+    criados.drivers.push(drv[0]!.id);
+
+    const placa = placaNova();
+    const tripId = await inserirViagem("truck");
+    const r = await linkFleetFromPortal(
+      tripId,
+      { driverLabel: vencido, plateLabel: placa } as unknown as PortalTrip,
+      actorId,
+    );
+
+    expect(r.outcome).toBe("linked_with_warnings");
+    const asg = await db
+      .select({ overrideReason: tripAssignments.overrideReason })
+      .from(tripAssignments)
+      .where(and(eq(tripAssignments.tripId, tripId), eq(tripAssignments.isCurrent, true)));
+    expect(asg).toHaveLength(1);
+    // O motivo diz o que foi aceito. Sem isso, o dia seguinte não sabe por que passou.
+    expect(asg[0]!.overrideReason).toContain("CNH DO MOTORISTA VENCIDA");
+  });
+
+  it("a exceção é SÓ da CNH: motorista inativo continua barrado", async () => {
+    // A decisão foi sobre a validade da carteira, não sobre bloquear menos. Um motorista que o
+    // cliente desativou continua fora — e é justamente o caso que o carregador marca como inativo.
+    const inativo = `MOTORISTA INATIVO ${code("I")}`;
+    const drv = await db
+      .insert(drivers)
+      .values({
+        name: inativo,
+        ownershipType: "subcontracted",
+        carrierId,
+        status: "inactive",
+        licenseExpiry: "2035-01-01",
+      })
+      .returning();
+    criados.drivers.push(drv[0]!.id);
+
+    const placa = placaNova();
+    const tripId = await inserirViagem("truck");
+    const r = await linkFleetFromPortal(
+      tripId,
+      { driverLabel: inativo, plateLabel: placa } as unknown as PortalTrip,
+      actorId,
+    );
+    // Motorista inativo nem é encontrado pela busca (ela exige `active`), então o resultado é
+    // "sem cadastro" — e o importante é que NÃO vira atribuição.
+    expect(r.outcome).not.toBe("linked");
+    expect(r.outcome).not.toBe("linked_with_warnings");
+    const asg = await db
+      .select()
+      .from(tripAssignments)
+      .where(and(eq(tripAssignments.tripId, tripId), eq(tripAssignments.isCurrent, true)));
+    expect(asg).toHaveLength(0);
+  });
+
   it("não duplica: rodar de novo reaproveita o veículo criado no ciclo anterior", async () => {
     // O robô repete o ciclo a cada poucos minutos. Sem esta garantia, cada passada criaria uma
     // placa nova — e placa duplicada faz o casamento escolher uma ao acaso.

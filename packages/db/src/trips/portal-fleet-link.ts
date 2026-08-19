@@ -1,5 +1,5 @@
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
-import type { PortalTrip, TripStatus, VehicleType } from "@brazil-tms/shared";
+import type { AssignTripInput, PortalTrip, TripStatus, VehicleType } from "@brazil-tms/shared";
 import { db } from "../client";
 import { drivers, trailers, tripAssignments, trips, vehicles } from "../../schema";
 import { assignTrip, mirrorAssignmentFromPortal } from "./trip-assignments";
@@ -362,10 +362,15 @@ export async function linkFleetFromPortal(
    * e `unassignTrip` devolve a viagem para lá já sem atribuição. Se aparecer, cai no `catch` abaixo
    * com o motivo escrito, em vez de virar silêncio.
    */
-  const atribuir = emCurso
-    ? (id: string, entrada: typeof base, ator: string) =>
-        mirrorAssignmentFromPortal(id, entrada, ator, substituindo)
-    : assignTrip;
+  const atribuir = (
+    id: string,
+    entrada: AssignTripInput,
+    ator: string,
+    bloqueiosAceitos: readonly string[] = [],
+  ) =>
+    emCurso
+      ? mirrorAssignmentFromPortal(id, entrada, ator, substituindo, bloqueiosAceitos)
+      : assignTrip(id, entrada, ator, bloqueiosAceitos);
 
   try {
     // Strict first: if nothing is wrong, the assignment carries no excuse attached to it.
@@ -375,10 +380,34 @@ export async function linkFleetFromPortal(
       : { outcome: "linked" };
   } catch (error) {
     if (!(error instanceof Conflict)) throw error;
-    // A hard refusal stands — expired documents, inactive driver, vehicle in maintenance, expired
-    // carrier contract. The customer put someone on the road the TMS would have stopped, and a robot
-    // must not wave that through.
-    if (error.code !== "OVERRIDE_REQUIRED") return { outcome: "blocked", detail: error.message };
+    /**
+     * A recusa dura continua de pé — motorista inativo, veículo em manutenção, contrato de
+     * transportadora vencido. O cliente pôs alguém na estrada que o TMS teria parado, e um robô não
+     * pode deixar passar calado.
+     *
+     * COM UMA EXCEÇÃO, decidida pelo usuário em 2026-08-19: CNH VENCIDA.
+     *
+     * A `LT0Q8J02DZHQ1` ficou sem motorista no quadro por causa disso — ELENO ALEXANDRE BISPO, CNH
+     * vencida em 09/01/2026, e o portal o escalou assim mesmo. O TMS recusar não impedia a viagem de
+     * acontecer; só escondia quem estava dirigindo. E esconder é pior: a operação perde o motorista
+     * na tela E perde o aviso.
+     *
+     * Então o vínculo aceita e REGISTRA, e a tela da viagem mostra "CNH vencida em 09/01/2026" em
+     * vermelho ao lado do nome. O risco fica visível onde alguém decide, em vez de virar uma viagem
+     * vazia que ninguém sabe por que está vazia.
+     *
+     * Isto vale SÓ para o espelho do portal. A atribuição feita à mão continua barrada — lá existe
+     * uma pessoa na frente da tela, que pode corrigir o cadastro ou escolher outro motorista.
+     *
+     * Na exportação do portal são 3 motoristas ativos com CNH vencida, de 375.
+     */
+    const cnhVencida =
+      error.code === "ASSIGNMENT_BLOCKED" &&
+      warningCodes(error.details).includes("doc_expired") &&
+      bloqueiosSaoSoDaCnh(error.details);
+    if (error.code !== "OVERRIDE_REQUIRED" && !cnhVencida) {
+      return { outcome: "blocked", detail: error.message };
+    }
 
     const avisos = warningCodes(error.details);
     // The one warning that is a real conflict RIGHT NOW rather than a gap in our own records: the
@@ -396,11 +425,12 @@ export async function linkFleetFromPortal(
         tripId,
         {
           ...base,
-          overrideReason: `Espelho da atribuição do cliente no portal. Avisos aceitos: ${
-            avisos.join(", ") || "não detalhados"
-          }.`,
+          overrideReason: `Espelho da atribuição do cliente no portal. ${
+            cnhVencida ? "CNH DO MOTORISTA VENCIDA — aceito por decisão da operação. " : ""
+          }Avisos aceitos: ${avisos.join(", ") || "não detalhados"}.`,
         },
         actorUserId,
+        cnhVencida ? [CNH_VENCIDA] : [],
       );
       return { outcome: "linked_with_warnings", detail: avisos.join(", ") };
     } catch (retry) {
@@ -408,6 +438,23 @@ export async function linkFleetFromPortal(
       throw retry;
     }
   }
+}
+
+/**
+ * A ÚNICA exceção tolerada: CNH vencida, e nada mais junto (2026-08-19).
+ *
+ * `true` só quando TODOS os bloqueios são a validade da carteira do motorista. Se vier acompanhado
+ * de motorista inativo, veículo em manutenção ou documento do caminhão vencido, a recusa continua —
+ * a decisão do usuário foi sobre a CNH, não sobre bloquear menos.
+ */
+const CNH_VENCIDA = "driver:doc_expired";
+
+function bloqueiosSaoSoDaCnh(details: unknown): boolean {
+  if (!Array.isArray(details) || details.length === 0) return false;
+  return details.every((f) => {
+    const item = f as { resourceKind?: unknown; code?: unknown };
+    return `${String(item.resourceKind)}:${String(item.code)}` === CNH_VENCIDA;
+  });
 }
 
 /** The finding codes carried by an `OVERRIDE_REQUIRED`, when it carries any. */
