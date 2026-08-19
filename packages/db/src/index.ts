@@ -27,6 +27,10 @@ export type {
   PortalApplyOptions,
 } from "./trips/portal-execution-apply";
 export { applyPortalPlan, applyPortalPlanTrip } from "./trips/portal-plan-apply";
+// O vínculo com a frota registrada — exportado para o teste de integração que tranca o cadastro
+// automático do veículo (2026-08-19).
+export { linkFleetFromPortal } from "./trips/portal-fleet-link";
+export type { FleetLinkOutcome, FleetLinkResult } from "./trips/portal-fleet-link";
 export { resolvePortalActorId } from "./trips/portal-actor";
 export {
   marcarVistasNoPortal,
