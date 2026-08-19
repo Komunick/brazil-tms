@@ -104,7 +104,9 @@ export function OfertasDoDia() {
             <DialogTitle className="flex items-center gap-2">
               <Gavel className="h-4 w-4 text-amber-500" aria-hidden />
               {t("todayTitle")}
-              <span className="ml-auto tabular-nums">{ofertas.length}</span>
+              {/* O `mr-6` é a distância do X: o botão de fechar do diálogo é posicionado por cima do
+                  conteúdo, e sem essa margem o número fica ATRÁS dele. */}
+              <span className="ml-auto mr-6 tabular-nums">{ofertas.length}</span>
             </DialogTitle>
             <DialogDescription>{t("listHint")}</DialogDescription>
           </DialogHeader>
