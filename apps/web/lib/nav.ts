@@ -35,6 +35,9 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { key: "freightRates", href: "/freight-rates", icon: "Banknote", permission: "view_freight_rates" },
   // 009 — Reports (view_all_trips: all 7 internal roles, mirroring the 005 dashboard).
   { key: "reports", href: "/reports", icon: "BarChart3", permission: "view_all_trips" },
+  // Status do Sistema (2026-08-19): o pulso dos robôs e do worker. Mesma chave do painel, e não uma
+  // de administração — quem precisa saber que os números pararam de chegar é quem os usa.
+  { key: "serverStatus", href: "/status", icon: "Activity", permission: "view_all_trips" },
   { key: "adminUsers", href: "/admin/users", icon: "Users", permission: "manage_users" },
   { key: "adminAudit", href: "/admin/audit", icon: "ScrollText", permission: "view_audit_log" },
   // 002 — commercial master data (manage_commercial_data: Admin, Ops Manager).
