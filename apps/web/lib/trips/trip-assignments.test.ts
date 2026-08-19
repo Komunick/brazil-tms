@@ -246,6 +246,63 @@ describe.skipIf(!hasDb)("trip-assignments (integration)", () => {
     expect(events[0]!.statusAfter).toBe("assigned");
   });
 
+  it("a OUTRA PERNA da mesma viagem não conta como conflito de agenda", async () => {
+    /**
+     * O bug (produção, 2026-08-19): uma viagem de linehaul chega do cliente partida em pernas, e cada
+     * perna é uma LINHA própria em `trips` — mesmo `external_trip_id`, `leg_number` diferente. O
+     * mesmo motorista fazer as duas é o caso NORMAL, e é o que o portal escala.
+     *
+     * A checagem de sobreposição excluía só a própria linha, então a perna 2 via a perna 1 como dupla
+     * reserva. O espelhamento do portal parava com "conflito de agenda: recurso já está em outra
+     * viagem" e a viagem ficava para sempre sem motorista no TMS enquanto o portal mostrava um.
+     * Eram 3 das 5 recusas: LT0Q8J02DX891, LT0Q8K02DX861 e LT0Q8L02DX871, todas contra si mesmas.
+     *
+     * As janelas AQUI se sobrepõem de propósito — é assim que as pernas reais são (a segunda começa
+     * antes de a primeira terminar). O que não existe é o conflito.
+     */
+    const externo = code("LT-PERNAS");
+    const janela = nextWindow();
+    const perna = async (legNumber: number, inicio: Date, fim: Date): Promise<string> => {
+      const inserted = await db
+        .insert(trips)
+        .values({
+          customerId,
+          originLocationId,
+          destinationLocationId,
+          externalTripId: externo,
+          legNumber,
+          originalPlan: {},
+          currentStatus: "received",
+          plannedVehicleType: "truck",
+          plannedPickupWindowStart: inicio,
+          plannedDeliveryWindowEnd: fim,
+        })
+        .returning();
+      const id = inserted[0]!.id;
+      createdTripIds.push(id);
+      return id;
+    };
+
+    const p1 = await perna(1, janela.start, janela.end);
+    // Começa DENTRO da janela da primeira: é a sobreposição real das pernas.
+    const p2 = await perna(
+      2,
+      new Date(janela.start.getTime() + 6 * 3_600_000),
+      new Date(janela.end.getTime() + 2 * 3_600_000),
+    );
+
+    await assignTrip(p1, fullInput(), actorId);
+    // Sem a correção, esta chamada estourava OVERRIDE_REQUIRED com `schedule_overlap`.
+    await assignTrip(p2, fullInput(), actorId);
+
+    const asg = await db
+      .select()
+      .from(tripAssignments)
+      .where(and(eq(tripAssignments.tripId, p2), eq(tripAssignments.isCurrent, true)));
+    expect(asg).toHaveLength(1);
+    expect(asg[0]!.driverId).toBe(driverId);
+  });
+
   it("rejects a driver-only assignment with INCOMPLETE_ASSIGNMENT (vehicle required)", async () => {
     const tripId = await insertTrip("received");
     const driverOnly = { driverId, expectedFromStatus: "received" } as unknown as AssignTripInput;

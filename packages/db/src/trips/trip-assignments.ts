@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, lt, gt, ne, or, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lt, gt, ne, not, or, type SQL } from "drizzle-orm";
 import { db, type DB } from "../client";
 import {
   carriers,
@@ -122,6 +122,10 @@ export async function gatherEligibilityContext(
       plannedVehicleType: trips.plannedVehicleType,
       windowStart: trips.plannedPickupWindowStart,
       windowEnd: trips.plannedDeliveryWindowEnd,
+      // Para excluir as OUTRAS PERNAS desta mesma viagem da checagem de conflito — ver o comentário
+      // em `resourceMatch`, abaixo.
+      customerId: trips.customerId,
+      externalTripId: trips.externalTripId,
     })
     .from(trips)
     .where(eq(trips.id, tripId))
@@ -259,6 +263,32 @@ export async function gatherEligibilityContext(
           and(
             eq(tripAssignments.isCurrent, true),
             ne(tripAssignments.tripId, tripId),
+            /**
+             * OUTRA PERNA DA MESMA VIAGEM NÃO É CONFLITO (corrigido 2026-08-19).
+             *
+             * Uma viagem de linehaul chega do cliente partida em pernas, e cada perna é uma LINHA
+             * própria em `trips` — mesmo `external_trip_id`, `leg_number` diferente. O mesmo
+             * motorista fazer as duas é o caso NORMAL, e é exatamente o que o portal escala.
+             *
+             * A checagem excluía só a própria linha, então a perna 2 via a perna 1 como dupla reserva
+             * e o espelhamento parava com "conflito de agenda: recurso já está em outra viagem". Em
+             * produção eram 3 das 5 recusas — `LT0Q8J02DX891`, `LT0Q8K02DX861` e `LT0Q8L02DX871`,
+             * todas conflitando consigo mesmas. As janelas se sobrepõem de verdade (a perna 2 começa
+             * antes de a 1 terminar); o que não existe é o conflito.
+             *
+             * Fica de fora só quem tem `external_trip_id` — viagem digitada à mão não tem esse
+             * número, e aí duas linhas sem número não podem ser tratadas como a mesma viagem.
+             */
+            ...(trip.externalTripId
+              ? [
+                  not(
+                    and(
+                      eq(trips.customerId, trip.customerId),
+                      eq(trips.externalTripId, trip.externalTripId),
+                    )!,
+                  ),
+                ]
+              : []),
             resourceMatch,
             // The other trip must still be live (cancelled/terminal trips never conflict).
             inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
