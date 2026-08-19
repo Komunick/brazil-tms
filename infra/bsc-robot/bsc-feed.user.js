@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.13.0
+// @version      1.14.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -134,6 +134,26 @@
      * hora em hora. Dado o custo de errar ter virado o custo de esperar, esperar mais sai de graça.
      */
     limiteRecalculoMs: 180000,
+    /**
+     * DE QUANTO EM QUANTO TEMPO RECARREGAR A PÁGINA (2026-08-19).
+     *
+     * O Looker NÃO refaz a consulta sozinho numa aba que fica aberta. Medido em produção: a aba do
+     * robô estava aberta desde a véspera, o rodapé dizia "Dados atualizados pela última vez:
+     * 19/08/2026 00:50:18 **(alguns itens na página não estão atualizados)**", e o relatório do
+     * cliente, no cabeçalho, já dizia 04:12:45. Um F5 à mão trouxe o carimbo para 12:52 — doze horas
+     * de dado que estavam paradas atrás de cache.
+     *
+     * Essa é a pior forma de falhar, e é a MESMA do robô do portal: o número continua na tela, com a
+     * cor certa, parecendo atual. O carimbo denuncia, e carimbo é a linha que ninguém lê.
+     *
+     * Quatro horas, e não uma: recarregar joga fora o `ultimoCarimboDoCiclo` (ele vive na memória da
+     * página), então a primeira leitura depois do reload sempre faz o ciclo completo. Com o intervalo
+     * de uma hora, recarregar a cada quatro custa um ciclo completo a mais por dia e cobre folgado um
+     * relatório que fecha uma vez por dia.
+     *
+     * `0` desliga.
+     */
+    recarregarAposMs: 4 * 60 * 60 * 1000,
   };
 
   /**
@@ -971,11 +991,29 @@
 
   /** Agenda a partir do FIM do anterior — nunca em paralelo consigo mesmo. */
   function repetir() {
+    const nascimento = Date.now();
     const passo = async () => {
       try {
         await ciclo();
       } catch (e) {
         erro("ciclo falhou:", e?.message ?? e);
+      }
+      /**
+       * O RELOAD VEM DEPOIS DO CICLO, nunca no meio (2026-08-19).
+       *
+       * Recarregar durante uma leitura mataria o recorte pela metade, e a página nova começaria com o
+       * filtro no lugar que o Looker escolher — que não é necessariamente onde a leitura estava. No
+       * fim do ciclo não há nada aberto: os popups foram fechados e os três recortes já foram
+       * entregues ou já falharam com motivo registrado.
+       *
+       * O robô não perde nada com a página nova: tudo que ele sabe vem da tela, e o que ele guardava
+       * na memória (`ultimoCarimboDoCiclo`) é justamente o que precisa ser esquecido para a próxima
+       * leitura valer.
+       */
+      if (CONFIG.recarregarAposMs > 0 && Date.now() - nascimento >= CONFIG.recarregarAposMs) {
+        log("recarregando a página: o Looker não refaz a consulta sozinho numa aba parada.");
+        location.reload();
+        return; // não agenda: quem agenda é o script que sobe com a página nova
       }
       setTimeout(passo, CONFIG.intervaloMs);
     };
