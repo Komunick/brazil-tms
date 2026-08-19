@@ -59,8 +59,10 @@ type MetricCardProps = {
  *
  * Duas mudanças resolvem, e nenhuma delas é diminuir a fonte:
  *
- *   `self-start` — o cartão para de esticar e passa a ter a altura do próprio conteúdo. É a correção
- *   de verdade; o resto seria maquiagem em cima de um retângulo que continuaria grande.
+ *   NÃO ESTICAR — o cartão passa a ter a altura do próprio conteúdo. É a correção de verdade; o
+ *   resto seria maquiagem em cima de um retângulo que continuaria grande. Quem segura isso hoje é o
+ *   `self-start` da COLUNA que os empilha (ver `DashboardWidgets`), e não cada cartão: dentro de uma
+ *   coluna flex, `self-start` no cartão encolheria a LARGURA dele, que é o eixo errado.
  *
  *   Rótulo e número na MESMA linha. Com o cartão livre para encolher, empilhar os dois em duas linhas
  *   só desperdiçava a largura que sobra ao lado de um número curto.
@@ -83,14 +85,14 @@ function MetricCard({ titleKey, value, href, placeholder }: MetricCardProps) {
 
   if (href && !placeholder) {
     return (
-      <Card className="self-start p-0 transition-colors hover:bg-muted/60">
+      <Card className="p-0 transition-colors hover:bg-muted/60">
         <Link href={href} className="block px-2.5 py-2" title={t("viewInBoard")}>
           {conteudo}
         </Link>
       </Card>
     );
   }
-  return <Card className="self-start px-2.5 py-2">{conteudo}</Card>;
+  return <Card className="px-2.5 py-2">{conteudo}</Card>;
 }
 
 /**
@@ -279,9 +281,11 @@ export function DashboardWidgets() {
    */
   const awaitingAssignmentHref = "/trips?awaitingAssignment=true&scope=active&sort=pickupStart";
 
+  // Risco de SLA em cima, fila do despacho embaixo (2026-08-19, a pedido). É a ordem da urgência: o
+  // risco tem hora marcada, a fila espera decisão.
   const cartoes: MetricCardProps[] = [
-    metric("awaitingAssignment", summary.awaitingAssignment, (n) => n, awaitingAssignmentHref),
     metric("tripsAtRisk", summary.tripsAtRisk, (n) => n, atRiskHref),
+    metric("awaitingAssignment", summary.awaitingAssignment, (n) => n, awaitingAssignmentHref),
   ];
 
   const hoje = saoPauloDate();
@@ -307,9 +311,14 @@ export function DashboardWidgets() {
       <OfertaDeSpot />
       {/* O BSC abre o painel: é a nota que decide contrato, e vem do cliente, não daqui. */}
       {bsc.length > 0 ? <BscCard snapshots={bsc} /> : null}
-      {cartoes.map((m) => (
-        <MetricCard key={m.titleKey} {...m} />
-      ))}
+      {/**
+       * A ORDEM É A DO TEMPO: hoje, amanhã, o mês (2026-08-19, a pedido).
+       *
+       * Os dois números avulsos abriam a fila e empurravam os três quadros para o meio da grade,
+       * onde a comparação entre eles — que é a leitura principal desta tela — exigia pular por cima
+       * de um cartão de spot no meio do caminho. Agora os três ficam lado a lado, na sequência em
+       * que a operação pensa, e o que é avulso vai para o fim.
+       */}
       <StatusCard
         titleKey="tripsToday"
         emptyKey="empty"
@@ -324,8 +333,6 @@ export function DashboardWidgets() {
         byStatus={summary.tripsTomorrowByStatus}
         dateFilter={`&pickupFrom=${amanha}&pickupTo=${amanha}`}
       />
-      {/* O destino do aviso depois que ele sai do meio da tela: mesma consulta, tamanho de cartão. */}
-      <OfertasDoDia />
       {/* Trocou o cartão de "Faturamento pendente" (2026-08-17, a pedido): o número do faturamento
           vive na tela de Faturamento, e aqui a pergunta é sobre a operação. */}
       <StatusCard
@@ -334,6 +341,24 @@ export function DashboardWidgets() {
         byStatus={summary.tripsByStatus}
         dateFilter={`&pickupFrom=${mes.first}&pickupTo=${mes.last}`}
       />
+      {/* O destino do aviso depois que ele sai do meio da tela: mesma consulta, tamanho de cartão. */}
+      <OfertasDoDia />
+      {/**
+       * OS DOIS NÚMEROS EMPILHADOS numa coluna só (2026-08-19, a pedido), risco de SLA em cima.
+       *
+       * Eles são cartões de uma linha ao lado de quadros de dez, e enfileirados na horizontal cada um
+       * gastava uma coluna inteira da grade para mostrar dois dígitos. Empilhados, os dois ocupam uma
+       * coluna e sobra a sexta — que o usuário previu e aceitou: espaço vazio na borda incomoda menos
+       * do que um quadro de status espremido.
+       *
+       * O `self-start` mora AQUI, e não nos cartões: é este item da grade que não pode esticar até a
+       * altura da linha. Dentro da coluna, os dois já têm a altura do próprio conteúdo.
+       */}
+      <div className="flex flex-col gap-2.5 self-start">
+        {cartoes.map((m) => (
+          <MetricCard key={m.titleKey} {...m} />
+        ))}
+      </div>
     </div>
   );
 }
