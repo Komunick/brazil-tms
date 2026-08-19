@@ -29,6 +29,36 @@ import { tocarAviso } from "@/lib/spot/som";
 /** Quanto tempo cada aviso fica na tela. */
 const DURACAO_MS = 30_000;
 
+/**
+ * AS CORES DA MARCA, e por que cada uma está onde está (2026-08-19, a pedido).
+ *
+ * O logo da Brazil Transports tem três: verde escuro (o dominante), amarelo e azul-marinho. São as
+ * da bandeira, e o pedido veio com uma condição — "de uma forma que não atrapalhe a visualização".
+ * Ela é o que decide a distribuição abaixo, porque as três juntas erram fácil.
+ *
+ *   FUNDO AZUL-MARINHO, não verde. Verde é a cor dominante do logo, e um fundo verde escuro deixa o
+ *   texto branco com contraste pior e o amarelo quase invisível. O marinho é o mais escuro dos três:
+ *   serve de base e faz os outros dois aparecerem.
+ *
+ *   AMARELO SÓ NO QUE É CURTO E GRANDE — o número da viagem e a barra de tempo. Amarelo sobre
+ *   marinho tem contraste altíssimo (~11:1), mas em texto pequeno ele vibra e cansa. Rótulo e valor
+ *   ficam em cinza-claro e branco.
+ *
+ *   VERDE NA MOLDURA. É a cor que diz "Brazil Transports" à distância, e na borda ela não compete
+ *   com texto nenhum. A faixa de cima faz verde → amarelo, que é a assinatura do logo.
+ *
+ * O que NÃO mudou: o fundo continua escuro. Numa TV ligada o dia inteiro, cartão claro estoura o
+ * brilho da sala e é a primeira coisa que alguém pede para desligar.
+ */
+const MARCA = {
+  fundo: "#0C1A2B",
+  fundoTopo: "#12283F",
+  verde: "#1B7A3D",
+  amarelo: "#F2C230",
+  texto: "#EEF3F8",
+  rotulo: "#93A9BF",
+};
+
 export function OfertaDeSpot() {
   const t = useTranslations("Spot");
   // Busca própria, com ritmo próprio: o componente é montado em telas de cadências diferentes e não
@@ -96,38 +126,84 @@ export function OfertaDeSpot() {
        * O que ficou, e não é informação: o X (foi pedido antes) e a barra de tempo, que é o que
        * explica por que o aviso some sozinho.
        *
-       * `aspect-square` com largura em `vw` mantém o quadrado em qualquer tela — inclusive na TV da
-       * sala, que é o destino real — e o `max-h-[86vh]` impede que ele estoure a altura numa janela
-       * baixa, caso em que ele deixa de ser quadrado de propósito: caber vence a forma.
+       * LARGO, E COM A ALTURA SEGUINDO O CONTEÚDO (2026-08-19, autorizado).
+       *
+       * O desenho pedia um quadrado, e ele não sobreviveu a dois pedidos que vieram depois: a rota em
+       * UMA linha e nada de espaço vazio. Com 620 px de largura, os 73 caracteres da maior rota
+       * espremiam a letra para ~15 px — legível de perto, invisível numa TV do outro lado da sala.
+       *
+       * A largura resolve a leitura; tirar a proporção fixa resolve o vazio. São só três blocos, e
+       * qualquer altura imposta sobraria embaixo deles — que foi exatamente o que aconteceu com o
+       * quadrado e com o 3:2 que tentei antes dele.
+       *
+       * O `py` generoso é o que mantém cara de CARTÃO em vez de barra de notificação: o aviso precisa
+       * de peso para fazer alguém virar a cabeça, e peso aqui vem da moldura, não de espaço morto.
        */}
       <div
-        className={`pointer-events-auto relative flex aspect-square w-[42vw] min-w-[340px] max-w-[620px] max-h-[86vh] flex-col overflow-hidden rounded-3xl bg-slate-900 shadow-[0_0_0_9999px_rgba(2,6,23,0.55),0_25px_60px_-15px_rgba(0,0,0,0.9)] ring-[6px] ring-amber-400 transition-all duration-200 ${
+        style={{
+          background: `linear-gradient(160deg, ${MARCA.fundoTopo} 0%, ${MARCA.fundo} 55%)`,
+          boxShadow: `0 0 0 9999px rgba(3,10,18,0.62), 0 30px 70px -20px rgba(0,0,0,0.95)`,
+          outline: `5px solid ${MARCA.verde}`,
+        }}
+        className={`pointer-events-auto relative flex max-h-[80vh] w-[74vw] min-w-[360px] max-w-[1500px] flex-col overflow-hidden rounded-[28px] transition-all duration-200 ${
           saindo ? "scale-[0.97] opacity-0" : "scale-100 opacity-100"
         }`}
       >
+        {/* A assinatura do logo em 4 px: verde virando amarelo. Não carrega texto, então não há
+            contraste a perder — é a única cor que pode ser puramente decorativa aqui. */}
+        <div
+          aria-hidden
+          className="h-1 shrink-0"
+          style={{ background: `linear-gradient(90deg, ${MARCA.verde}, ${MARCA.amarelo})` }}
+        />
+
         <button
           type="button"
           onClick={encerrar}
           aria-label={t("dismiss")}
           title={t("dismiss")}
-          className="absolute right-3 top-3 z-10 rounded-full p-1.5 text-slate-500 transition-colors hover:bg-white/10 hover:text-white"
+          className="absolute right-3 top-4 z-10 rounded-full p-1.5 text-slate-500 transition-colors hover:bg-white/10 hover:text-white"
         >
           <X className="h-5 w-5" aria-hidden />
         </button>
 
-        <div className="flex flex-1 flex-col items-center justify-evenly px-[8%] py-[7%] text-center">
+        <div className="flex flex-1 flex-col items-center justify-center gap-[2.2vh] px-[6%] py-[3.5vh] text-center">
           {/* TRIP — o número do LH, para quem for atrás dele no portal. */}
           {atual.tripNumber ? (
-            <div className="flex items-center gap-2 text-amber-400">
-              <Gavel className="h-[1.4vw] min-h-4 w-[1.4vw] min-w-4 shrink-0" aria-hidden />
-              <span className="font-black uppercase tracking-[0.12em] tabular-nums [font-size:clamp(0.9rem,1.5vw,1.9rem)]">
+            <div className="flex items-center gap-2.5" style={{ color: MARCA.amarelo }}>
+              <Gavel className="h-[1.7vw] min-h-5 w-[1.7vw] min-w-5 shrink-0" aria-hidden />
+              <span className="font-black uppercase tracking-[0.14em] tabular-nums [font-size:clamp(1rem,1.8vw,2.6rem)]">
                 {atual.tripNumber}
               </span>
             </div>
           ) : null}
 
-          {/* ROTA — o maior de todos: é ela que decide se alguém corre. */}
-          <div className="font-bold leading-tight text-white [font-size:clamp(1.05rem,2.1vw,2.6rem)]">
+          {/**
+           * ROTA EM UMA LINHA SÓ (2026-08-19, a pedido) — e é por ela que o cartão alargou.
+           *
+           * Quebrada em duas ou três linhas, a rota quebrava no meio do nome da estação
+           * ("LM Hub_PB_João / Pessoa_Gramame"), o que faz o olho parar para remontar a palavra. É a
+           * informação que decide se alguém corre atrás do frete; ela não pode custar leitura.
+           *
+           * O tamanho da letra CAI conforme o texto cresce, em vez de um valor fixo. Medido nas rotas
+           * reais: a maior tem 65 caracteres nas ofertas e 73 nas viagens em geral. Com um número
+           * fixo, ou a rota longa vazava, ou a curta ficava pequena à toa.
+           *
+           * A conta de caber: a largura útil é 88% do cartão e uma letra em negrito ocupa ~0,52 do
+           * corpo dela, então o corpo máximo é `1,69 × largura ÷ comprimento`.
+           *
+           * O TETO É EM PIXELS, e isso não é detalhe. O cartão cresce com a tela até 1080 px e PARA;
+           * um tamanho só em `vw` continuaria crescendo depois disso e a rota vazaria justamente na
+           * tela grande — que é a TV, o lugar onde ela precisa caber.
+           */}
+          <div
+            className="w-full overflow-hidden whitespace-nowrap font-bold leading-tight"
+            style={{
+              color: MARCA.texto,
+              fontSize: `clamp(0.72rem, ${(125 / Math.max(atual.route.length, 1)).toFixed(2)}vw, ${Math.min(54, 2535 / Math.max(atual.route.length, 1)).toFixed(1)}px)`,
+            }}
+            title={atual.route}
+          >
             {atual.route}
           </div>
 
@@ -159,11 +235,14 @@ export function OfertaDeSpot() {
         </div>
 
         {/* A barra escorre com o tempo: mostra que ele vai sair sozinho, sem precisar de aviso. */}
-        <div className="h-1.5 shrink-0 bg-amber-400/20">
+        <div className="h-1.5 shrink-0" style={{ backgroundColor: "rgba(242,194,48,0.16)" }}>
           <div
             key={atual.id}
-            className="h-full bg-amber-400"
-            style={{ animation: `oferta-tempo ${DURACAO_MS}ms linear forwards` }}
+            className="h-full"
+            style={{
+              backgroundColor: MARCA.amarelo,
+              animation: `oferta-tempo ${DURACAO_MS}ms linear forwards`,
+            }}
           />
         </div>
       </div>
@@ -176,10 +255,18 @@ export function OfertaDeSpot() {
 function Dado({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
     <span className="leading-tight">
-      <span className="block uppercase tracking-[0.12em] text-slate-500 [font-size:clamp(0.6rem,0.8vw,0.95rem)]">
+      {/* Rótulo em cinza-claro e valor em branco: os dois em AMARELO brigariam com o número da
+          viagem, e a tela perderia a hierarquia que faz o olho achar a rota primeiro. */}
+      <span
+        className="block uppercase tracking-[0.14em] [font-size:clamp(0.68rem,0.95vw,1.25rem)]"
+        style={{ color: MARCA.rotulo }}
+      >
         {rotulo}
       </span>
-      <span className="font-semibold text-slate-100 [font-size:clamp(0.85rem,1.3vw,1.6rem)]">
+      <span
+        className="font-semibold [font-size:clamp(0.95rem,1.6vw,2.2rem)]"
+        style={{ color: MARCA.texto }}
+      >
         {valor}
       </span>
     </span>
