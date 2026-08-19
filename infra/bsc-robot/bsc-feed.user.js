@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.14.0
+// @version      1.15.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -179,27 +179,37 @@
    * Os três recortes, com o caminho EXATO do menu (medido na tela) e o rótulo do TMS.
    *
    * `pai` é o item que precisa ser aberto antes de achar a opção. "Ontem" está na raiz do menu; só o
-   * mês mora num submenu, que abre ao passar o mouse e não ao clicar. A janela de nove dias não usa o
+   * mês mora num submenu, que abre ao passar o mouse e não ao clicar. A janela semanal não usa o
    * menu: monta o intervalo no "Avançado".
    */
   /**
-   * A semana da operação: DOMINGO a SEGUNDA, nove dias com as pontas contando.
+   * A semana da operação: SEGUNDA a DOMINGO, sete dias (2026-08-19, a pedido).
+   *
+   * Era domingo a segunda, nove dias com as duas pontas contando — e nove dias não é uma semana: o
+   * domingo e a segunda apareciam DUAS vezes no cálculo, uma em cada ponta. O usuário corrigiu para
+   * a semana de calendário, que é a que a operação usa para comparar um período com o outro.
    *
    * O "Avançado" do Looker só sabe contar para trás a partir de hoje ("Hoje menos N"), então a
-   * âncora de calendário vira aritmética aqui: o fim é a última segunda-feira (hoje, se hoje for
-   * segunda) e o início é oito dias antes dela, que cai sempre num domingo.
+   * âncora de calendário vira aritmética aqui: o fim é o ÚLTIMO DOMINGO já fechado e o início é a
+   * segunda-feira seis dias antes dele.
    *
-   *   terça 18/08   → fim = hoje menos 1 (17, segunda), início = hoje menos 9 (9, domingo)
-   *   domingo 23/08 → fim = hoje menos 6 (17, segunda), início = hoje menos 14 (9, domingo)
-   *   segunda 24/08 → fim = hoje menos 0 (24, segunda), início = hoje menos 8 (16, domingo)
+   *   quarta 19/08  → fim = hoje menos 3 (16, domingo), início = hoje menos 9 (10, segunda)
+   *   domingo 23/08 → fim = hoje menos 7 (16, domingo), início = hoje menos 13 (10, segunda)
+   *   segunda 24/08 → fim = hoje menos 1 (23, domingo), início = hoje menos 7 (17, segunda)
    *
-   * A janela anda numa segunda-feira, e nunca invade o futuro — que é o defeito que derrubou as duas
-   * primeiras tentativas de recorte semanal (ver o comentário do RECORTE, logo abaixo).
+   * Repare no domingo: ele conta 7 e não 0. Um domingo só entra na janela quando já ACABOU — no
+   * próprio domingo o dia ainda está correndo, e incluí-lo poria data sem dado dentro do intervalo.
+   * Foi esse o defeito que derrubou as duas primeiras tentativas de recorte semanal (ver o comentário
+   * do RECORTE, logo abaixo): intervalo que avança sobre o futuro não parece quebrado, parece
+   * desempenho péssimo.
+   *
+   * A janela vira numa segunda-feira, e nunca invade o futuro.
    */
   function janelaSemanal(hoje = new Date()) {
-    // getDay(): 0 = domingo. Rodado para segunda = 0, que é a distância até a última segunda-feira.
-    const fimMenos = (hoje.getDay() + 6) % 7;
-    return { inicioMenos: fimMenos + 8, fimMenos };
+    // getDay(): 0 = domingo. No domingo, volta uma semana inteira em vez de zero — ver acima.
+    const dia = hoje.getDay();
+    const fimMenos = dia === 0 ? 7 : dia;
+    return { inicioMenos: fimMenos + 6, fimMenos };
   }
 
   const RECORTES = [
@@ -214,16 +224,12 @@
     // janela de nove dias. Primeiro recorte do ciclo é o mais fácil de confundir com a tela de
     // partida, e é por isso que `lerEstavel` registra quando estabiliza sem mudar de valores.
     { period: "day", pai: null, menu: "Ontem" },
-    // A SEMANA — domingo a segunda-feira, ancorada no CALENDÁRIO e não em hoje (2026-08-18).
+    // A SEMANA — SEGUNDA a DOMINGO, sete dias, ancorada no CALENDÁRIO e não em hoje.
     //
-    // Nasceu como "nove dias terminando hoje" (Hoje menos 8 → Hoje menos 0), e no dia em que foi
-    // medida caiu em "9 a 17 de ago." porque 17 era segunda. No dia seguinte virou "10 a 18" — uma
-    // segunda a uma terça —, e foi aí que ficou claro o que o usuário queria de fato: o intervalo
-    // 9→17, toda vez, porque a semana da operação vai de DOMINGO a SEGUNDA.
-    //
-    // A conta é a mesma janela de nove dias, só que presa à última segunda-feira em vez de a hoje:
-    // ver `janelaSemanal`. O rótulo do TMS deixou de ser "9 dias" e virou "Semana" no mesmo commit —
-    // o nome contava o tamanho da janela, que era exatamente a parte que estava errada.
+    // Nasceu como "nove dias terminando hoje" (Hoje menos 8 → Hoje menos 0) e depois virou nove dias
+    // presos ao último domingo. Nenhuma das duas era uma semana: com as pontas contando, o domingo e
+    // a segunda entravam DUAS vezes no intervalo. Em 2026-08-19 o usuário fixou a semana da operação
+    // como segunda a domingo, sete dias — ver `janelaSemanal` para a aritmética e os exemplos.
     //
     // Duas tentativas anteriores e o que cada uma ensinou:
     //
@@ -234,11 +240,11 @@
     //   0%. Nenhuma opção de semana de calendário tem variante "até agora" (mês, trimestre e ano têm),
     //   então não dá para cortar o futuro por ali.
     //
-    //   "Últimos 7 dias" resolveu o futuro mas termina ONTEM (medido: 10 a 16/08). O dia de hoje, que
-    //   é justamente o que a operação quer ver, ficava de fora.
+    //   "Últimos 7 dias" resolveu o futuro mas é uma janela móvel: numa quarta ela cai numa quinta,
+    //   e comparar uma semana com a outra deixa de fazer sentido.
     //
-    // O "Avançado" resolve os dois: início = Hoje menos 8, término = Hoje menos 0. Medido na tela,
-    // rótulo "9 de ago. de 2026 - 17 de ago. de 2026". Os oito são nove dias porque as pontas contam.
+    // O "Avançado" resolve os dois, porque aceita as duas pontas em "Hoje menos N". Medido na tela
+    // numa quarta 19/08: rótulo "10 de ago. de 2026 - 16 de ago. de 2026".
     { period: "week", avancado: janelaSemanal },
     { period: "month", pai: "Este mês", menu: "Este mês, até agora" },
   ];
@@ -344,7 +350,12 @@
     if (tipo.startsWith("pointer") && typeof PointerEvent === "function") {
       try {
         el.dispatchEvent(
-          new PointerEvent(tipo, { ...opcoes, pointerId: 1, pointerType: "mouse", isPrimary: true }),
+          new PointerEvent(tipo, {
+            ...opcoes,
+            pointerId: 1,
+            pointerType: "mouse",
+            isPrimary: true,
+          }),
         );
         return;
       } catch {
@@ -496,7 +507,14 @@
     //
     // Deixar o navegador interpretar acerta nos dois casos, porque é exatamente a mesma conta que o
     // Looker fez para escrever o texto.
-    const d = new Date(Number(ano), Number(mes) - 1, Number(dia), hora, Number(min), Number(seg || 0));
+    const d = new Date(
+      Number(ano),
+      Number(mes) - 1,
+      Number(dia),
+      hora,
+      Number(min),
+      Number(seg || 0),
+    );
     return Number.isNaN(d.getTime()) ? null : d.toISOString();
   }
 
@@ -516,11 +534,26 @@
    * alguém mover um bloco.
    */
   const ROTULOS = [
-    "Scheduling", "Tendência", "SPOT", "Aderência de Perfil",
-    "ETA Origem", "Performance CPT", "No Show", "Plano de Ação",
-    "ETA Destino", "Telemetria", "Utilização do APP", "Report de Ocorrências",
-    "CMK", "Training", "Atendimento Check List", "Acidente Fatal",
-    "Sinistralidade (pct)", "Bloqueio Driver", "Ocorrência - Quebra", "Reversa",
+    "Scheduling",
+    "Tendência",
+    "SPOT",
+    "Aderência de Perfil",
+    "ETA Origem",
+    "Performance CPT",
+    "No Show",
+    "Plano de Ação",
+    "ETA Destino",
+    "Telemetria",
+    "Utilização do APP",
+    "Report de Ocorrências",
+    "CMK",
+    "Training",
+    "Atendimento Check List",
+    "Acidente Fatal",
+    "Sinistralidade (pct)",
+    "Bloqueio Driver",
+    "Ocorrência - Quebra",
+    "Reversa",
   ];
 
   /** Formato pt-BR: exige vírgula decimal ou o símbolo de porcentagem — "110" do eixo não entra. */
@@ -562,8 +595,14 @@
    * O `110` do eixo do medidor também é um inteiro de três dígitos, mas não tem faixa escrita embaixo.
    * Quem separa os dois é o par, não o formato — e a legenda de cores, que lista as quatro faixas em
    * sequência, é descartada porque um item dela vem sempre seguido de outro.
+   *
+   * O "de" da faixa É OPCIONAL, e isso custou o dia 18/08 inteiro. O texto embaixo do número não é
+   * o mesmo da legenda de cores: a legenda escreve "Zona de Evolução", o medidor escreve "Zona
+   * evolução". Cada faixa teve o rótulo digitado à mão no relatório, então a grafia varia de uma
+   * para a outra — as notas que caíam em atenção liam normalmente, e a primeira nota que subiu para
+   * a faixa de evolução (89, em 18/08) veio sem nota nenhuma, três ciclos seguidos.
    */
-  const EH_FAIXA = /^(Zona de .+|Fora da faixa)$/;
+  const EH_FAIXA = /^(Zona (de )?.+|Fora da faixa)$/;
   const EH_NOTA = /^\d{1,3}(,\d{1,2})?$/;
 
   function notaEZona() {
@@ -587,7 +626,10 @@
         timeout: 60000,
         onload: (res) => {
           if (res.status >= 200 && res.status < 300) resolve(JSON.parse(res.responseText || "{}"));
-          else reject(new Error(`TMS respondeu ${res.status}: ${String(res.responseText).slice(0, 200)}`));
+          else
+            reject(
+              new Error(`TMS respondeu ${res.status}: ${String(res.responseText).slice(0, 200)}`),
+            );
         },
         onerror: () => reject(new Error("falha de rede ao falar com o TMS")),
         ontimeout: () => reject(new Error("TMS não respondeu a tempo")),
@@ -629,7 +671,8 @@
     // "Hoje" — e procurar o nome antigo faz o segundo ciclo falhar onde o primeiro tinha passado.
     // Por isso a busca é pelo CONJUNTO de nomes possíveis, não por um.
     const modo = await esperarQualquer(MODOS);
-    if (!modo) throw new Error(`nenhum modo de período na tela (esperava um de: ${MODOS.join(", ")})`);
+    if (!modo)
+      throw new Error(`nenhum modo de período na tela (esperava um de: ${MODOS.join(", ")})`);
     clicar(modo);
 
     if (recorte.avancado) {
@@ -643,9 +686,10 @@
       if (!campos) throw new Error("campos de compensação do 'Avançado' não encontrados");
       // Calculado NA HORA, não uma vez na carga do script: a aba fica aberta por dias, e uma janela
       // congelada no dia da abertura escorregaria um dia a cada meia-noite sem nada avisar.
-      const janela =
-        typeof recorte.avancado === "function" ? recorte.avancado() : recorte.avancado;
-      log(`${recorte.period}: janela Hoje menos ${janela.inicioMenos} até Hoje menos ${janela.fimMenos}.`);
+      const janela = typeof recorte.avancado === "function" ? recorte.avancado() : recorte.avancado;
+      log(
+        `${recorte.period}: janela Hoje menos ${janela.inicioMenos} até Hoje menos ${janela.fimMenos}.`,
+      );
       preencherCampo(campos[0], janela.inicioMenos);
       preencherCampo(campos[1], janela.fimMenos);
       await dormir(1500);
@@ -782,7 +826,12 @@
           // verdade é sobre a leitura que está sendo devolvida, agora.
           if (agora === anterior && agora !== antes) {
             if (Date.now() - desde >= CONFIG.patamarMs) {
-              return { leitura, mudou, viuConteudo, segundos: Math.round((Date.now() - desde) / 1000) };
+              return {
+                leitura,
+                mudou,
+                viuConteudo,
+                segundos: Math.round((Date.now() - desde) / 1000),
+              };
             }
           } else if (agora !== anterior) {
             anterior = agora;
@@ -836,9 +885,9 @@
               `Confira se o filtro "Transportador" está preenchido nesta aba.`
           : estavel.mudou
             ? `${recorte.period}: a tela não assentou em ${limiteS}s — nada enviado (número pela ` +
-                `metade parece desempenho ruim).`
+              `metade parece desempenho ruim).`
             : `${recorte.period}: a tela continuou sendo a do recorte anterior por ${limiteS}s ` +
-                `(mesmos números E mesmo carimbo) — nada enviado. O relatório não recalculou.`,
+              `(mesmos números E mesmo carimbo) — nada enviado. O relatório não recalculou.`,
       );
       return;
     }
