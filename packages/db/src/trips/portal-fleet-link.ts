@@ -1,5 +1,5 @@
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
-import type { PortalTrip, TripStatus } from "@brazil-tms/shared";
+import type { PortalTrip, TripStatus, VehicleType } from "@brazil-tms/shared";
 import { db } from "../client";
 import { drivers, trailers, tripAssignments, trips, vehicles } from "../../schema";
 import { assignTrip, mirrorAssignmentFromPortal } from "./trip-assignments";
@@ -121,7 +121,13 @@ export async function linkFleetFromPortal(
 
   const trip = (
     await db
-      .select({ currentStatus: trips.currentStatus })
+      .select({
+        currentStatus: trips.currentStatus,
+        // O tipo que o CLIENTE declarou para esta viagem (`vehicle_type_name` no payload do portal,
+        // já convertido pelo `portal-plan-apply`). É o que permite cadastrar o caminhão sozinho mais
+        // abaixo, sem chutar nada.
+        plannedVehicleType: trips.plannedVehicleType,
+      })
       .from(trips)
       .where(eq(trips.id, tripId))
       .limit(1)
@@ -150,23 +156,26 @@ export async function linkFleetFromPortal(
     .limit(1);
   if (current[0]) return { outcome: "already_assigned" };
 
-  const vehicle = (
-    await db
-      .select({
-        id: vehicles.id,
-        ownershipType: vehicles.ownershipType,
-        carrierId: vehicles.carrierId,
-      })
-      .from(vehicles)
-      .where(
-        and(
-          sql`upper(regexp_replace(${vehicles.plate}, '[^A-Za-z0-9]', '', 'g')) = ${vehiclePlate}`,
-          eq(vehicles.status, "active"),
-          isNull(vehicles.archivedAt),
-        ),
-      )
-      .limit(1)
-  )[0];
+  const acharVeiculo = async () =>
+    (
+      await db
+        .select({
+          id: vehicles.id,
+          ownershipType: vehicles.ownershipType,
+          carrierId: vehicles.carrierId,
+        })
+        .from(vehicles)
+        .where(
+          and(
+            sql`upper(regexp_replace(${vehicles.plate}, '[^A-Za-z0-9]', '', 'g')) = ${vehiclePlate}`,
+            eq(vehicles.status, "active"),
+            isNull(vehicles.archivedAt),
+          ),
+        )
+        .limit(1)
+    )[0];
+
+  let vehicle = await acharVeiculo();
 
   const driver = (
     await db
@@ -185,6 +194,44 @@ export async function linkFleetFromPortal(
       )
       .limit(1)
   )[0];
+
+  /**
+   * O CAMINHÃO QUE FALTA É CADASTRADO NA HORA (2026-08-19, a pedido).
+   *
+   * O motorista chega ao TMS por uma exportação que alguém precisa lembrar de fazer; a placa chega
+   * junto da VIAGEM, de graça, a cada ciclo. O efeito da assimetria era medível: das 8 viagens que
+   * ainda ficavam sem motorista no TMS enquanto o portal mostrava um, 6 eram só isso — placa que o
+   * cadastro não tinha. A operação via "NA ORIGEM, sem ninguém" e o portal via um motorista escalado.
+   *
+   * NADA AQUI É CHUTE. O tipo sai de `planned_vehicle_type`, que é o `vehicle_type_name` que o
+   * próprio cliente manda na viagem, já convertido pelo mapeador de `portal-plan-apply`. Sem esse
+   * tipo o veículo NÃO é criado — a coluna é obrigatória e a compatibilidade de veículo decide
+   * atribuição, então inventar um tipo poria o caminhão errado no despacho.
+   *
+   * A transportadora vem do MOTORISTA, pela mesma razão já documentada mais abaixo: é com a pessoa
+   * que o contrato existe, e o veículo segue quem dirige.
+   *
+   * O cadastro nasce mínimo e honesto — placa, tipo, dono — com a origem escrita na observação. Quem
+   * for completar documento e rastreador encontra o registro já existindo, em vez de ter que criá-lo
+   * antes de a viagem poder andar.
+   */
+  if (!vehicle && driver && trip.plannedVehicleType) {
+    const subcontratadoDoMotorista = driver.ownershipType === "subcontracted";
+    try {
+      await db.insert(vehicles).values({
+        plate: vehiclePlate,
+        vehicleType: trip.plannedVehicleType as VehicleType,
+        ownershipType: driver.ownershipType,
+        carrierId: subcontratadoDoMotorista ? (driver.carrierId ?? undefined) : undefined,
+        status: "active",
+        notes: `Cadastrado automaticamente do portal do cliente em ${new Date().toISOString().slice(0, 10)}: placa vinda da viagem, tipo declarado pelo cliente.`,
+      });
+    } catch {
+      // Corrida com outro ciclo, ou placa que já existe arquivada/inativa. Não é motivo para perder o
+      // vínculo: a busca abaixo decide, e um `no_match` continua sendo uma saída honesta.
+    }
+    vehicle = await acharVeiculo();
+  }
 
   if (!vehicle || !driver) {
     const faltando = [

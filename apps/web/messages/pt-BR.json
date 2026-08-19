@@ -1614,14 +1614,12 @@
     }
   },
   "Spot": {
-    "newOffer": "Nova oferta de spot",
     "dismiss": "Fechar aviso",
-    "departure": "Saída",
     "vehicle": "Veículo",
-    "queued": "+{count} na fila",
     "todayTitle": "Ofertas de spot hoje",
     "todayEmpty": "Nenhuma oferta hoje.",
-    "todayMore": "e mais {count}"
+    "todayMore": "e mais {count}",
+    "originArrival": "STA"
   },
   "Wallboard": {
     "title": "Brazil Transports · Torre",
@@ -1702,6 +1700,12 @@
     "failures": "{count} falhas nas últimas 24 h",
     "noJobs": "Sem informação das tarefas — o worker pode não ter subido ainda.",
     "loadError": "Não foi possível carregar o status.",
-    "lateExplainer": "Um robô atrasado não derruba o TMS: a tela continua funcionando, mas para de receber novidades do cliente. Viagens novas e atribuições feitas no portal desde então não aparecem aqui."
+    "lateExplainer": "Um robô atrasado não derruba o TMS: a tela continua funcionando, mas para de receber novidades do cliente. Viagens novas e atribuições feitas no portal desde então não aparecem aqui.",
+    "coherenceTitle": "Coerência com o portal",
+    "coherenceHint": "O que o cliente diz e o que o TMS mostra são a mesma coisa?",
+    "divergences": "Status divergentes",
+    "divergencesNone": "Todos os rótulos do portal batem com o status aqui.",
+    "pendingAssignments": "Atribuições pendentes",
+    "pendingAssignmentsHint": "O portal já tem motorista e o TMS não conseguiu espelhar — falta cadastro, ou há conflito de agenda para alguém decidir."
   }
 }

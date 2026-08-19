@@ -82,59 +82,84 @@ export function OfertaDeSpot() {
       role="status"
       aria-live="polite"
     >
+      {/**
+       * QUADRADO, e com QUATRO informações (2026-08-19, a pedido, sobre um desenho do usuário).
+       *
+       * Era um retângulo largo com cabeçalho, preço em destaque e contador de fila. Virou um quadrado
+       * com viagem, rota, saída e veículo — as mesmas coisas que vão para o Telegram, e só elas.
+       *
+       * O que saiu, e por quê: o PREÇO, porque a maioria das ofertas chega como "preço não exibido" e
+       * um campo que quase sempre diz nada rouba o lugar do que decide; o CABEÇALHO "Nova oferta",
+       * porque um aviso que ocupa o meio da tela por trinta segundos já se anuncia sozinho; e o
+       * CONTADOR DE FILA, porque a segunda oferta aparece logo em seguida de qualquer jeito.
+       *
+       * O que ficou, e não é informação: o X (foi pedido antes) e a barra de tempo, que é o que
+       * explica por que o aviso some sozinho.
+       *
+       * `aspect-square` com largura em `vw` mantém o quadrado em qualquer tela — inclusive na TV da
+       * sala, que é o destino real — e o `max-h-[86vh]` impede que ele estoure a altura numa janela
+       * baixa, caso em que ele deixa de ser quadrado de propósito: caber vence a forma.
+       */}
       <div
-        className={`pointer-events-auto w-[46vw] min-w-[380px] max-w-[880px] overflow-hidden rounded-2xl bg-slate-900 shadow-[0_0_0_9999px_rgba(2,6,23,0.55),0_25px_60px_-15px_rgba(0,0,0,0.9)] ring-1 ring-amber-400/60 transition-all duration-200 ${
+        className={`pointer-events-auto relative flex aspect-square w-[42vw] min-w-[340px] max-w-[620px] max-h-[86vh] flex-col overflow-hidden rounded-3xl bg-slate-900 shadow-[0_0_0_9999px_rgba(2,6,23,0.55),0_25px_60px_-15px_rgba(0,0,0,0.9)] ring-[6px] ring-amber-400 transition-all duration-200 ${
           saindo ? "scale-[0.97] opacity-0" : "scale-100 opacity-100"
         }`}
       >
-        {/* A faixa de cima é a única coisa em cor de alerta na tela: é ela que faz virar a cabeça. */}
-        <div className="flex items-center gap-3 bg-gradient-to-r from-amber-400 to-amber-300 px-5 py-2.5 text-slate-950">
-          <Gavel className="h-[1.15vw] min-h-4 w-[1.15vw] min-w-4 shrink-0" aria-hidden />
-          <span className="flex-1 text-[1.15vw] font-black uppercase leading-none tracking-[0.14em] [font-size:clamp(0.8rem,1.15vw,1.4rem)]">
-            {t("newOffer")}
-          </span>
-          {atual.tripNumber ? (
-            <span className="rounded-full bg-slate-950/10 px-2.5 py-1 text-[0.95vw] font-bold tabular-nums [font-size:clamp(0.7rem,0.95vw,1.05rem)]">
-              {atual.tripNumber}
-            </span>
-          ) : null}
-          <button
-            type="button"
-            onClick={encerrar}
-            aria-label={t("dismiss")}
-            title={t("dismiss")}
-            className="-mr-1 rounded-full p-1 text-slate-950/70 transition-colors hover:bg-slate-950/10 hover:text-slate-950"
-          >
-            <X className="h-4 w-4" aria-hidden />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={encerrar}
+          aria-label={t("dismiss")}
+          title={t("dismiss")}
+          className="absolute right-3 top-3 z-10 rounded-full p-1.5 text-slate-500 transition-colors hover:bg-white/10 hover:text-white"
+        >
+          <X className="h-5 w-5" aria-hidden />
+        </button>
 
-        <div className="px-5 py-4">
-          {/* A rota decide se alguém corre: vem primeiro e maior que o resto. */}
-          <div className="text-[1.6vw] font-bold leading-tight text-white [font-size:clamp(1rem,1.6vw,2rem)]">
+        <div className="flex flex-1 flex-col items-center justify-evenly px-[8%] py-[7%] text-center">
+          {/* TRIP — o número do LH, para quem for atrás dele no portal. */}
+          {atual.tripNumber ? (
+            <div className="flex items-center gap-2 text-amber-400">
+              <Gavel className="h-[1.4vw] min-h-4 w-[1.4vw] min-w-4 shrink-0" aria-hidden />
+              <span className="font-black uppercase tracking-[0.12em] tabular-nums [font-size:clamp(0.9rem,1.5vw,1.9rem)]">
+                {atual.tripNumber}
+              </span>
+            </div>
+          ) : null}
+
+          {/* ROTA — o maior de todos: é ela que decide se alguém corre. */}
+          <div className="font-bold leading-tight text-white [font-size:clamp(1.05rem,2.1vw,2.6rem)]">
             {atual.route}
           </div>
 
-          <div className="mt-3 flex flex-wrap items-end gap-x-6 gap-y-2">
-            {atual.price ? (
-              <span className="text-[2vw] font-black leading-none tabular-nums text-emerald-400 [font-size:clamp(1.3rem,2vw,2.6rem)]">
-                {atual.price}
-              </span>
-            ) : null}
-            {atual.departure ? (
-              <Dado rotulo={t("departure")} valor={atual.departure} />
-            ) : null}
-            {atual.vehicle ? <Dado rotulo={t("vehicle")} valor={atual.vehicle} /> : null}
-            {fila.length > 1 ? (
-              <span className="ml-auto rounded-full bg-white/10 px-2.5 py-1 text-xs font-semibold text-amber-300">
-                {t("queued", { count: fila.length - 1 })}
-              </span>
-            ) : null}
-          </div>
+          {/**
+           * UM HORÁRIO SÓ, E COM O NOME DO PORTAL: o STA da ORIGEM (2026-08-19, a pedido).
+           *
+           * A viagem tem três instantes programados, e eu mostrava os dois errados. Na LT1Q8J02EEL01
+           * eles eram:
+           *
+           *   STA origem   19/08 16:29   o caminhão precisa ESTAR lá   ← este
+           *   STD origem   19/08 17:29   ele sai
+           *   STA destino  20/08 01:29   chega no destino
+           *
+           * Só o primeiro responde a pergunta de quem vai dar lance: "consigo pôr um caminhão aí?".
+           * Os outros dois são consequência, e numa TV cada campo a mais encolhe todos os outros.
+           *
+           * O rótulo é `STA` porque é assim que está escrito na coluna do portal. Chamar de "saída"
+           * ou "chegada" obriga quem lê os dois lados a traduzir de cabeça — e foi traduzindo de
+           * cabeça que esta tela ficou com o horário errado desde que nasceu.
+           */}
+          {atual.originArrival || atual.vehicle ? (
+            <div className="flex w-full items-start justify-center gap-[12%]">
+              {atual.originArrival ? (
+                <Dado rotulo={t("originArrival")} valor={atual.originArrival} />
+              ) : null}
+              {atual.vehicle ? <Dado rotulo={t("vehicle")} valor={atual.vehicle} /> : null}
+            </div>
+          ) : null}
         </div>
 
         {/* A barra escorre com o tempo: mostra que ele vai sair sozinho, sem precisar de aviso. */}
-        <div className="h-1 bg-amber-400/20">
+        <div className="h-1.5 shrink-0 bg-amber-400/20">
           <div
             key={atual.id}
             className="h-full bg-amber-400"
@@ -151,8 +176,12 @@ export function OfertaDeSpot() {
 function Dado({ rotulo, valor }: { rotulo: string; valor: string }) {
   return (
     <span className="leading-tight">
-      <span className="block text-[0.62rem] uppercase tracking-wide text-slate-500">{rotulo}</span>
-      <span className="text-sm font-medium text-slate-200">{valor}</span>
+      <span className="block uppercase tracking-[0.12em] text-slate-500 [font-size:clamp(0.6rem,0.8vw,0.95rem)]">
+        {rotulo}
+      </span>
+      <span className="font-semibold text-slate-100 [font-size:clamp(0.85rem,1.3vw,1.6rem)]">
+        {valor}
+      </span>
     </span>
   );
 }

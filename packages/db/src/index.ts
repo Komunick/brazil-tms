@@ -27,6 +27,10 @@ export type {
   PortalApplyOptions,
 } from "./trips/portal-execution-apply";
 export { applyPortalPlan, applyPortalPlanTrip } from "./trips/portal-plan-apply";
+// O vínculo com a frota registrada — exportado para o teste de integração que tranca o cadastro
+// automático do veículo (2026-08-19).
+export { linkFleetFromPortal } from "./trips/portal-fleet-link";
+export type { FleetLinkOutcome, FleetLinkResult } from "./trips/portal-fleet-link";
 export { resolvePortalActorId } from "./trips/portal-actor";
 export {
   marcarVistasNoPortal,
@@ -157,4 +161,9 @@ export { saveBscSnapshot, queryLatestBsc, BSC_PERIODS } from "./reporting/bsc";
 export type { BscPeriod, BscSnapshotInput, BscSnapshotView } from "./reporting/bsc";
 // O pulso dos robôs e do worker (2026-08-19): só carimbos, sem julgamento — a régua mora na tela.
 export { queryServerStatus } from "./reporting/server-status";
-export type { ServerStatus, StatusFonte, StatusTarefa } from "./reporting/server-status";
+export type {
+  ServerStatus,
+  StatusFonte,
+  StatusTarefa,
+  StatusParPortal,
+} from "./reporting/server-status";

@@ -9,3 +9,4 @@ export * from "./stacked-row";
 export * from "./portal-execution";
 export * from "./portal-milestones";
 export * from "./portal-api";
+export * from "./portal-status-map";
