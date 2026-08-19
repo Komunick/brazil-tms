@@ -78,6 +78,34 @@ function partitionFindings(findings: Finding[]): { blocks: Finding[]; warns: Fin
 }
 
 /**
+ * A CHAVE DE UM BLOQUEIO ACEITÁVEL: `recurso:código` (2026-08-19).
+ *
+ * Existe uma exceção, e só uma, à regra de que bloqueio é absoluto: o espelho do portal aceita
+ * `driver:doc_expired` — CNH vencida. Ver o comentário em `portal-fleet-link.ts`, onde a decisão está
+ * registrada com o caso que a motivou.
+ *
+ * A chave inclui o RECURSO de propósito. `doc_expired` é o mesmo código para motorista, veículo e
+ * carreta; aceitar por código solto liberaria junto o caminhão com documento vencido, que ninguém
+ * pediu e que é outra conversa.
+ */
+const chaveDoBloqueio = (f: Finding): string => `${f.resourceKind}:${f.code}`;
+
+/**
+ * Separa os bloqueios que o chamador declarou aceitar. Os aceitos passam a se comportar como AVISO:
+ * exigem `overrideReason` e ficam gravados na atribuição — nunca somem calados.
+ */
+function comBloqueiosAceitos(
+  blocks: Finding[],
+  aceitos: readonly string[],
+): { recusados: Finding[]; tolerados: Finding[] } {
+  if (aceitos.length === 0) return { recusados: blocks, tolerados: [] };
+  return {
+    recusados: blocks.filter((f) => !aceitos.includes(chaveDoBloqueio(f))),
+    tolerados: blocks.filter((f) => aceitos.includes(chaveDoBloqueio(f))),
+  };
+}
+
+/**
  * Derive the assignment's ownership from the chosen driver/vehicle `ownership_type` — a trip has no
  * ownership column (data-model.md §3.3). The set is `subcontracted` (⇒ carrier required) when EITHER
  * the chosen driver or vehicle is subcontracted, otherwise `owned`.
@@ -379,6 +407,12 @@ export async function assignTrip(
   tripId: string,
   input: AssignTripInput,
   actorUserId: string,
+  /**
+   * Bloqueios que este chamador declara aceitar (`recurso:código`). Vazio no caminho manual: quem
+   * está na frente da tela pode corrigir o cadastro ou escolher outro motorista. Só o espelho do
+   * portal passa algo — ver `chaveDoBloqueio`.
+   */
+  bloqueiosAceitos: readonly string[] = [],
 ): Promise<{ trip: TripDetail; findings: Finding[] }> {
   const candidate: Candidate = {
     driverId: input.driverId,
@@ -401,18 +435,20 @@ export async function assignTrip(
 
   const findings = evaluateAssignmentEligibility(context, DEFAULT_ASSIGNMENT_POLICY);
   const { blocks, warns } = partitionFindings(findings);
-  if (blocks.length > 0) {
+  const { recusados, tolerados } = comBloqueiosAceitos(blocks, bloqueiosAceitos);
+  if (recusados.length > 0) {
     throw new Conflict(
       "ASSIGNMENT_BLOCKED",
       "Atribuição bloqueada por restrições de elegibilidade.",
-      blocks,
+      recusados,
     );
   }
-  if (warns.length > 0 && !input.overrideReason) {
+  // Bloqueio tolerado vira aviso: exige motivo e fica gravado. Nunca some calado.
+  if ((warns.length > 0 || tolerados.length > 0) && !input.overrideReason) {
     throw new Conflict(
       "OVERRIDE_REQUIRED",
       "Há avisos de elegibilidade; informe o motivo da exceção para prosseguir.",
-      warns,
+      [...warns, ...tolerados],
     );
   }
 
@@ -531,6 +567,18 @@ export async function mirrorAssignmentFromPortal(
   tripId: string,
   input: AssignTripInput,
   actorUserId: string,
+  /**
+   * Substituir a atribuição atual em vez de recusar (2026-08-19).
+   *
+   * Só o espelho do portal passa `true`, e só quando já COMPAROU e viu que o cliente trocou de
+   * motorista ou de caminhão. Fora daí o padrão continua: quem já está lá fica.
+   */
+  substituirAtual = false,
+  /**
+   * Bloqueios que este chamador declara aceitar, no formato `recurso:código`. Hoje só o espelho do
+   * portal usa, e só com `driver:doc_expired` — ver `chaveDoBloqueio`.
+   */
+  bloqueiosAceitos: readonly string[] = [],
 ): Promise<{ trip: TripDetail; findings: Finding[] }> {
   const expected = input.expectedFromStatus as TripStatus;
   // Passou do ponto onde a confirmação era uma pergunta aberta?
@@ -562,18 +610,21 @@ export async function mirrorAssignmentFromPortal(
 
   const findings = evaluateAssignmentEligibility(context, DEFAULT_ASSIGNMENT_POLICY);
   const { blocks, warns } = partitionFindings(findings);
-  if (blocks.length > 0) {
+  // O espelho é o ÚNICO caminho que pode tolerar um bloqueio, e só o que o chamador declarou.
+  const { recusados, tolerados } = comBloqueiosAceitos(blocks, bloqueiosAceitos);
+  if (recusados.length > 0) {
     throw new Conflict(
       "ASSIGNMENT_BLOCKED",
       "Atribuição bloqueada por restrições de elegibilidade.",
-      blocks,
+      recusados,
     );
   }
-  if (warns.length > 0 && !input.overrideReason) {
+  // Bloqueio tolerado vira aviso: exige motivo e fica gravado. Nunca some calado.
+  if ((warns.length > 0 || tolerados.length > 0) && !input.overrideReason) {
     throw new Conflict(
       "OVERRIDE_REQUIRED",
       "Há avisos de elegibilidade; informe o motivo da exceção para prosseguir.",
-      warns,
+      [...warns, ...tolerados],
     );
   }
 
@@ -591,17 +642,37 @@ export async function mirrorAssignmentFromPortal(
       throw new Conflict("STALE_TRANSITION", "A viagem já mudou de status.");
     }
 
-    // Sob o mesmo lock: se alguém atribuiu enquanto avaliávamos, a decisão dessa pessoa fica.
+    /**
+     * Sob o mesmo lock: se alguém atribuiu enquanto avaliávamos, a decisão dessa pessoa fica — a
+     * menos que o chamador diga explicitamente que veio SUBSTITUIR (2026-08-19).
+     *
+     * A substituição existe porque o portal é a fonte da verdade sobre quem dirige, e ele MUDA de
+     * ideia: em produção, 15 viagens tinham motorista e placa diferentes do que o portal dizia,
+     * porque o cliente trocou depois que o TMS espelhou e o espelho parava em "já tem atribuição".
+     * Duas dessas ainda bloqueavam OUTRAS viagens por conflito de agenda com um caminhão que já não
+     * era daquela viagem.
+     *
+     * O histórico não se perde: a linha antiga é superseded, exatamente como em `reassignTrip`.
+     */
     const jaTem = await tx
       .select({ id: tripAssignments.id })
       .from(tripAssignments)
       .where(and(eq(tripAssignments.tripId, tripId), eq(tripAssignments.isCurrent, true)))
       .limit(1);
-    if (jaTem[0]) {
+    if (jaTem[0] && !substituirAtual) {
       throw new Conflict("STALE_TRANSITION", "A viagem já tem atribuição atual.");
     }
+    // O índice parcial `(trip_id) WHERE is_current` NÃO é deferido: a linha antiga precisa liberar a
+    // vaga ANTES do insert, não no commit. O elo do histórico é preenchido logo depois.
+    const superseded = jaTem[0]
+      ? await tx
+          .update(tripAssignments)
+          .set({ isCurrent: false, supersededAt: now, updatedAt: now })
+          .where(and(eq(tripAssignments.tripId, tripId), eq(tripAssignments.isCurrent, true)))
+          .returning({ id: tripAssignments.id })
+      : [];
 
-    await tx.insert(tripAssignments).values({
+    const novas = await tx.insert(tripAssignments).values({
       tripId,
       driverId: input.driverId,
       vehicleId: input.vehicleId,
@@ -618,7 +689,20 @@ export async function mirrorAssignmentFromPortal(
       // Uma viagem parada em `assigned` NÃO ganha o carimbo — lá a pergunta continua de pé.
       confirmedByUserId: jaPassouDaConfirmacao ? actorUserId : null,
       confirmedAt: jaPassouDaConfirmacao ? now : null,
-    });
+    }).returning({ id: tripAssignments.id });
+
+    // Fecha o elo do histórico: a linha antiga passa a apontar para a nova.
+    if (superseded.length > 0 && novas[0]) {
+      await tx
+        .update(tripAssignments)
+        .set({ supersededByAssignmentId: novas[0].id, updatedAt: now })
+        .where(
+          inArray(
+            tripAssignments.id,
+            superseded.map((r) => r.id),
+          ),
+        );
+    }
 
     // Auditado como `trip.assign`, com o status IGUAL nos dois lados: é o que separa este registro de
     // um despacho feito na hora, sem inventar uma ação nova no vocabulário de auditoria.

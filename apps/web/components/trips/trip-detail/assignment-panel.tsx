@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { TriangleAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { formatDateTime } from "@brazil-tms/shared";
 import type { TripAssignmentDto, TripDetailView, TripFilterOptions } from "@brazil-tms/db";
@@ -169,7 +170,28 @@ function AssignmentSummary({
 
   return (
     <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
-      <Field label={t("driver")} value={assignment.driverName} />
+      {/**
+       * CNH VENCIDA, em vermelho, colado no nome (2026-08-19, decisão do usuário).
+       *
+       * O TMS RECUSAVA atribuir motorista com CNH vencida — documento vencido é bloqueio duro na
+       * regra de elegibilidade. A decisão foi outra: atribuir mesmo assim e avisar. O portal é quem
+       * escala, e uma viagem sem motorista no quadro esconde o problema em vez de mostrá-lo.
+       *
+       * Então o aviso tem de estar ONDE a pessoa olha o motorista, não numa tela de relatório: quem
+       * abre a viagem para saber quem vai dirigir precisa ver a validade no mesmo instante.
+       *
+       * A conta é contra o relógio de quem olha, e não contra um valor guardado: uma CNH vence
+       * sozinha com o tempo passando, sem ninguém escrever nada no banco.
+       */}
+      <Field
+        label={t("driver")}
+        value={assignment.driverName}
+        aviso={
+          assignment.driverLicenseExpiry && new Date(assignment.driverLicenseExpiry) < new Date()
+            ? t("expiredLicense", { date: formatarData(assignment.driverLicenseExpiry) })
+            : null
+        }
+      />
       <Field label={t("vehicle")} value={assignment.vehiclePlate} />
       <Field label={t("trailer")} value={assignment.trailerLabel} />
       <Field label={t("carrier")} value={assignment.carrierName} />
@@ -196,11 +218,32 @@ function AssignmentSummary({
   );
 }
 
-function Field({ label, value }: { label: string; value: ReactNode }) {
+function Field({
+  label,
+  value,
+  aviso,
+}: {
+  label: string;
+  value: ReactNode;
+  /** Texto de alerta que fica ABAIXO do valor, em vermelho. Hoje só a CNH vencida usa. */
+  aviso?: string | null;
+}) {
   return (
     <div className="space-y-0.5">
       <dt className="text-xs font-medium text-muted-foreground">{label}</dt>
       <dd className="text-sm">{value ?? "—"}</dd>
+      {aviso ? (
+        <p className="flex items-center gap-1 text-xs font-semibold text-destructive">
+          <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {aviso}
+        </p>
+      ) : null}
     </div>
   );
+}
+
+/** `2026-01-09` → `09/01/2026`. Data só, sem hora: validade de CNH não tem minuto. */
+function formatarData(iso: string): string {
+  const [ano, mes, dia] = iso.slice(0, 10).split("-");
+  return dia && mes && ano ? `${dia}/${mes}/${ano}` : iso;
 }

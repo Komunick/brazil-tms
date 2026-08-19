@@ -1611,7 +1611,8 @@
       "NOT_FOUND": "Viagem não encontrada.",
       "VALIDATION": "Verifique os campos destacados.",
       "REQUEST_FAILED": "Não foi possível concluir a operação. Tente novamente."
-    }
+    },
+    "expiredLicense": "CNH vencida em {date}"
   },
   "Spot": {
     "dismiss": "Fechar aviso",
