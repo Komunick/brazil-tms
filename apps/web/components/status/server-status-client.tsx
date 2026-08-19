@@ -1,0 +1,192 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+import { useQuery } from "@tanstack/react-query";
+import type { ServerStatus } from "@brazil-tms/db";
+import { idadeEmTexto, saudeDaFonte, saudeDaTarefa, type Saude } from "@/lib/status/saude";
+import { Card, CardContent, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+
+/**
+ * A tela de status (2026-08-19).
+ *
+ * Ela existe por uma falha medida: em 2026-08-18 o robô do portal ficou seis horas sem entregar nada
+ * e nada denunciava — navegador aberto, site no ar, painel desenhando números com a cor certa. O
+ * único sinal era um 401 num console dentro de uma VM.
+ *
+ * Duas decisões de desenho, ambas por causa disso:
+ *
+ *   A IDADE É CONTADA CONTRA O RELÓGIO DO SERVIDOR, que vem no corpo da resposta. Contra o relógio do
+ *   navegador, uma máquina com a hora errada — e a TV da sala já esteve — transformaria "chegou
+ *   agora" em "atrasado há três horas", ou pior, o contrário.
+ *
+ *   ATRASO NÃO É ERRO DE PÁGINA. Um robô parado não derruba o TMS; ele só para de trazer novidade. A
+ *   tela diz isso com todas as letras em vez de mostrar um "X" que faz pensar que o sistema caiu.
+ */
+
+/** 30 s: metade da régua mais curta que existe aqui não faria diferença, e a página é leve. */
+const INTERVALO_MS = 30_000;
+
+function useStatus() {
+  return useQuery({
+    queryKey: ["server-status"],
+    queryFn: async (): Promise<ServerStatus> => {
+      const r = await fetch("/api/status");
+      if (!r.ok) throw new Error(String(r.status));
+      return (await r.json()) as ServerStatus;
+    },
+    refetchInterval: INTERVALO_MS,
+    // Igual ao painel da TV: sem foco de janela, a atualização não pode parar.
+    refetchIntervalInBackground: true,
+  });
+}
+
+const CORES: Record<Saude, string> = {
+  ok: "border-success/40 bg-success/10 text-success",
+  atrasado: "border-destructive/40 bg-destructive/10 text-destructive",
+  sem_dado: "border-destructive/40 bg-destructive/10 text-destructive",
+  sem_regua: "border-border bg-muted text-muted-foreground",
+};
+
+function Selo({ saude, texto }: { saude: Saude; texto: string }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-semibold ${CORES[saude]}`}
+    >
+      <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-current" />
+      {texto}
+    </span>
+  );
+}
+
+export function ServerStatusClient() {
+  const t = useTranslations("ServerStatus");
+  const { data, isLoading, isError } = useStatus();
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <Card key={i} className="p-4">
+            <Skeleton className="h-4 w-40" />
+            <Skeleton className="mt-3 h-20 w-full" />
+          </Card>
+        ))}
+      </div>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <Card>
+        <CardContent className="py-6">
+          <p role="alert" className="text-sm text-destructive">
+            {t("loadError")}
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const agora = new Date(data.agora);
+  const fontes = data.fontes.map((f) => ({ ...f, ...saudeDaFonte(f.chave, f.ultimo, agora) }));
+  const tarefas = data.tarefas.map((j) => ({ ...j, ...saudeDaTarefa(j.ultimo, agora) }));
+  const algoAtrasado = [...fontes, ...tarefas].some((x) => x.saude !== "ok" && x.saude !== "sem_regua");
+
+  /**
+   * O nome da fila vira chave de tradução — e o PONTO tem que sair antes.
+   *
+   * `sla.sweep` como chave faria o next-intl procurar `job` → `sla` → `sweep`, porque ponto é o
+   * separador de aninhamento dele. O repositório tem um teste que proíbe chave com ponto exatamente
+   * por isso, e foi ele que pegou este erro. Então `sla.sweep` → `slaSweep`.
+   *
+   * Uma fila nova no worker não pode derrubar a página só por não ter tradução: cai no próprio nome
+   * técnico, que é feio e honesto. `t.has` existe para isto e não lança.
+   */
+  const rotulo = (nome: string, dicionario: "source" | "sourceHint" | "job"): string => {
+    const chave = nome.replace(/\.(\w)/g, (_, c: string) => c.toUpperCase());
+    return t.has(`${dicionario}.${chave}`) ? t(`${dicionario}.${chave}`) : nome;
+  };
+
+  return (
+    <div className="space-y-4">
+      {algoAtrasado ? (
+        <div
+          role="status"
+          className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm font-medium text-destructive"
+        >
+          {t("lateExplainer")}
+        </div>
+      ) : null}
+
+      <Card className="p-4">
+        <CardTitle className="text-sm font-semibold uppercase tracking-wide">
+          {t("sourcesTitle")}
+        </CardTitle>
+        <p className="mt-0.5 text-xs text-muted-foreground">{t("sourcesHint")}</p>
+        <ul className="mt-2">
+          {fontes.map((f) => (
+            <li
+              key={f.chave}
+              className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 py-2.5 last:border-b-0"
+            >
+              <div className="min-w-[16rem] flex-1">
+                <p className="text-sm font-medium">{rotulo(f.chave, "source")}</p>
+                <p className="text-xs text-muted-foreground">{rotulo(f.chave, "sourceHint")}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {idadeEmTexto(f.minutos) ? t("age", { age: idadeEmTexto(f.minutos)! }) : t("never")}
+                </span>
+                <Selo saude={f.saude} texto={t(`health.${f.saude}`)} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Card>
+
+      <Card className="p-4">
+        <CardTitle className="text-sm font-semibold uppercase tracking-wide">
+          {t("jobsTitle")}
+        </CardTitle>
+        <p className="mt-0.5 text-xs text-muted-foreground">{t("jobsHint")}</p>
+        {tarefas.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">{t("noJobs")}</p>
+        ) : (
+          <ul className="mt-2">
+            {tarefas.map((j) => (
+              <li
+                key={j.nome}
+                className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 py-2.5 last:border-b-0"
+              >
+                <div className="min-w-[16rem] flex-1">
+                  <p className="text-sm font-medium">{rotulo(j.nome, "job")}</p>
+                  <p className="text-xs text-muted-foreground">{j.nome}</p>
+                  {j.falhas > 0 ? (
+                    <p className="text-xs font-medium text-destructive">
+                      {t("failures", { count: j.falhas })}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {idadeEmTexto(j.minutos)
+                      ? t("age", { age: idadeEmTexto(j.minutos)! })
+                      : t("never")}
+                  </span>
+                  <Selo saude={j.saude} texto={t(`health.${j.saude}`)} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      <p className="text-xs text-muted-foreground">
+        {t("measuredAt", {
+          time: agora.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+        })}
+      </p>
+    </div>
+  );
+}
