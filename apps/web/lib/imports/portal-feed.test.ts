@@ -3,6 +3,7 @@ import { eq, inArray } from "drizzle-orm";
 import {
   auditLogs,
   billingItems,
+  ensureBillingItem,
   customers,
   db,
   importBatches,
@@ -330,8 +331,10 @@ describe.skipIf(!hasDb)("portal feed (integration)", () => {
     if (exec.batchId) createdBatchIds.push(exec.batchId);
 
     const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
-    // Completion auto-advances to `billing_pending` — that IS the billing queue.
-    expect(trip.currentStatus).toBe("billing_pending");
+    // A viagem PARA EM "CONCLUÍDA" (2026-08-20, a pedido): o salto automático para a fila de
+    // faturamento foi desligado enquanto a operação não trabalha essa etapa. O que este caso afirma
+    // — que a execução do portal fecha a viagem sozinha — continua valendo, e é o que importa aqui.
+    expect(trip.currentStatus).toBe("completed");
     expect(exec.summary?.completed).toBe(1);
 
     // The whole journey is on the record, nothing skipped and nothing invented.
@@ -349,9 +352,10 @@ describe.skipIf(!hasDb)("portal feed (integration)", () => {
     ]) {
       expect(percorrido).toContain(passo);
     }
-    // And the item that lets it be invoiced exists.
+    // E NÃO nasce item de faturamento: a etapa foi desligada em 2026-08-20, a pedido. A viagem
+    // fecha, que é o que este caso mede; entrar na fila do dinheiro é outra decisão, hoje humana.
     const itens = await db.select().from(billingItems).where(eq(billingItems.tripId, trip.id));
-    expect(itens).toHaveLength(1);
+    expect(itens).toHaveLength(0);
   });
 
   it("guarda motorista e placa que o portal informa", async () => {
@@ -491,10 +495,14 @@ describe.skipIf(!hasDb)("portal feed (integration)", () => {
     // Centavos inteiros, sem ponto flutuante rondando dinheiro.
     expect(trip.customerPriceCents).toBe(247153);
     // A viagem completou no mesmo ciclo (o payload já prova a descarga) e levou o preço consigo.
-    expect(trip.currentStatus).toBe("billing_pending");
+    // Para em "Concluída" desde 2026-08-20: o salto para a fila de faturamento está desligado.
+    expect(trip.currentStatus).toBe("completed");
 
-    const item = (await db.select().from(billingItems).where(eq(billingItems.tripId, trip.id)))[0]!;
-    expect(item.baseFreightCents).toBe(247153);
+    // O preço fica NA VIAGEM, que é o que este caso mede. Ele chega ao item de faturamento quando a
+    // etapa for religada — `ensureBillingItem` lê `customerPriceCents` e tem teste próprio em
+    // `billing-items.test.ts`. Afirmar o item aqui seria testar uma etapa desligada por tabela.
+    const item = await db.select().from(billingItems).where(eq(billingItems.tripId, trip.id));
+    expect(item).toHaveLength(0);
   });
 
   it("uma tarifa genérica cadastrada NÃO sobrepõe o valor daquela viagem", async () => {
@@ -538,6 +546,16 @@ describe.skipIf(!hasDb)("portal feed (integration)", () => {
     if (r.batchId) createdBatchIds.push(r.batchId);
 
     const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+
+    /**
+     * O item é criado AQUI, à mão, porque o automático foi desligado (2026-08-20, a pedido).
+     *
+     * O assunto deste caso nunca foi quem dispara o item — é a PRECEDÊNCIA do preço: o valor que o
+     * portal informou para aquela viagem vence a tarifa genérica cadastrada. Essa regra continua
+     * viva e continua sendo dela que o dinheiro sai quando a etapa voltar. Apagar o caso porque o
+     * gatilho saiu jogaria fora a única prova de que a tarifa não atropela o valor do cliente.
+     */
+    await db.transaction(async (tx) => ensureBillingItem(tx, trip.id));
     const item = (await db.select().from(billingItems).where(eq(billingItems.tripId, trip.id)))[0]!;
     expect(item.baseFreightCents).toBe(193519);
     // A tarifa foi encontrada e fica registrada no item — mas não é ela que define o valor.

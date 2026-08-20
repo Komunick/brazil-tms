@@ -13,7 +13,11 @@ import { Conflict, NotFound } from "../errors";
 import { transitionTripStatus } from "./trip-transitions";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
 import { ensureBillingItem } from "../billing/billing-items";
-import { resolveRequiredTypes, satisfiedDocumentTypeIds, type TripScope } from "../documents/requirements";
+import {
+  resolveRequiredTypes,
+  satisfiedDocumentTypeIds,
+  type TripScope,
+} from "../documents/requirements";
 
 /**
  * Feature 008 — completion + Billing-Ready transitions (data-model §11, R7). These are transitions on
@@ -86,9 +90,36 @@ async function reload(tripId: string): Promise<TripDetail> {
 }
 
 /**
+ * A ETAPA DE FATURAMENTO ESTÁ DESLIGADA (2026-08-20, a pedido).
+ *
+ * A viagem concluída parava em `billing_pending` e nascia com item de faturamento. A operação não
+ * usa essa parte do sistema hoje, e um estado que ninguém trabalha não é etapa — é fila parada com
+ * nome de etapa. Pior: no quadro ela ocupa o lugar de "Concluída", que é a palavra que o cliente
+ * usa, e obriga quem compara as duas telas a traduzir.
+ *
+ * ── O QUE FICA DESLIGADO, E O QUE NÃO ──────────────────────────────────────────────────────────
+ *
+ * Desliga só o ÚLTIMO passo: o salto `completed → billing_pending` e a criação do item. Tudo antes
+ * continua igual — a caminhada até `unloaded`, a trava dos documentos, o registro dos marcos. A
+ * viagem termina em `completed`, que é onde o cliente também a considera encerrada.
+ *
+ * NADA foi apagado: `markBillingReady`, o item de faturamento, a exportação e as telas de
+ * faturamento continuam de pé, e as 117 viagens que já entraram na fila continuam lá. Religar é
+ * trocar esta constante para `true`.
+ *
+ * ── POR QUE UMA CONSTANTE, E NÃO REMOVER O CÓDIGO ──────────────────────────────────────────────
+ *
+ * O pedido tem prazo dentro dele — "por enquanto". Remover o salto e o item exigiria reescrever
+ * quando voltasse, e o que volta reescrito volta diferente. Uma constante com o motivo ao lado diz
+ * a quem chegar depois que isto é uma decisão de operação, não um passo que alguém esqueceu.
+ */
+const FATURAMENTO_AUTOMATICO = false;
+
+/**
  * Mark a trip Completed (§19.3): gate on `unloaded` + the completion-required documents (after
- * waivers), then `transitionTripStatus(unloaded→completed)` and immediately the §11.6 auto-advance
- * `transitionTripStatus(completed→billing_pending)` + `ensureBillingItem`. Blocked ⇒ `COMPLETION_BLOCKED`.
+ * waivers), then `transitionTripStatus(unloaded→completed)`. O auto-avanço §11.6 para
+ * `billing_pending` + `ensureBillingItem` está atrás de {@link FATURAMENTO_AUTOMATICO}, hoje
+ * desligado. Blocked ⇒ `COMPLETION_BLOCKED`.
  */
 export async function markCompleted(
   tripId: string,
@@ -120,13 +151,19 @@ export async function markCompleted(
   }
 
   // Drive the existing machine (each call opens its own concurrency-guarded transaction).
-  await transitionTripStatus(tripId, { toStatus: "completed", expectedFromStatus: "unloaded" }, actorUserId);
   await transitionTripStatus(
     tripId,
-    { toStatus: "billing_pending", expectedFromStatus: "completed" },
+    { toStatus: "completed", expectedFromStatus: "unloaded" },
     actorUserId,
   );
-  await db.transaction(async (tx) => ensureBillingItem(tx, tripId));
+  if (FATURAMENTO_AUTOMATICO) {
+    await transitionTripStatus(
+      tripId,
+      { toStatus: "billing_pending", expectedFromStatus: "completed" },
+      actorUserId,
+    );
+    await db.transaction(async (tx) => ensureBillingItem(tx, tripId));
+  }
 
   return reload(tripId);
 }
@@ -151,7 +188,10 @@ export async function markBillingReady(
   const { billingMissing } = evaluateChecklist(required, augmented);
 
   const itemRows = await db
-    .select({ baseFreightCents: billingItems.baseFreightCents, disputeStatus: billingItems.disputeStatus })
+    .select({
+      baseFreightCents: billingItems.baseFreightCents,
+      disputeStatus: billingItems.disputeStatus,
+    })
     .from(billingItems)
     .where(eq(billingItems.tripId, tripId))
     .limit(1);
@@ -166,10 +206,14 @@ export async function markBillingReady(
     disputeStatus,
   });
   if (!gate.canBillReady) {
-    throw new Conflict("BILLING_READY_BLOCKED", "Não é possível marcar como pronta: existem pendências.", {
-      blockers: gate.blockers,
-      missingDocumentTypeIds: billingMissing,
-    });
+    throw new Conflict(
+      "BILLING_READY_BLOCKED",
+      "Não é possível marcar como pronta: existem pendências.",
+      {
+        blockers: gate.blockers,
+        missingDocumentTypeIds: billingMissing,
+      },
+    );
   }
 
   if (waivers.length) {
