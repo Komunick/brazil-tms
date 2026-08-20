@@ -72,7 +72,22 @@ export function FleetSummaryCard() {
     {
       rotulo: t("offRoute"),
       valor: summary.offRoute,
-      cor: summary.offRoute > 0 ? "text-destructive" : "",
+      cor: summary.offRoute > 0 ? "text-warning" : "",
+    },
+    /**
+     * O QUINTO NÚMERO, e o único que é conta NOSSA (2026-08-20, a pedido).
+     *
+     * Os quatro primeiros descrevem o VEÍCULO; este descreve o COMPROMISSO — a previsão de chegada
+     * do rastreador contra a janela que o cliente publicou. Por isso ele fica com o vermelho, e
+     * `fora de rota` recua para âmbar: furar prazo do cliente custa mais do que desviar do trajeto.
+     *
+     * O eTorre tem o alerta equivalente e ele NÃO foi copiado — o dele mede contra o prazo que ELE
+     * conhece. Ver `classifyRisk`.
+     */
+    {
+      rotulo: t("atRisk"),
+      valor: summary.atRisk,
+      cor: summary.atRisk > 0 ? "text-destructive" : "",
     },
   ];
 
