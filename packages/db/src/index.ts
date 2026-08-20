@@ -180,3 +180,6 @@ export type {
   StatusTarefa,
   StatusParPortal,
 } from "./reporting/server-status";
+// O push da SPX (2026-08-20): gravado cru até haver payload real para mapear.
+export { recordSpxRouterEvent, querySpxRouterPulse } from "./imports/spx-router";
+export type { SpxRouterEventInput, SpxRouterEventResult, SpxRouterPulse } from "./imports/spx-router";
