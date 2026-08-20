@@ -298,8 +298,16 @@ export interface FleetSummary {
   silentOverAnHour: number;
   /** Fora da rota planejada, farol do rastreador. */
   offRoute: number;
-  /** Vai furar a janela do CLIENTE se nada mudar — a conta é nossa, não a do rastreador. */
-  atRisk: number;
+  /**
+   * OS DOIS RISCOS, SEPARADOS (2026-08-20, a pedido).
+   *
+   * Nasceram somados num contador só, e o usuário viu o problema antes de mim: são ações diferentes.
+   * `late` já aconteceu — cabe avisar o cliente e registrar o motivo. `willBeLate` ainda dá para
+   * evitar — cabe ligar para o motorista. Um número só esconde qual das duas a sala precisa fazer,
+   * e é assim que o próprio rastreador separa na legenda dele.
+   */
+  late: number;
+  willBeLate: number;
   /** A leitura mais recente, para a tela dizer de quando é o retrato. */
   lastReceivedAt: string | null;
 }
@@ -339,7 +347,8 @@ export async function fleetSummary(): Promise<FleetSummary> {
       (l) => !l.positionAt || new Date(l.positionAt).getTime() < umaHoraAtras,
     ).length,
     offRoute: linhas.filter((l) => (l.offRoute ?? "").toUpperCase() === "S").length,
-    atRisk: linhas.filter((l) => l.risk === "vai_atrasar" || l.risk === "atrasada").length,
+    late: linhas.filter((l) => l.risk === "atrasada").length,
+    willBeLate: linhas.filter((l) => l.risk === "vai_atrasar").length,
     lastReceivedAt:
       linhas.length === 0
         ? null
