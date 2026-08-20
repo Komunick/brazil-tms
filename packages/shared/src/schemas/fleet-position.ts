@@ -41,8 +41,19 @@ export const fleetPositionSchema = z.object({
   tripStartedAt: z.string().trim().max(40).nullish(),
   etaAt: z.string().trim().max(40).nullish(),
 
-  progressPercent: z.number().min(0).max(1000).nullish(),
-  kmTravelled: z.number().min(0).nullish(),
+  /**
+   * O `-1` DO RASTREADOR É "não se aplica", não um percentual negativo.
+   *
+   * Onze veículos vieram assim no primeiro lote real, todos com `STATUS_VIAGEM = SEM VIAGEM`: é o
+   * jeito de dizer que não há viagem cujo progresso medir. O piso em zero recusou o RETRATO INTEIRO
+   * por causa deles — e derrubar a frota toda por um campo que não se aplica a caminhão parado é o
+   * oposto do que essa validação deveria proteger.
+   *
+   * O contrato passa a aceitar, e a tradução para null mora na gravação, onde a decisão pertence:
+   * aqui se transporta o que o fornecedor manda; quem interpreta é o servidor.
+   */
+  progressPercent: z.number().min(-1).max(1000).nullish(),
+  kmTravelled: z.number().min(-1).nullish(),
   /** O rastreador manda como texto ("0"); o servidor arredonda para inteiro. */
   stoppedMinutes: z.union([z.number(), z.string()]).nullish(),
 
