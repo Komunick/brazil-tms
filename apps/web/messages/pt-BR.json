@@ -609,7 +609,7 @@
       "archivedMsg": "Local arquivado.",
       "region": "Região",
       "regionNone": "Sem região",
-      "missingRegion": "Sem região ({count})"
+      "missingRegion": "A classificar ({count})"
     },
     "lanes": {
       "title": "Rotas",

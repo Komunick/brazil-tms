@@ -79,23 +79,27 @@ export function LocationsClient({ canArchive }: { canArchive: boolean }) {
   const rows = query.data ?? [];
 
   /**
-   * A FILA DE CLASSIFICAÇÃO (2026-08-20, a pedido): só as estações ainda sem região.
+   * A FILA DE CLASSIFICAÇÃO (2026-08-20, a pedido): sem região E JÁ USADA em viagem aceita.
    *
-   * A pergunta "o que falta classificar?" não se responde rolando 459 locais, e ela volta toda vez
-   * que uma estação nova entra na operação. O contador ao lado do botão diz quantas são sem precisar
-   * ligar o recorte — se for zero, não há o que fazer e ninguém precisa clicar.
+   * As duas condições, e a segunda é o que faz a fila valer. Só "sem região" dava 386 estações —
+   * quase todas destino de última milha ou nunca usadas — e uma fila que não zera ninguém trabalha.
+   * Com o aceite junto, sobram as que a operação de fato rodou: 18 quando isto foi escrito, com uma
+   * de Belo Horizonte carregando 40 viagens.
+   *
+   * A regra é do usuário: rota aceita é rota nossa. Proposta em análise ainda não é, e por isso não
+   * entra na fila — classificar uma estação que talvez nunca seja usada é trabalho jogado fora.
    */
   const [soSemRegiao, setSoSemRegiao] = useState(false);
-  const semRegiao = rows.filter((l) => !l.region).length;
+  const aClassificar = rows.filter((l) => !l.region && l.usedInAcceptedTrip);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    const base = soSemRegiao ? rows.filter((l) => !l.region) : rows;
+    const base = soSemRegiao ? aClassificar : rows;
     if (!term) return base;
     return base.filter(
       (l) => l.name.toLowerCase().includes(term) || l.code.toLowerCase().includes(term),
     );
-  }, [rows, search, soSemRegiao]);
+  }, [rows, aClassificar, search, soSemRegiao]);
 
   const columns: ColumnDef<LocationDto>[] = [
     { accessorKey: "name", header: () => t("name") },
@@ -127,12 +131,12 @@ export function LocationsClient({ canArchive }: { canArchive: boolean }) {
           <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
         <div className="flex items-center gap-2">
-          {semRegiao > 0 || soSemRegiao ? (
+          {aClassificar.length > 0 || soSemRegiao ? (
             <Button
               variant={soSemRegiao ? "default" : "outline"}
               onClick={() => setSoSemRegiao((v) => !v)}
             >
-              {t("missingRegion", { count: semRegiao })}
+              {t("missingRegion", { count: aClassificar.length })}
             </Button>
           ) : null}
           <Button
