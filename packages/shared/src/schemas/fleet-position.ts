@@ -46,9 +46,18 @@ export const fleetPositionSchema = z.object({
   /** O rastreador manda como texto ("0"); o servidor arredonda para inteiro. */
   stoppedMinutes: z.union([z.number(), z.string()]).nullish(),
 
-  offRoute: z.string().trim().max(8).nullish(),
-  noPosition: z.string().trim().max(8).nullish(),
-  stoppedFlag: z.string().trim().max(8).nullish(),
+  /**
+   * OS FARÓIS CABEM EM 24, e o 8 que estava aqui recusou o primeiro lote real.
+   *
+   * Dois deles são de uma letra (`S`/`N`), e o limite foi escrito pensando neles. O de movimento
+   * passou depois a vir escrito por extenso — `MOVIMENTANDO` — porque o farol equivalente devolve
+   * `MAI`/`MOV` e obrigaria a adivinhar a abreviação. A troca foi feita e o limite ficou para trás:
+   * o robô leu 84 veículos, entregou, e o TMS recusou o lote inteiro por causa do campo mais bobo
+   * do contrato.
+   */
+  offRoute: z.string().trim().max(24).nullish(),
+  noPosition: z.string().trim().max(24).nullish(),
+  stoppedFlag: z.string().trim().max(24).nullish(),
 });
 
 export type FleetPositionInput = z.infer<typeof fleetPositionSchema>;
