@@ -3,6 +3,8 @@ import { and, eq } from "drizzle-orm";
 import {
   auditLogs,
   billingItems,
+  ensureBillingItem,
+  transitionTripStatus,
   customers,
   alerts,
   db,
@@ -16,6 +18,23 @@ import {
   users,
 } from "@brazil-tms/db";
 import { markBillingReady, markCompleted } from "./billing";
+
+/**
+ * Põe a viagem na fila do dinheiro À MÃO, porque o automático foi desligado (2026-08-20).
+ *
+ * A etapa de faturamento continua existindo e continua tendo dono — o que saiu foi o salto
+ * automático depois de concluir. Os casos de `markBillingReady` precisam do estado que aquele
+ * salto criava, então o montam explicitamente: é a diferença entre testar a etapa e testar quem a
+ * dispara, e agora ela importa.
+ */
+async function porNaFilaDeFaturamento(tripId: string, actorId: string): Promise<void> {
+  await transitionTripStatus(
+    tripId,
+    { toStatus: "billing_pending", expectedFromStatus: "completed" },
+    actorId,
+  );
+  await db.transaction(async (tx) => ensureBillingItem(tx, tripId));
+}
 
 /**
  * Feature 008 (US2, T069) — the gated completion + Billing-Ready transitions against the live dev DB.
@@ -66,14 +85,23 @@ describe.skipIf(!hasDb)("completion + billing-ready gates (integration, US2)", (
       .returning();
     customerId = cust[0]!.id;
     originId = (
-      await db.insert(locations).values({ customerId, code: code("O"), name: "Origem" }).returning()
+      await db
+        .insert(locations)
+        .values({ customerId, code: code("O"), name: "Origem" })
+        .returning()
     )[0]!.id;
     destId = (
-      await db.insert(locations).values({ customerId, code: code("D"), name: "Destino" }).returning()
+      await db
+        .insert(locations)
+        .values({ customerId, code: code("D"), name: "Destino" })
+        .returning()
     )[0]!.id;
 
     typeId = (
-      await db.insert(documentTypes).values({ code: code("dt"), labelPt: "POD" }).returning()
+      await db
+        .insert(documentTypes)
+        .values({ code: code("dt"), labelPt: "POD" })
+        .returning()
     )[0]!.id;
     // A document required for BOTH completion and billing.
     await db.insert(documentRequirements).values({
@@ -88,7 +116,10 @@ describe.skipIf(!hasDb)("completion + billing-ready gates (integration, US2)", (
 
   afterAll(async () => {
     for (const id of createdTripIds) {
-      const items = await db.select({ id: billingItems.id }).from(billingItems).where(eq(billingItems.tripId, id));
+      const items = await db
+        .select({ id: billingItems.id })
+        .from(billingItems)
+        .where(eq(billingItems.tripId, id));
       for (const it of items) {
         await db.delete(billingItems).where(eq(billingItems.id, it.id));
       }
@@ -120,15 +151,20 @@ describe.skipIf(!hasDb)("completion + billing-ready gates (integration, US2)", (
     expect(after[0]!.s).toBe("unloaded"); // no state change
   });
 
-  it("a waiver satisfies the gate; the trip completes, auto-advances to billing_pending, and is auto-priced", async () => {
+  /**
+   * A viagem PARA EM "CONCLUÍDA" (2026-08-20, a pedido). O salto automático para faturamento foi
+   * desligado porque a operação não trabalha essa fila hoje, e estado que ninguém trabalha não é
+   * etapa. Este teste afirmava o contrário e foi invertido — o `waiver` e a trava dos documentos,
+   * que são o assunto dele, continuam valendo igual.
+   */
+  it("a waiver satisfies the gate; the trip completes and STOPS there — no billing hop, no item", async () => {
     const tripId = await seedTripAt("unloaded");
     const detail = await markCompleted(
       tripId,
       { waivedRequirements: [{ documentTypeId: typeId, reason: "indisponível" }] },
       actorId,
     );
-    expect(detail.currentStatus).toBe("billing_pending");
-    expect(detail.billingStatus).toBe("billing_pending");
+    expect(detail.currentStatus).toBe("completed");
 
     // A waiver row (no file) was recorded + a document.waive audit.
     const waiver = detail.documents.find((d) => d.isWaiver);
@@ -140,23 +176,22 @@ describe.skipIf(!hasDb)("completion + billing-ready gates (integration, US2)", (
       .where(and(eq(auditLogs.entityId, waiver!.id), eq(auditLogs.action, "document.waive")));
     expect(waiveAudit.length).toBe(1);
 
-    // The billing item exists, auto-priced from the seeded rate, period set.
-    expect(detail.billing).not.toBeNull();
-    expect(detail.billing!.baseFreightCents).toBe(150_000);
-    expect(detail.billing!.hasRate).toBe(true);
-    expect(detail.billing!.billingPeriod).toMatch(/^\d{4}-\d{2}$/);
+    // O item de faturamento NÃO nasce mais junto: ele pertence à etapa que foi desligada. A
+    // precificação automática a partir da tarifa continua existindo — ver `billing-items.test.ts`,
+    // que exercita `ensureBillingItem` direto. O que saiu daqui foi o gatilho, não o cálculo.
+    expect(detail.billing).toBeNull();
 
-    // Both transitions were driven through transitionTripStatus (trip.status_change audits + events).
+    // A transição que sobrou continua passando por `transitionTripStatus` (auditoria + evento).
     const statusChanges = await db
       .select({ id: auditLogs.id })
       .from(auditLogs)
       .where(and(eq(auditLogs.entityId, tripId), eq(auditLogs.action, "trip.status_change")));
-    expect(statusChanges.length).toBeGreaterThanOrEqual(2);
+    expect(statusChanges.length).toBeGreaterThanOrEqual(1);
     const events = await db
       .select({ id: tripEvents.id })
       .from(tripEvents)
       .where(and(eq(tripEvents.tripId, tripId), eq(tripEvents.eventType, "status_change")));
-    expect(events.length).toBeGreaterThanOrEqual(2);
+    expect(events.length).toBeGreaterThanOrEqual(1);
   });
 
   it("markBillingReady is blocked by an open dispute, then succeeds once cleared", async () => {
@@ -166,6 +201,7 @@ describe.skipIf(!hasDb)("completion + billing-ready gates (integration, US2)", (
       { waivedRequirements: [{ documentTypeId: typeId, reason: "indisponível" }] },
       actorId,
     );
+    await porNaFilaDeFaturamento(tripId, actorId);
 
     // Open a billing dispute → §19.4 blocks.
     await db
