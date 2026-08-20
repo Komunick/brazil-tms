@@ -83,6 +83,17 @@ function paraInteiro(valor: number | string | null | undefined): number | null {
   return Number.isFinite(n) ? Math.round(n) : null;
 }
 
+/**
+ * O `-1` do rastreador vira null.
+ *
+ * Ele usa `-1` para "não se aplica" em percentual e quilometragem — caminhão sem viagem não tem
+ * progresso a medir. Onze dos 84 do primeiro lote real vieram assim. Gravado como número, ele
+ * apareceria na tela como `-1%`, que é pior do que um traço: parece medição, e medição errada é a
+ * única coisa pior do que medição ausente.
+ */
+const semSentinela = (valor: number | null | undefined): number | null =>
+  valor === null || valor === undefined || valor < 0 ? null : valor;
+
 const texto = (valor: string | null | undefined): string | null => {
   const t = (valor ?? "").trim();
   return t === "" || t === "-" ? null : t;
@@ -126,8 +137,8 @@ export async function recordFleetPositions(
     destinationCity: texto(e.destinationCity),
     tripStartedAt: paraUtc(e.tripStartedAt),
     etaAt: paraUtc(e.etaAt),
-    progressPercent: e.progressPercent ?? null,
-    kmTravelled: e.kmTravelled ?? null,
+    progressPercent: semSentinela(e.progressPercent),
+    kmTravelled: semSentinela(e.kmTravelled),
     stoppedMinutes: paraInteiro(e.stoppedMinutes),
     offRoute: texto(e.offRoute),
     noPosition: texto(e.noPosition),

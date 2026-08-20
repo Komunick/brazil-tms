@@ -81,3 +81,21 @@ describe("fleetFeedBodySchema", () => {
     expect(() => fleetFeedBodySchema.parse({ positions: [] })).toThrow();
   });
 });
+
+describe("o -1 do rastreador", () => {
+  it("passa pelo contrato em vez de derrubar o lote", () => {
+    /**
+     * Onze dos 84 veículos do primeiro lote real vieram com `progressPercent: -1`, todos sem viagem.
+     * Com piso em zero, o retrato inteiro era recusado por causa de caminhão parado — que é o estado
+     * mais comum da frota de madrugada.
+     */
+    const r = fleetPositionSchema.parse({ plate: "AAA1A11", progressPercent: -1, kmTravelled: -1 });
+    expect(r.progressPercent).toBe(-1);
+  });
+
+  it("continua recusando o que é absurdo de verdade", () => {
+    // -1 é sentinela conhecida; -50% não é nada que o rastreador diga, e passar batido esconderia
+    // um campo trocado do outro lado.
+    expect(() => fleetPositionSchema.parse({ plate: "AAA1A11", progressPercent: -50 })).toThrow();
+  });
+});
