@@ -1,15 +1,21 @@
 // ==UserScript==
-// @name         Brazil TMS — leitor do eTorre (prova de conceito)
+// @name         Brazil TMS — leitor do eTorre
 // @namespace    braziltransports.com.br
-// @version      0.1.0
-// @description  Escuta o que a tela de Veículos Logísticos do eTorre já busca e resume no console. Somente leitura, não envia nada.
+// @version      0.2.0
+// @description  Escuta o que a tela de Veículos Logísticos do eTorre já busca e entrega ao TMS. Somente leitura.
 // @match        https://torre.logae.com.br/*
+// @connect      tmsdev.braziltransports.com.br
+// @connect      tms.braziltransports.com.br
+// @grant        GM_xmlhttpRequest
 // @run-at       document-start
-// @grant        none
+// Sem estas duas linhas o Tampermonkey nunca procura versão nova, e toda correção vira "abra a URL e
+// clique em Reinstalar" — com o agravante de que os três robôs desta VM têm nome parecido.
+// @updateURL    http://127.0.0.1:8899/etorre-feed.user.js
+// @downloadURL  http://127.0.0.1:8899/etorre-feed.user.js
 // ==/UserScript==
 
 /**
- * A PROVA DE CONCEITO do rastreador (2026-08-19).
+ * O LEITOR DO RASTREADOR (2026-08-19).
  *
  * O eTorre (white-label da Raster) não publica API para nós, mas a tela "Veículos Logísticos" busca
  * tudo de um endpoint só — `POST /apilog/veiculos-logisticos` —, e a resposta traz MUITO mais do que
@@ -34,10 +40,15 @@
  * depois de ver o dado real correndo por algumas horas.
  */
 
+/* global GM_xmlhttpRequest, GM_info */
 (function () {
   "use strict";
 
   const CONFIG = {
+    /** Endereço do TMS. Troque para o de produção quando for a hora. */
+    tms: "https://tmsdev.braziltransports.com.br",
+    /** O mesmo valor de PORTAL_FEED_TOKEN no servidor. Trocar aqui e lá ao mesmo tempo. */
+    token: "COLE_AQUI_O_TOKEN",
     /** Só interessa esta chamada; as outras do `/apilog/` são lookups de tela. */
     alvo: "/apilog/veiculos-logisticos",
     /** O `-preload` tem o mesmo prefixo e devolve 204 — precisa sair na mão. */
@@ -58,8 +69,15 @@
     botaoAtualizar: 'title="Atualizar"',
   };
 
-  const log = (...a) => console.log("[TMS eTorre 0.1.0]", ...a);
-  const erro = (...a) => console.warn("[TMS eTorre 0.1.0]", ...a);
+  /**
+   * A versão vem do CABEÇALHO, não de uma constante copiada. A constante escrita à mão envelhece
+   * calada, e a linha que existe para provar qual versão está rodando passa a mentir sobre
+   * exatamente isso — já aconteceu no robô do BSC, que saiu com `@version` novo e console velho.
+   */
+  const VERSAO =
+    (typeof GM_info !== "undefined" && GM_info?.script?.version) || "versão desconhecida";
+  const log = (...a) => console.log(`[TMS eTorre ${VERSAO}]`, ...a);
+  const erro = (...a) => console.warn(`[TMS eTorre ${VERSAO}]`, ...a);
 
   /**
    * Os campos que o TMS usaria, com o nome que eles têm lá dentro.
@@ -71,7 +89,15 @@
   const CAMPOS = {
     placa: "GRA_PLACA",
     carreta: "PLACA_CARRETA01",
-    motorista: "GRA_CAMDESC",
+    /**
+     * O motorista é `GRA_CAWNOME`, e isso custou uma leitura errada.
+     *
+     * `GRA_CAMDESC` parecia o campo óbvio e devolve "SASCAR", "ONIXSAT", "OMNILINK" — a MARCA DO
+     * RASTREADOR, não a pessoa. O erro não aparece sozinho: "SASCAR" é um texto plausível numa
+     * coluna de motorista. Só conferindo contra a grade da tela (FRP3C84 → RENATO FREIRE DE LIMA) é
+     * que os dois se separam.
+     */
+    motorista: "GRA_CAWNOME",
     lat: "POD_LAT",
     lon: "POD_LON",
     ignicao: "POD_IGNICAO",
@@ -84,6 +110,19 @@
     percentual: "GRJ_PERCENTUALPERCORRIDO",
     kmPercorrido: "GRJ_KMPERCORRIDO",
     minutosParado: "MINUTOS_PARADO_ALVO_VIAGEM",
+    /** A referência textual da última posição — é o que a operação lê para saber "onde é isso". */
+    referencia: "GRA_REFERENCIA_LOCALIZADOR",
+    /** Faróis do rastreador: alertas de execução que o TMS não tem como derivar sozinho. */
+    foraDeRota: "GRJ_FAROLFORADEROTA",
+    semPosicao: "GRJ_FAROLSEMPOSICAO",
+    /**
+     * `PARADO` / `MOVIMENTANDO`, escrito por extenso.
+     *
+     * O farol equivalente (`GRJ_FAROLVEICULOPARADO`) devolve `MAI`/`MOV`, que exige adivinhar o que
+     * a abreviação significa. Este diz a mesma coisa sem intérprete no meio — e um contador de
+     * "quantos estão parados" não pode depender de eu ter chutado certo.
+     */
+    parado: "GSH_STATUS_PARADO_MOVIMENTADO",
   };
 
   function extrair(registro) {
@@ -115,6 +154,76 @@
       erro(`campos vazios em toda a frota (nome pode ter mudado): ${vazios.join(", ")}`);
     }
     if (emViagem[0]) log("exemplo com viagem:", emViagem[0]);
+    entregar(frota);
+  }
+
+  /**
+   * A entrega ao TMS, com `GM_xmlhttpRequest` porque a chamada é cross-origin.
+   *
+   * O token vai no CORPO, e não no cabeçalho: um `Authorization` transforma o POST em requisição
+   * "não simples" e obriga a um preflight que o TMS teria de negociar com a origem do fornecedor. É
+   * a mesma decisão dos outros dois robôs desta VM.
+   *
+   * Falha aqui NÃO derruba o ciclo: o próximo sai em cinco minutos e traz um retrato mais novo. O
+   * que não pode acontecer é falhar em silêncio — daí o aviso com o corpo da resposta, que é onde o
+   * TMS explica se o token está curto, se o corpo veio torto ou se a rota nem existe ainda.
+   */
+  function entregar(frota) {
+    if (!CONFIG.token || CONFIG.token === "COLE_AQUI_O_TOKEN") {
+      erro("token não configurado — o retrato foi lido e NÃO foi entregue");
+      return;
+    }
+    GM_xmlhttpRequest({
+      method: "POST",
+      url: `${CONFIG.tms}/api/imports/fleet-feed`,
+      headers: { "Content-Type": "application/json" },
+      data: JSON.stringify({ token: CONFIG.token, positions: frota.map(paraTms) }),
+      timeout: 60000,
+      onload: (res) => {
+        if (res.status >= 200 && res.status < 300) {
+          const corpo = JSON.parse(res.responseText || "{}");
+          log(
+            `entregue: ${corpo.recebidas} posições, ${corpo.vinculadas} casadas com a frota` +
+              (corpo.semCadastro ? `, ${corpo.semCadastro} sem cadastro` : ""),
+          );
+        } else {
+          erro(`TMS respondeu ${res.status}: ${String(res.responseText).slice(0, 200)}`);
+        }
+      },
+      onerror: () => erro("falha de rede ao entregar ao TMS"),
+      ontimeout: () => erro("o TMS demorou demais para responder"),
+    });
+  }
+
+  /**
+   * Do vocabulário do rastreador para o do TMS.
+   *
+   * Os instantes seguem como TEXTO, exatamente como vieram. Converter fuso aqui amarraria o dado ao
+   * relógio desta VM — que é a última coisa em que confiar para alimentar cálculo de atraso. Quem
+   * converte é o servidor, que sabe em que fuso a empresa opera.
+   */
+  function paraTms(v) {
+    return {
+      plate: v.placa,
+      trailerPlate: v.carreta,
+      driverLabel: v.motorista,
+      latitude: typeof v.lat === "number" ? v.lat : null,
+      longitude: typeof v.lon === "number" ? v.lon : null,
+      positionLabel: v.referencia,
+      positionAt: v.horaPosicao,
+      ignition: v.ignicao,
+      tripStatus: v.statusViagem,
+      originCity: v.origem,
+      destinationCity: v.destino,
+      tripStartedAt: v.inicioViagem,
+      etaAt: v.previsaoEntrega,
+      progressPercent: typeof v.percentual === "number" ? v.percentual : null,
+      kmTravelled: typeof v.kmPercorrido === "number" ? v.kmPercorrido : null,
+      stoppedMinutes: v.minutosParado,
+      offRoute: v.foraDeRota,
+      noPosition: v.semPosicao,
+      stoppedFlag: v.parado,
+    };
   }
 
   const original = XMLHttpRequest.prototype.open;

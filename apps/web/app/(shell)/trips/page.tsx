@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { can } from "@brazil-tms/shared";
 import { verifySession } from "@/lib/auth/session";
 import { ControlTowerTable } from "@/components/trips/control-tower-table";
-import { AlertSurface } from "@/components/alerts/alert-surface";
+import { FleetSummaryCard } from "@/components/fleet/fleet-summary-card";
 import { cancelScopeForRole } from "@/lib/trips/cancel-scope";
 import { getTripFilterOptions } from "@/lib/trips/trips-read";
 
@@ -36,7 +36,10 @@ export default async function TripsPage() {
         <h1 className="text-2xl font-semibold">{t("title")}</h1>
         <p className="text-muted-foreground">{t("subtitle")}</p>
       </header>
-      <AlertSurface />
+      {/* No lugar dos "Alertas ativos" (2026-08-20, a pedido): o quadro listava avisos que a própria
+          tabela abaixo já mostra por viagem, enquanto onde está o caminhão era informação que o TMS
+          não tinha. O cartão abre a página de rastreamento. */}
+      <FleetSummaryCard />
       <ControlTowerTable
         filterOptions={filterOptions}
         canAssign={canAssign}
