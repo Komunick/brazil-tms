@@ -54,6 +54,7 @@ import {
   type TripExportQuery,
   type TripDisplayStatus,
   type TripStatus,
+  regionPosition,
 } from "@brazil-tms/shared";
 import { Conflict } from "../errors";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
@@ -170,6 +171,26 @@ export interface DashboardSummary {
    * faturamento realmente pensam.
    */
   tripsByStatus: { status: TripDisplayStatus; count: number }[];
+
+  /**
+   * As viagens de HOJE por REGIÃO da estação de origem (2026-08-20, a pedido).
+   *
+   * Mesma pergunta do cartão de hoje, recortada por onde a viagem começa. A operação é dividida em
+   * três frentes — NONE (Norte + Nordeste), SUDESTE e SULCO (Sul + Centro-Oeste) — e quem cuida de
+   * uma delas não consegue ler o número somado: doze viagens em análise não dizem se o problema é
+   * seu ou de outra frente.
+   *
+   * A REGIÃO É A DA ORIGEM, e é uma escolha, não um detalhe: um LH liga duas pontas que podem estar
+   * em regiões diferentes. A planilha do cliente titula a coluna "ESTAÇÃO ORIGEM", então é de lá
+   * que a viagem herda.
+   *
+   * `region: null` é estação ainda não classificada — aparece como grupo próprio em vez de sumir,
+   * porque viagem que não entra em nenhuma frente é justamente o que alguém precisa ver.
+   */
+  tripsTodayByRegion: {
+    region: string | null;
+    byStatus: { status: TripDisplayStatus; count: number }[];
+  }[];
   /**
    * A fila do DESPACHO: aceita pelo cliente e ainda sem motorista no portal (2026-08-17).
    *
@@ -446,6 +467,24 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
   }
 
   if (query.originLocationId) conditions.push(eq(trips.originLocationId, query.originLocationId));
+  /**
+   * REGIÃO por SUBCONSULTA, e não por join.
+   *
+   * As condições daqui alimentam DUAS consultas — a lista e a contagem — e só a lista junta a
+   * tabela de locais. Um `eq(originLoc.region, ...)` quebraria a contagem, e fazer a contagem juntar
+   * também custaria um join em toda paginação para um filtro que quase nunca está ligado.
+   *
+   * É o mesmo recorte que os cartões de região do painel contam: o cartão abre esta lista, e os dois
+   * números têm que ser o mesmo número.
+   */
+  if (query.region) {
+    conditions.push(
+      inArray(
+        trips.originLocationId,
+        db.select({ id: locations.id }).from(locations).where(eq(locations.region, query.region)),
+      ),
+    );
+  }
   if (query.destinationLocationId) {
     conditions.push(eq(trips.destinationLocationId, query.destinationLocationId));
   }
@@ -763,6 +802,31 @@ export async function getTripDetailView(id: string): Promise<TripDetailView | nu
  * (SLA risk → 007, exceptions/on-time → 007, missing docs → 008) is returned as `null` — scaffolded,
  * not invented.
  */
+/**
+ * As linhas (região, status, contagem) viram um grupo por região, na ORDEM DECLARADA.
+ *
+ * A ordem vem de `REGION_ORDER` e não do banco: um `ORDER BY` alfabético poria NONE antes de
+ * SUDESTE hoje e mudaria de lugar no dia em que uma região nova entrasse. Num painel de parede, a
+ * posição do cartão é como as pessoas o encontram — ela não pode depender do alfabeto.
+ *
+ * Região fora da lista (uma quarta que a operação criar sem avisar o código) entra no fim, em vez
+ * de sumir: número que existe e não aparece é pior do que número fora de ordem.
+ */
+function agruparPorRegiao(
+  linhas: { region: string | null; status: string; value: number }[],
+): DashboardSummary["tripsTodayByRegion"] {
+  const grupos = new Map<string | null, { status: TripDisplayStatus; count: number }[]>();
+  for (const l of linhas) {
+    const chave = l.region && l.region.trim() !== "" ? l.region : null;
+    const lista = grupos.get(chave) ?? [];
+    lista.push({ status: l.status as TripDisplayStatus, count: l.value });
+    grupos.set(chave, lista);
+  }
+
+  return [...grupos.entries()]
+    .sort(([a], [b]) => regionPosition(a) - regionPosition(b) || String(a).localeCompare(String(b)))
+    .map(([region, byStatus]) => ({ region, byStatus }));
+}
 export async function queryDashboardMetrics(): Promise<DashboardSummary> {
   const agora = new Date();
   const { from, to } = dayRangeSaoPaulo(agora);
@@ -774,6 +838,7 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
 
   const [
     byStatus,
+    porRegiaoHoje,
     byStatusAmanha,
     allByStatus,
     aguardandoAtribuicao,
@@ -795,6 +860,24 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
         ),
       )
       .groupBy(displayStatusSql),
+    /**
+     * O MESMO recorte de hoje, quebrado pela região da estação de ORIGEM.
+     *
+     * `innerJoin` e não `leftJoin`: toda viagem tem origem obrigatória (a coluna é `notNull`), então
+     * não há linha a perder. O que pode faltar é a REGIÃO da estação, e essa vem nula — agrupada
+     * como um grupo próprio, não descartada.
+     */
+    db
+      .select({ region: locations.region, status: displayStatusSql, value: count() })
+      .from(trips)
+      .innerJoin(locations, eq(locations.id, trips.originLocationId))
+      .where(
+        and(
+          gte(trips.plannedPickupWindowStart, new Date(from)),
+          lt(trips.plannedPickupWindowStart, new Date(to)),
+        ),
+      )
+      .groupBy(locations.region, displayStatusSql),
     // O mesmo recorte, no dia SEGUINTE — o que ainda dá tempo de arrumar.
     db
       .select({ status: displayStatusSql, value: count() })
@@ -911,6 +994,7 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
       status: r.status as TripDisplayStatus,
       count: r.value,
     })),
+    tripsTodayByRegion: agruparPorRegiao(porRegiaoHoje),
     tripsTomorrowByStatus: byStatusAmanha.map((r) => ({
       status: r.status as TripDisplayStatus,
       count: r.value,

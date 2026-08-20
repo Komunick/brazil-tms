@@ -59,6 +59,12 @@ export const tripBoardQuerySchema = z.object({
   status: oneOrMany(z.enum(TRIP_STATUSES)),
   billingStatus: optParam(z.enum(BILLING_PHASE_STATUSES)),
   originLocationId: uuidParam("Local de origem"),
+  /**
+   * A REGIÃO da estação de origem (2026-08-20). Texto livre e não enum: a lista é do cliente, e um
+   * enum aqui recusaria com 400 uma região que ele criasse na planilha — o filtro deve devolver
+   * lista vazia, não erro. O limite de tamanho é só higiene de parâmetro de URL.
+   */
+  region: optParam(z.string().trim().min(1).max(40)),
   destinationLocationId: uuidParam("Local de destino"),
   laneId: uuidParam("Rota"),
   vehicleType: optParam(vehicleTypeSchema),
@@ -110,7 +116,11 @@ export const tripBoardQuerySchema = z.object({
     .min(1, "O limite deve ser ao menos 1.")
     .max(TRIP_BOARD_MAX_LIMIT, `O limite máximo é ${TRIP_BOARD_MAX_LIMIT}.`)
     .default(TRIP_BOARD_DEFAULT_LIMIT),
-  offset: z.coerce.number().int("Deslocamento inválido.").min(0, "Deslocamento inválido.").default(0),
+  offset: z.coerce
+    .number()
+    .int("Deslocamento inválido.")
+    .min(0, "Deslocamento inválido.")
+    .default(0),
 });
 
 export type TripBoardQuery = z.infer<typeof tripBoardQuerySchema>;
@@ -128,6 +138,7 @@ const PARAM_KEYS = [
   "customerId",
   "billingStatus",
   "originLocationId",
+  "region",
   "destinationLocationId",
   "laneId",
   "vehicleType",

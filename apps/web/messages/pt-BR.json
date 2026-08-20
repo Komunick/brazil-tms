@@ -1308,7 +1308,10 @@
       "emptyMonth": "Nenhuma viagem neste mês.",
       "loadError": "Não foi possível carregar o painel.",
       "reconnecting": "Sem conexão com o servidor — mostrando os últimos números. A tela se atualiza sozinha quando voltar.",
-      "trips": "{count} viagens"
+      "trips": "{count} viagens",
+      "regionCard": "Região {region} — hoje",
+      "regionUnassigned": "Sem região",
+      "emptyRegion": "Nenhuma viagem com coleta hoje nesta região."
     }
   },
   "Sla": {

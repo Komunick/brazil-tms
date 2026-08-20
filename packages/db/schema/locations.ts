@@ -37,6 +37,21 @@ export const locations = pgTable(
     address: text("address"),
     city: text("city"),
     state: text("state"),
+    /**
+     * A REGIÃO OPERACIONAL da estação, como o cliente a declara (2026-08-20).
+     *
+     * Três valores, e são os do vocabulário da operação, não os do IBGE: `NONE` (Norte + Nordeste),
+     * `SUDESTE` e `SULCO` (Sul + Centro-Oeste). Ficam em texto e não em enum de propósito — a lista
+     * é do cliente, muda por decisão dele, e um enum no Postgres não se altera sem migração.
+     *
+     * O VALOR É COPIADO, NUNCA DEDUZIDO. A tentação é derivar a região da UF, que acerta quase
+     * sempre e é código mais curto. Não serve: Palmas/TO e Itaitinga/CE estão em `SULCO` e Guanambi
+     * /BA em `SUDESTE`, contra a geografia, porque são exceções que a operação decidiu (confirmado
+     * pelo usuário em 2026-08-20). Deduzir apagaria essas decisões e ninguém veria acontecer.
+     *
+     * Nulo é estação ainda não classificada — não é uma quarta região.
+     */
+    region: text("region"),
     country: text("country").notNull().default("BR"),
     latitude: doublePrecision("latitude"),
     longitude: doublePrecision("longitude"),
