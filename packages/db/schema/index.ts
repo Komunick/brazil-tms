@@ -40,3 +40,4 @@ export * from "./bsc-snapshots";
 // Oferta de spot vinda do monitor de leilão (VM Windows) — avisada na TV.
 export * from "./spot-offers";
 export * from "./fleet-positions";
+export * from "./spx-router-events";
