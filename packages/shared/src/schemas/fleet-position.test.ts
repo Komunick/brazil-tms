@@ -48,6 +48,13 @@ describe("fleetPositionSchema", () => {
     );
   });
 
+  it("aceita o texto de movimento por extenso", () => {
+    // `MOVIMENTANDO` tem 12 caracteres e o limite era 8, herdado do farol abreviado que veio antes.
+    // O lote inteiro foi recusado pelo campo mais bobo do contrato — daí este caso existir.
+    const r = fleetPositionSchema.parse({ plate: "AAA1A11", stoppedFlag: "MOVIMENTANDO" });
+    expect(r.stoppedFlag).toBe("MOVIMENTANDO");
+  });
+
   it("recusa placa vazia", () => {
     expect(() => fleetPositionSchema.parse({ plate: "  " })).toThrow();
   });
