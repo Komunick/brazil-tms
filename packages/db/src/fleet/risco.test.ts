@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { classifyRisk, MARGEM_MINUTOS } from "./fleet-positions";
+import { classifyRisk, melhorJanela, MARGEM_MINUTOS } from "./fleet-positions";
 
 /**
  * O "vai atrasar" que é NOSSO.
@@ -47,5 +47,34 @@ describe("classifyRisk", () => {
     expect(classifyRisk(null, eta)).toBe("sem_base");
     expect(classifyRisk(eta, null)).toBe("sem_base");
     expect(classifyRisk(null, null)).toBe("sem_base");
+  });
+});
+
+describe("melhorJanela", () => {
+  const agora = new Date("2026-08-20T12:00:00Z").getTime();
+  const em = (h: number) => new Date(agora + h * 3600000);
+
+  it("a janela que ainda dá para cumprir vence a que já passou", () => {
+    /**
+     * O caso que motivou tudo: o ATG9I07 tinha OITO viagens ativas, de 19 a 22/08. A regra anterior
+     * ficava com a mais próxima — 19/08, vencida havia 35 horas — e o caminhão nascia atrasado.
+     */
+    expect(melhorJanela(em(4), em(-35), agora)).toBe(true);
+    expect(melhorJanela(em(-35), em(4), agora)).toBe(false);
+  });
+
+  it("entre duas futuras, a mais próxima", () => {
+    // Aqui o raciocínio original continua valendo: é o milk run, e a perna de agora é a primeira.
+    expect(melhorJanela(em(2), em(6), agora)).toBe(true);
+  });
+
+  it("entre duas vencidas, a menos velha", () => {
+    // Descreve o atraso de agora, não o acumulado de dias.
+    expect(melhorJanela(em(-2), em(-30), agora)).toBe(true);
+  });
+
+  it("janela ausente perde para qualquer janela", () => {
+    expect(melhorJanela(null, em(5), agora)).toBe(false);
+    expect(melhorJanela(em(5), null, agora)).toBe(true);
   });
 });
