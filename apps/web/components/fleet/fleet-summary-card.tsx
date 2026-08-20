@@ -75,19 +75,26 @@ export function FleetSummaryCard() {
       cor: summary.offRoute > 0 ? "text-warning" : "",
     },
     /**
-     * O QUINTO NÚMERO, e o único que é conta NOSSA (2026-08-20, a pedido).
+     * OS DOIS ÚLTIMOS SÃO CONTA NOSSA, e são SEPARADOS (2026-08-20, a pedido).
      *
-     * Os quatro primeiros descrevem o VEÍCULO; este descreve o COMPROMISSO — a previsão de chegada
-     * do rastreador contra a janela que o cliente publicou. Por isso ele fica com o vermelho, e
-     * `fora de rota` recua para âmbar: furar prazo do cliente custa mais do que desviar do trajeto.
+     * Os quatro primeiros descrevem o VEÍCULO; estes dois descrevem o COMPROMISSO — a previsão de
+     * chegada do rastreador contra a janela que o cliente publicou.
      *
-     * O eTorre tem o alerta equivalente e ele NÃO foi copiado — o dele mede contra o prazo que ELE
-     * conhece. Ver `classifyRisk`.
+     * Separados porque pedem ações diferentes: "vai atrasar" ainda dá para evitar com um telefonema,
+     * "atrasada" já aconteceu e o que cabe é avisar o cliente. Somados num número só, a sala não sabe
+     * qual das duas fazer — e é assim que o próprio rastreador separa na legenda dele.
+     *
+     * A cor segue a mesma lógica: âmbar para o que ainda tem saída, vermelho para o que já custou.
      */
     {
-      rotulo: t("atRisk"),
-      valor: summary.atRisk,
-      cor: summary.atRisk > 0 ? "text-destructive" : "",
+      rotulo: t("willBeLate"),
+      valor: summary.willBeLate,
+      cor: summary.willBeLate > 0 ? "text-warning" : "",
+    },
+    {
+      rotulo: t("late"),
+      valor: summary.late,
+      cor: summary.late > 0 ? "text-destructive" : "",
     },
   ];
 
@@ -112,7 +119,7 @@ export function FleetSummaryCard() {
           </span>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {numeros.map((n) => (
             <div key={n.rotulo} className="border-l pl-3">
               <span
