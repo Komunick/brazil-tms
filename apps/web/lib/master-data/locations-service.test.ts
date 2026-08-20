@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { and, eq } from "drizzle-orm";
-import { auditLogs, customers, db, locations, users } from "@brazil-tms/db";
+import { and, eq, inArray } from "drizzle-orm";
+import { auditLogs, customers, db, locations, trips, users } from "@brazil-tms/db";
 import { NotFound } from "@/lib/api/respond";
 import {
   archiveLocation,
@@ -21,6 +21,9 @@ describe.skipIf(!hasDb)("locations-service (integration)", () => {
   let actorId = "";
   let customerId = "";
   const createdLocationIds: string[] = [];
+  const createdTripIds: string[] = [];
+  /** Um destino qualquer: as viagens de teste precisam de duas pontas distintas. */
+  let destinoFixo = "";
   const createdCustomerIds: string[] = [];
 
   beforeAll(async () => {
@@ -41,8 +44,29 @@ describe.skipIf(!hasDb)("locations-service (integration)", () => {
     createdCustomerIds.push(customerId);
   });
 
+  async function garantirDestino(): Promise<string> {
+    if (destinoFixo) return destinoFixo;
+    const d = await createLocation(
+      {
+        customerId,
+        code: `RG-FIXO-${Date.now()}`,
+        name: "Destino fixo",
+        country: "BR",
+        region: "NONE",
+      },
+      actorId,
+    );
+    createdLocationIds.push(d.id);
+    destinoFixo = d.id;
+    return destinoFixo;
+  }
+
   afterAll(async () => {
-    // FK-safe order: locations first (none reference each other), then customers.
+    // FK-safe order: as viagens PRIMEIRO — elas referenciam os locais, e desde 2026-08-20 esta suíte
+    // cria duas para provar a regra do aceite. Sem isto, o delete do local esbarra na FK.
+    if (createdTripIds.length) {
+      await db.delete(trips).where(inArray(trips.id, createdTripIds));
+    }
     for (const id of createdLocationIds) {
       await db.delete(auditLogs).where(eq(auditLogs.entityId, id));
       await db.delete(locations).where(eq(locations.id, id));
@@ -179,7 +203,13 @@ describe.skipIf(!hasDb)("locations-service (integration)", () => {
     expect(criada.region).toBeNull();
   });
 
-  /** A fila de classificação: o recorte tem de trazer a nova e NÃO trazer a que já foi classificada. */
+  /**
+   * A FILA DE CLASSIFICAÇÃO exige DUAS coisas: sem região E já usada em viagem aceita.
+   *
+   * A segunda é o que faz a fila valer. Só "sem região" trazia 386 estações — quase todas destino de
+   * última milha ou nunca usadas — e uma fila que não zera ninguém trabalha. Este teste afirma as
+   * duas pontas: a estação usada entra, a nunca usada não, e a já classificada também não.
+   */
   it("o recorte de pendentes traz só as estações sem região", async () => {
     const semRegiao = await createLocation(
       { customerId, code: `RG-P1-${Date.now()}`, name: "Pendente", country: "BR" },
@@ -197,10 +227,83 @@ describe.skipIf(!hasDb)("locations-service (integration)", () => {
     );
     createdLocationIds.push(semRegiao.id, comRegiao.id);
 
+    await garantirDestino();
+    // As DUAS já rodaram viagem aceita, para o teste isolar o eixo da REGIÃO. Sem isso ele estaria
+    // medindo duas regras ao mesmo tempo e passaria pelo motivo errado.
+    const viagens = await db
+      .insert(trips)
+      .values(
+        [semRegiao.id, comRegiao.id].map((origem) => ({
+          customerId,
+          originLocationId: origem,
+          destinationLocationId: destinoFixo,
+          originalPlan: {},
+          currentStatus: "received" as const,
+          customerFields: { "Aceitação (portal)": "Accepted" },
+        })),
+      )
+      .returning({ id: trips.id });
+    createdTripIds.push(...viagens.map((t) => t.id));
+
     const pendentes = await listLocations({ customerId, missingRegion: true });
     const ids = pendentes.map((l) => l.id);
     expect(ids).toContain(semRegiao.id);
     expect(ids).not.toContain(comRegiao.id);
     expect(pendentes.every((l) => l.region === null)).toBe(true);
+  });
+
+  /**
+   * Estação que só aparece em PROPOSTA não entra na fila.
+   *
+   * É a regra do usuário: rota aceita é rota nossa; proposta em análise ainda não é. Classificar uma
+   * estação que talvez nunca seja usada é trabalho jogado fora — e foi o que encheu a fila de 386.
+   */
+  it("proposta em análise NÃO põe a estação na fila; viagem aceita põe", async () => {
+    const destino = await createLocation(
+      { customerId, code: `RG-DST-${Date.now()}`, name: "Destino", country: "BR", region: "NONE" },
+      actorId,
+    );
+    const soProposta = await createLocation(
+      { customerId, code: `RG-PROP-${Date.now()}`, name: "Só proposta", country: "BR" },
+      actorId,
+    );
+    const aceita = await createLocation(
+      { customerId, code: `RG-ACE-${Date.now()}`, name: "Rodou de verdade", country: "BR" },
+      actorId,
+    );
+    createdLocationIds.push(destino.id, soProposta.id, aceita.id);
+
+    const criadas = await db
+      .insert(trips)
+      .values([
+        {
+          customerId,
+          originLocationId: soProposta.id,
+          destinationLocationId: destino.id,
+          originalPlan: {},
+          currentStatus: "received" as const,
+          customerFields: { "Aceitação (portal)": "Pending" },
+        },
+        {
+          customerId,
+          originLocationId: aceita.id,
+          destinationLocationId: destino.id,
+          originalPlan: {},
+          currentStatus: "received" as const,
+          customerFields: { "Aceitação (portal)": "Accepted" },
+        },
+      ])
+      .returning({ id: trips.id });
+    createdTripIds.push(...criadas.map((t) => t.id));
+
+    const fila = await listLocations({ customerId, missingRegion: true });
+    const ids = fila.map((l) => l.id);
+    expect(ids).toContain(aceita.id);
+    expect(ids).not.toContain(soProposta.id);
+
+    // A bandeira também chega na listagem normal, que é de onde a tela conta.
+    const todas = await listLocations({ customerId });
+    expect(todas.find((l) => l.id === aceita.id)?.usedInAcceptedTrip).toBe(true);
+    expect(todas.find((l) => l.id === soProposta.id)?.usedInAcceptedTrip).toBe(false);
   });
 });
