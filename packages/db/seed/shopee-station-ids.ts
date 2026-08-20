@@ -62,7 +62,7 @@ async function main(): Promise<void> {
       code,
       name,
       externalStationId: stationId,
-      state: ufFromCode(code),
+      state: ufFromCode(code, name),
     });
     created++;
   }
@@ -77,17 +77,26 @@ async function main(): Promise<void> {
 }
 
 /**
- * UF from the operational code — `HUB-LSP-64` → SP, `XPT-LMG-96` → MG. The customer's codes carry
- * the state in their middle segment, optionally prefixed with the network letter (`LSP` = L + SP).
- * Returns null when the segment is not a state, rather than guessing.
+ * UF do código operacional — `HUB-LSP-64` → SP, `XPT-LMG-96` → MG. Os códigos do cliente trazem o
+ * estado no segmento do meio, às vezes prefixado pela letra da rede (`LSP` = L + SP).
+ *
+ * O NOME é a segunda tentativa, e ela existe porque o padrão novo dos FM Hub não carrega estado
+ * nenhum: `FMH-CPS-01` é Campinas, e "CPS" não é UF. Cadastrado só pelo código, o local nascia sem
+ * estado — foi o que aconteceu com o primeiro deles, em 2026-08-19. O nome do próprio cliente diz o
+ * que falta ("FM Hub_SP_Campinas"), então é dele que se tira, e só quando o código não disser.
+ *
+ * Devolve null quando nenhuma das duas fontes afirma um estado, em vez de adivinhar.
  */
 const UF = new Set(
   "AC AL AP AM BA CE DF ES GO MA MT MS MG PA PB PR PE PI RJ RN RS RO RR SC SP SE TO".split(" "),
 );
-function ufFromCode(code: string): string | null {
+function ufFromCode(code: string, name?: string | null): string | null {
   for (const part of code.toUpperCase().split(/[-_]/)) {
     if (UF.has(part)) return part;
     if (part.length === 3 && UF.has(part.slice(1))) return part.slice(1);
+  }
+  for (const part of (name ?? "").toUpperCase().split(/[-_s]+/)) {
+    if (UF.has(part)) return part;
   }
   return null;
 }
