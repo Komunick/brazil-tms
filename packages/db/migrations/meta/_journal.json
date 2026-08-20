@@ -225,6 +225,13 @@
       "when": 1787200000003,
       "tag": "0031_spx_router_events",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1787200000004,
+      "tag": "0032_locations_region",
+      "breakpoints": true
     }
   ]
 }
