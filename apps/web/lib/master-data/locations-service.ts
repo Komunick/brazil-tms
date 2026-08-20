@@ -18,6 +18,8 @@ export interface LocationDto {
   latitude: number | null;
   longitude: number | null;
   gateInstructions: string | null;
+  /** A região operacional; nulo é estação ainda não classificada. */
+  region: string | null;
   archived: boolean;
   archivedAt: string | null;
   createdAt: string;
@@ -36,6 +38,8 @@ interface LocationRow {
   latitude: number | null;
   longitude: number | null;
   gateInstructions: string | null;
+  /** A região operacional; nulo é estação ainda não classificada. */
+  region: string | null;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -54,6 +58,7 @@ function toDto(row: LocationRow): LocationDto {
     latitude: row.latitude,
     longitude: row.longitude,
     gateInstructions: row.gateInstructions,
+    region: row.region,
     archived: row.archivedAt !== null,
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
@@ -113,12 +118,20 @@ export interface ListLocationsOptions {
   customerId?: string;
   q?: string;
   includeArchived?: boolean;
+  /**
+   * Só as estações AINDA SEM REGIÃO — a fila de classificação (2026-08-20).
+   *
+   * Existe porque a pergunta "o que falta classificar?" não se responde rolando 459 locais. Ela
+   * aparece sozinha quando uma estação nova entra na operação, e é aí que alguém precisa decidir.
+   */
+  missingRegion?: boolean;
 }
 
 export async function listLocations(opts: ListLocationsOptions = {}): Promise<LocationDto[]> {
   const filters = [];
   if (!opts.includeArchived) filters.push(isNull(locations.archivedAt));
   if (opts.customerId) filters.push(eq(locations.customerId, opts.customerId));
+  if (opts.missingRegion) filters.push(isNull(locations.region));
   if (opts.q && opts.q.trim().length > 0) {
     const term = `%${opts.q.trim()}%`;
     filters.push(or(ilike(locations.code, term), ilike(locations.name, term)));
@@ -158,6 +171,7 @@ export async function createLocation(
           latitude: input.latitude ?? null,
           longitude: input.longitude ?? null,
           gateInstructions: input.gateInstructions ?? null,
+          region: input.region ?? null,
         })
         .returning();
       const row = inserted[0];
@@ -205,6 +219,7 @@ export async function updateLocation(
     "latitude",
     "longitude",
     "gateInstructions",
+    "region",
   ];
   for (const field of fields) {
     if (input[field] === undefined) continue;
@@ -215,11 +230,7 @@ export async function updateLocation(
 
   try {
     return await db.transaction(async (tx) => {
-      const updated = await tx
-        .update(locations)
-        .set(set)
-        .where(eq(locations.id, id))
-        .returning();
+      const updated = await tx.update(locations).set(set).where(eq(locations.id, id)).returning();
       const row = updated[0];
       if (!row) throw new NotFound("NOT_FOUND", "Local não encontrado.");
       await writeAudit(tx, {

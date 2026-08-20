@@ -77,13 +77,25 @@ export function LocationsClient({ canArchive }: { canArchive: boolean }) {
   });
 
   const rows = query.data ?? [];
+
+  /**
+   * A FILA DE CLASSIFICAÇÃO (2026-08-20, a pedido): só as estações ainda sem região.
+   *
+   * A pergunta "o que falta classificar?" não se responde rolando 459 locais, e ela volta toda vez
+   * que uma estação nova entra na operação. O contador ao lado do botão diz quantas são sem precisar
+   * ligar o recorte — se for zero, não há o que fazer e ninguém precisa clicar.
+   */
+  const [soSemRegiao, setSoSemRegiao] = useState(false);
+  const semRegiao = rows.filter((l) => !l.region).length;
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter(
+    const base = soSemRegiao ? rows.filter((l) => !l.region) : rows;
+    if (!term) return base;
+    return base.filter(
       (l) => l.name.toLowerCase().includes(term) || l.code.toLowerCase().includes(term),
     );
-  }, [rows, search]);
+  }, [rows, search, soSemRegiao]);
 
   const columns: ColumnDef<LocationDto>[] = [
     { accessorKey: "name", header: () => t("name") },
@@ -98,6 +110,13 @@ export function LocationsClient({ canArchive }: { canArchive: boolean }) {
       header: () => t("city"),
       cell: ({ row }) => row.original.city ?? "—",
     },
+    {
+      accessorKey: "region",
+      header: () => t("region"),
+      // Sem região não é um traço como as outras células vazias: é pendência, e fica visível.
+      cell: ({ row }) =>
+        row.original.region ?? <span className="text-xs text-warning">{t("regionNone")}</span>,
+    },
   ];
 
   return (
@@ -107,14 +126,24 @@ export function LocationsClient({ canArchive }: { canArchive: boolean }) {
           <h1 className="text-2xl font-semibold">{t("title")}</h1>
           <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
-        <Button
-          onClick={() => {
-            setCreateError(null);
-            setCreateOpen(true);
-          }}
-        >
-          {t("new")}
-        </Button>
+        <div className="flex items-center gap-2">
+          {semRegiao > 0 || soSemRegiao ? (
+            <Button
+              variant={soSemRegiao ? "default" : "outline"}
+              onClick={() => setSoSemRegiao((v) => !v)}
+            >
+              {t("missingRegion", { count: semRegiao })}
+            </Button>
+          ) : null}
+          <Button
+            onClick={() => {
+              setCreateError(null);
+              setCreateOpen(true);
+            }}
+          >
+            {t("new")}
+          </Button>
+        </div>
       </div>
 
       {feedback ? (

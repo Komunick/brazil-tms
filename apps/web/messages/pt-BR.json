@@ -606,7 +606,10 @@
       "duplicateCode": "Já existe um local com esse código para o cliente.",
       "created": "Local criado.",
       "updated": "Local atualizado.",
-      "archivedMsg": "Local arquivado."
+      "archivedMsg": "Local arquivado.",
+      "region": "Região",
+      "regionNone": "Sem região",
+      "missingRegion": "Sem região ({count})"
     },
     "lanes": {
       "title": "Rotas",
