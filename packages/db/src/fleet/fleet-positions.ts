@@ -221,18 +221,29 @@ export async function readFleetPositions(): Promise<FleetPositionView[]> {
         )
     : [];
   /**
-   * Um veículo PODE estar em duas viagens ativas — as pernas de um milk run compartilham o caminhão.
-   * Fica a de janela mais próxima: é a que está em jogo agora, e é contra ela que o atraso conta.
+   * QUAL DAS VIAGENS ATIVAS É A QUE ESTÁ EM JOGO (corrigido em 2026-08-20, horas depois de nascer).
+   *
+   * A primeira versão ficava com a janela MAIS PRÓXIMA, raciocinando sobre milk run: duas pernas da
+   * mesma jornada, e a mais próxima é a que corre agora. O dado real desmentiu na primeira medição —
+   * o `ATG9I07` tem OITO viagens ativas simultâneas no TMS, com janelas de 19 a 22/08. Com "a mais
+   * próxima" ele herdava a de 19/08, vencida havia 35 horas, e nascia atrasado por definição. Foi o
+   * que produziu 31 "atrasadas" com janela vencida há mais de um dia.
+   *
+   * Passa a valer a PRIMEIRA JANELA QUE AINDA NÃO VENCEU: é a promessa que ainda dá para cumprir, e
+   * portanto a única sobre a qual faz sentido avisar. Prazo já furado é assunto do SLA, que já o
+   * acompanha — repeti-lo aqui afogaria o aviso que importa.
+   *
+   * Quando TODAS já venceram, fica a MAIS RECENTE: o caminhão está mesmo atrasado, e a janela menos
+   * velha descreve o atraso de agora em vez do acumulado de dias.
    */
+  const agora = Date.now();
   const porVeiculo = new Map<string, (typeof viagens)[number]>();
   for (const v of viagens) {
     if (!v.vehicleId) continue;
     const atual = porVeiculo.get(v.vehicleId);
-    const maisCedo =
-      !atual ||
-      (v.deliveryWindowEnd &&
-        (!atual.deliveryWindowEnd || v.deliveryWindowEnd < atual.deliveryWindowEnd));
-    if (maisCedo) porVeiculo.set(v.vehicleId, v);
+    if (!atual || melhorJanela(v.deliveryWindowEnd, atual.deliveryWindowEnd, agora)) {
+      porVeiculo.set(v.vehicleId, v);
+    }
   }
 
   return linhas.map((r) => {
@@ -349,6 +360,24 @@ export async function fleetSummary(): Promise<FleetSummary> {
  * informação nenhuma.
  */
 export type DeliveryRisk = "no_prazo" | "vai_atrasar" | "atrasada" | "sem_base";
+
+/**
+ * Entre duas janelas do mesmo veículo, qual descreve o compromisso de agora.
+ *
+ * Ganha a primeira que AINDA NÃO VENCEU (a mais próxima entre as futuras). Se nenhuma sobrou, ganha
+ * a menos velha. Janela ausente perde para qualquer janela: com ela não há promessa a medir.
+ *
+ * Devolve verdadeiro quando a candidata deve substituir a atual.
+ */
+export function melhorJanela(candidata: Date | null, atual: Date | null, agora: number): boolean {
+  if (!candidata) return false;
+  if (!atual) return true;
+  const candidataVale = candidata.getTime() >= agora;
+  const atualVale = atual.getTime() >= agora;
+  if (candidataVale !== atualVale) return candidataVale;
+  // Ambas no futuro: a mais próxima é a que corre agora. Ambas vencidas: a menos velha.
+  return candidataVale ? candidata < atual : candidata > atual;
+}
 
 /**
  * Quanta folga ainda conta como tranquilo.
