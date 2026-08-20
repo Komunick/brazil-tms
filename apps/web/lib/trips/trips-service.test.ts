@@ -73,12 +73,29 @@ describe.skipIf(!hasDb)("trips-service (integration)", () => {
   afterAll(async () => {
     // FK-safe order: trip_events + audit → trips → locations → customers.
     for (const id of createdTripIds) {
-      // The SLA sweep runs over EVERY trip in the dev DB, so a concurrently-running suite can leave
-      // alerts hanging off these trips. Clear them or the delete below trips over their FK.
-      await db.delete(alerts).where(eq(alerts.tripId, id));
       await db.delete(tripEvents).where(eq(tripEvents.tripId, id));
       await db.delete(auditLogs).where(eq(auditLogs.entityId, id));
-      await db.delete(trips).where(eq(trips.id, id));
+    }
+    /**
+     * Apagar aviso e viagem em DUAS PASSADAS, com repetição.
+     *
+     * A varredura de SLA roda em outra suíte, ao mesmo tempo, sobre TODAS as viagens do banco — e
+     * pode criar um aviso no intervalo entre limpar os avisos e apagar a viagem. Limpar uma vez e
+     * apagar em seguida perdia essa corrida, e a suíte caía com violação de FK.
+     *
+     * Num banco de CI recém-criado isso deixa de ser raro: a varredura tem meia dúzia de viagens
+     * para avaliar, e as desta suíte são justamente as que ela alcança.
+     */
+    if (createdTripIds.length) {
+      for (let tentativa = 1; tentativa <= 3; tentativa++) {
+        await db.delete(alerts).where(inArray(alerts.tripId, createdTripIds));
+        try {
+          await db.delete(trips).where(inArray(trips.id, createdTripIds));
+          break;
+        } catch (erro) {
+          if (tentativa === 3) throw erro;
+        }
+      }
     }
     // Creating a trip registers its route, and that lane points at these locations.
     if (createdCustomerIds.length) {

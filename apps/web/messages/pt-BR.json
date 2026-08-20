@@ -1308,7 +1308,10 @@
       "emptyMonth": "Nenhuma viagem neste mês.",
       "loadError": "Não foi possível carregar o painel.",
       "reconnecting": "Sem conexão com o servidor — mostrando os últimos números. A tela se atualiza sozinha quando voltar.",
-      "trips": "{count} viagens"
+      "trips": "{count} viagens",
+      "regionCard": "Região {region} — hoje",
+      "regionUnassigned": "Sem região",
+      "emptyRegion": "Nenhuma viagem com coleta hoje nesta região."
     }
   },
   "Sla": {
@@ -1613,6 +1616,39 @@
       "REQUEST_FAILED": "Não foi possível concluir a operação. Tente novamente."
     },
     "expiredLicense": "CNH vencida em {date}"
+  },
+  "Fleet": {
+    "title": "Rastreamento da frota",
+    "subtitle": "Onde os caminhões estão agora, segundo o rastreador.",
+    "total": "{count} veículos",
+    "moving": "Andando",
+    "stopped": "Parados",
+    "silent": "Sem comunicar",
+    "offRoute": "Fora de rota",
+    "willBeLate": "Vai atrasar",
+    "late": "Atrasada",
+    "risk": "Prazo",
+    "riskOnTime": "No prazo",
+    "riskWillDelay": "Vai atrasar",
+    "riskLate": "Atrasada",
+    "riskUnknown": "—",
+    "noTrip": "sem viagem no TMS",
+    "lastRead": "leitura {time}",
+    "openPage": "Ver a frota",
+    "empty": "Nenhuma leitura do rastreador ainda.",
+    "loadError": "Não consegui carregar a frota.",
+    "searchPlaceholder": "Buscar por placa, motorista ou cidade",
+    "shown": "{shown} de {total}",
+    "plate": "Placa",
+    "driver": "Motorista",
+    "trip": "Viagem",
+    "progress": "Percorrido",
+    "eta": "Previsão",
+    "position": "Última posição",
+    "age": "Há",
+    "halted": "parado",
+    "unregistered": "sem cadastro",
+    "noMatch": "Nenhum veículo com esse termo."
   },
   "Spot": {
     "dismiss": "Fechar aviso",

@@ -53,8 +53,24 @@ describe.skipIf(!hasDb)("linkFleetFromPortal — cadastro automático do veícul
   const portalTrip = (plate: string): PortalTrip =>
     ({ driverLabel: driverName, plateLabel: plate }) as unknown as PortalTrip;
 
+  /**
+   * UM DIA POR VIAGEM, EM SEQUÊNCIA — não sorteado.
+   *
+   * O dia saía de `Math.random() * 27`, e o MESMO motorista dirige todas as viagens deste arquivo.
+   * Dois sorteios iguais punham esse motorista em duas viagens ao mesmo tempo, o avaliador acusava
+   * conflito de agenda, e um caso que esperava `already_assigned` recebia `blocked`.
+   *
+   * Medido em 2026-08-20: 3 falhas em 20 execuções do arquivo sozinho. O código estava certo — o
+   * teste é que se atropelava. Um contador dá a cada viagem uma janela só dela, e a colisão deixa
+   * de existir em vez de ficar improvável.
+   */
+  let proximoDia = 0;
+
   async function inserirViagem(plannedVehicleType: "truck" | null): Promise<string> {
-    const dia = String(Math.floor(Math.random() * 27) + 1).padStart(2, "0");
+    // Setembro de 2026 tem 30 dias e este arquivo cria menos de dez viagens; a volta é só um
+    // seguro para quem acrescentar casos depois.
+    proximoDia += 1;
+    const dia = String(((proximoDia - 1) % 28) + 1).padStart(2, "0");
     const inserted = await db
       .insert(trips)
       .values({

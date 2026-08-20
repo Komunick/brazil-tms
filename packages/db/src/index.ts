@@ -76,6 +76,19 @@ export { queryWallboard, ON_THE_ROAD_STATUSES } from "./trips/wallboard-read";
 export type { WallboardSummary, WallboardTrip } from "./trips/wallboard-read";
 export { recordSpotOffer, readSpotOffersToday } from "./trips/spot-offers";
 export type { SpotOfferView } from "./trips/spot-offers";
+export {
+  recordFleetPositions,
+  readFleetPositions,
+  lastFleetPositionAt,
+  fleetSummary,
+  normalizePlate,
+} from "./fleet/fleet-positions";
+export type {
+  FleetPositionView,
+  FleetFeedResult,
+  FleetSummary,
+  DeliveryRisk,
+} from "./fleet/fleet-positions";
 export type {
   TripBoardRow,
   TripBoardResult,
@@ -167,3 +180,6 @@ export type {
   StatusTarefa,
   StatusParPortal,
 } from "./reporting/server-status";
+// O push da SPX (2026-08-20): gravado cru até haver payload real para mapear.
+export { recordSpxRouterEvent, querySpxRouterPulse } from "./imports/spx-router";
+export type { SpxRouterEventInput, SpxRouterEventResult, SpxRouterPulse } from "./imports/spx-router";

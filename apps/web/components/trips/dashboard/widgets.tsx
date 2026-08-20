@@ -128,11 +128,14 @@ function StatusList({
   byStatus,
   emptyKey,
   dateFilter,
+  extraFilter = "",
 }: {
   byStatus: DashboardSummary["tripsTodayByStatus"];
   emptyKey: string;
   /** O trecho de data do link — o MESMO recorte que o cartão contou. */
   dateFilter: string;
+  /** Recorte extra do link (hoje, a região). Vazio no cartão que conta o país inteiro. */
+  extraFilter?: string;
 }) {
   const t = useTranslations("Trips.dashboard");
   // A ordem é a do ciclo de vida, não a do banco: quem lê espera Recebida antes de Em trânsito, e
@@ -149,7 +152,7 @@ function StatusList({
       {ordenadas.map(({ status, count }) => (
         <li key={status}>
           <Link
-            href={`/trips?${boardQueryForDisplayStatus(status)}${dateFilter}&scope=all#${BOARD_ANCHOR}`}
+            href={`/trips?${boardQueryForDisplayStatus(status)}${dateFilter}${extraFilter}&scope=all#${BOARD_ANCHOR}`}
             className="flex items-center justify-between gap-2 rounded px-1 py-0.5 hover:bg-muted"
           >
             <TripStatusBadge status={status} />
@@ -198,6 +201,55 @@ function StatusCard({
   );
 }
 
+/**
+ * Um quadro de status recortado por REGIÃO, no dia de hoje (2026-08-20, a pedido).
+ *
+ * A operação é dividida em três frentes, e quem cuida de uma não consegue ler o número somado: doze
+ * viagens em análise não dizem se o problema é seu ou de outra frente. Cada cartão responde a mesma
+ * pergunta do cartão de hoje, só que para uma frente.
+ *
+ * Reaproveita `StatusList`, e isso é o ponto: a lista, a ordem dos status, o que fica oculto e o
+ * formato do link são exatamente os do cartão de hoje. Um componente próprio divergiria no primeiro
+ * ajuste de estilo, e aí duas listas que respondem a mesma pergunta pareceriam responder a duas.
+ *
+ * O link carrega `region=` — o MESMO filtro que a consulta agrupou. É o que garante que o número do
+ * cartão e o total da lista sejam o mesmo número.
+ */
+function RegionCard({
+  region,
+  byStatus,
+  dateFilter,
+}: {
+  region: string | null;
+  byStatus: DashboardSummary["tripsTodayByStatus"];
+  dateFilter: string;
+}) {
+  const t = useTranslations("Trips.dashboard");
+  const total = byStatus.reduce((n, s) => n + s.count, 0);
+  /**
+   * Estação sem região não tem para onde o link apontar — `region=` vazio traria o país inteiro, e um
+   * cartão que abre uma lista maior que ele próprio é pior do que um que não abre. Esse grupo existe
+   * para ser visto e resolvido no cadastro, não para ser navegado.
+   */
+  const extraFilter = region ? `&region=${encodeURIComponent(region)}` : "";
+
+  return (
+    <Card className="p-2.5">
+      <div className="mb-1.5 flex items-baseline justify-between gap-2">
+        <CardTitle className="text-[0.68rem] font-medium uppercase leading-tight tracking-wide text-muted-foreground">
+          {region ? t("regionCard", { region }) : t("regionUnassigned")}
+        </CardTitle>
+        <span className="text-sm font-semibold tabular-nums">{total}</span>
+      </div>
+      <StatusList
+        byStatus={byStatus}
+        emptyKey="emptyRegion"
+        dateFilter={dateFilter}
+        extraFilter={extraFilter}
+      />
+    </Card>
+  );
+}
 export function DashboardWidgets() {
   const t = useTranslations("Trips.dashboard");
   const tCommon = useTranslations("Common");
@@ -309,7 +361,14 @@ export function DashboardWidgets() {
           painel de parede. Ele se posiciona sobre a tela e não ocupa lugar na grade — o que estiver
           embaixo continua desenhado e clicável. */}
       <OfertaDeSpot />
-      {/* O BSC abre o painel: é a nota que decide contrato, e vem do cliente, não daqui. */}
+      {/**
+       * O BSC ABRE O PAINEL: é a nota que decide contrato, e vem do cliente, não daqui.
+       *
+       * Saiu e voltou no mesmo dia (2026-08-20), nas duas vezes a pedido. Fica registrado porque a
+       * ida e volta prova o desenho: o cartão nunca dependeu de nada além desta linha e do import —
+       * o robô continuou lendo e o payload continuou trazendo o recorte enquanto ele estava fora.
+       * Tirar e repor um cartão daqui é decisão de tela, não mudança de sistema.
+       */}
       {bsc.length > 0 ? <BscCard snapshots={bsc} /> : null}
       {/**
        * A ORDEM É A DO TEMPO: hoje, amanhã, o mês (2026-08-19, a pedido).
@@ -325,6 +384,24 @@ export function DashboardWidgets() {
         byStatus={summary.tripsTodayByStatus}
         dateFilter={`&pickupFrom=${hoje}&pickupTo=${hoje}`}
       />
+      {/**
+       * As frentes, logo DEPOIS do total de hoje e antes de amanhã.
+       *
+       * A ordem conta uma leitura: o número do dia, a quebra desse mesmo número por frente, e só
+       * então o dia seguinte. Pôr as regiões no fim obrigaria a voltar à primeira coluna para
+       * comparar a parte com o todo.
+       *
+       * A ordem entre elas vem do servidor (`REGION_ORDER`), não do alfabeto: num painel de parede a
+       * posição do cartão é como as pessoas o encontram.
+       */}
+      {summary.tripsTodayByRegion.map(({ region, byStatus }) => (
+        <RegionCard
+          key={region ?? "__sem_regiao__"}
+          region={region}
+          byStatus={byStatus}
+          dateFilter={`&pickupFrom=${hoje}&pickupTo=${hoje}`}
+        />
+      ))}
       {/* Amanhã (2026-08-17, a pedido): numa TV no meio da sala, de tarde, a pergunta que ainda tem
           resposta é a do dia seguinte. */}
       <StatusCard

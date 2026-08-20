@@ -53,7 +53,8 @@ describe.skipIf(!hasDb)("vínculo com a frota (integration)", () => {
     ]);
     process.env.PORTAL_FEED_ACTOR_EMAIL = "admin@braziltransports.com.br";
 
-    // Um motorista e um veículo em ordem, e um motorista com CNH vencida.
+    // Um motorista e um veículo em ordem, um com CNH vencida (aceita com aviso desde 2026-08-19)
+    // e um INATIVO, que é o bloqueio duro que sobrou.
     const d1 = await db
       .insert(drivers)
       .values({
@@ -72,6 +73,7 @@ describe.skipIf(!hasDb)("vínculo com a frota (integration)", () => {
         licenseExpiry: "2020-01-01",
       })
       .returning({ id: drivers.id });
+
     const v1 = await db
       .insert(vehicles)
       .values({
@@ -82,11 +84,24 @@ describe.skipIf(!hasDb)("vínculo com a frota (integration)", () => {
         documentExpiry: "2030-01-01",
       })
       .returning({ id: vehicles.id, plate: vehicles.plate });
-    criados.push(d1[0]!.id, d2[0]!.id, v1[0]!.id);
+    // Ativo, mas com o documento vencido: é encontrado pela busca e barrado pelo avaliador.
+    const v2 = await db
+      .insert(vehicles)
+      .values({
+        plate: `BBB${Math.floor(Math.random() * 9000 + 1000)}`,
+        vehicleType: "carreta",
+        ownershipType: "owned",
+        status: "active",
+        documentExpiry: "2020-01-01",
+      })
+      .returning({ id: vehicles.id, plate: vehicles.plate });
+    criados.push(d1[0]!.id, d2[0]!.id, v1[0]!.id, v2[0]!.id);
     placaBoa = v1[0]!.plate;
+    placaVencida = v2[0]!.plate;
   });
 
   let placaBoa = "";
+  let placaVencida = "";
 
   afterAll(async () => {
     const ids = (
@@ -564,14 +579,15 @@ describe.skipIf(!hasDb)("vínculo com a frota (integration)", () => {
   });
 
   it("RECUSA a escolha do cliente quando as regras do TMS barram, e diz por quê", async () => {
-    // O ponto do vínculo: o cliente pôs na estrada um motorista com CNH vencida. O TMS não passa
-    // por cima disso em silêncio — reporta, e a viagem fica sem atribuição para alguém resolver.
+    // O ponto do vínculo: o cliente pôs na estrada um veículo com o documento vencido. O TMS não
+    // passa por cima disso em silêncio — reporta, e a viagem fica sem atribuição para alguém
+    // resolver. (Motorista com CNH vencida NÃO cai mais aqui: ver o teste seguinte.)
     const ext = `LH-BLOQ-${token}`;
     const r = await ingestPortalFeed({
       payload: payload({
         trip_number: ext,
-        driver_name: `Motorista Vencido ${token}`,
-        vehicle_number: placaBoa,
+        driver_name: `Motorista Bom ${token}`,
+        vehicle_number: placaVencida,
       }),
       mode: "plan",
       customerCode,
@@ -581,6 +597,42 @@ describe.skipIf(!hasDb)("vínculo com a frota (integration)", () => {
 
     const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
     expect(trip.currentStatus).toBe("received");
+  });
+
+  /**
+   * A EXCEÇÃO DA CNH, decidida em 2026-08-19 (commit b7bc82f) e sem teste até aqui.
+   *
+   * Este arquivo afirmava o contrário — CNH vencida bloqueava — e ficou vermelho desde a mudança de
+   * regra, invisível porque as suítes com banco PULAM sem `DATABASE_URL`, que é o caso da CI.
+   *
+   * A regra em vigor: recusar não impedia a viagem de acontecer, só escondia quem estava dirigindo.
+   * Então o espelho do portal aceita, registra e avisa. Vale SÓ para o espelho: a atribuição feita à
+   * mão continua barrada, porque lá existe uma pessoa que pode corrigir o cadastro.
+   */
+  it("ACEITA CNH vencida e avisa, em vez de esconder quem dirigiu", async () => {
+    const ext = `LH-CNH-${token}`;
+    const r = await ingestPortalFeed({
+      payload: payload({
+        trip_number: ext,
+        driver_name: `Motorista Vencido ${token}`,
+        vehicle_number: placaBoa,
+      }),
+      mode: "plan",
+      customerCode,
+    });
+    expect(r.planSummary?.linkBlocked).toBe(0);
+    expect(r.planSummary?.linkedWithWarnings).toBe(1);
+
+    // O que a decisão queria: o motorista aparece na viagem, não some dela.
+    const trip = (await db.select().from(trips).where(eq(trips.externalTripId, ext)).limit(1))[0]!;
+    const atribuicao = (
+      await db
+        .select({ driverId: tripAssignments.driverId })
+        .from(tripAssignments)
+        .where(eq(tripAssignments.tripId, trip.id))
+        .limit(1)
+    )[0];
+    expect(atribuicao?.driverId).toBeTruthy();
   });
 
   it("viagem JÁ CONCLUÍDA ainda registra quem a dirigiu", async () => {

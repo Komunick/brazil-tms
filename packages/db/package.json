@@ -32,7 +32,8 @@
     "db:seed:shopee-stations": "tsx ./seed/shopee-station-ids.ts",
     "db:lanes:transit": "tsx ./seed/lane-transit.ts",
     "db:seed:service-account": "tsx ./seed/service-account.ts",
-    "db:seed:portal-fleet": "tsx ./seed/portal-fleet.ts"
+    "db:seed:portal-fleet": "tsx ./seed/portal-fleet.ts",
+    "db:seed:regioes": "tsx ./seed/station-regions.ts"
   },
   "dependencies": {
     "@brazil-tms/shared": "workspace:*",

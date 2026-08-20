@@ -78,7 +78,11 @@ export interface PortalPlanSummary {
   linkNoMatch: number;
   /** O portal ainda não designou ninguém para a viagem — não é pendência de cadastro. */
   linkNotStated: number;
-  /** The TMS's own rules refused the customer's choice (expired licence, wrong vehicle type…). */
+  /**
+   * The TMS's own rules refused the customer's choice (vehicle documents, wrong vehicle type,
+   * subcontracting without a carrier). NOT an expired driver licence since 2026-08-19: that one
+   * links and warns, because refusing hid who was driving without stopping the trip.
+   */
   linkBlocked: number;
   linkBlockedReasons: string[];
   outcomes: PortalPlanOutcome[];
