@@ -83,7 +83,12 @@ export {
   fleetSummary,
   normalizePlate,
 } from "./fleet/fleet-positions";
-export type { FleetPositionView, FleetFeedResult, FleetSummary } from "./fleet/fleet-positions";
+export type {
+  FleetPositionView,
+  FleetFeedResult,
+  FleetSummary,
+  DeliveryRisk,
+} from "./fleet/fleet-positions";
 export type {
   TripBoardRow,
   TripBoardResult,

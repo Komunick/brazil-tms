@@ -1,8 +1,8 @@
-import { desc, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { DateTime } from "luxon";
-import { APP_TIME_ZONE, type FleetPositionInput } from "@brazil-tms/shared";
+import { ACTIVE_TRIP_STATUSES, APP_TIME_ZONE, type FleetPositionInput } from "@brazil-tms/shared";
 import { db } from "../client";
-import { fleetPositions, vehicles } from "../../schema";
+import { fleetPositions, tripAssignments, trips, vehicles } from "../../schema";
 
 /**
  * O retrato da frota que o rastreador entrega, gravado (2026-08-20).
@@ -33,6 +33,12 @@ export interface FleetPositionView {
   noPosition: string | null;
   stoppedFlag: string | null;
   receivedAt: string;
+  /** A viagem do TMS que está com este veículo agora, quando existe. */
+  tripId: string | null;
+  externalTripId: string | null;
+  /** O fim da janela que o CLIENTE publicou — a promessa contra a qual o risco é medido. */
+  deliveryWindowEnd: string | null;
+  risk: DeliveryRisk;
 }
 
 export interface FleetFeedResult {
@@ -182,32 +188,83 @@ export async function recordFleetPositions(
   };
 }
 
-/** O retrato inteiro, do mais recente para o mais antigo — a página de rastreamento lê daqui. */
+/**
+ * O retrato inteiro, JÁ CRUZADO com a viagem que está com cada veículo.
+ *
+ * O cruzamento passa pela atribuição vigente (`is_current`) e só considera viagem ATIVA: um veículo
+ * que rodou ontem e está livre hoje não pode herdar a janela da viagem encerrada e aparecer atrasado
+ * para sempre.
+ *
+ * Uma consulta para todas as atribuições, não uma por veículo. São ~85 posições; perguntar uma a uma
+ * seriam 85 idas ao banco a cada carregamento de tela.
+ */
 export async function readFleetPositions(): Promise<FleetPositionView[]> {
   const linhas = await db.select().from(fleetPositions).orderBy(desc(fleetPositions.receivedAt));
-  return linhas.map((r) => ({
-    plate: r.plate,
-    vehicleId: r.vehicleId,
-    trailerPlate: r.trailerPlate,
-    driverLabel: r.driverLabel,
-    latitude: r.latitude,
-    longitude: r.longitude,
-    positionLabel: r.positionLabel,
-    positionAt: r.positionAt?.toISOString() ?? null,
-    ignition: r.ignition,
-    tripStatus: r.tripStatus,
-    originCity: r.originCity,
-    destinationCity: r.destinationCity,
-    tripStartedAt: r.tripStartedAt?.toISOString() ?? null,
-    etaAt: r.etaAt?.toISOString() ?? null,
-    progressPercent: r.progressPercent,
-    kmTravelled: r.kmTravelled,
-    stoppedMinutes: r.stoppedMinutes,
-    offRoute: r.offRoute,
-    noPosition: r.noPosition,
-    stoppedFlag: r.stoppedFlag,
-    receivedAt: r.receivedAt.toISOString(),
-  }));
+  const veiculos = linhas.map((l) => l.vehicleId).filter((v): v is string => v !== null);
+
+  const viagens = veiculos.length
+    ? await db
+        .select({
+          vehicleId: tripAssignments.vehicleId,
+          tripId: trips.id,
+          externalTripId: trips.externalTripId,
+          deliveryWindowEnd: trips.plannedDeliveryWindowEnd,
+        })
+        .from(tripAssignments)
+        .innerJoin(trips, eq(trips.id, tripAssignments.tripId))
+        .where(
+          and(
+            eq(tripAssignments.isCurrent, true),
+            inArray(tripAssignments.vehicleId, veiculos),
+            inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]),
+          ),
+        )
+    : [];
+  /**
+   * Um veículo PODE estar em duas viagens ativas — as pernas de um milk run compartilham o caminhão.
+   * Fica a de janela mais próxima: é a que está em jogo agora, e é contra ela que o atraso conta.
+   */
+  const porVeiculo = new Map<string, (typeof viagens)[number]>();
+  for (const v of viagens) {
+    if (!v.vehicleId) continue;
+    const atual = porVeiculo.get(v.vehicleId);
+    const maisCedo =
+      !atual ||
+      (v.deliveryWindowEnd &&
+        (!atual.deliveryWindowEnd || v.deliveryWindowEnd < atual.deliveryWindowEnd));
+    if (maisCedo) porVeiculo.set(v.vehicleId, v);
+  }
+
+  return linhas.map((r) => {
+    const viagem = r.vehicleId ? porVeiculo.get(r.vehicleId) : undefined;
+    return {
+      plate: r.plate,
+      vehicleId: r.vehicleId,
+      trailerPlate: r.trailerPlate,
+      driverLabel: r.driverLabel,
+      latitude: r.latitude,
+      longitude: r.longitude,
+      positionLabel: r.positionLabel,
+      positionAt: r.positionAt?.toISOString() ?? null,
+      ignition: r.ignition,
+      tripStatus: r.tripStatus,
+      originCity: r.originCity,
+      destinationCity: r.destinationCity,
+      tripStartedAt: r.tripStartedAt?.toISOString() ?? null,
+      etaAt: r.etaAt?.toISOString() ?? null,
+      progressPercent: r.progressPercent,
+      kmTravelled: r.kmTravelled,
+      stoppedMinutes: r.stoppedMinutes,
+      offRoute: r.offRoute,
+      noPosition: r.noPosition,
+      stoppedFlag: r.stoppedFlag,
+      receivedAt: r.receivedAt.toISOString(),
+      tripId: viagem?.tripId ?? null,
+      externalTripId: viagem?.externalTripId ?? null,
+      deliveryWindowEnd: viagem?.deliveryWindowEnd?.toISOString() ?? null,
+      risk: classifyRisk(r.etaAt, viagem?.deliveryWindowEnd ?? null),
+    };
+  });
 }
 
 /** A leitura mais recente, para o Status do Sistema saber se o robô do rastreador ainda está vivo. */
@@ -230,6 +287,8 @@ export interface FleetSummary {
   silentOverAnHour: number;
   /** Fora da rota planejada, farol do rastreador. */
   offRoute: number;
+  /** Vai furar a janela do CLIENTE se nada mudar — a conta é nossa, não a do rastreador. */
+  atRisk: number;
   /** A leitura mais recente, para a tela dizer de quando é o retrato. */
   lastReceivedAt: string | null;
 }
@@ -247,14 +306,14 @@ export interface FleetSummary {
  * mostrou na primeira vez que a abri.
  */
 export async function fleetSummary(): Promise<FleetSummary> {
-  const linhas = await db
-    .select({
-      stoppedFlag: fleetPositions.stoppedFlag,
-      offRoute: fleetPositions.offRoute,
-      positionAt: fleetPositions.positionAt,
-      receivedAt: fleetPositions.receivedAt,
-    })
-    .from(fleetPositions);
+  /**
+   * O resumo lê o MESMO retrato cruzado que a página, e não uma consulta própria.
+   *
+   * São ~85 linhas: o custo de reaproveitar é irrelevante, e o ganho é que o número do quadro e a
+   * lista que ele abre nunca podem discordar. Duas consultas para a mesma pergunta foi exatamente o
+   * que produziu o cartão "NA ORIGEM" anunciando 2 e abrindo vazio.
+   */
+  const linhas = await readFleetPositions();
 
   const umaHoraAtras = Date.now() - 60 * 60 * 1000;
   const moving = linhas.filter((l) => (l.stoppedFlag ?? "").toUpperCase().startsWith("MOV")).length;
@@ -265,12 +324,48 @@ export async function fleetSummary(): Promise<FleetSummary> {
     // O resto é "parado": inclui quem não informa movimento. Chamar de "parado" o que não se sabe é
     // deliberado — some do contador de andando, e some para menos é mais seguro do que para mais.
     stopped: linhas.length - moving,
-    silentOverAnHour: linhas.filter((l) => !l.positionAt || l.positionAt.getTime() < umaHoraAtras)
-      .length,
+    silentOverAnHour: linhas.filter(
+      (l) => !l.positionAt || new Date(l.positionAt).getTime() < umaHoraAtras,
+    ).length,
     offRoute: linhas.filter((l) => (l.offRoute ?? "").toUpperCase() === "S").length,
+    atRisk: linhas.filter((l) => l.risk === "vai_atrasar" || l.risk === "atrasada").length,
     lastReceivedAt:
       linhas.length === 0
         ? null
-        : new Date(Math.max(...linhas.map((l) => l.receivedAt.getTime()))).toISOString(),
+        : new Date(Math.max(...linhas.map((l) => new Date(l.receivedAt).getTime()))).toISOString(),
   };
+}
+
+/**
+ * O RISCO DE FURAR A JANELA DO CLIENTE (2026-08-20).
+ *
+ * `atrasada`   — a chegada calculada já passou do fim da janela prometida.
+ * `vai_atrasar`— ainda cabe, mas a margem encolheu abaixo de `MARGEM_MINUTOS`.
+ * `no_prazo`   — sobra folga.
+ * `sem_base`   — falta a previsão do rastreador, a janela do cliente, ou o vínculo entre os dois.
+ *
+ * `sem_base` é uma resposta de primeira classe, não um resto. Ela diz "não sei", que é diferente de
+ * "está tudo bem" — e é o que impede a tela de pintar de verde um caminhão sobre o qual não há
+ * informação nenhuma.
+ */
+export type DeliveryRisk = "no_prazo" | "vai_atrasar" | "atrasada" | "sem_base";
+
+/**
+ * Quanta folga ainda conta como tranquilo.
+ *
+ * Uma hora, e é um número ESCOLHIDO, não medido — não há histórico para calibrá-lo ainda. Ele está
+ * aqui, com nome, para poder ser discutido e mudado quando houver: um limiar enterrado numa
+ * comparação é um limiar que ninguém revisa.
+ *
+ * O rastreador tem o alerta equivalente e nós deliberadamente NÃO o copiamos: o dele mede contra o
+ * prazo que ELE conhece, com uma regra que não controlamos e que pode mudar sem aviso. Este mede
+ * contra a janela que o cliente publicou, que é o compromisso pelo qual a empresa responde.
+ */
+export const MARGEM_MINUTOS = 60;
+
+export function classifyRisk(eta: Date | null, janelaFim: Date | null): DeliveryRisk {
+  if (!eta || !janelaFim) return "sem_base";
+  const margem = (janelaFim.getTime() - eta.getTime()) / 60000;
+  if (margem < 0) return "atrasada";
+  return margem < MARGEM_MINUTOS ? "vai_atrasar" : "no_prazo";
 }

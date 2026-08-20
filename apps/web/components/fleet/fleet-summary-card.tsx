@@ -97,7 +97,7 @@ export function FleetSummaryCard() {
           </span>
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {numeros.map((n) => (
             <div key={n.rotulo} className="border-l pl-3">
               <span

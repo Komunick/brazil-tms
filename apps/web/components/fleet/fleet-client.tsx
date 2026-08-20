@@ -119,6 +119,7 @@ export function FleetClient() {
                 <TableHead>{t("trip")}</TableHead>
                 <TableHead className="text-right">{t("progress")}</TableHead>
                 <TableHead>{t("eta")}</TableHead>
+                <TableHead>{t("risk")}</TableHead>
                 <TableHead>{t("position")}</TableHead>
                 <TableHead className="text-right">{t("age")}</TableHead>
               </TableRow>
@@ -126,7 +127,7 @@ export function FleetClient() {
             <TableBody>
               {linhas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-sm text-muted-foreground">
+                  <TableCell colSpan={8} className="text-sm text-muted-foreground">
                     {t("noMatch")}
                   </TableCell>
                 </TableRow>
@@ -138,6 +139,43 @@ export function FleetClient() {
         </div>
       </Card>
     </div>
+  );
+}
+
+/**
+ * O prazo do CLIENTE, não o do rastreador.
+ *
+ * Quando não há viagem do TMS com este veículo, a coluna diz isso em vez de mostrar um traço: sem
+ * viagem não há promessa a furar, e "—" faria pensar em dado faltando.
+ */
+function Risco({
+  risco,
+  temViagem,
+  t,
+}: {
+  risco: FleetPositionView["risk"];
+  temViagem: boolean;
+  t: (k: string) => string;
+}) {
+  if (risco === "sem_base") {
+    return (
+      <span className="text-xs text-muted-foreground">
+        {temViagem ? t("riskUnknown") : t("noTrip")}
+      </span>
+    );
+  }
+  const estilo =
+    risco === "atrasada"
+      ? "border-destructive/50 text-destructive"
+      : risco === "vai_atrasar"
+        ? "border-warning/50 text-warning"
+        : "border-success/50 text-success";
+  const rotulo =
+    risco === "atrasada" ? "riskLate" : risco === "vai_atrasar" ? "riskWillDelay" : "riskOnTime";
+  return (
+    <span className={`inline-block rounded border px-1.5 py-0.5 text-[0.7rem] ${estilo}`}>
+      {t(rotulo)}
+    </span>
   );
 }
 
@@ -175,6 +213,9 @@ function Linha({ v, t }: { v: FleetPositionView; t: (k: string, p?: never) => st
         {v.progressPercent == null ? "—" : `${v.progressPercent.toFixed(0)}%`}
       </TableCell>
       <TableCell className="text-sm tabular-nums">{hora(v.etaAt)}</TableCell>
+      <TableCell className="text-sm">
+        <Risco risco={v.risk} temViagem={Boolean(v.tripId)} t={t} />
+      </TableCell>
       <TableCell className="max-w-[22rem] truncate text-sm" title={v.positionLabel ?? undefined}>
         {v.positionLabel ?? "—"}
         {parado ? (
