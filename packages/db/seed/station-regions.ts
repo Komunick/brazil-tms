@@ -25,6 +25,8 @@ import { customers, db, locations } from "../src";
  * planilha que mora no computador de uma pessoa. Versionadas aqui, elas sobrevivem ao computador, e
  * a mudança de uma região aparece no diff — que é onde uma decisão dessas deve aparecer.
  *
+ * São 74 linhas da planilha mais 4 origens ditadas depois (ver o bloco no fim da tabela).
+ *
  * Idempotente: reescreve a região das estações listadas e reporta as que o TMS não tem.
  *
  *   pnpm --filter @brazil-tms/db db:seed:regioes
@@ -120,6 +122,22 @@ const REGIOES: ReadonlyArray<readonly [string, string]> = [
   ["XPT-LPB-90", "NONE"], // XPT_PB_PATOS
   ["XPT-LSE-89", "NONE"], // XPT_SE_ITABAIANA
   ["XPT-NSG-01", "NONE"], // XPT_SE_ITABAIANA
+
+  /**
+   * QUATRO ORIGENS QUE A PLANILHA NÃO TINHA (2026-08-20, ditadas pelo usuário).
+   *
+   * Não vieram do arquivo: vieram de uma pergunta direta depois que a conferência mostrou 13 viagens
+   * ACEITAS saindo de estações sem classificação — com motorista, repetindo semana a semana, e duas
+   * na estrada naquele momento. Eram rotas da operação cuja ponta de saída ficou de fora do arquivo.
+   *
+   * DUAS DELAS CONTRARIAM A GEOGRAFIA, e é por isso que estão escritas aqui em vez de deduzidas:
+   * Caldas Novas fica em Goiás e é NONE; Bom Jesus da Lapa fica na Bahia e é SUDESTE. Qualquer regra
+   * por UF teria errado as duas.
+   */
+  ["XPT-LBA-73", "SUDESTE"], // XPT_BA_BOM JESUS DA LAPA_02 — Bahia, mas opera no Sudeste
+  ["XPT-LGO-97", "NONE"], // XPT_GO_CALDAS NOVAS — Goiás, mas opera no Norte-Nordeste
+  ["FMH-CPS-01", "SUDESTE"], // FM Hub_SP_Campinas
+  ["SOC-PR1", "SULCO"], // SoC_PR_Curitiba
 ];
 
 async function main(): Promise<void> {
