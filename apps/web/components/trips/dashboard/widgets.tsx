@@ -15,6 +15,7 @@ import { useDashboardSummary } from "@/lib/trips/client";
 import { useReconexao } from "@/lib/ui/reconexao";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { BOARD_ANCHOR } from "@/components/trips/control-tower-table";
+import { BscCard } from "@/components/trips/dashboard/bsc-card";
 import { OfertaDeSpot } from "@/components/spot/oferta-de-spot";
 import { OfertasDoDia } from "@/components/spot/ofertas-do-dia";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
@@ -297,7 +298,7 @@ export function DashboardWidgets() {
     );
   }
 
-  const { summary } = data;
+  const { summary, bsc } = data;
 
   /**
    * Um número do painel: valor + atalho para o quadro; `null` → o aviso de "ainda não medido", nunca
@@ -361,16 +362,14 @@ export function DashboardWidgets() {
           embaixo continua desenhado e clicável. */}
       <OfertaDeSpot />
       {/**
-       * SEM O BSC (2026-08-20, a pedido, "por enquanto").
+       * O BSC ABRE O PAINEL: é a nota que decide contrato, e vem do cliente, não daqui.
        *
-       * Ele abria o painel porque é a nota que decide contrato. Saiu para dar a primeira linha aos
-       * cartões por região, que respondem a pergunta do DIA — o BSC é medida de mês fechado e não
-       * muda entre uma olhada e outra na tela.
-       *
-       * NADA foi desligado: o robô continua lendo, `queryLatestBsc` continua devolvendo o recorte no
-       * payload, e `bsc-card.tsx` continua no repositório. Voltar é reimportar o componente e
-       * reinserir a linha — o dado já estará esperando.
+       * Saiu e voltou no mesmo dia (2026-08-20), nas duas vezes a pedido. Fica registrado porque a
+       * ida e volta prova o desenho: o cartão nunca dependeu de nada além desta linha e do import —
+       * o robô continuou lendo e o payload continuou trazendo o recorte enquanto ele estava fora.
+       * Tirar e repor um cartão daqui é decisão de tela, não mudança de sistema.
        */}
+      {bsc.length > 0 ? <BscCard snapshots={bsc} /> : null}
       {/**
        * A ORDEM É A DO TEMPO: hoje, amanhã, o mês (2026-08-19, a pedido).
        *
