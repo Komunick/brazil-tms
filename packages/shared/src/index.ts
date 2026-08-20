@@ -41,3 +41,4 @@ export * from "./domain/reporting";
 export * from "./domain/freight-rates";
 export * from "./schemas/freight-rate";
 export * from "./schemas/spot-offer";
+export * from "./schemas/fleet-position";
