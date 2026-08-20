@@ -143,4 +143,64 @@ describe.skipIf(!hasDb)("locations-service (integration)", () => {
       updateLocation("00000000-0000-0000-0000-000000000000", { name: "X" }, actorId),
     ).rejects.toBeInstanceOf(NotFound);
   });
+
+  /**
+   * A REGIÃO editável pela tela (2026-08-20). O que se afirma é o ciclo inteiro: grava, lê de volta,
+   * muda, e desclassifica. Antes disto a região só entrava por seed — mudar uma exigia PR e deploy.
+   */
+  it("grava a região, devolve na leitura e aceita desclassificar", async () => {
+    const criada = await createLocation(
+      {
+        customerId,
+        code: `RG-${Date.now()}`,
+        name: "Estação com região",
+        country: "BR",
+        region: "SUDESTE",
+      },
+      actorId,
+    );
+    createdLocationIds.push(criada.id);
+    expect(criada.region).toBe("SUDESTE");
+
+    const trocada = await updateLocation(criada.id, { region: "NONE" }, actorId);
+    expect(trocada.region).toBe("NONE");
+
+    // Desclassificar é caso de uso real: estação que sai da operação volta a ser pendência.
+    const limpa = await updateLocation(criada.id, { region: null }, actorId);
+    expect(limpa.region).toBeNull();
+  });
+
+  it("nasce SEM região quando ninguém informa — é o estado inicial, não um erro", async () => {
+    const criada = await createLocation(
+      { customerId, code: `RG-SEM-${Date.now()}`, name: "Estação nova", country: "BR" },
+      actorId,
+    );
+    createdLocationIds.push(criada.id);
+    expect(criada.region).toBeNull();
+  });
+
+  /** A fila de classificação: o recorte tem de trazer a nova e NÃO trazer a que já foi classificada. */
+  it("o recorte de pendentes traz só as estações sem região", async () => {
+    const semRegiao = await createLocation(
+      { customerId, code: `RG-P1-${Date.now()}`, name: "Pendente", country: "BR" },
+      actorId,
+    );
+    const comRegiao = await createLocation(
+      {
+        customerId,
+        code: `RG-P2-${Date.now()}`,
+        name: "Classificada",
+        country: "BR",
+        region: "SULCO",
+      },
+      actorId,
+    );
+    createdLocationIds.push(semRegiao.id, comRegiao.id);
+
+    const pendentes = await listLocations({ customerId, missingRegion: true });
+    const ids = pendentes.map((l) => l.id);
+    expect(ids).toContain(semRegiao.id);
+    expect(ids).not.toContain(comRegiao.id);
+    expect(pendentes.every((l) => l.region === null)).toBe(true);
+  });
 });

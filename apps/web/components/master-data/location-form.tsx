@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import {
   createLocationSchema,
+  REGION_ORDER,
   UF_VALUES,
   type CreateLocationInput,
 } from "@brazil-tms/shared";
@@ -30,6 +31,13 @@ export interface LocationFormProps {
 }
 
 /** Create/edit form for a location (US2). Validates with the shared `createLocationSchema`. */
+/**
+ * O valor do item "Sem região". NÃO pode ser string vazia: o `Select` do shadcn/Radix reserva `""`
+ * para "nada selecionado" e recusa um item com esse valor. O sentinela vira `null` no `onChange`,
+ * que é o que o schema espera.
+ */
+const SEM_REGIAO = "__sem_regiao__";
+
 export function LocationForm({
   defaultValues,
   submitting,
@@ -133,6 +141,42 @@ export function LocationForm({
           <Input id="country" {...register("country")} />
         </Field>
       </div>
+
+      {/**
+       * A REGIÃO OPERACIONAL, editável aqui (2026-08-20, a pedido).
+       *
+       * Antes disto, classificar uma estação era: alguém editar a planilha, alguém editar o seed,
+       * abrir PR, mergear, promover e rodar um comando na VM. Seis passos e um desenvolvedor no meio
+       * de todos, para uma decisão que é da operação. Estação nova entrava sem região e ficava assim
+       * até alguém reparar.
+       *
+       * A lista tem SÓ as três, sem digitação: um "Sudeste" minúsculo criaria um quarto cartão no
+       * painel que ninguém acharia. "Sem região" é opção de verdade — dá para desclassificar.
+       */}
+      <Field label={t("region")} htmlFor="region" error={errors.region?.message}>
+        <Controller
+          control={control}
+          name="region"
+          render={({ field }) => (
+            <Select
+              value={field.value ?? SEM_REGIAO}
+              onValueChange={(v) => field.onChange(v === SEM_REGIAO ? null : v)}
+            >
+              <SelectTrigger id="region">
+                <SelectValue placeholder={t("regionNone")} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SEM_REGIAO}>{t("regionNone")}</SelectItem>
+                {REGION_ORDER.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {r}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        />
+      </Field>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label={t("latitude")} htmlFor="latitude" error={errors.latitude?.message}>
