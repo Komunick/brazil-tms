@@ -205,6 +205,14 @@ export interface DashboardSummary {
   tripsD1ByRegion: RegionSlice[];
   tripsD2ByRegion: RegionSlice[];
   /**
+   * As LH ATRASADAS por frente: sem motorista e com o prazo vencido (2026-08-20, a pedido).
+   *
+   * ACUMULA os dias anteriores. Uma viagem de ontem que ninguém atribuiu continua contando aqui até
+   * ser resolvida — ela não pertence a nenhum dos três cartões de dia, e sumir do painel é o pior
+   * desfecho possível para o caso mais grave.
+   */
+  lateToAssignByRegion: { region: string | null; count: number }[];
+  /**
    * A fila do DESPACHO: aceita pelo cliente e ainda sem motorista no portal (2026-08-17).
    *
    * É decisão de GENTE, não estado de caminhão — por isso vem antes dos quadros de status. Nasceu
@@ -653,6 +661,25 @@ const diaColetaSaoPaulo = sql<string>`(${trips}.planned_pickup_window_start AT T
   `'${APP_TIME_ZONE}'`,
 )})::date`;
 
+/**
+ * O PRAZO DE ATRIBUIÇÃO desta viagem já venceu?
+ *
+ * A regra da operação: a viagem pode ser atribuída até o MEIO-DIA do próprio dia da coleta. Escrita
+ * como "agora passou do meio-dia do dia da coleta", ela cobre os dois casos de uma vez — a viagem de
+ * hoje depois das 12h E a de qualquer dia anterior, cujo meio-dia passou faz tempo.
+ *
+ * É por isso que o cálculo veio para o SERVIDOR. No navegador ele só sabia olhar "hoje": uma viagem
+ * de ontem que ninguém atribuiu não aparecia em cartão nenhum e sumia do painel — o pior desfecho
+ * possível justamente para o caso mais grave.
+ *
+ * O meio-dia é o de São Paulo, e a volta para `timestamptz` é o que garante isso: quem abre a tela
+ * de outro fuso vê o mesmo prazo, porque quem decide é o relógio da operação.
+ */
+const prazoDeAtribuicaoVencidoSql = sql<boolean>`now() > (
+  ((${trips}.planned_pickup_window_start AT TIME ZONE ${sql.raw(`'${APP_TIME_ZONE}'`)})::date
+    + interval '12 hours') AT TIME ZONE ${sql.raw(`'${APP_TIME_ZONE}'`)}
+)`;
+
 const displayStatusSql = sql<string>`CASE
   -- "NA ORIGEM" e UMA linha so: a fila do portal e a chegada de verdade (2026-08-19, a pedido).
   -- Espelha displayStatusOf; se as duas divergirem, o cartao e a lista mostram numeros diferentes
@@ -885,6 +912,7 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
   const [
     byStatus,
     porRegiaoTresDias,
+    atrasadasPorRegiao,
     byStatusAmanha,
     allByStatus,
     aguardandoAtribuicao,
@@ -937,6 +965,19 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
         ),
       )
       .groupBy(diaColetaSaoPaulo, locations.region, displayStatusSql),
+    /**
+     * As ATRASADAS por frente, sem recorte de data: o prazo é que define, não o dia.
+     *
+     * `to_assign` e só ele. `in_analysis` é proposta que o CLIENTE não decidiu — cobrar atraso de
+     * quem está esperando resposta do outro lado seria acusar a operação de uma demora que não é
+     * dela. E `awaiting_arrival` já tem motorista no portal.
+     */
+    db
+      .select({ region: locations.region, value: count() })
+      .from(trips)
+      .innerJoin(locations, eq(locations.id, trips.originLocationId))
+      .where(and(sql`${displayStatusSql} = 'to_assign'`, prazoDeAtribuicaoVencidoSql))
+      .groupBy(locations.region),
     // O mesmo recorte, no dia SEGUINTE — o que ainda dá tempo de arrumar.
     db
       .select({ status: displayStatusSql, value: count() })
@@ -1056,6 +1097,9 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
     tripsTodayByRegion: agruparPorRegiao(doDia(porRegiaoTresDias, from)),
     tripsD1ByRegion: agruparPorRegiao(doDia(porRegiaoTresDias, amanha.from)),
     tripsD2ByRegion: agruparPorRegiao(doDia(porRegiaoTresDias, depois.from)),
+    lateToAssignByRegion: atrasadasPorRegiao
+      .map((r) => ({ region: r.region ?? null, count: r.value }))
+      .sort((a, b) => regionPosition(a.region) - regionPosition(b.region)),
     tripsTomorrowByStatus: byStatusAmanha.map((r) => ({
       status: r.status as TripDisplayStatus,
       count: r.value,
