@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SpotOfferView } from "@brazil-tms/db";
-import { estadoInicial, novasOfertas } from "./ofertas";
+import { decidirAviso, estadoInicial, novasOfertas } from "./ofertas";
 
 const oferta = (id: string): SpotOfertaTeste => ({
   id,
@@ -56,5 +56,62 @@ describe("novasOfertas", () => {
     novasOfertas(estado, [oferta("a")]);
     novasOfertas(estado, []);
     expect(novasOfertas(estado, [oferta("a")])).toEqual([]);
+  });
+});
+
+/**
+ * A SEXTA-FEIRA (2026-08-21, a pedido).
+ *
+ * Toda sexta chegam mais de cinquenta ofertas em sequência, e o monitor manda UMA A UMA — cada busca
+ * acha uma nova. Com um aviso de trinta segundos por oferta, são vinte e cinco minutos de tela
+ * ocupada, com som a cada uma. Numa sala onde a TV serve para olhar de relance, isso deixa de ser
+ * aviso e vira ruído que a operação aprende a ignorar.
+ *
+ * A regra NÃO consulta o calendário, e isso é deliberado: ela age quando a tela está ocupada, o que
+ * na prática só acontece na sexta. Amarrar no dia criaria dois defeitos — pico numa quinta voltaria a
+ * spammar, e sexta calma engoliria uma oferta legítima.
+ */
+describe("decidirAviso", () => {
+  it("com a tela livre, a oferta sobe", () => {
+    const d = decidirAviso(false, [oferta("a")]);
+    expect(d.anunciar?.id).toBe("a");
+    expect(d.absorvidas).toBe(0);
+  });
+
+  it("com um cartão na tela, a nova vai para a caixa e NÃO interrompe", () => {
+    const d = decidirAviso(true, [oferta("b")]);
+    expect(d.anunciar).toBeNull();
+    expect(d.absorvidas).toBe(1);
+  });
+
+  /** A rajada inteira numa busca só: uma sobe, o resto acumula — nunca uma fila de cinquenta. */
+  it("várias na mesma busca: a primeira sobe, as outras acumulam", () => {
+    const d = decidirAviso(false, [oferta("a"), oferta("b"), oferta("c")]);
+    expect(d.anunciar?.id).toBe("a");
+    expect(d.absorvidas).toBe(2);
+  });
+
+  it("a rajada com a tela ocupada vai inteira para a caixa", () => {
+    expect(decidirAviso(true, [oferta("a"), oferta("b"), oferta("c")])).toEqual({
+      anunciar: null,
+      absorvidas: 3,
+    });
+  });
+
+  it("sem oferta nova, não decide nada", () => {
+    expect(decidirAviso(false, [])).toEqual({ anunciar: null, absorvidas: 0 });
+    expect(decidirAviso(true, [])).toEqual({ anunciar: null, absorvidas: 0 });
+  });
+
+  /**
+   * O dia normal não muda. Ofertas espaçadas encontram a tela livre, uma de cada vez — quem opera
+   * numa terça não percebe que esta regra existe.
+   */
+  it("num dia espaçado, toda oferta continua subindo", () => {
+    for (const id of ["a", "b", "c"]) {
+      const d = decidirAviso(false, [oferta(id)]);
+      expect(d.anunciar?.id).toBe(id);
+      expect(d.absorvidas).toBe(0);
+    }
   });
 });
