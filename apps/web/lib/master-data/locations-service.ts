@@ -1,6 +1,6 @@
 import "server-only";
-import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
-import { customers, db, locations } from "@brazil-tms/db";
+import { and, desc, eq, getTableColumns, ilike, isNull, or, sql } from "drizzle-orm";
+import { customers, db, locations, trips } from "@brazil-tms/db";
 import type { CreateLocationInput, UpdateLocationInput } from "@brazil-tms/shared";
 import { writeAudit } from "@/lib/audit/write-audit";
 import { Conflict, NotFound } from "@/lib/api/respond";
@@ -18,6 +18,16 @@ export interface LocationDto {
   latitude: number | null;
   longitude: number | null;
   gateInstructions: string | null;
+  /** A região operacional; nulo é estação ainda não classificada. */
+  region: string | null;
+  /**
+   * Esta estação já apareceu numa viagem que o cliente ACEITOU (2026-08-20).
+   *
+   * É a regra que o usuário deu: rota aceita é rota nossa. Sem isso, a fila de classificação tinha
+   * 386 estações — quase todas destino de última milha ou nunca usadas — e uma fila que não zera
+   * ninguém trabalha. Com isso, ela tem as que a operação de fato rodou.
+   */
+  usedInAcceptedTrip: boolean;
   archived: boolean;
   archivedAt: string | null;
   createdAt: string;
@@ -36,12 +46,14 @@ interface LocationRow {
   latitude: number | null;
   longitude: number | null;
   gateInstructions: string | null;
+  /** A região operacional; nulo é estação ainda não classificada. */
+  region: string | null;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-function toDto(row: LocationRow): LocationDto {
+function toDto(row: LocationRow, usedInAcceptedTrip = false): LocationDto {
   return {
     id: row.id,
     customerId: row.customerId,
@@ -54,6 +66,8 @@ function toDto(row: LocationRow): LocationDto {
     latitude: row.latitude,
     longitude: row.longitude,
     gateInstructions: row.gateInstructions,
+    region: row.region,
+    usedInAcceptedTrip,
     archived: row.archivedAt !== null,
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
@@ -113,29 +127,61 @@ export interface ListLocationsOptions {
   customerId?: string;
   q?: string;
   includeArchived?: boolean;
+  /**
+   * Só as estações AINDA SEM REGIÃO — a fila de classificação (2026-08-20).
+   *
+   * Existe porque a pergunta "o que falta classificar?" não se responde rolando 459 locais. Ela
+   * aparece sozinha quando uma estação nova entra na operação, e é aí que alguém precisa decidir.
+   */
+  missingRegion?: boolean;
 }
+
+/**
+ * "Esta estação já apareceu numa viagem aceita?" — em SQL, para não trazer viagem nenhuma à memória.
+ *
+ * Vale para as DUAS pontas: a estação pode ser origem de uma rota e destino de outra, e as duas
+ * contam como "a operação passou por aqui". A palavra do aceite é do portal e mora em
+ * `customer_fields`, que é onde o robô a grava.
+ *
+ * A TABELA É QUALIFICADA À MÃO (`${locations}.id`, não `${locations.id}`), e isso não é estilo.
+ * Na projeção de um SELECT o Drizzle renderiza a coluna SEM o nome da tabela — vira `"id"` puro, e
+ * dentro desta subconsulta `"id"` passa a apontar para `trips.id`. A comparação fica sempre falsa e
+ * NÃO dá erro: a coluna volta `false` para todo mundo. No `WHERE` ele qualifica, então o mesmo
+ * trecho funcionava num lugar e mentia no outro — que é o pior jeito de um bug se apresentar.
+ */
+const usadaEmViagemAceita = sql<boolean>`EXISTS (
+  SELECT 1 FROM ${trips} t
+  WHERE (t.origin_location_id = ${locations}.id OR t.destination_location_id = ${locations}.id)
+    AND t.customer_fields ->> 'Aceitação (portal)' = 'Accepted'
+)`;
 
 export async function listLocations(opts: ListLocationsOptions = {}): Promise<LocationDto[]> {
   const filters = [];
   if (!opts.includeArchived) filters.push(isNull(locations.archivedAt));
   if (opts.customerId) filters.push(eq(locations.customerId, opts.customerId));
+  if (opts.missingRegion) filters.push(and(isNull(locations.region), usadaEmViagemAceita)!);
   if (opts.q && opts.q.trim().length > 0) {
     const term = `%${opts.q.trim()}%`;
     filters.push(or(ilike(locations.code, term), ilike(locations.name, term)));
   }
   const rows = await db
-    .select()
+    .select({ ...getTableColumns(locations), usada: usadaEmViagemAceita })
     .from(locations)
     .where(filters.length > 0 ? and(...filters) : undefined)
     .orderBy(desc(locations.createdAt));
-  return rows.map(toDto);
+  return rows.map(({ usada, ...row }) => toDto(row, usada));
 }
 
 export async function getLocation(id: string): Promise<LocationDto> {
-  const rows = await db.select().from(locations).where(eq(locations.id, id)).limit(1);
+  const rows = await db
+    .select({ ...getTableColumns(locations), usada: usadaEmViagemAceita })
+    .from(locations)
+    .where(eq(locations.id, id))
+    .limit(1);
   const row = rows[0];
   if (!row) throw new NotFound("NOT_FOUND", "Local não encontrado.");
-  return toDto(row);
+  const { usada, ...resto } = row;
+  return toDto(resto, usada);
 }
 
 export async function createLocation(
@@ -158,6 +204,7 @@ export async function createLocation(
           latitude: input.latitude ?? null,
           longitude: input.longitude ?? null,
           gateInstructions: input.gateInstructions ?? null,
+          region: input.region ?? null,
         })
         .returning();
       const row = inserted[0];
@@ -205,6 +252,7 @@ export async function updateLocation(
     "latitude",
     "longitude",
     "gateInstructions",
+    "region",
   ];
   for (const field of fields) {
     if (input[field] === undefined) continue;
@@ -215,11 +263,7 @@ export async function updateLocation(
 
   try {
     return await db.transaction(async (tx) => {
-      const updated = await tx
-        .update(locations)
-        .set(set)
-        .where(eq(locations.id, id))
-        .returning();
+      const updated = await tx.update(locations).set(set).where(eq(locations.id, id)).returning();
       const row = updated[0];
       if (!row) throw new NotFound("NOT_FOUND", "Local não encontrado.");
       await writeAudit(tx, {

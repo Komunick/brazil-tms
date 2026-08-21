@@ -77,13 +77,29 @@ export function LocationsClient({ canArchive }: { canArchive: boolean }) {
   });
 
   const rows = query.data ?? [];
+
+  /**
+   * A FILA DE CLASSIFICAÇÃO (2026-08-20, a pedido): sem região E JÁ USADA em viagem aceita.
+   *
+   * As duas condições, e a segunda é o que faz a fila valer. Só "sem região" dava 386 estações —
+   * quase todas destino de última milha ou nunca usadas — e uma fila que não zera ninguém trabalha.
+   * Com o aceite junto, sobram as que a operação de fato rodou: 18 quando isto foi escrito, com uma
+   * de Belo Horizonte carregando 40 viagens.
+   *
+   * A regra é do usuário: rota aceita é rota nossa. Proposta em análise ainda não é, e por isso não
+   * entra na fila — classificar uma estação que talvez nunca seja usada é trabalho jogado fora.
+   */
+  const [soSemRegiao, setSoSemRegiao] = useState(false);
+  const aClassificar = rows.filter((l) => !l.region && l.usedInAcceptedTrip);
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter(
+    const base = soSemRegiao ? aClassificar : rows;
+    if (!term) return base;
+    return base.filter(
       (l) => l.name.toLowerCase().includes(term) || l.code.toLowerCase().includes(term),
     );
-  }, [rows, search]);
+  }, [rows, aClassificar, search, soSemRegiao]);
 
   const columns: ColumnDef<LocationDto>[] = [
     { accessorKey: "name", header: () => t("name") },
@@ -98,6 +114,13 @@ export function LocationsClient({ canArchive }: { canArchive: boolean }) {
       header: () => t("city"),
       cell: ({ row }) => row.original.city ?? "—",
     },
+    {
+      accessorKey: "region",
+      header: () => t("region"),
+      // Sem região não é um traço como as outras células vazias: é pendência, e fica visível.
+      cell: ({ row }) =>
+        row.original.region ?? <span className="text-xs text-warning">{t("regionNone")}</span>,
+    },
   ];
 
   return (
@@ -107,14 +130,24 @@ export function LocationsClient({ canArchive }: { canArchive: boolean }) {
           <h1 className="text-2xl font-semibold">{t("title")}</h1>
           <p className="text-muted-foreground">{t("subtitle")}</p>
         </div>
-        <Button
-          onClick={() => {
-            setCreateError(null);
-            setCreateOpen(true);
-          }}
-        >
-          {t("new")}
-        </Button>
+        <div className="flex items-center gap-2">
+          {aClassificar.length > 0 || soSemRegiao ? (
+            <Button
+              variant={soSemRegiao ? "default" : "outline"}
+              onClick={() => setSoSemRegiao((v) => !v)}
+            >
+              {t("missingRegion", { count: aClassificar.length })}
+            </Button>
+          ) : null}
+          <Button
+            onClick={() => {
+              setCreateError(null);
+              setCreateOpen(true);
+            }}
+          >
+            {t("new")}
+          </Button>
+        </div>
       </div>
 
       {feedback ? (

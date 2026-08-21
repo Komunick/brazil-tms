@@ -97,6 +97,8 @@ export function LocationDetailClient({ locationId, canArchive }: Props) {
         latitude: current.latitude ?? undefined,
         longitude: current.longitude ?? undefined,
         gateInstructions: current.gateInstructions ?? "",
+        // Sem região vira `null`, e não `""`: é o valor que o schema aceita para não classificada.
+        region: (current.region as CreateLocationInput["region"]) ?? null,
       }
     : undefined;
 

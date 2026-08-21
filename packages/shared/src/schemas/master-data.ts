@@ -1,3 +1,4 @@
+import { REGION_ORDER } from "../domain/region";
 import { z } from "zod";
 
 /**
@@ -346,6 +347,19 @@ const locationBase = z.object({
   country: z.string().trim().length(2, "País inválido.").default("BR"),
   latitude: numberFromInput(latitudeSchema),
   longitude: numberFromInput(longitudeSchema),
+  /**
+   * A REGIÃO OPERACIONAL da estação (2026-08-20).
+   *
+   * LIMITADA às três, e isto é uma mudança de ideia declarada: o filtro do quadro aceita texto livre
+   * de propósito — região desconhecida na URL deve devolver lista vazia, não erro 400. Na ESCRITA o
+   * risco é o oposto: um "SUDESTE " com espaço ou um "Sudeste" minúsculo criaria um quarto cartão
+   * no painel sem ninguém perceber, e ninguém acharia o erro olhando a tela. Ler tolera, escrever
+   * não. Uma quarta região é uma linha em `REGION_ORDER`.
+   *
+   * `nullish` e não `transform`: um transform tornaria o campo OBRIGATÓRIO no tipo de saída, e todo
+   * pendências mostra.
+   */
+  region: z.enum(REGION_ORDER).nullish(),
   gateInstructions: optionalText(1000),
 });
 

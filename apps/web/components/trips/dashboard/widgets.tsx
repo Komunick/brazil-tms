@@ -7,10 +7,11 @@ import {
   boardQueryForDisplayStatus,
   saoPauloDate,
   saoPauloMonthBounds,
+  prazoDeAtribuicaoVencido,
   TRIP_DISPLAY_ORDER,
   type TripDisplayStatus,
 } from "@brazil-tms/shared";
-import type { DashboardSummary } from "@brazil-tms/db";
+import type { DashboardSummary, RegionSlice } from "@brazil-tms/db";
 import { useDashboardSummary } from "@/lib/trips/client";
 import { useReconexao } from "@/lib/ui/reconexao";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
@@ -219,10 +220,20 @@ function RegionCard({
   region,
   byStatus,
   dateFilter,
+  diaKey,
+  atrasadas = 0,
 }: {
   region: string | null;
   byStatus: DashboardSummary["tripsTodayByStatus"];
   dateFilter: string;
+  /** `hoje`, `d1` ou `d2` — entra no título e decide se o prazo já pode ter vencido. */
+  diaKey: "regionToday" | "regionD1" | "regionD2";
+  /**
+   * Quantas viagens deste cartão passaram do prazo de atribuição. Só o cartão de HOJE recebe número
+   * aqui: D1 e D2 têm o prazo inteiro pela frente, e pintar de vermelho o que tem um dia de folga
+   * ensina a operação a ignorar vermelho.
+   */
+  atrasadas?: number;
 }) {
   const t = useTranslations("Trips.dashboard");
   const total = byStatus.reduce((n, s) => n + s.count, 0);
@@ -237,10 +248,29 @@ function RegionCard({
     <Card className="p-2.5">
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
         <CardTitle className="text-[0.68rem] font-medium uppercase leading-tight tracking-wide text-muted-foreground">
-          {region ? t("regionCard", { region }) : t("regionUnassigned")}
+          {region ? t(diaKey, { region }) : t("regionUnassigned")}
         </CardTitle>
         <span className="text-sm font-semibold tabular-nums">{total}</span>
       </div>
+      {/**
+       * A LH ATRASADA, piscando (2026-08-20, a pedido).
+       *
+       * A regra da operação: a viagem pode ser atribuída até o MEIO-DIA do próprio dia da coleta.
+       * Depois disso, sem motorista, é atraso — e numa TV isso precisa ser visto sem procurar.
+       *
+       * `motion-safe:` no pisca, e não animação crua: quem configurou o sistema para reduzir
+       * movimento continua vendo a faixa vermelha, só que parada. O aviso é a COR e o número; o
+       * pisca é reforço, e reforço não pode ser a única forma de perceber.
+       */}
+      {atrasadas > 0 ? (
+        <Link
+          href={`/trips?${boardQueryForDisplayStatus("to_assign")}${dateFilter}${extraFilter}&scope=all#${BOARD_ANCHOR}`}
+          className="mb-1.5 flex items-center justify-between gap-2 rounded border border-destructive/50 bg-destructive/10 px-1.5 py-1 text-xs font-semibold text-destructive motion-safe:animate-pulse"
+        >
+          <span>{t("lateToAssign")}</span>
+          <span className="tabular-nums">{atrasadas}</span>
+        </Link>
+      ) : null}
       <StatusList
         byStatus={byStatus}
         emptyKey="emptyRegion"
@@ -342,7 +372,52 @@ export function DashboardWidgets() {
 
   const hoje = saoPauloDate();
   const amanha = saoPauloDate(1);
+  const depoisDeAmanha = saoPauloDate(2);
   const mes = saoPauloMonthBounds();
+
+  /**
+   * As três frentes com os três dias de cada uma, na ordem que o servidor mandou.
+   *
+   * A UNIÃO das regiões vem dos três recortes, não só do de hoje: uma frente pode não ter viagem
+   * hoje e ter amanhã, e ela precisa aparecer — um cartão faltando é indistinguível de uma frente
+   * que não existe.
+   *
+   * `atrasadas` só é calculado para HOJE, e só depois do meio-dia: é a regra da operação, e é o
+   * único cartão em que o prazo pode ter vencido.
+   */
+  const vencido = prazoDeAtribuicaoVencido();
+  const porRegiao = new Map<string | null, Record<string, RegionSlice["byStatus"]>>();
+  for (const [chave, lista] of [
+    ["regionToday", summary.tripsTodayByRegion],
+    ["regionD1", summary.tripsD1ByRegion],
+    ["regionD2", summary.tripsD2ByRegion],
+  ] as const) {
+    for (const { region, byStatus } of lista) {
+      const atual = porRegiao.get(region) ?? {};
+      atual[chave] = byStatus;
+      porRegiao.set(region, atual);
+    }
+  }
+  const filtroDe: Record<string, string> = {
+    regionToday: `&pickupFrom=${hoje}&pickupTo=${hoje}`,
+    regionD1: `&pickupFrom=${amanha}&pickupTo=${amanha}`,
+    regionD2: `&pickupFrom=${depoisDeAmanha}&pickupTo=${depoisDeAmanha}`,
+  };
+  const regioesDosTresDias = [...porRegiao.entries()].map(([region, porDia]) => ({
+    region,
+    dias: (["regionToday", "regionD1", "regionD2"] as const).map((diaKey) => {
+      const byStatus = porDia[diaKey] ?? [];
+      return {
+        diaKey,
+        byStatus,
+        dateFilter: filtroDe[diaKey]!,
+        atrasadas:
+          diaKey === "regionToday" && vencido
+            ? (byStatus.find((linha) => linha.status === "to_assign")?.count ?? 0)
+            : 0,
+      };
+    }),
+  }));
 
   return (
     <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
@@ -394,14 +469,26 @@ export function DashboardWidgets() {
        * A ordem entre elas vem do servidor (`REGION_ORDER`), não do alfabeto: num painel de parede a
        * posição do cartão é como as pessoas o encontram.
        */}
-      {summary.tripsTodayByRegion.map(({ region, byStatus }) => (
-        <RegionCard
-          key={region ?? "__sem_regiao__"}
-          region={region}
-          byStatus={byStatus}
-          dateFilter={`&pickupFrom=${hoje}&pickupTo=${hoje}`}
-        />
-      ))}
+      {/**
+       * TRÊS CARTÕES POR REGIÃO, agrupados por FRENTE e não por dia (2026-08-20, a pedido).
+       *
+       * Quem cuida de uma frente vê os três dias dela lado a lado — hoje, amanhã, depois. Agrupar
+       * por dia espalharia a mesma frente em três lugares da grade e obrigaria a caçar.
+       *
+       * A ordem das frentes vem do servidor; a dos dias é fixa aqui, porque é a do tempo.
+       */}
+      {regioesDosTresDias.map(({ region, dias }) =>
+        dias.map(({ diaKey, byStatus, dateFilter, atrasadas }) => (
+          <RegionCard
+            key={`${region ?? "__sem_regiao__"}-${diaKey}`}
+            region={region}
+            byStatus={byStatus}
+            dateFilter={dateFilter}
+            diaKey={diaKey}
+            atrasadas={atrasadas}
+          />
+        )),
+      )}
       {/* Amanhã (2026-08-17, a pedido): numa TV no meio da sala, de tarde, a pergunta que ainda tem
           resposta é a do dia seguinte. */}
       <StatusCard
