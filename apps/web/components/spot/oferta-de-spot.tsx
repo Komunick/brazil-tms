@@ -69,6 +69,14 @@ export function OfertaDeSpot() {
   // A memória de "já anunciei" vive na sessão da tela, não em estado do React: recriá-la a cada
   // render faria a mesma oferta voltar a ser novidade. Ver `novasOfertas`.
   const memoria = useRef(estadoInicial());
+  /**
+   * QUANDO chegou a última oferta nova — o que separa uma rajada da seguinte.
+   *
+   * Em `useRef` e não em estado: mudá-la não deve redesenhar nada, e ela precisa sobreviver entre
+   * buscas sem virar dependência de efeito. Começa em zero, então a primeira oferta da sessão sempre
+   * começa rajada — que é o certo: depois de um recarregamento, a próxima oferta é novidade.
+   */
+  const ultimaOfertaEm = useRef(0);
   const [fila, setFila] = useState<SpotOfferView[]>([]);
   const [saindo, setSaindo] = useState(false);
   /**
@@ -81,9 +89,12 @@ export function OfertaDeSpot() {
   const [absorvidas, setAbsorvidas] = useState(0);
 
   /**
-   * UMA POR VEZ NA TELA; o resto vai para a caixa (2026-08-21, a pedido). Ver `decidirAviso`.
+   * UM AVISO POR RAJADA; o resto vai para a caixa (2026-08-21, a pedido). Ver `decidirAviso`.
    *
-   * `setFila` com função e a decisão DENTRO dela: é o único lugar onde se sabe, sem correr risco de
+   * O SILÊNCIO é medido FORA do `setFila`: ele descreve quando a oferta chegou, e o `setFila` pode ser
+   * reexecutado pelo React — recalcular o relógio lá dentro daria uma medida diferente a cada vez.
+   *
+   * O resto da decisão fica DENTRO dele: é o único lugar onde se sabe, sem correr risco de
    * estado velho, se já existe um cartão na tela. Ler `fila` de fora do `setFila` traria o valor do
    * render anterior — e numa TV que busca a cada poucos segundos, isso erra na hora exata em que
    * mais importa acertar, que é durante a rajada.
@@ -92,8 +103,11 @@ export function OfertaDeSpot() {
     if (!ofertas) return;
     const novas = novasOfertas(memoria.current, ofertas);
     if (novas.length === 0) return;
+    const agora = Date.now();
+    const silencio = agora - ultimaOfertaEm.current;
+    ultimaOfertaEm.current = agora;
     setFila((atual) => {
-      const decisao = decidirAviso(atual.length > 0, novas);
+      const decisao = decidirAviso(atual.length > 0, novas, silencio);
       if (decisao.absorvidas > 0) setAbsorvidas((n) => n + decisao.absorvidas);
       if (!decisao.anunciar) return atual;
       // O som acompanha o cartão, não a oferta: o que foi para a caixa não faz barulho.
