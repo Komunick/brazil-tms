@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime, TRANSITIONS, TRIP_STATUSES, type TripStatus } from "@brazil-tms/shared";
 import { useAddTripNote, useRecordMilestone, TripsError } from "@/lib/trips/client";
 import type { TripDetailView } from "@/lib/trips/trips-read";
+import { montarLinhaDoTempo } from "@/lib/trips/timeline";
 
 /**
  * Interactive execution timeline (007, US1). Upgrades the read-only 005 timeline: a milestone
@@ -49,12 +50,10 @@ export function TimelineSection({ trip }: { trip: TripDetailView }) {
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const events = trip.events;
-  const ordered = [...events].sort((a, b) => {
-    const at = a.eventTimestamp ?? a.createdAt;
-    const bt = b.eventTimestamp ?? b.createdAt;
-    return bt.localeCompare(at);
-  });
+  // A ordenação e a junção das linhas moram em `lib/trips/timeline` — pura, e com teste. Ver lá o
+  // porquê: cada marco vinha duplicado com a mudança de status que ele provocou, e o empate entre os
+  // dois saía do banco, trocando blocos inteiros de lugar entre uma atualização e outra.
+  const ordered = montarLinhaDoTempo(trip.events);
 
   const statusLabel = (s: string | null) => {
     if (!s) return "—";
@@ -115,7 +114,9 @@ export function TimelineSection({ trip }: { trip: TripDetailView }) {
     if (statusAfter === "at_origin") planned = trip.plannedPickupWindowEnd;
     else if (statusAfter === "at_destination") planned = trip.plannedDeliveryWindowEnd;
     if (!planned) return null;
-    const diffMin = Math.round((new Date(eventTs).getTime() - new Date(planned).getTime()) / MINUTE);
+    const diffMin = Math.round(
+      (new Date(eventTs).getTime() - new Date(planned).getTime()) / MINUTE,
+    );
     if (diffMin === 0) return t("deltaOnTime");
     return diffMin > 0
       ? t("deltaLate", { minutes: diffMin })
@@ -156,7 +157,11 @@ export function TimelineSection({ trip }: { trip: TripDetailView }) {
             maxLength={2000}
           />
           <div className="flex items-center gap-3">
-            <Button size="sm" onClick={onAddNote} disabled={addNote.isPending || note.trim() === ""}>
+            <Button
+              size="sm"
+              onClick={onAddNote}
+              disabled={addNote.isPending || note.trim() === ""}
+            >
               {addNote.isPending ? t("addingNote") : t("addNote")}
             </Button>
             {error ? <span className="text-sm text-destructive">{error}</span> : null}
@@ -183,7 +188,7 @@ export function TimelineSection({ trip }: { trip: TripDetailView }) {
                 return (
                   <TableRow key={ev.id}>
                     <TableCell className="whitespace-nowrap">
-                      {formatDateTime(ev.eventTimestamp ?? ev.createdAt)}
+                      {formatDateTime(ev.instante)}
                     </TableCell>
                     <TableCell>{eventLabel(ev.eventType)}</TableCell>
                     <TableCell className="whitespace-nowrap">
