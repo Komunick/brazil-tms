@@ -12,9 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
-import { CancelTripDialog } from "@/components/trips/cancel-trip-dialog";
 import { PortalDecisionButtons } from "@/components/trips/portal-decision-buttons";
-import { canCancelTrip, type CancelScope } from "@/lib/trips/cancel-scope";
 import { useFilterOptions, useTripBoard } from "@/lib/trips/client";
 
 /**
@@ -42,9 +40,9 @@ import { useFilterOptions, useTripBoard } from "@/lib/trips/client";
  * and turning a page scrolls back to the first row of the new one: with it only at the far end, a page
  * turn cost a scroll down and a scroll back up to read the result.
  *
- * 017 (issue #24): each row also offers "Cancelar viagem" for `cancelScope` holders (the queue is all
- * `received` ⊂ dispatch phase, so any non-`none` scope qualifies) — the shared CancelTripDialog; a
- * cancelled trip leaves the queue on the next poll/invalidation.
+ * O "Cancelar viagem" saiu da linha em 2026-08-21, a pedido — e do TMS inteiro junto. Quem cancela
+ * uma viagem é o CLIENTE, no portal dele; o robô traz o cancelamento na leitura seguinte. A rota e o
+ * diálogo continuam existindo, sem entrada na tela — repor é uma linha, se um dia fizer sentido.
  */
 
 /**
@@ -87,16 +85,12 @@ const PAGE_SIZE = 50;
 
 export function DispatchBoard({
   resourceOptions: initialResourceOptions,
-  cancelScope = "none",
 }: {
   resourceOptions: TripFilterOptions;
-  /** 017 — how far this user's cancel permission reaches (§18); computed server-side. */
-  cancelScope?: CancelScope;
 }) {
   // 019 — keep the assign pickers fresh on an open tab (60s poll + focus refetch); server seed.
   const resourceOptions = useFilterOptions(initialResourceOptions);
   const t = useTranslations("Dispatch");
-  const tCancel = useTranslations("Trips.cancel");
   const tCommon = useTranslations("Common");
   // The queue reuses the Control Tower's pagination wording — same board, same vocabulary.
   const tBoard = useTranslations("Trips.board");
@@ -113,20 +107,28 @@ export function DispatchBoard({
 
   // Pickup-date bounds, typed directly or set by a preset. Both are `yyyy-MM-dd` in São Paulo and go
   // to the board's own `pickupFrom`/`pickupTo` (the server maps them to BRT day boundaries).
-  const [pickupFrom, setPickupFrom] = useState(() => saoPauloDate());
+  /**
+   * A ABA DE DECISÃO ABRE SEM FILTRO DE DATA, a de atribuição abre em "de hoje em diante".
+   *
+   * São doze pendências, não trezentas: não há volume a recortar, e cinco das sete de hoje têm coleta
+   * VENCIDA — abrir filtrado esconderia justamente as mais atrasadas. Na de atribuição o volume é de
+   * centenas e a data é o que torna a lista utilizável.
+   */
+  const [pickupFrom, setPickupFrom] = useState("");
   const [pickupTo, setPickupTo] = useState("");
 
   /**
-   * O RECORTE DA FILA — e por que ele precisou existir no mesmo dia (2026-08-21).
+   * DUAS ABAS, E NENHUMA VISÃO MISTA (2026-08-21, a pedido — "está embaralhado aí").
    *
-   * A fila tem 376 linhas e SETE delas esperam decisão. Os botões de Aceitar/Recusar entraram na
-   * linha certa e mesmo assim ninguém os encontrava: sete agulhas ordenadas por data no meio de
-   * trezentas e setenta e seis. Foi exatamente o relato — "não estou vendo aceitar nenhum".
+   * A fila tinha 376 linhas com "Atribuir" e SETE esperando decisão no meio delas. Primeiro tentei
+   * resolver com um filtro e uma opção "Todas"; o usuário viu antes de mim que o problema não era
+   * achar, era MISTURAR. São dois trabalhos diferentes, feitos por quem está pensando em coisas
+   * diferentes — decidir se a empresa faz a viagem, e escolher quem a faz.
    *
-   * Uma ação que existe e não pode ser encontrada não existe. Os dois recortes são as duas perguntas
-   * que a operação faz nesta tela, e agora dá para escolher qual está sendo respondida.
+   * Por isso não existe mais visão mista: ou você está decidindo, ou está escalando. A aba de
+   * decisão abre primeiro porque é ela que trava a outra — não se escala o que não foi aceito.
    */
-  const [recorte, setRecorte] = useState<"todas" | "in_analysis" | "to_assign">("todas");
+  const [aba, setAba] = useState<"in_analysis" | "to_assign">("in_analysis");
 
   function applyPreset(key: DatePresetKey): void {
     const preset = DATE_PRESETS.find((p) => p.key === key);
@@ -165,7 +167,7 @@ export function DispatchBoard({
 
   const query = [
     DISPATCH_QUERY,
-    recorte === "todas" ? "" : `queue=${recorte}`,
+    `queue=${aba}`,
     appliedSearch ? `q=${encodeURIComponent(appliedSearch)}` : "",
     pickupFrom ? `pickupFrom=${pickupFrom}` : "",
     pickupTo ? `pickupTo=${pickupTo}` : "",
@@ -179,7 +181,6 @@ export function DispatchBoard({
   // The trip whose assign dialog is open.
   const [assignRow, setAssignRow] = useState<TripBoardRow | null>(null);
   // The trip whose cancel dialog is open (017).
-  const [cancelRow, setCancelRow] = useState<TripBoardRow | null>(null);
 
   const items = board.data?.items ?? [];
   const total = board.data?.total ?? 0;
@@ -230,38 +231,32 @@ export function DispatchBoard({
         </div>
 
         {/**
-         * As fichas do RECORTE vêm antes das de data: elas dizem QUE trabalho está sendo feito, e a
-         * data só limita quando. Trocar de recorte volta para a primeira página — a paginação é do
-         * conjunto anterior e continuar nela mostraria um pedaço do meio de outra lista.
+         * A faixa de abas, e não fichas soltas: uma aba diz que a lista embaixo dela É outra coisa,
+         * uma ficha sugere que é a mesma lista filtrada. Aqui são dois trabalhos, não dois recortes.
+         *
+         * Trocar de aba volta para a primeira página e repõe a data que faz sentido para o trabalho
+         * daquela aba — continuar na página 7 de outra lista mostraria um pedaço do meio do nada.
          */}
-        <div className="flex flex-wrap gap-1.5">
-          {(["todas", "in_analysis", "to_assign"] as const).map((chave) => (
-            <Button
+        <div className="flex gap-1 border-b">
+          {(["in_analysis", "to_assign"] as const).map((chave) => (
+            <button
               key={chave}
               type="button"
-              size="sm"
-              variant={recorte === chave ? "default" : "outline"}
+              aria-current={aba === chave ? "page" : undefined}
+              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${
+                aba === chave
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
               onClick={() => {
-                setRecorte(chave);
+                setAba(chave);
                 setOffset(0);
-                /**
-                 * ESCOLHER "aguardando decisão" SOLTA O FILTRO DE DATA.
-                 *
-                 * A fila abre em "de hoje em diante", e cinco das sete pendentes de hoje têm coleta
-                 * no PASSADO — ficariam escondidas justamente por serem as mais atrasadas. Prazo
-                 * vencido não é motivo para sumir da tela; é motivo para aparecer primeiro.
-                 *
-                 * Só neste sentido: voltar para "todas" não repõe a data, porque aí o volume é de
-                 * centenas e o recorte de data é o que torna a lista utilizável.
-                 */
-                if (chave === "in_analysis") {
-                  setPickupFrom("");
-                  setPickupTo("");
-                }
+                setPickupFrom(chave === "to_assign" ? saoPauloDate() : "");
+                setPickupTo("");
               }}
             >
-              {t(`queueFilter.${chave}`)}
-            </Button>
+              {t(`queueTab.${chave}`)}
+            </button>
           ))}
         </div>
 
@@ -337,17 +332,6 @@ export function DispatchBoard({
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  {canCancelTrip(cancelScope, row.currentStatus) ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      className="text-destructive"
-                      onClick={() => setCancelRow(row)}
-                    >
-                      {tCancel("action")}
-                    </Button>
-                  ) : null}
                   {row.portalAcceptance === ACEITACAO_PENDENTE ? (
                     <PortalDecisionButtons
                       tripId={row.id}
@@ -399,16 +383,6 @@ export function DispatchBoard({
           ) : null}
         </DialogContent>
       </Dialog>
-
-      {/* Cancel dialog (017) — the shared justified flow; one instance fed the row in scope. */}
-      {cancelRow ? (
-        <CancelTripDialog
-          tripId={cancelRow.id}
-          tripLabel={cancelRow.externalTripId}
-          open
-          onOpenChange={(open) => !open && setCancelRow(null)}
-        />
-      ) : null}
     </Card>
   );
 }

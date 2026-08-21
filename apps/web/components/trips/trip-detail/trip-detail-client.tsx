@@ -1,14 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import { useTranslations } from "next-intl";
 import type { TripFilterOptions } from "@brazil-tms/db";
 import { useFilterOptions, useTripDetail } from "@/lib/trips/client";
-import { canCancelTrip, type CancelScope } from "@/lib/trips/cancel-scope";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { CancelTripDialog } from "@/components/trips/cancel-trip-dialog";
 import { TripDetailHeader } from "@/components/trips/trip-detail/header";
 import { PortalDecisionPanel } from "@/components/trips/trip-detail/portal-decision";
 import { CustomerPlanSection } from "@/components/trips/trip-detail/customer-plan";
@@ -27,26 +24,22 @@ import { PlanEditForm } from "@/components/trips/plan-edit-form";
  * (`useTripDetail`, no Realtime). Composes the section components in the §15.5 order. The plan editor
  * self-guards on `isNonEditableStatus`, so it is always rendered (it shows a read-only message when
  * the trip is closed/terminal). 017: the header row carries the "Cancelar viagem" action
- * (`cancelScope` ∩ machine legality); on success the `["trips"]` invalidation re-renders this page
+ * O "Cancelar viagem" saiu daqui em 2026-08-21: quem cancela é o cliente, no portal dele.
  * with the terminal state.
  */
 export function TripDetailClient({
   id,
   resourceOptions: initialResourceOptions,
-  cancelScope = "none",
 }: {
   id: string;
   resourceOptions: TripFilterOptions;
   /** 017 — how far this user's cancel permission reaches (§18); computed server-side. */
-  cancelScope?: CancelScope;
 }) {
   // 019 — keep the assignment pickers fresh on an open tab (60s poll + focus refetch); server seed.
   const resourceOptions = useFilterOptions(initialResourceOptions);
   const t = useTranslations("Trips.detail");
-  const tCancel = useTranslations("Trips.cancel");
   const tCommon = useTranslations("Common");
   const { data, isLoading, isError } = useTripDetail(id);
-  const [cancelOpen, setCancelOpen] = useState(false);
 
   const backLink = (
     <Button asChild variant="outline">
@@ -76,25 +69,10 @@ export function TripDetailClient({
   }
 
   const trip = data.item;
-  const showCancel = canCancelTrip(cancelScope, trip.currentStatus);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        {backLink}
-        {showCancel ? (
-          <Button type="button" variant="destructive" onClick={() => setCancelOpen(true)}>
-            {tCancel("action")}
-          </Button>
-        ) : null}
-      </div>
-
-      <CancelTripDialog
-        tripId={trip.id}
-        tripLabel={trip.externalTripId}
-        open={cancelOpen}
-        onOpenChange={setCancelOpen}
-      />
+      {backLink}
 
       <TripDetailHeader trip={trip} />
       <PortalDecisionPanel trip={trip} />
