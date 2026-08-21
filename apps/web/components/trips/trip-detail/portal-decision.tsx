@@ -1,34 +1,10 @@
 "use client";
 
-import { useState } from "react";
 import { useTranslations } from "next-intl";
-import {
-  MOTIVOS_DE_RECUSA,
-  formatDateTime,
-  impedimentoDaAcao,
-  rotuloDoMotivo,
-} from "@brazil-tms/shared";
+import { formatDateTime, impedimentoDaAcao, rotuloDoMotivo } from "@brazil-tms/shared";
 import type { TripDetailView } from "@/lib/trips/trips-read";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { TripsError, usePortalAction } from "@/lib/trips/client";
+import { PortalDecisionButtons } from "@/components/trips/portal-decision-buttons";
 
 /**
  * DECIDIR A VIAGEM SEM ABRIR O PORTAL (2026-08-21, a pedido).
@@ -53,18 +29,6 @@ import { TripsError, usePortalAction } from "@/lib/trips/client";
  */
 export function PortalDecisionPanel({ trip }: { trip: TripDetailView }) {
   const t = useTranslations("Trips.portalDecision");
-  const [motivo, setMotivo] = useState<string>("");
-  const [observacao, setObservacao] = useState("");
-  /**
-   * O QUE ESTÁ SENDO DECIDIDO AGORA — nada, aceite, ou recusa (2026-08-21, a pedido).
-   *
-   * O aceite ganhou confirmação depois que a recusa já tinha: os dois são irreversíveis do nosso
-   * lado. Uma vez que o portal registra, desfazer é conversa com o cliente, não um botão. Um clique
-   * solitário numa lista de 617 linhas é fácil demais de dar sem querer.
-   */
-  const [modo, setModo] = useState<null | "accept" | "reject">(null);
-  const acao = usePortalAction(trip.id);
-
   const campos = (trip.customerFields ?? {}) as Record<string, string>;
   const ordem = trip.portalCommand;
   const emVoo = ordem?.status === "pending" || ordem?.status === "sent";
@@ -81,15 +45,6 @@ export function PortalDecisionPanel({ trip }: { trip: TripDetailView }) {
    */
   if (impedimento === "nao_esta_pendente" && !ordem) return null;
 
-  const erro = acao.error instanceof TripsError ? acao.error.message : null;
-
-  /** Fechar a recusa limpa o que foi digitado: reabrir tem de começar do zero, não do meio. */
-  const fechar = () => {
-    setModo(null);
-    setMotivo("");
-    setObservacao("");
-  };
-
   return (
     <Card>
       <CardHeader>
@@ -104,126 +59,15 @@ export function PortalDecisionPanel({ trip }: { trip: TripDetailView }) {
           <p className="text-sm text-muted-foreground">{t("noPortalId")}</p>
         ) : null}
 
-        {erro ? (
-          <p role="alert" className="text-sm text-destructive">
-            {erro}
-          </p>
-        ) : null}
-
-        {impedimento === null && modo === null ? (
-          <div className="flex flex-wrap gap-2">
-            <Button disabled={acao.isPending} onClick={() => setModo("accept")}>
-              {t("accept")}
-            </Button>
-            <Button variant="outline" disabled={acao.isPending} onClick={() => setModo("reject")}>
-              {t("reject")}
-            </Button>
-          </div>
-        ) : null}
-
         {/**
-         * A CONFIRMAÇÃO É UM CARD QUE PARA A TELA (2026-08-21, a pedido).
+         * OS BOTÕES SÃO OS MESMOS DA FILA DE EXPEDIÇÃO.
          *
-         * Um bloco embutido continua sendo parte da página, e numa página que a pessoa já estava
-         * varrendo com o olho ele vira mais uma coisa a rolar. O modal tira a decisão do fluxo: ele
-         * existe para forçar meio segundo de leitura entre o clique e o irreversível.
-         *
-         * E ele diz o NÚMERO DA LH em voz alta. "Você tem certeza?" sozinho não protege de nada — quem
-         * clicou errado clica "sim" com a mesma convicção. O que revela o engano é ler qual viagem é.
+         * Duas telas com a mesma decisão irreversível não podem ter duas confirmações escritas
+         * separadamente — a segunda é sempre a que esquece de perguntar.
          */}
-        <Dialog
-          open={modo === "accept"}
-          onOpenChange={(aberto) => setModo(aberto ? "accept" : null)}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{t("confirmTitle")}</DialogTitle>
-              <DialogDescription>
-                {t("confirmAcceptQuestion", { lh: trip.externalTripId ?? trip.id })}
-              </DialogDescription>
-            </DialogHeader>
-            <p className="text-sm text-muted-foreground">{t("noUndo")}</p>
-            <DialogFooter>
-              <Button variant="ghost" disabled={acao.isPending} onClick={() => setModo(null)}>
-                {t("cancel")}
-              </Button>
-              <Button
-                disabled={acao.isPending}
-                onClick={() => acao.mutate({ action: "accept", reasonId: null, remark: null })}
-              >
-                {t("confirmAccept")}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/**
-         * A RECUSA PEDE MOTIVO, e não por escolha nossa: o portal não aceita rejeição sem um dos ids
-         * que ele serve. Perguntar aqui é o que evita mandar a ordem para receber a recusa três
-         * saltos adiante, quando quem decidiu já saiu da tela.
-         *
-         * Ela mora no mesmo card modal do aceite — a pergunta é a mesma, e a resposta também não tem
-         * volta. A diferença é que aqui a confirmação já vem com o que o portal exige.
-         */}
-        <Dialog
-          open={modo === "reject"}
-          onOpenChange={(aberto) => (aberto ? setModo("reject") : fechar())}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>{t("confirmTitle")}</DialogTitle>
-              <DialogDescription>
-                {t("confirmRejectQuestion", { lh: trip.externalTripId ?? trip.id })}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="motivo-recusa">{t("reasonLabel")}</Label>
-                <Select value={motivo} onValueChange={setMotivo}>
-                  <SelectTrigger id="motivo-recusa">
-                    <SelectValue placeholder={t("reasonPlaceholder")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MOTIVOS_DE_RECUSA.map((m) => (
-                      <SelectItem key={m.id} value={String(m.id)}>
-                        {m.rotulo}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="obs-recusa">{t("remarkLabel")}</Label>
-                <Textarea
-                  id="obs-recusa"
-                  value={observacao}
-                  onChange={(e) => setObservacao(e.target.value)}
-                  maxLength={500}
-                  rows={2}
-                />
-              </div>
-              <p className="text-sm text-muted-foreground">{t("noUndo")}</p>
-            </div>
-            <DialogFooter>
-              <Button variant="ghost" disabled={acao.isPending} onClick={fechar}>
-                {t("cancel")}
-              </Button>
-              <Button
-                variant="destructive"
-                disabled={acao.isPending || motivo === ""}
-                onClick={() =>
-                  acao.mutate({
-                    action: "reject",
-                    reasonId: Number(motivo),
-                    remark: observacao.trim() || null,
-                  })
-                }
-              >
-                {t("confirmReject")}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        {impedimento === null ? (
+          <PortalDecisionButtons tripId={trip.id} externalTripId={trip.externalTripId} />
+        ) : null}
       </CardContent>
     </Card>
   );
