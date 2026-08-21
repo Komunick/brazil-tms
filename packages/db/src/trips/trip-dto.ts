@@ -28,6 +28,7 @@ import {
   type TripStatus,
 } from "@brazil-tms/shared";
 import { loadChecklistStatus, type DocRef, type TripScope } from "../documents/requirements";
+import { ordensDaViagem, type OrdemDoPortal } from "./portal-commands";
 import { loadBillingItemView, type BillingItemView } from "../billing/billing-items";
 
 export type { BillingItemView, BillingAdjustmentDto } from "../billing/billing-items";
@@ -240,6 +241,14 @@ export interface TripDetail extends TripSummary {
   documentSummary: DocumentSummary;
   /** Feature 008 — the billing item + computed values, or null when not yet in the billing phase. */
   billing: BillingItemView | null;
+  /**
+   * A ÚLTIMA decisão enviada ao portal por esta viagem — aceitar ou rejeitar (2026-08-21).
+   *
+   * Uma só, a mais recente, e não o histórico: a pergunta que a tela faz é "tem alguma coisa em
+   * voo agora, e como terminou a anterior?". O histórico completo já está na auditoria, que é onde
+   * ele pertence.
+   */
+  portalCommand: OrdemDoPortal | null;
 }
 
 /** The Drizzle row type for `trips` (camelCase columns; timestamps are Date). */
@@ -283,6 +292,7 @@ function toTripBase(
   | "documents"
   | "documentSummary"
   | "billing"
+  | "portalCommand"
 > {
   return {
     ...toTripSummary(row),
@@ -632,5 +642,6 @@ export async function loadTripDetail(
       checklistSignedOff: checklist.hasExplicitChecklist,
     },
     billing,
+    portalCommand: (await ordensDaViagem(row.id, 1))[0] ?? null,
   };
 }

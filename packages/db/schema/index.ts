@@ -42,3 +42,4 @@ export * from "./spot-offers";
 export * from "./fleet-positions";
 export * from "./spx-router-events";
 export * from "./robot-cycles";
+export * from "./portal-commands";

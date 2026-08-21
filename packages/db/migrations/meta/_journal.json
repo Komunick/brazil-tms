@@ -246,6 +246,13 @@
       "when": 1787200000006,
       "tag": "0034_fleet_alert_flags",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1787200000007,
+      "tag": "0035_portal_commands",
+      "breakpoints": true
     }
   ]
 }

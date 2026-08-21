@@ -1,0 +1,196 @@
+// ==UserScript==
+// @name         Brazil TMS — executor de decisões no portal
+// @namespace    braziltransports.com.br
+// @version      0.1.0
+// @description  Executa no portal as decisões tomadas no TMS: aceitar e rejeitar viagem. NÃO decide nada.
+// @match        https://logistics.myagencyservice.com.br/*
+// @connect      tmsdev.braziltransports.com.br
+// @connect      tms.braziltransports.com.br
+// @grant        GM_xmlhttpRequest
+// Sem estas duas o Tampermonkey nunca procura versão nova, e toda correção vira "abra a URL e
+// clique em Reinstalar" — com o agravante de que os robôs desta VM têm nome parecido.
+// @updateURL    http://127.0.0.1:8899/portal-actions.user.js
+// @downloadURL  http://127.0.0.1:8899/portal-actions.user.js
+// ==/UserScript==
+
+/**
+ * O ROBÔ QUE ESCREVE (2026-08-21).
+ *
+ * O robô de leitura (`portal-feed`) traz no cabeçalho três regras, e a primeira é "SOMENTE LEITURA …
+ * se um dia precisar escrever, não é aqui". Este é o "um dia", e é por isso que ele é um ARQUIVO
+ * SEPARADO, com nome, versão e instalação próprios: quem for auditar o que o TMS manda no portal
+ * lê 150 linhas, não 500 misturadas com a leitura.
+ *
+ * ── O QUE ELE FAZ, E O QUE ELE NÃO DECIDE ──────────────────────────────────────────────────────
+ *
+ * Ele pergunta ao TMS "tem ordem para mim?" e executa o que vier. Não olha viagem, não escolhe
+ * viagem, não sabe o que é uma proposta boa. A decisão foi de uma pessoa, na tela do TMS, e está
+ * registrada lá com nome e hora. Aqui é só o braço.
+ *
+ * A consequência prática dessa divisão: se este arquivo for adulterado, ele ainda só consegue fazer
+ * o que o TMS mandar — e o TMS só manda o que alguém autenticado pediu.
+ *
+ * ── POR QUE ELE EXISTE ─────────────────────────────────────────────────────────────────────────
+ *
+ * Quem tem sessão no portal é ESTE navegador. Um POST saindo do servidor do TMS seria recusado por
+ * falta de credencial. Então o TMS grava a ordem e este script a entrega — é a mesma arquitetura dos
+ * outros três, invertida: em vez de trazer o que o portal diz, leva o que o TMS decidiu.
+ *
+ * ── NUNCA REPETE POR CONTA PRÓPRIA ─────────────────────────────────────────────────────────────
+ *
+ * Uma ordem sai da fila do TMS assim que é entregue a este script (`pending` → `sent`), e o
+ * resultado — sucesso OU falha — é relatado sempre. Ele nunca tenta de novo sozinho: erro de negócio
+ * do portal ("já aceita", "expirou") se repete igual em toda tentativa, e um robô teimoso
+ * transformaria uma recusa numa enxurrada de requisições ao fornecedor. Tentar de novo é decisão de
+ * gente, na tela do TMS.
+ */
+
+/* global GM_xmlhttpRequest, GM_info */
+(function () {
+  "use strict";
+
+  const CONFIG = {
+    /** Endereço do TMS. Troque para o de produção quando for a hora. */
+    tms: "https://tmsdev.braziltransports.com.br",
+    /** O mesmo valor de PORTAL_FEED_TOKEN no servidor. Trocar aqui e lá ao mesmo tempo. */
+    token: "COLE_AQUI_O_TOKEN",
+    /**
+     * De quanto em quanto tempo perguntar se há ordem.
+     *
+     * Trinta segundos, e não cinco minutos como os robôs de leitura: aqui tem GENTE ESPERANDO. A
+     * pessoa apertou "Aceitar" e está olhando a tela; cinco minutos de silêncio fariam ela ir
+     * conferir no portal, que é exatamente o passo que este recurso existe para eliminar.
+     *
+     * O custo é uma requisição ao NOSSO servidor a cada 30 s, que não devolve nada em 99% das vezes.
+     * Ao portal do fornecedor não chega nada enquanto não houver ordem.
+     */
+    intervaloMs: 30 * 1000,
+    /** Quantas ordens pegar por vez. A fila é de decisão humana, não de volume. */
+    porCiclo: 5,
+    /** As duas rotas do portal, medidas no bundle dele em 2026-08-21. */
+    aceitar: "/api/admin/transportation/agency/trip/accept",
+    rejeitar: "/api/admin/transportation/agency/trip/reject",
+  };
+
+  /** A versão vem do CABEÇALHO, não de uma constante copiada — que envelhece calada. */
+  const VERSAO =
+    (typeof GM_info !== "undefined" && GM_info?.script?.version) || "versão desconhecida";
+  const log = (...a) => console.log(`[TMS ações ${VERSAO}]`, ...a);
+  const erro = (...a) => console.warn(`[TMS ações ${VERSAO}]`, ...a);
+
+  /** Fala com o TMS. `GM_xmlhttpRequest` porque a chamada é cross-origin, como nos outros robôs. */
+  function aoTms(corpo) {
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        method: "POST",
+        url: `${CONFIG.tms}/api/imports/portal-commands`,
+        headers: { "Content-Type": "application/json" },
+        data: JSON.stringify({ token: CONFIG.token, ...corpo }),
+        timeout: 30000,
+        onload: (res) => {
+          if (res.status < 200 || res.status >= 300) {
+            reject(new Error(`TMS ${res.status}: ${String(res.responseText).slice(0, 160)}`));
+            return;
+          }
+          try {
+            resolve(JSON.parse(res.responseText || "{}"));
+          } catch (e) {
+            reject(new Error(`resposta do TMS ilegível: ${e}`));
+          }
+        },
+        onerror: () => reject(new Error("falha de rede ao falar com o TMS")),
+        ontimeout: () => reject(new Error("o TMS demorou demais")),
+      });
+    });
+  }
+
+  /**
+   * Executa UMA ordem no portal, na sessão deste navegador.
+   *
+   * O corpo de cada rota foi lido do bundle do portal: aceitar leva `{trip_id}`; rejeitar leva
+   * `{trip_id, reject_reason}`, onde `reject_reason` é o id que ele mesmo serve na lista de motivos.
+   *
+   * A OBSERVAÇÃO NÃO VAI. O portal não tem campo para ela nesta chamada — o diálogo dele só pergunta
+   * o motivo. Ela é registro NOSSO, e fica no TMS ao lado de quem decidiu. Dizer isso aqui é o que
+   * impede alguém de "consertar" mandando um campo que o outro lado ignora.
+   *
+   * `retcode: 0` é o "deu certo" do portal, e um HTTP 200 com retcode diferente de zero é FALHA —
+   * confundir os dois faria o TMS dar por aceita uma viagem que continua pendente.
+   */
+  async function executar(ordem) {
+    const caminho = ordem.action === "accept" ? CONFIG.aceitar : CONFIG.rejeitar;
+    const corpo =
+      ordem.action === "accept"
+        ? { trip_id: Number(ordem.portalTripId) }
+        : { trip_id: Number(ordem.portalTripId), reject_reason: ordem.reasonId };
+
+    const r = await fetch(caminho, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(corpo),
+    });
+    if (!r.ok) {
+      return { ok: false, error: `portal HTTP ${r.status}`, response: null };
+    }
+    const payload = await r.json().catch(() => null);
+    if (payload?.retcode !== 0) {
+      return {
+        ok: false,
+        error: `portal retcode ${payload?.retcode}: ${String(payload?.message ?? "").slice(0, 200)}`,
+        response: payload,
+      };
+    }
+    return { ok: true, error: null, response: payload };
+  }
+
+  async function ciclo() {
+    if (!CONFIG.token || CONFIG.token === "COLE_AQUI_O_TOKEN") {
+      erro("token não configurado — nenhuma ordem será buscada");
+      return;
+    }
+    const { ordens } = await aoTms({ limite: CONFIG.porCiclo });
+    if (!Array.isArray(ordens) || ordens.length === 0) return;
+
+    log(`${ordens.length} ordem(ns) para executar`);
+    for (const ordem of ordens) {
+      let resultado;
+      try {
+        resultado = await executar(ordem);
+      } catch (e) {
+        // Falha de rede ao falar com o PORTAL. Ainda assim é relatada: uma ordem que sai da fila e
+        // nunca volta é a única coisa que este desenho não pode produzir — ela ficaria em `sent`
+        // para sempre, e a tela diria "enviando" até alguém desconfiar.
+        resultado = { ok: false, error: String(e?.message ?? e).slice(0, 200), response: null };
+      }
+      try {
+        await aoTms({ id: ordem.id, ...resultado });
+        log(
+          `${ordem.action} em ${ordem.externalTripId ?? ordem.portalTripId}: ` +
+            (resultado.ok ? "portal aceitou" : `falhou — ${resultado.error}`),
+        );
+      } catch (e) {
+        // Aqui a ordem JÁ foi executada no portal e o relato não chegou. É o pior caso, e por isso
+        // ele é gritado: o TMS vai continuar dizendo "enviando" para algo que já aconteceu, e a
+        // leitura do ciclo seguinte é quem vai desempatar.
+        erro(`EXECUTEI E NÃO CONSEGUI RELATAR (${ordem.id}): ${String(e?.message ?? e)}`);
+      }
+    }
+  }
+
+  /**
+   * O próximo ciclo é agendado a partir do FIM do anterior, nunca por `setInterval`.
+   *
+   * Com intervalo fixo, um ciclo lento se sobrepõe ao seguinte e a mesma ordem sairia duas vezes. O
+   * TMS já se defende disso (ele marca a ordem como pega na mesma ida que a entrega), mas defesa em
+   * um lugar só é defesa que ninguém revisa.
+   */
+  function repetir() {
+    ciclo()
+      .catch((e) => erro("ciclo falhou:", String(e?.message ?? e).slice(0, 200)))
+      .finally(() => setTimeout(repetir, CONFIG.intervaloMs));
+  }
+
+  log(`ativo. Executa o que o TMS mandar, a cada ${CONFIG.intervaloMs / 1000}s. Não decide nada.`);
+  repetir();
+})();

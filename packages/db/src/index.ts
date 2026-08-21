@@ -156,6 +156,16 @@ export {
   removeBillingAdjustment,
 } from "./billing/billing-items";
 export { markCompleted, markBillingReady } from "./trips/completion";
+// Aceitar/rejeitar no portal a partir do TMS: a fila de ordens que o robo executa (2026-08-21).
+export {
+  enfileirarOrdemDoPortal,
+  pegarOrdensPendentes,
+  encerrarOrdemDoPortal,
+  ordensDaViagem,
+  viagensComOrdemAberta,
+  OrdemRecusada,
+  type OrdemDoPortal,
+} from "./trips/portal-commands";
 export { createExportBatch, countBillableTrips, getExportDownload } from "./billing/export";
 export {
   queryBillingList,
