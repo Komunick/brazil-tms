@@ -8,7 +8,7 @@ import {
   queryDashboardMetrics,
   trips,
 } from "@brazil-tms/db";
-import { tripBoardQueryFromParams } from "@brazil-tms/shared";
+import { saoPauloDate, tripBoardQueryFromParams } from "@brazil-tms/shared";
 
 /**
  * O CARTÃO DE REGIÃO E A LISTA QUE ELE ABRE TÊM QUE DAR O MESMO NÚMERO.
@@ -50,14 +50,24 @@ describe.skipIf(!hasDb)("cartões por região (integration)", () => {
     // Coleta HOJE, que é o recorte do cartão: 2 no Sudeste, 1 no NONE, 1 sem região.
     const agora = new Date();
     const hoje = new Date(agora.getTime() + 60 * 60 * 1000);
+    const d1 = new Date(agora.getTime() + 25 * 60 * 60 * 1000);
+    const d2 = new Date(agora.getTime() + 49 * 60 * 60 * 1000);
     const destino = locs[3]!.id;
-    const linhas = [locs[0]!.id, locs[0]!.id, locs[1]!.id, locs[2]!.id].map((origem) => ({
+    const linhas = [
+      ...[locs[0]!.id, locs[0]!.id, locs[1]!.id, locs[2]!.id].map((origem) => ({
+        origem,
+        quando: hoje,
+      })),
+      // Uma em D1 e uma em D2, para provar que o corte por dia separa os três cartões.
+      { origem: locs[0]!.id, quando: d1 },
+      { origem: locs[1]!.id, quando: d2 },
+    ].map(({ origem, quando }) => ({
       customerId,
       originLocationId: origem,
       destinationLocationId: destino,
       originalPlan: {},
       currentStatus: "received" as const,
-      plannedPickupWindowStart: hoje,
+      plannedPickupWindowStart: quando,
     }));
     const criadas = await db.insert(trips).values(linhas).returning({ id: trips.id });
     tripIds.push(...criadas.map((t) => t.id));
@@ -93,7 +103,15 @@ describe.skipIf(!hasDb)("cartões por região (integration)", () => {
    */
   it("o total do cartão é o total da lista que ele abre", async () => {
     const { tripsTodayByRegion } = await queryDashboardMetrics();
-    const hoje = new Date().toISOString().slice(0, 10);
+    /**
+     * O DIA VEM DE SÃO PAULO, não de `toISOString()`.
+     *
+     * Escrito com UTC, este teste falhava toda noite depois das 21h — quando em São Paulo ainda é
+     * dia 20 e em UTC já é 21. O cartão contava um dia e o quadro era consultado com outro, e a
+     * falha parecia divergência entre os dois caminhos quando era o teste medindo errado. É a mesma
+     * armadilha que a consulta evita agrupando no fuso da operação.
+     */
+    const hoje = saoPauloDate();
 
     for (const regiao of ["SUDESTE", "NONE"]) {
       const doCartao =
@@ -112,5 +130,20 @@ describe.skipIf(!hasDb)("cartões por região (integration)", () => {
       const { total: doQuadro } = await queryTripBoard(query);
       expect(doQuadro).toBe(doCartao);
     }
+  });
+
+  /**
+   * OS TRÊS DIAS saem de UMA consulta e são separados aqui. O risco é o corte errar por fuso: uma
+   * coleta às 22h de Brasília é 01h do dia seguinte em UTC, e cairia no cartão errado — justamente
+   * nas viagens noturnas, que são as que mais interessam a quem monta o dia seguinte.
+   */
+  it("separa hoje, D1 e D2 em recortes próprios", async () => {
+    const { tripsTodayByRegion, tripsD1ByRegion, tripsD2ByRegion } = await queryDashboardMetrics();
+    const total = (grupos: { region: string | null; byStatus: { count: number }[] }[], r: string) =>
+      grupos.find((g) => g.region === r)?.byStatus.reduce((n, s) => n + s.count, 0) ?? 0;
+
+    expect(total(tripsTodayByRegion, "SUDESTE")).toBeGreaterThanOrEqual(2);
+    expect(total(tripsD1ByRegion, "SUDESTE")).toBeGreaterThanOrEqual(1);
+    expect(total(tripsD2ByRegion, "NONE")).toBeGreaterThanOrEqual(1);
   });
 });

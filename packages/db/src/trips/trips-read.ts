@@ -1,3 +1,4 @@
+import { DateTime } from "luxon";
 import {
   and,
   asc,
@@ -55,6 +56,7 @@ import {
   type TripDisplayStatus,
   type TripStatus,
   regionPosition,
+  APP_TIME_ZONE,
 } from "@brazil-tms/shared";
 import { Conflict } from "../errors";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
@@ -152,6 +154,12 @@ export type TripDetailView = TripDetail & {
   }[];
 };
 
+/** Um recorte de "viagens por status" de uma região, num dia. */
+export interface RegionSlice {
+  region: string | null;
+  byStatus: { status: TripDisplayStatus; count: number }[];
+}
+
 export interface DashboardSummary {
   tripsTodayByStatus: { status: TripDisplayStatus; count: number }[];
   /**
@@ -187,10 +195,15 @@ export interface DashboardSummary {
    * `region: null` é estação ainda não classificada — aparece como grupo próprio em vez de sumir,
    * porque viagem que não entra em nenhuma frente é justamente o que alguém precisa ver.
    */
-  tripsTodayByRegion: {
-    region: string | null;
-    byStatus: { status: TripDisplayStatus; count: number }[];
-  }[];
+  tripsTodayByRegion: RegionSlice[];
+  /**
+   * As mesmas frentes em D1 e D2 — amanhã e depois de amanhã (2026-08-20, a pedido).
+   *
+   * Hoje responde o que está acontecendo; D1 e D2 respondem o que ainda dá tempo de arrumar. Numa TV
+   * no meio da sala, de tarde, ninguém mais monta o dia de hoje — monta os próximos.
+   */
+  tripsD1ByRegion: RegionSlice[];
+  tripsD2ByRegion: RegionSlice[];
   /**
    * A fila do DESPACHO: aceita pelo cliente e ainda sem motorista no portal (2026-08-17).
    *
@@ -624,6 +637,22 @@ function boardSelect() {
  * regra, e é uma dívida consciente: agrupar no banco é a única forma de contar sem trazer a tabela
  * inteira para a memória. O teste de contrato entre as duas é o que impede a divergência.
  */
+/**
+ * O DIA DA COLETA no fuso de São Paulo, como texto `YYYY-MM-DD`.
+ *
+ * Duas decisões apertadas aqui, e as duas já morderam este arquivo:
+ *
+ * TABELA QUALIFICADA à mão. Na projeção de um SELECT o Drizzle escreve a coluna sem o nome da
+ * tabela, e numa consulta com join isso é uma ambiguidade esperando acontecer.
+ *
+ * FUSO COMO LITERAL, não como parâmetro. Esta mesma expressão aparece no SELECT e no GROUP BY; se o
+ * fuso viajasse como `$1` e `$2`, o Postgres veria duas expressões DIFERENTES e recusaria a consulta
+ * com "column must appear in the GROUP BY clause". O valor é constante nossa, não entrada de usuário.
+ */
+const diaColetaSaoPaulo = sql<string>`(${trips}.planned_pickup_window_start AT TIME ZONE ${sql.raw(
+  `'${APP_TIME_ZONE}'`,
+)})::date`;
+
 const displayStatusSql = sql<string>`CASE
   -- "NA ORIGEM" e UMA linha so: a fila do portal e a chegada de verdade (2026-08-19, a pedido).
   -- Espelha displayStatusOf; se as duas divergirem, o cartao e a lista mostram numeros diferentes
@@ -803,6 +832,21 @@ export async function getTripDetailView(id: string): Promise<TripDetailView | nu
  * not invented.
  */
 /**
+ * As linhas de UM dia, dentro do lote de três.
+ *
+ * A consulta traz os três dias juntos e o corte acontece aqui, em memória — são poucas dezenas de
+ * linhas. `inicio` é o começo do dia em UTC (o mesmo `dayRangeSaoPaulo` que o resto do painel usa) e
+ * vira `YYYY-MM-DD` no fuso de São Paulo para casar com o que o banco agrupou.
+ *
+ * Dia sem viagem nenhuma some do resultado do banco, e é isso que se quer: a região não aparece
+ * naquele dia em vez de aparecer zerada.
+ */
+function doDia<T extends { dia: string }>(linhas: T[], inicio: string): T[] {
+  const alvo = DateTime.fromISO(inicio, { zone: "utc" }).setZone(APP_TIME_ZONE).toISODate();
+  return linhas.filter((l) => l.dia === alvo);
+}
+
+/**
  * As linhas (região, status, contagem) viram um grupo por região, na ORDEM DECLARADA.
  *
  * A ordem vem de `REGION_ORDER` e não do banco: um `ORDER BY` alfabético poria NONE antes de
@@ -831,6 +875,8 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
   const agora = new Date();
   const { from, to } = dayRangeSaoPaulo(agora);
   const amanha = dayRangeSaoPaulo(agora, 1);
+  // D2 fecha a janela dos cartões por região: hoje, amanhã e depois de amanhã.
+  const depois = dayRangeSaoPaulo(agora, 2);
   const mes = monthRangeSaoPaulo(agora);
   // 009 — the shared on-time predicate (R2): one source of truth with the SLA report.
   const pickup = onTimeExpr("pickup");
@@ -838,7 +884,7 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
 
   const [
     byStatus,
-    porRegiaoHoje,
+    porRegiaoTresDias,
     byStatusAmanha,
     allByStatus,
     aguardandoAtribuicao,
@@ -861,23 +907,36 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
       )
       .groupBy(displayStatusSql),
     /**
-     * O MESMO recorte de hoje, quebrado pela região da estação de ORIGEM.
+     * TRÊS DIAS, quebrados por região da estação de ORIGEM — hoje, D1 e D2 (2026-08-20, a pedido).
+     *
+     * UMA consulta para os três, e não três. O agrupamento por dia já existe no banco; repetir a
+     * mesma varredura três vezes só para mudar a janela custaria três idas ao Postgres a cada
+     * atualização do painel, que roda de minuto em minuto numa TV.
      *
      * `innerJoin` e não `leftJoin`: toda viagem tem origem obrigatória (a coluna é `notNull`), então
      * não há linha a perder. O que pode faltar é a REGIÃO da estação, e essa vem nula — agrupada
      * como um grupo próprio, não descartada.
+     *
+     * O dia sai do fuso de SÃO PAULO, não do UTC: uma coleta às 22h de Brasília é 01h do dia
+     * seguinte em UTC, e cairia no cartão errado — justamente nas viagens noturnas, que são as que
+     * mais interessam a quem monta o dia seguinte.
      */
     db
-      .select({ region: locations.region, status: displayStatusSql, value: count() })
+      .select({
+        dia: sql<string>`${diaColetaSaoPaulo}::text`,
+        region: locations.region,
+        status: displayStatusSql,
+        value: count(),
+      })
       .from(trips)
       .innerJoin(locations, eq(locations.id, trips.originLocationId))
       .where(
         and(
           gte(trips.plannedPickupWindowStart, new Date(from)),
-          lt(trips.plannedPickupWindowStart, new Date(to)),
+          lt(trips.plannedPickupWindowStart, new Date(depois.to)),
         ),
       )
-      .groupBy(locations.region, displayStatusSql),
+      .groupBy(diaColetaSaoPaulo, locations.region, displayStatusSql),
     // O mesmo recorte, no dia SEGUINTE — o que ainda dá tempo de arrumar.
     db
       .select({ status: displayStatusSql, value: count() })
@@ -994,7 +1053,9 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
       status: r.status as TripDisplayStatus,
       count: r.value,
     })),
-    tripsTodayByRegion: agruparPorRegiao(porRegiaoHoje),
+    tripsTodayByRegion: agruparPorRegiao(doDia(porRegiaoTresDias, from)),
+    tripsD1ByRegion: agruparPorRegiao(doDia(porRegiaoTresDias, amanha.from)),
+    tripsD2ByRegion: agruparPorRegiao(doDia(porRegiaoTresDias, depois.from)),
     tripsTomorrowByStatus: byStatusAmanha.map((r) => ({
       status: r.status as TripDisplayStatus,
       count: r.value,
