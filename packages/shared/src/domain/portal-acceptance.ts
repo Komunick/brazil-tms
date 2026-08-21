@@ -18,7 +18,11 @@ import { ACEITACAO_PENDENTE } from "./trip-display-status";
 /** O outro lado do eixo: já aceita, e portanto fora do alcance destes botões. */
 export const ACEITACAO_ACEITA = "Accepted";
 
-export type PortalAction = "accept" | "reject";
+/**
+ * As três coisas que o TMS manda o portal fazer. `assign` chegou depois, com a atribuição — ver
+ * `domain/portal-assignment.ts`, que guarda as regras dela.
+ */
+export type PortalAction = "accept" | "reject" | "assign";
 
 /**
  * OS MOTIVOS DE RECUSA SÃO DO PORTAL, não nossos.

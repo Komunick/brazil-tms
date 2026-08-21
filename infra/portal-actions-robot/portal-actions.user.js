@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — executor de decisões no portal
 // @namespace    braziltransports.com.br
-// @version      0.1.0
+// @version      0.3.0
 // @description  Executa no portal as decisões tomadas no TMS: aceitar e rejeitar viagem. NÃO decide nada.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -67,9 +67,32 @@
     intervaloMs: 30 * 1000,
     /** Quantas ordens pegar por vez. A fila é de decisão humana, não de volume. */
     porCiclo: 5,
-    /** As duas rotas do portal, medidas no bundle dele em 2026-08-21. */
-    aceitar: "/api/admin/transportation/agency/trip/accept",
-    rejeitar: "/api/admin/transportation/agency/trip/reject",
+    /**
+     * As duas rotas do portal, MEDIDAS NO FIO (2026-08-21) — e não as que o bundle sugeria.
+     *
+     * O bundle tem `/api/admin/transportation/agency/trip/accept` escrito em texto, e foi o que eu
+     * usei primeiro. O que o portal chama de verdade, capturado num aceite real do usuário, é
+     * `/api/line_haul/agency/...` — a mesma família que o robô de LEITURA já usa. Provavelmente são
+     * apelidos do mesmo serviço, mas "provavelmente" não serve para um POST que não tem volta.
+     *
+     * A recusa vai pela simetria da que foi medida. A primeira recusa real confirma ou desmente, e
+     * ela falha do jeito certo — a ordem fica em `failed` com a mensagem do portal, sem recusar nada.
+     */
+    aceitar: "/api/line_haul/agency/trip/accept",
+    rejeitar: "/api/line_haul/agency/trip/reject",
+    /**
+     * A ATRIBUIÇÃO TEM DUAS ROTAS, e a escolha não é de estilo (medido em 2026-08-21).
+     *
+     * Com UM motorista o portal chama `/trip/assign` e manda `operation_info`. Com DOIS ele chama
+     * `/trip/accept/assign_multiple_driver`, manda `driver_pool` e NÃO manda `operation_info`. Não é
+     * o mesmo pacote com um campo a mais — são chamadas distintas.
+     *
+     * Mandar dois motoristas pela rota de um faz o portal responder SUCESSO e ignorar o segundo em
+     * silêncio, que é o pior desfecho possível: a viagem sai com metade do que foi pedido e ninguém
+     * fica sabendo.
+     */
+    atribuir: "/api/line_haul/agency/trip/assign",
+    atribuirDois: "/api/line_haul/agency/trip/accept/assign_multiple_driver",
   };
 
   /** A versão vem do CABEÇALHO, não de uma constante copiada — que envelhece calada. */
@@ -118,11 +141,52 @@
    * confundir os dois faria o TMS dar por aceita uma viagem que continua pendente.
    */
   async function executar(ordem) {
-    const caminho = ordem.action === "accept" ? CONFIG.aceitar : CONFIG.rejeitar;
+    const doisMotoristas = ordem.action === "assign" && Boolean(ordem.secondDriverId);
+    const caminho =
+      ordem.action === "accept"
+        ? CONFIG.aceitar
+        : ordem.action === "reject"
+          ? CONFIG.rejeitar
+          : doisMotoristas
+            ? CONFIG.atribuirDois
+            : CONFIG.atribuir;
+    /**
+     * A ESTAÇÃO VAI NO CORPO, e é obrigatória.
+     *
+     * Não estava no que eu li do bundle; apareceu no pacote real: `agency_current_station_id: 5015`.
+     * É a mesma agência sob a qual a aba está logada, e sai do mesmo lugar de onde o robô de leitura
+     * a tira. Sem ela o portal não sabe QUEM está aceitando.
+     *
+     * Ausência dela é sessão caída, não descuido: a ordem falha com essa palavra, em vez de sair
+     * pela metade e receber um erro que ninguém sabe traduzir.
+     */
+    const estacao = localStorage.getItem("stationId");
+    if (!estacao) throw new Error("stationId não encontrado: a sessão do portal caiu?");
+
+    const base = {
+      trip_id: Number(ordem.portalTripId),
+      agency_current_station_id: Number(estacao),
+    };
     const corpo =
       ordem.action === "accept"
-        ? { trip_id: Number(ordem.portalTripId) }
-        : { trip_id: Number(ordem.portalTripId), reject_reason: ordem.reasonId };
+        ? base
+        : ordem.action === "reject"
+          ? { ...base, reject_reason: ordem.reasonId }
+          : doisMotoristas
+            ? {
+                ...base,
+                driver_id: ordem.driverId,
+                driver_pool: [ordem.secondDriverId],
+                vehicle_plate_number_list: ordem.plates,
+              }
+            : {
+                ...base,
+                driver_id: ordem.driverId,
+                vehicle_plate_number_list: ordem.plates,
+                // Copiado do pacote real. O portal manda os dois assim na tela dele; não invento
+                // valor para campo que não entendo.
+                operation_info: { device_type: 1, operation_mode: 0 },
+              };
 
     const r = await fetch(caminho, {
       method: "POST",

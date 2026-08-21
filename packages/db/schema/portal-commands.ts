@@ -32,7 +32,18 @@ import { users } from "./users";
  * viagem reaparece como `Accepted` — e é por isso que a tela mostra as duas coisas. Uma resposta de
  * sucesso que não se reflete na leitura é justamente o caso que precisa ser visto, não escondido.
  */
-export const portalCommandAction = pgEnum("portal_command_action", ["accept", "reject"]);
+export const portalCommandAction = pgEnum("portal_command_action", [
+  "accept",
+  "reject",
+  /**
+   * ESCALAR MOTORISTA E PLACA (2026-08-21) — a segunda metade do fluxo.
+   *
+   * Chega depois do aceite, e no portal é literalmente a tela seguinte. Mora na MESMA fila porque é
+   * a mesma natureza: uma decisão de gente que precisa sair daqui e chegar lá, com o mesmo registro
+   * de quem pediu e a mesma prova de que o portal concordou.
+   */
+  "assign",
+]);
 
 export const portalCommandStatus = pgEnum("portal_command_status", [
   /** Gravada, esperando o robô pegar. */
@@ -74,6 +85,21 @@ export const portalCommands = pgTable(
     reasonId: integer("reason_id"),
     /** A observação livre que acompanha a recusa, quando quem decidiu quis explicar. */
     remark: text("remark"),
+
+    /**
+     * A ATRIBUIÇÃO, quando `action = assign`.
+     *
+     * `driver_id` é o id do motorista NO PORTAL, não o do TMS — a única chave que os dois lados
+     * compartilham, e que o robô de leitura já traz desde agosto. `second_driver_id` é o que o portal
+     * chama de `driver_pool`, e a presença dele MUDA A ROTA da chamada: ver `rotaDaAtribuicao`.
+     *
+     * As placas vão como TEXTO separado por vírgula, e não como coluna de array, porque é o que elas
+     * são para nós: uma ou duas etiquetas que o portal valida. Guardar array aqui pediria um tipo
+     * novo para ganhar nada — quem interpreta é quem monta o payload, e são duas.
+     */
+    driverId: integer("driver_id"),
+    secondDriverId: integer("second_driver_id"),
+    plates: text("plates"),
 
     status: portalCommandStatus("status").notNull().default("pending"),
     /**

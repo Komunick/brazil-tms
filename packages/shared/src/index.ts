@@ -7,6 +7,7 @@ export * from "./domain/trip-status";
 export * from "./domain/trip-display-status";
 export * from "./domain/fleet-alerts";
 export * from "./domain/portal-acceptance";
+export * from "./domain/portal-assignment";
 export * from "./domain/region";
 export * from "./domain/assignment-eligibility";
 export * from "./domain/sla-risk";
