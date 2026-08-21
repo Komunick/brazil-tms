@@ -1673,7 +1673,8 @@
     "todayMore": "e mais {count}",
     "originArrival": "STA",
     "openList": "Ver as ofertas de hoje",
-    "listHint": "O que o aviso mostrou, pelo resto do dia."
+    "listHint": "O que o aviso mostrou, pelo resto do dia.",
+    "absorbed": "+{count} na caixa de ofertas"
   },
   "Wallboard": {
     "title": "Brazil Transports · Torre",
