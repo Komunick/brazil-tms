@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do eTorre
 // @namespace    braziltransports.com.br
-// @version      0.2.1
+// @version      0.2.4
 // @description  Escuta o que a tela de Veículos Logísticos do eTorre já busca e entrega ao TMS. Somente leitura.
 // @match        https://torre.logae.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -123,6 +123,31 @@
      * "quantos estão parados" não pode depender de eu ter chutado certo.
      */
     parado: "GSH_STATUS_PARADO_MOVIMENTADO",
+    /**
+     * OS CINCO QUE FALTAVAM (2026-08-21).
+     *
+     * A tela mostra OITO ícones por caminhão e o robô entregava três. Os outros cinco vinham na
+     * mesma resposta, ciclo após ciclo, e eram descartados — não por decisão, por não terem sido
+     * procurados. O mapeamento foi conferido cruzando a COR do ícone na tela com o valor do campo
+     * em vinte veículos de uma vez; sete fecharam vinte de vinte.
+     *
+     * O oitavo, o alfinete de posição, NÃO está aqui: `GRJ_FAROLSEMPOSICAO` vem `S` para a frota
+     * inteira porque é a configuração do alerta, não o estado. Ele acende quando a última posição
+     * passa do limite que o próprio rastreador informa — e é esse limite que vai em
+     * `limiteSemPosicaoMin`. Quem acende é o TMS, com o relógio do servidor.
+     */
+    /** Jornada do motorista: `MAI` passou das quatro horas, `MEN` está dentro. */
+    tempoDirecao: "GRJ_FAROLTEMPODIRECAO",
+    /** `S` quando a viagem começou depois da hora prevista. */
+    inicioAtrasado: "GRJ_FAROLINICIOVIAGEM",
+    bloqueado: "GRA_BLOQUEADO",
+    sirene: "GRA_SIRENE",
+    /** Liberação vigente, TEXTO livre. Vazio para quase todos; existir já é o alerta. */
+    liberacao: "GVL_LIBERACAOVEICULO",
+    /** O atraso da viagem pela régua DELE — o TMS mede a dele contra a janela do cliente. */
+    atrasoViagem: "GRJ_ALERTAATRASO",
+    /** Quantos minutos de silêncio o rastreador considera demais nesta conta (hoje 60). */
+    limiteSemPosicaoMin: "CMM_TEMPOALERTASEMPOSICAO",
   };
 
   function extrair(registro) {
@@ -152,6 +177,18 @@
       // Campo que veio vazio para TODO MUNDO é sinal de que o nome mudou do lado deles, não de que a
       // frota parou. Os dois se parecem no gráfico e não se parecem em nada na hora de consertar.
       erro(`campos vazios em toda a frota (nome pode ter mudado): ${vazios.join(", ")}`);
+      /**
+       * E DIZ QUAIS NOMES EXISTEM NO LUGAR.
+       *
+       * Sem isto, o aviso acima é um beco: informa que quebrou e não ajuda a consertar. Quem for
+       * arrumar teria de abrir a aba de rede, achar a chamada certa e ler um JSON de 380 campos —
+       * dentro de uma VM, por VNC. Com a lista no console, o conserto é comparar dois nomes.
+       *
+       * Só quando algo já quebrou: em operação normal esta linha nunca aparece.
+       */
+      if (registros[0]) {
+        erro(`nomes disponíveis no registro: ${Object.keys(registros[0]).sort().join(", ")}`);
+      }
     }
     if (emViagem[0]) log("exemplo com viagem:", emViagem[0]);
     entregar(frota);
@@ -236,6 +273,13 @@
       offRoute: v.foraDeRota,
       noPosition: v.semPosicao,
       stoppedFlag: v.parado,
+      drivingTimeFlag: v.tempoDirecao,
+      lateStartFlag: v.inicioAtrasado,
+      blockedFlag: v.bloqueado,
+      sirenFlag: v.sirene,
+      releaseLabel: v.liberacao,
+      tripDelayFlag: v.atrasoViagem,
+      noPositionLimitMinutes: v.limiteSemPosicaoMin,
     };
   }
 
