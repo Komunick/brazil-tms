@@ -365,7 +365,9 @@
     "billing_export": "Exportação de faturamento gerada",
     "freight_rate_replace": "Tabela de fretes substituída",
     "driver_document_upload": "Documento do motorista enviado",
-    "vehicle_document_upload": "Documento do veículo enviado"
+    "vehicle_document_upload": "Documento do veículo enviado",
+    "trip_portal_accept": "Aceite enviado ao portal",
+    "trip_portal_reject": "Recusa enviada ao portal"
   },
   "Documents": {
     "title": "Documentos",
@@ -1327,6 +1329,30 @@
       "regionD1": "{region} — D1 (amanhã)",
       "regionD2": "{region} — D2",
       "lateToAssign": "LH ATRASADA"
+    },
+    "portalDecision": {
+      "title": "Decisão da proposta",
+      "hint": "Aceite ou recuse esta viagem sem sair do TMS. A decisão vai para o portal e fica registrada aqui.",
+      "accept": "Aceitar",
+      "reject": "Recusar",
+      "confirmReject": "Confirmar recusa",
+      "cancel": "Cancelar",
+      "reasonLabel": "Motivo da recusa",
+      "reasonPlaceholder": "Escolha o motivo",
+      "remarkLabel": "Observação (fica registrada no TMS)",
+      "noPortalId": "Esta viagem não veio do portal, então não há o que decidir lá.",
+      "actionAccept": "aceite",
+      "actionReject": "recusa",
+      "requestedAt": "Pedido em {when}",
+      "status_pending": "Enviando o {action} para o portal…",
+      "status_sent": "Enviando o {action} para o portal…",
+      "status_done": "O portal registrou o {action}.",
+      "status_failed": "O portal recusou o {action}.",
+      "confirmAcceptQuestion": "Aceitar a viagem {lh}?",
+      "confirmAccept": "Confirmar aceite",
+      "noUndo": "Depois que o portal registrar, desfazer só falando com o cliente.",
+      "confirmTitle": "Você tem certeza?",
+      "confirmRejectQuestion": "Recusar a viagem {lh}?"
     }
   },
   "Sla": {

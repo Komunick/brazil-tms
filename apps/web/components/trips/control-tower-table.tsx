@@ -10,6 +10,7 @@ import {
   VEHICLE_TYPE_VALUES,
   type TripBoardQuery,
   type VehicleType,
+  ACEITACAO_PENDENTE,
 } from "@brazil-tms/shared";
 import type { TripBoardRow, TripFilterOptions } from "@brazil-tms/db";
 import { Button } from "@/components/ui/button";
@@ -245,8 +246,20 @@ export function ControlTowerTable({
                     current-assignment context (resources pre-filled), which only the Trip-Detail
                     panel has — the board row carries just display names — so an assigned row is
                     reached via its detail link, not a blank reassign form here. */}
+                {/**
+                 * EM ANÁLISE NÃO ATRIBUI (2026-08-21, a pedido).
+                 *
+                 * A ordem da operação é aceitar primeiro, escalar depois: a viagem em análise é uma
+                 * PROPOSTA que o cliente ainda espera resposta, e pôr motorista nela é comprometer
+                 * recurso com um trabalho que a empresa pode recusar.
+                 *
+                 * As duas filas vivem no mesmo `received` e só a aceitação as separa — por isso o
+                 * botão sumia sozinho: para o TMS as 617 em análise eram indistinguíveis das que já
+                 * podem ser escaladas. Quem decide nessa linha agora é o cartão de decisão.
+                 */}
                 {canAssign &&
                 !row.original.isAssigned &&
+                row.original.portalAcceptance !== ACEITACAO_PENDENTE &&
                 row.original.currentStatus === "received" ? (
                   <Button
                     type="button"

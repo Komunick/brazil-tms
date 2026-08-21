@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CancelTripDialog } from "@/components/trips/cancel-trip-dialog";
 import { TripDetailHeader } from "@/components/trips/trip-detail/header";
+import { PortalDecisionPanel } from "@/components/trips/trip-detail/portal-decision";
 import { CustomerPlanSection } from "@/components/trips/trip-detail/customer-plan";
 import { TimelineSection } from "@/components/trips/trip-detail/timeline";
 import { NotesSection } from "@/components/trips/trip-detail/notes";
@@ -96,6 +97,7 @@ export function TripDetailClient({
       />
 
       <TripDetailHeader trip={trip} />
+      <PortalDecisionPanel trip={trip} />
       <CustomerPlanSection trip={trip} />
       <PlanEditForm trip={trip} />
       <AssignmentPanel trip={trip} resourceOptions={resourceOptions} />

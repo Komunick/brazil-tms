@@ -35,6 +35,10 @@ export async function writePortalFacts(
   }
 
   const fields: Record<string, string> = {};
+  // O ID NUMÉRICO do portal: a chave com que o TMS manda nele (aceitar/rejeitar). Ver
+  // `PortalTrip.portalTripId`. Sem ele, cada clique custaria uma busca só para redescobrir um
+  // número que a listagem já entregou.
+  if (portal.portalTripId) fields["ID (portal)"] = portal.portalTripId;
   if (portal.driverLabel) fields["Motorista (portal)"] = portal.driverLabel;
   // O id do motorista no sistema do cliente. Guardado porque é a única chave que os dois lados
   // compartilham, e porque um dado que o cliente entrega de graça não se joga fora.

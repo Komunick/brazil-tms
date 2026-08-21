@@ -72,6 +72,22 @@ export interface PortalLeg {
 
 export interface PortalTrip {
   externalTripId: string;
+  /**
+   * O ID NUMÉRICO da viagem no portal — a chave com que se MANDA nele (2026-08-21).
+   *
+   * O TMS conhece a viagem pelo número da LH (`LT0Q8O02EGOR1`); o portal, por um inteiro
+   * (`4018638`). Toda ação escrita — aceitar, rejeitar — é endereçada pelo inteiro, e a listagem
+   * entrega os dois lado a lado em toda resposta. Vinha sendo descartado: o robô de leitura o usava
+   * dentro do próprio ciclo, para buscar o detalhe, e não o guardava em lugar nenhum.
+   *
+   * Sem ele, aceitar a partir do TMS obrigaria a uma busca no portal a cada clique só para
+   * redescobrir um número que já tínhamos em mãos — uma ida a mais ao fornecedor, e um passo a mais
+   * capaz de falhar, para responder algo que ele já respondeu.
+   *
+   * A planilha não tem esse campo, e por isso ele é opcional: viagem que nasceu de import manual
+   * simplesmente não pode ser aceita pelo TMS, e a tela diz isso em vez de tentar.
+   */
+  portalTripId?: string | null;
   tripName: string | null;
   /** The portal's own word: "Completed", "Cancelled", … — the caller decides what it means. */
   status: string | null;

@@ -35,6 +35,11 @@ export type AuditAction =
   | "trailer.status_change"
   // feature 003 — trip domain (data-model.md §Audit actions). Every critical-field change and
   // lifecycle action writes exactly one immutable audit row (SC-003).
+  // 2026-08-21 — a decisao de aceitar/rejeitar a viagem NO PORTAL, tomada daqui.
+  // Apertar no portal nao deixa rastro nenhum do nosso lado: ninguem sabe quem aceitou, quando,
+  // nem por que recusou. Estas duas sao a resposta a essas perguntas.
+  | "trip.portal_accept"
+  | "trip.portal_reject"
   | "trip.create" // newValue = original_plan summary + initial status
   | "trip.plan_update" // accepted customer update to live planned_* fields (per-field prev/new)
   | "trip.fields_update" // the operation's own annotations (solicitação, checklist, SM Raster, CT-e, doca)
@@ -181,6 +186,8 @@ export const ALL_AUDIT_ACTIONS = [
   "freight_rate.replace",
   "driver.document_upload",
   "vehicle.document_upload",
+  "trip.portal_accept",
+  "trip.portal_reject",
 ] as const satisfies readonly AuditAction[];
 
 /**

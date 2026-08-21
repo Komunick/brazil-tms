@@ -34,6 +34,7 @@ import {
   type BillingReadinessReport,
   type AuditLogPage,
   type TripStatus,
+  type PortalActionBody,
 } from "@brazil-tms/shared";
 import type {
   TripBoardRow,
@@ -1215,4 +1216,28 @@ export function useTripBoardFilters(): TripBoardFilters {
   }, [router]);
 
   return { query, search, setFilters, setParam, reset };
+}
+
+/**
+ * ACEITAR OU REJEITAR NO PORTAL, a partir do TMS (2026-08-21).
+ *
+ * A resposta é 202, não 200: quando ela chega, o portal ainda não foi tocado. O que existe é uma
+ * ordem gravada, e o robô da VM — o único com sessão lá — vai executá-la. Por isso a invalidação
+ * traz a viagem de volta com `portalCommand` em `pending`, e não com o efeito pronto.
+ */
+export function usePortalAction(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: PortalActionBody) => {
+      const res = await fetch(`/api/trips/${id}/portal-action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+      });
+      return asJson<{ item: unknown }>(res);
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+    },
+  });
 }

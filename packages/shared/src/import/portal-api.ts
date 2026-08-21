@@ -205,6 +205,9 @@ export function mapPortalApiTrips(payload: PortalApiEnvelope): PortalParseResult
     const statusCode = typeof raw.trip_status === "number" ? raw.trip_status : null;
     trips.push({
       externalTripId,
+      // O inteiro com que o portal se endereça. Ver `PortalTrip.portalTripId` para o porquê de
+      // guardá-lo: é a chave de toda ação escrita, e ela vem de graça em toda listagem.
+      portalTripId: positive(raw.id) != null ? String(raw.id) : null,
       tripName: trimmed(raw.trip_name),
       status: statusCode == null ? null : (TRIP_STATUS_LABEL[statusCode] ?? `Status ${statusCode}`),
       driverLabel: trimmed(raw.driver_name),

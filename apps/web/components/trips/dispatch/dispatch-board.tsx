@@ -46,7 +46,18 @@ import { useFilterOptions, useTripBoard } from "@/lib/trips/client";
  * cancelled trip leaves the queue on the next poll/invalidation.
  */
 
-const DISPATCH_QUERY = "assigned=false&status=received&sort=pickupStart";
+/**
+ * A FILA DE DESPACHO É SÓ O QUE JÁ FOI ACEITO (2026-08-21, a pedido).
+ *
+ * `received` guarda DUAS filas que pedem coisas diferentes: as que esperam o cliente responder
+ * ("Em análise") e as que esperam motorista ("P/Atribuir"). Sem o recorte, as 617 propostas em
+ * análise entravam aqui e ofereciam escalar recurso para um trabalho que a empresa ainda pode
+ * recusar — e afogavam, em volume, as que de fato precisam de despacho.
+ *
+ * A ordem da operação é aceitar primeiro, escalar depois. Aceitar agora se faz no próprio TMS, no
+ * cartão de decisão da viagem.
+ */
+const DISPATCH_QUERY = "assigned=false&status=received&queue=to_assign&sort=pickupStart";
 
 /** How long the queue search waits after the last keystroke before hitting the board endpoint. */
 const SEARCH_DEBOUNCE_MS = 300;
