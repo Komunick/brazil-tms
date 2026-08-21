@@ -1657,7 +1657,12 @@
       "VALIDATION": "Verifique os campos destacados.",
       "REQUEST_FAILED": "Não foi possível concluir a operação. Tente novamente."
     },
-    "expiredLicense": "CNH vencida em {date}"
+    "expiredLicense": "CNH vencida em {date}",
+    "queueFilter": {
+      "todas": "Todas",
+      "in_analysis": "Aguardando decisão",
+      "to_assign": "Para atribuir"
+    }
   },
   "Fleet": {
     "title": "Rastreamento da frota",
