@@ -57,6 +57,7 @@ import {
   type TripStatus,
   regionPosition,
   APP_TIME_ZONE,
+  termosDaBusca,
 } from "@brazil-tms/shared";
 import { Conflict } from "../errors";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
@@ -579,14 +580,34 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
   }
 
   if (query.q) {
-    const like = `%${query.q}%`;
+    /**
+     * VÁRIAS LHs DE UMA VEZ (2026-08-21, a pedido): colar uma lista na busca filtra todas.
+     *
+     * A operação recebe LHs em bloco — de uma planilha, de um e-mail, do próprio portal — e antes
+     * disso era uma busca por vez, anotando o resultado no papel. Colar e ver a lista inteira é a
+     * diferença entre conferir trinta viagens em trinta buscas ou numa.
+     *
+     * Os termos se somam com OU, nunca com E: quem cola trinta LHs quer as trinta, e E devolveria
+     * sempre vazio — nenhuma viagem é trinta viagens ao mesmo tempo.
+     *
+     * Um termo só continua se comportando como antes, inclusive buscando por cliente e por estação.
+     * Com vários, a busca por nome perde o sentido (ninguém cola uma lista de nomes de cliente) mas
+     * também não atrapalha — e manter o MESMO predicado evita duas buscas que se comportam
+     * diferente sem que ninguém saiba por quê.
+     */
+    const termos = termosDaBusca(query.q);
     const search = or(
-      ilike(trips.externalTripId, like),
-      ilike(customers.name, like),
-      ilike(originLoc.name, like),
-      ilike(destLoc.name, like),
-      ilike(originLoc.code, like),
-      ilike(destLoc.code, like),
+      ...termos.flatMap((termo) => {
+        const like = `%${termo}%`;
+        return [
+          ilike(trips.externalTripId, like),
+          ilike(customers.name, like),
+          ilike(originLoc.name, like),
+          ilike(destLoc.name, like),
+          ilike(originLoc.code, like),
+          ilike(destLoc.code, like),
+        ];
+      }),
     );
     if (search) conditions.push(search);
   }
