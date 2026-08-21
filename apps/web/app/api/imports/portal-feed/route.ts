@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
+import { recordRobotCycle } from "@brazil-tms/db";
 import { Conflict, handleRouteError } from "@/lib/api/respond";
 import { Unauthorized } from "@/lib/auth/require-auth";
 import { ingestPortalDetail, ingestPortalFeed } from "@/lib/imports/portal-feed";
@@ -31,6 +32,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       mode?: string;
       customerCode?: string;
       payload?: unknown;
+      /** O pulso do robô (2026-08-21): opcional, para não quebrar quem ainda não foi atualizado. */
+      cicloMs?: number;
+      duracaoMs?: number;
     } | null;
     if (!body || typeof body !== "object") {
       throw new Conflict("INVALID_BODY", "Corpo inválido: envie JSON.");
@@ -63,6 +67,21 @@ export async function POST(request: Request): Promise<NextResponse> {
       });
       return NextResponse.json(recorded);
     }
+
+    /**
+     * O pulso é gravado por MODO — `portal_plan`, `portal_execution`, `portal_in_progress`.
+     *
+     * São três relógios independentes rodando na mesma aba, e um pode sufocar sem o outro. Um pulso
+     * só, somando os três, esconderia justamente qual deles está atrasando.
+     *
+     * O modo `detail` fica de fora: ele não tem ciclo próprio, é uma busca que o modo `plan` dispara
+     * quando falta informação de uma viagem.
+     */
+    await recordRobotCycle({
+      robot: `portal_${mode}`,
+      intervalMs: body.cicloMs ?? null,
+      durationMs: body.duracaoMs ?? null,
+    });
 
     const result = await ingestPortalFeed({
       payload: body.payload,

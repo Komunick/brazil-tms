@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import { db } from "../client";
+import { queryRobotCycles, type RobotCycleView } from "./robot-cycles";
 
 /**
  * O PULSO DO TMS (2026-08-19).
@@ -43,6 +44,13 @@ export interface StatusParPortal {
 export interface ServerStatus {
   fontes: StatusFonte[];
   tarefas: StatusTarefa[];
+  /**
+   * O CICLO de cada robô: o intervalo que ele promete e o que ele está levando (2026-08-21).
+   *
+   * As fontes acima dizem "o dado ainda chega?". Isto diz "ele está chegando NO RITMO?" — a
+   * pergunta que antecede a outra, e a que denuncia a VM sufocando antes de o dado parar.
+   */
+  ciclos: RobotCycleView[];
   /**
    * A tabela cruzada crua — TODOS os pares, não só os divergentes.
    *
@@ -144,12 +152,15 @@ export async function queryServerStatus(): Promise<ServerStatus> {
     return linhas as Record<string, unknown>[];
   };
 
+  const ciclos = await queryRobotCycles();
+
   return {
     fontes: [
       { chave: "portal", ultimo: iso(primeira(portal)?.ultimo) },
       { chave: "bsc", ultimo: iso(primeira(bsc)?.ultimo) },
       { chave: "spot", ultimo: iso(primeira(spot)?.ultimo) },
     ],
+    ciclos,
     tarefas: todas(tarefas)
       // `__pgboss__send-it` é encanamento interno da fila, não trabalho nosso. Mostrá-lo só ensina a
       // operação a ignorar linhas que não significam nada.

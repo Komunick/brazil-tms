@@ -133,6 +133,15 @@ export interface AuditEntryDto {
   previousValue: unknown;
   newValue: unknown;
   actorUserId: string;
+  /**
+   * QUEM alterou, por nome (2026-08-21, a pedido). O identificador continua ao lado porque é ele que
+   * liga a linha ao usuário; o nome é o que a pessoa lê.
+   *
+   * O robô tem usuário próprio — "Robô do portal" — então ele se identifica sozinho, sem caso
+   * especial no código. Nulo é ator que não existe mais na tabela de usuários; a tela mostra o
+   * identificador nesse caso, em vez de fingir que a linha não tem dono.
+   */
+  actorName: string | null;
   reason: string | null;
   createdAt: string;
 }
@@ -419,9 +428,26 @@ export async function loadTripDetail(
     .orderBy(desc(tripEvents.createdAt))
     .limit(50);
 
+  /**
+   * O nome de quem alterou vem por JOIN, não por consulta separada (2026-08-21).
+   *
+   * São 50 linhas com um punhado de atores repetidos — o robô responde por 711 das últimas 24 h.
+   * Buscar os usuários depois seria uma segunda ida ao banco para um dado que a mesma consulta já
+   * podia trazer, e `leftJoin` garante que uma linha nunca some porque o usuário foi removido.
+   */
   const auditRows = await executor
-    .select()
+    .select({
+      id: auditLogs.id,
+      action: auditLogs.action,
+      previousValue: auditLogs.previousValue,
+      newValue: auditLogs.newValue,
+      actorUserId: auditLogs.actorUserId,
+      actorName: users.name,
+      reason: auditLogs.reason,
+      createdAt: auditLogs.createdAt,
+    })
     .from(auditLogs)
+    .leftJoin(users, eq(users.id, auditLogs.actorUserId))
     .where(and(eq(auditLogs.entityType, "trip"), eq(auditLogs.entityId, tripId)))
     .orderBy(desc(auditLogs.createdAt))
     .limit(50);
@@ -544,6 +570,7 @@ export async function loadTripDetail(
       previousValue: a.previousValue,
       newValue: a.newValue,
       actorUserId: a.actorUserId,
+      actorName: a.actorName,
       reason: a.reason,
       createdAt: a.createdAt.toISOString(),
     })),

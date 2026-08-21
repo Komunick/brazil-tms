@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.10.0
+// @version      1.10.1
 // @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -160,6 +160,18 @@
    * Entrega uma página ao TMS. `GM_xmlhttpRequest` em vez de `fetch` porque a chamada é
    * cross-origin: assim o TMS não precisa abrir CORS para o domínio do cliente.
    */
+  /**
+   * O PULSO DO ROBÔ (2026-08-21): quanto o ciclo ANTERIOR de cada modo levou, e o intervalo dele.
+   *
+   * Vai pendurado na entrega seguinte, e não numa chamada própria: uma requisição a mais só para
+   * dizer "estou bem" seria mais tráfego para vigiar tráfego. O número é do ciclo anterior porque a
+   * duração deste só se conhece quando ele termina — e aí a entrega já foi.
+   *
+   * Serve para a tela de Status avisar que a VM está sufocando ANTES de o dado parar: configurado
+   * 10s, levando 45s é sintoma; dado que parou é consequência.
+   */
+  const ultimoCiclo = {};
+
   function entregar(modo, payload) {
     return new Promise((resolve, reject) => {
       GM_xmlhttpRequest({
@@ -169,7 +181,12 @@
           "Content-Type": "application/json",
           Authorization: `Bearer ${CONFIG.token}`,
         },
-        data: JSON.stringify({ mode: modo, customerCode: CONFIG.customerCode, payload }),
+        data: JSON.stringify({
+          mode: modo,
+          customerCode: CONFIG.customerCode,
+          payload,
+          ...(ultimoCiclo[modo] ?? {}),
+        }),
         timeout: 120000,
         onload: (res) => {
           if (res.status >= 200 && res.status < 300) {
@@ -295,7 +312,7 @@
    * demora mais que o intervalo, o seguinte simplesmente começa depois; nada se acumula, nada
    * recursa, e um erro não interrompe a corrente.
    */
-  function repetir(nome, intervaloMs, tarefa) {
+  function repetir(nome, intervaloMs, tarefa, modo) {
     let rodando = false;
     const passo = async () => {
       if (rodando) return;
@@ -315,6 +332,8 @@
       } catch (e) {
         erro(`${nome} falhou (tenta de novo no próximo ciclo):`, e?.message ?? e);
       } finally {
+        // O pulso deste ciclo viaja na entrega do PRÓXIMO — ver `ultimoCiclo`.
+        if (modo) ultimoCiclo[modo] = { cicloMs: intervaloMs, duracaoMs: Date.now() - t0 };
         rodando = false;
         setTimeout(passo, intervaloMs);
       }
@@ -329,6 +348,7 @@
       query_type: 1,
       sta: `${agora() - CONFIG.planoDiasAtras * DIA},${agora() + CONFIG.planoDiasAdiante * DIA}`,
     }),
+    "plan",
   );
 
   // A aba "Aceito": o que está na estrada agora. Mesmo endpoint do plano, outro `query_type`.
@@ -343,6 +363,7 @@
       query_type: 2,
       sta: `${agora() - CONFIG.emCursoDiasAtras * DIA},${agora() + CONFIG.emCursoDiasAdiante * DIA}`,
     }),
+    "in_progress",
   );
 
   /**
@@ -359,12 +380,19 @@
    * Quem decide isso tudo é o TMS. Aqui só se diz de onde veio e se é a varredura de arranque.
    */
   let primeiraExecucao = true;
-  repetir("execução", CONFIG.intervaloExecucaoMs, () => {
-    const arranque = primeiraExecucao;
-    const horas = arranque ? CONFIG.execucaoHorasPrimeiroCiclo : CONFIG.execucaoHorasAtras;
-    primeiraExecucao = false;
-    return ciclo(arranque ? "history" : "execution", "/api/line_haul/agency/trip/history/list", {
-      mtime: `${agora() - horas * 3600},${agora()}`,
-    });
-  });
+  // O modo alterna entre `history` (primeiro ciclo) e `execution`, mas o RELÓGIO é um só — por isso
+  // a chave do pulso é fixa, e não o modo que a entrega usou.
+  repetir(
+    "execução",
+    CONFIG.intervaloExecucaoMs,
+    () => {
+      const arranque = primeiraExecucao;
+      const horas = arranque ? CONFIG.execucaoHorasPrimeiroCiclo : CONFIG.execucaoHorasAtras;
+      primeiraExecucao = false;
+      return ciclo(arranque ? "history" : "execution", "/api/line_haul/agency/trip/history/list", {
+        mtime: `${agora() - horas * 3600},${agora()}`,
+      });
+    },
+    "execution",
+  );
 })();
