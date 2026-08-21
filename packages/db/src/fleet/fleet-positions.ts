@@ -32,6 +32,13 @@ export interface FleetPositionView {
   offRoute: string | null;
   noPosition: string | null;
   stoppedFlag: string | null;
+  drivingTimeFlag: string | null;
+  lateStartFlag: string | null;
+  blockedFlag: string | null;
+  sirenFlag: string | null;
+  releaseLabel: string | null;
+  tripDelayFlag: string | null;
+  noPositionLimitMinutes: number | null;
   receivedAt: string;
   /** A viagem do TMS que está com este veículo agora, quando existe. */
   tripId: string | null;
@@ -149,6 +156,13 @@ export async function recordFleetPositions(
     offRoute: texto(e.offRoute),
     noPosition: texto(e.noPosition),
     stoppedFlag: texto(e.stoppedFlag),
+    drivingTimeFlag: texto(e.drivingTimeFlag),
+    lateStartFlag: texto(e.lateStartFlag),
+    blockedFlag: texto(e.blockedFlag),
+    sirenFlag: texto(e.sirenFlag),
+    releaseLabel: texto(e.releaseLabel),
+    tripDelayFlag: texto(e.tripDelayFlag),
+    noPositionLimitMinutes: paraInteiro(e.noPositionLimitMinutes),
     receivedAt: new Date(),
   }));
 
@@ -177,6 +191,13 @@ export async function recordFleetPositions(
         offRoute: sql`excluded.off_route`,
         noPosition: sql`excluded.no_position`,
         stoppedFlag: sql`excluded.stopped_flag`,
+        drivingTimeFlag: sql`excluded.driving_time_flag`,
+        lateStartFlag: sql`excluded.late_start_flag`,
+        blockedFlag: sql`excluded.blocked_flag`,
+        sirenFlag: sql`excluded.siren_flag`,
+        releaseLabel: sql`excluded.release_label`,
+        tripDelayFlag: sql`excluded.trip_delay_flag`,
+        noPositionLimitMinutes: sql`excluded.no_position_limit_minutes`,
         receivedAt: sql`excluded.received_at`,
       },
     });
@@ -199,7 +220,26 @@ export async function recordFleetPositions(
  * seriam 85 idas ao banco a cada carregamento de tela.
  */
 export async function readFleetPositions(): Promise<FleetPositionView[]> {
-  const linhas = await db.select().from(fleetPositions).orderBy(desc(fleetPositions.receivedAt));
+  /**
+   * DO MAIOR PROGRESSO PARA O MENOR (2026-08-21, a pedido).
+   *
+   * A ordem era por hora de leitura, que é a ordem em que o rastreador respondeu — informação sobre
+   * o robô, não sobre a operação. Quem abre esta tela quer saber quem está chegando, e isso se lê de
+   * cima para baixo quando o mais adiantado vem primeiro.
+   *
+   * `NULLS LAST` porque nulo aqui é "sem viagem para medir", não "progresso zero": caminhão parado
+   * sem viagem no topo da lista empurraria para baixo justamente quem está em movimento.
+   *
+   * A hora de leitura fica como critério de desempate — entre dois veículos no mesmo percentual,
+   * o de posição mais fresca primeiro.
+   */
+  const linhas = await db
+    .select()
+    .from(fleetPositions)
+    .orderBy(
+      sql`${fleetPositions.progressPercent} desc nulls last`,
+      desc(fleetPositions.receivedAt),
+    );
   const veiculos = linhas.map((l) => l.vehicleId).filter((v): v is string => v !== null);
 
   const viagens = veiculos.length
@@ -269,6 +309,13 @@ export async function readFleetPositions(): Promise<FleetPositionView[]> {
       offRoute: r.offRoute,
       noPosition: r.noPosition,
       stoppedFlag: r.stoppedFlag,
+      drivingTimeFlag: r.drivingTimeFlag,
+      lateStartFlag: r.lateStartFlag,
+      blockedFlag: r.blockedFlag,
+      sirenFlag: r.sirenFlag,
+      releaseLabel: r.releaseLabel,
+      tripDelayFlag: r.tripDelayFlag,
+      noPositionLimitMinutes: r.noPositionLimitMinutes,
       receivedAt: r.receivedAt.toISOString(),
       tripId: viagem?.tripId ?? null,
       externalTripId: viagem?.externalTripId ?? null,

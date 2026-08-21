@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { fromUtc } from "@brazil-tms/shared";
+import { Bell, Flag, GitBranch, History, Lock, MapPin, PlayCircle, Truck } from "lucide-react";
+import { FLEET_ALERT_KEYS, fleetAlerts, fromUtc, type FleetAlertKey } from "@brazil-tms/shared";
 import type { FleetPositionView } from "@brazil-tms/db";
 import { useFleet } from "@/lib/fleet/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -50,6 +51,53 @@ function idade(iso: string | null): { texto: string; velho: boolean } {
 }
 
 const hora = (iso: string | null): string => (iso ? fromUtc(iso).toFormat("dd/MM HH:mm") : "—");
+
+/**
+ * OS OITO ÍCONES, NA ORDEM DA TELA DO FORNECEDOR (2026-08-21, a pedido).
+ *
+ * A ordem e a forma são deliberadamente as mesmas do eTorre: a sala já lê aqueles oito de relance,
+ * e reordenar ou reinventar os símbolos custaria a única coisa que essa coluna tem de bom, que é
+ * não precisar ser aprendida. Cada Lucide aqui é o par do Font Awesome de lá — ramo, caminhão,
+ * relógio com seta, alfinete, play, cadeado, sino, bandeira.
+ *
+ * Verde é o estado bom e vermelho é o alerta, como lá. Verde NÃO é decoração: é a afirmação de que
+ * aquele farol foi verificado. Mostrar só os acesos pouparia pixels e perderia isso — uma linha com
+ * nenhum ícone seria indistinguível de uma leitura antiga de robô velho, que é justamente o caso em
+ * que ninguém pode confiar no silêncio.
+ */
+const ICONES: Record<FleetAlertKey, typeof GitBranch> = {
+  foraDeRota: GitBranch,
+  paradoDemais: Truck,
+  jornadaExcedida: History,
+  semPosicao: MapPin,
+  inicioAtrasado: PlayCircle,
+  bloqueio: Lock,
+  sirene: Bell,
+  liberacao: Flag,
+};
+
+function Alertas({ v, t }: { v: FleetPositionView; t: (k: string, p?: never) => string }) {
+  const acesos = fleetAlerts(v);
+  return (
+    <div className="flex items-center gap-1">
+      {FLEET_ALERT_KEYS.map((chave) => {
+        const Icone = ICONES[chave];
+        const aceso = acesos.has(chave);
+        // O título carrega a frase inteira, dos dois lados: "fora da rota" e "dentro da rota" são
+        // informações diferentes, e quem passa o mouse quer confirmar qual das duas está vendo.
+        const rotulo = t(aceso ? `alert_${chave}_on` : `alert_${chave}_off`);
+        return (
+          <span key={chave} title={rotulo} aria-label={rotulo}>
+            <Icone
+              aria-hidden
+              className={`h-3.5 w-3.5 ${aceso ? "text-destructive" : "text-success"}`}
+            />
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
 export function FleetClient() {
   const t = useTranslations("Fleet");
@@ -117,9 +165,10 @@ export function FleetClient() {
                 <TableHead>{t("plate")}</TableHead>
                 <TableHead>{t("driver")}</TableHead>
                 <TableHead>{t("trip")}</TableHead>
-                <TableHead className="text-right">{t("progress")}</TableHead>
+                <TableHead>{t("progress")}</TableHead>
                 <TableHead>{t("eta")}</TableHead>
                 <TableHead>{t("risk")}</TableHead>
+                <TableHead>{t("alerts")}</TableHead>
                 <TableHead>{t("position")}</TableHead>
                 <TableHead className="text-right">{t("age")}</TableHead>
               </TableRow>
@@ -127,7 +176,7 @@ export function FleetClient() {
             <TableBody>
               {linhas.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-sm text-muted-foreground">
+                  <TableCell colSpan={9} className="text-sm text-muted-foreground">
                     {t("noMatch")}
                   </TableCell>
                 </TableRow>
@@ -209,12 +258,41 @@ function Linha({ v, t }: { v: FleetPositionView; t: (k: string, p?: never) => st
           <span className="text-muted-foreground">{v.tripStatus ?? "—"}</span>
         )}
       </TableCell>
-      <TableCell className="text-right text-sm tabular-nums">
-        {v.progressPercent == null ? "—" : `${v.progressPercent.toFixed(0)}%`}
+      {/**
+       * O PROGRESSO COMO BARRA (2026-08-21, a pedido).
+       *
+       * O número sozinho obriga a ler oitenta linhas para achar quem está quase chegando. A barra
+       * responde isso de relance, que é o que uma tela de acompanhamento precisa dar.
+       *
+       * O número FICA ao lado: barra sozinha não distingue 78% de 82%, e quem vai decidir sobre uma
+       * viagem específica precisa do valor. A barra é para varrer, o número é para agir.
+       *
+       * Sem viagem, um traço — e não uma barra vazia, que pareceria "parado no começo" quando na
+       * verdade não há percurso nenhum a medir.
+       */}
+      <TableCell className="w-[8.5rem]">
+        {v.progressPercent == null ? (
+          <span className="text-sm text-muted-foreground">—</span>
+        ) : (
+          <div className="flex items-center gap-2">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{ width: `${Math.min(100, Math.max(0, v.progressPercent))}%` }}
+              />
+            </div>
+            <span className="w-9 shrink-0 text-right text-sm tabular-nums">
+              {v.progressPercent.toFixed(0)}%
+            </span>
+          </div>
+        )}
       </TableCell>
       <TableCell className="text-sm tabular-nums">{hora(v.etaAt)}</TableCell>
       <TableCell className="text-sm">
         <Risco risco={v.risk} temViagem={Boolean(v.tripId)} t={t} />
+      </TableCell>
+      <TableCell>
+        <Alertas v={v} t={t} />
       </TableCell>
       <TableCell className="max-w-[22rem] truncate text-sm" title={v.positionLabel ?? undefined}>
         {v.positionLabel ?? "—"}
