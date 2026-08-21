@@ -8,6 +8,7 @@ import {
   saoPauloDate,
   saoPauloMonthBounds,
   prazoDeAtribuicaoVencido,
+  regionPosition,
   TRIP_DISPLAY_ORDER,
   type TripDisplayStatus,
 } from "@brazil-tms/shared";
@@ -403,21 +404,30 @@ export function DashboardWidgets() {
     regionD1: `&pickupFrom=${amanha}&pickupTo=${amanha}`,
     regionD2: `&pickupFrom=${depoisDeAmanha}&pickupTo=${depoisDeAmanha}`,
   };
-  const regioesDosTresDias = [...porRegiao.entries()].map(([region, porDia]) => ({
-    region,
-    dias: (["regionToday", "regionD1", "regionD2"] as const).map((diaKey) => {
-      const byStatus = porDia[diaKey] ?? [];
-      return {
-        diaKey,
-        byStatus,
-        dateFilter: filtroDe[diaKey]!,
-        atrasadas:
-          diaKey === "regionToday" && vencido
-            ? (byStatus.find((linha) => linha.status === "to_assign")?.count ?? 0)
-            : 0,
-      };
-    }),
-  }));
+  /**
+   * A ORDEM É REORDENADA AQUI TAMBÉM, e não é redundância.
+   *
+   * O servidor devolve cada recorte na ordem declarada, mas o mapa acima é preenchido percorrendo os
+   * três dias: uma frente que não tem viagem hoje e tem amanhã entra na volta do D1 e ficaria no fim,
+   * fora de ordem. Num painel de parede a posição da linha é como as pessoas a encontram.
+   */
+  const regioesDosTresDias = [...porRegiao.entries()]
+    .sort(([a], [b]) => regionPosition(a) - regionPosition(b))
+    .map(([region, porDia]) => ({
+      region,
+      dias: (["regionToday", "regionD1", "regionD2"] as const).map((diaKey) => {
+        const byStatus = porDia[diaKey] ?? [];
+        return {
+          diaKey,
+          byStatus,
+          dateFilter: filtroDe[diaKey]!,
+          atrasadas:
+            diaKey === "regionToday" && vencido
+              ? (byStatus.find((linha) => linha.status === "to_assign")?.count ?? 0)
+              : 0,
+        };
+      }),
+    }));
 
   return (
     <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
@@ -477,18 +487,32 @@ export function DashboardWidgets() {
        *
        * A ordem das frentes vem do servidor; a dos dias é fixa aqui, porque é a do tempo.
        */}
-      {regioesDosTresDias.map(({ region, dias }) =>
-        dias.map(({ diaKey, byStatus, dateFilter, atrasadas }) => (
-          <RegionCard
-            key={`${region ?? "__sem_regiao__"}-${diaKey}`}
-            region={region}
-            byStatus={byStatus}
-            dateFilter={dateFilter}
-            diaKey={diaKey}
-            atrasadas={atrasadas}
-          />
-        )),
-      )}
+      {regioesDosTresDias.map(({ region, dias }) => (
+        /**
+         * UMA LINHA POR FRENTE (2026-08-20, a pedido): NONE em cima, SUDESTE embaixo, SULCO por
+         * último — e os três dias de cada uma lado a lado, dentro da linha dela.
+         *
+         * `col-span-full` com grade própria dentro, em vez de deixar os nove cartões fluírem na
+         * grade de fora. Fluindo, eles se acomodavam pelo espaço que sobrava e a mesma frente
+         * quebrava no meio da tela — quem cuida de uma região perdia a comparação entre os dias dela,
+         * que é justamente a leitura que estes cartões existem para dar.
+         */
+        <div
+          key={region ?? "__sem_regiao__"}
+          className="col-span-full grid grid-cols-1 gap-2.5 sm:grid-cols-3"
+        >
+          {dias.map(({ diaKey, byStatus, dateFilter, atrasadas }) => (
+            <RegionCard
+              key={diaKey}
+              region={region}
+              byStatus={byStatus}
+              dateFilter={dateFilter}
+              diaKey={diaKey}
+              atrasadas={atrasadas}
+            />
+          ))}
+        </div>
+      ))}
       {/* Amanhã (2026-08-17, a pedido): numa TV no meio da sala, de tarde, a pergunta que ainda tem
           resposta é a do dia seguinte. */}
       <StatusCard
