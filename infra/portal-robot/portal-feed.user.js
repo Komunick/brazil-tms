@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.10.1
+// @version      1.11.0
 // @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -91,7 +91,22 @@
      * considera dele — e barato o bastante para o ciclo rodar de cinco em cinco minutos.
      */
     planoDiasAtras: 15,
-    planoDiasAdiante: 7,
+    /**
+     * TRINTA DIAS À FRENTE, e não sete (2026-08-21).
+     *
+     * O sete nasceu quando o robô só servia para ACOMPANHAR execução: viagem de daqui a duas semanas
+     * não tinha o que acompanhar. Depois o TMS passou a decidir aceite e atribuição, e o número
+     * ficou curto sem que ninguém percebesse — o alcance vira o limite do que dá para trabalhar.
+     *
+     * O sintoma foi concreto: a LT0Q8T02EN8G1, aceita no portal e com coleta em 30/08, simplesmente
+     * não existia no TMS. O usuário foi atribuí-la e não a encontrou. Uma viagem que a empresa já se
+     * comprometeu a fazer, invisível para o sistema que decide quem a faz.
+     *
+     * Medido no portal: a janela de 7 dias vê 472 viagens (22 esperando decisão); a de 30 vê 616
+     * (23). O cliente publica até ~10 dias à frente, então o 30 dá folga em vez de raspar o limite —
+     * e o custo é ir de 5 para 7 páginas por ciclo, ~3 segundos a cada cinco minutos.
+     */
+    planoDiasAdiante: 30,
     /**
      * A aba "Aceito" — as viagens que estão ACONTECENDO agora (2026-08-16).
      *
