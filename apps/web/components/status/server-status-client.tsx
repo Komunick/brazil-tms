@@ -4,7 +4,13 @@ import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import type { ServerStatus } from "@brazil-tms/db";
 import { portalStatusAgrees, type TripStatus } from "@brazil-tms/shared";
-import { idadeEmTexto, saudeDaFonte, saudeDaTarefa, type Saude } from "@/lib/status/saude";
+import {
+  idadeEmTexto,
+  saudeDaFonte,
+  saudeDaTarefa,
+  type Saude,
+  saudeDoCiclo,
+} from "@/lib/status/saude";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -60,6 +66,14 @@ function Selo({ saude, texto }: { saude: Saude; texto: string }) {
   );
 }
 
+/**
+ * Milissegundos em segundos com uma casa. Traço quando o robô não mandou — e traço é honesto: ele
+ * diz que a pergunta foi feita e a resposta ainda não veio, o que é diferente de zero.
+ */
+function segundos(ms: number | null): string {
+  return ms == null ? "—" : `${(ms / 1000).toFixed(1)}s`;
+}
+
 export function ServerStatusClient() {
   const t = useTranslations("ServerStatus");
   const { data, isLoading, isError } = useStatus();
@@ -92,7 +106,20 @@ export function ServerStatusClient() {
   const agora = new Date(data.agora);
   const fontes = data.fontes.map((f) => ({ ...f, ...saudeDaFonte(f.chave, f.ultimo, agora) }));
   const tarefas = data.tarefas.map((j) => ({ ...j, ...saudeDaTarefa(j.ultimo, agora) }));
-  const algoAtrasado = [...fontes, ...tarefas].some((x) => x.saude !== "ok" && x.saude !== "sem_regua");
+  /**
+   * O CICLO de cada robô: o que ele promete contra o que entrega (2026-08-21).
+   *
+   * Robô lento entra no MESMO aviso do topo que as fontes atrasadas. São o mesmo problema visto em
+   * dois momentos — um antes de o dado parar, outro depois — e separá-los em dois avisos faria a
+   * pessoa aprender a olhar só um deles.
+   */
+  const ciclos = (data.ciclos ?? []).map((c) => ({
+    ...c,
+    ...saudeDoCiclo(c.intervalMs, c.durationMs),
+  }));
+  const algoAtrasado =
+    [...fontes, ...tarefas].some((x) => x.saude !== "ok" && x.saude !== "sem_regua") ||
+    ciclos.some((c) => c.saude === "lento");
   // A regra do que combina mora no shared, testada sem banco. Aqui só se filtra o que ela reprovou.
   const divergentes = data.paresDoPortal.filter(
     (p) => !portalStatusAgrees(p.portal, p.tms as TripStatus),
@@ -141,7 +168,9 @@ export function ServerStatusClient() {
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-xs tabular-nums text-muted-foreground">
-                  {idadeEmTexto(f.minutos) ? t("age", { age: idadeEmTexto(f.minutos)! }) : t("never")}
+                  {idadeEmTexto(f.minutos)
+                    ? t("age", { age: idadeEmTexto(f.minutos)! })
+                    : t("never")}
                 </span>
                 <Selo saude={f.saude} texto={t(`health.${f.saude}`)} />
               </div>
@@ -149,6 +178,47 @@ export function ServerStatusClient() {
           ))}
         </ul>
       </Card>
+
+      {/**
+       * O RITMO DOS ROBÔS — o aviso que chega ANTES do dado parar.
+       *
+       * As fontes acima respondem "ainda chega?". Isto responde "chega no ritmo?". Quando a VM
+       * começa a sufocar, o ciclo estica muito antes de falhar: configurado 10s, levando 45s. O dado
+       * ainda aparece, só que velho — e o carimbo fresco lá em cima diria que está tudo bem.
+       *
+       * Só aparece quando algum robô já mandou o pulso. Robô antigo, que ainda não foi atualizado,
+       * simplesmente não figura — em vez de figurar como "sem dado" e parecer defeito.
+       */}
+      {ciclos.length > 0 ? (
+        <Card className="p-4">
+          <CardTitle className="text-sm font-semibold uppercase tracking-wide">
+            {t("cyclesTitle")}
+          </CardTitle>
+          <p className="mt-0.5 text-xs text-muted-foreground">{t("cyclesHint")}</p>
+          <ul className="mt-2">
+            {ciclos.map((c) => (
+              <li
+                key={c.robot}
+                className="flex flex-wrap items-center justify-between gap-2 border-b border-border/60 py-2.5 last:border-b-0"
+              >
+                <p className="min-w-[16rem] flex-1 text-sm font-medium">{c.robot}</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {t("cyclePace", {
+                      configurado: segundos(c.intervalMs),
+                      real: segundos(c.durationMs),
+                    })}
+                  </span>
+                  <Selo
+                    saude={c.saude === "lento" ? "atrasado" : c.saude === "ok" ? "ok" : "sem_regua"}
+                    texto={t(`cycleHealth.${c.saude}`)}
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       {/* A COERÊNCIA COM O PORTAL. Duas perguntas diferentes, e as ações que elas pedem também:
           divergência de status quer dizer que um marco não chegou; atribuição pendente quer dizer

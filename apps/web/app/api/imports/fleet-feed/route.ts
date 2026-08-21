@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { fleetFeedBodySchema } from "@brazil-tms/shared";
-import { recordFleetPositions } from "@brazil-tms/db";
+import { recordFleetPositions, recordRobotCycle } from "@brazil-tms/db";
 import { Conflict, handleRouteError } from "@/lib/api/respond";
 import { Unauthorized } from "@/lib/auth/require-auth";
 
@@ -46,6 +46,19 @@ export async function POST(request: Request): Promise<NextResponse> {
 
     const body = fleetFeedBodySchema.parse(json);
     assertToken(request, body.token);
+
+    /**
+     * O pulso vai ANTES da gravação, e sem `await` no caminho crítico? Não: com `await`, e antes.
+     *
+     * Antes porque, se a gravação falhar, o pulso ainda é verdade — o robô rodou e levou aquele
+     * tempo. Com `await` porque `recordRobotCycle` já engole os próprios erros: ela nunca derruba a
+     * entrega, e um `void` aqui só esconderia a ordem de quem lê depois.
+     */
+    await recordRobotCycle({
+      robot: "fleet",
+      intervalMs: body.cicloMs ?? null,
+      durationMs: body.duracaoMs ?? null,
+    });
 
     const resultado = await recordFleetPositions(body.positions);
     /**

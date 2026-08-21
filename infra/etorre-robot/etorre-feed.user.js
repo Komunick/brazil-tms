@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do eTorre
 // @namespace    braziltransports.com.br
-// @version      0.2.0
+// @version      0.2.1
 // @description  Escuta o que a tela de Veículos Logísticos do eTorre já busca e entrega ao TMS. Somente leitura.
 // @match        https://torre.logae.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -168,6 +168,15 @@
    * que não pode acontecer é falhar em silêncio — daí o aviso com o corpo da resposta, que é onde o
    * TMS explica se o token está curto, se o corpo veio torto ou se a rota nem existe ainda.
    */
+  /**
+   * O PULSO DO ROBÔ (2026-08-21): quanto o ciclo anterior levou, e o intervalo configurado.
+   *
+   * Vai pendurado na entrega seguinte, e não numa chamada própria — uma requisição a mais só para
+   * dizer "estou bem" seria tráfego para vigiar tráfego. Serve para a tela de Status avisar que a VM
+   * está sufocando ANTES de o dado parar.
+   */
+  let ultimoCiclo = {};
+
   function entregar(frota) {
     if (!CONFIG.token || CONFIG.token === "COLE_AQUI_O_TOKEN") {
       erro("token não configurado — o retrato foi lido e NÃO foi entregue");
@@ -177,7 +186,11 @@
       method: "POST",
       url: `${CONFIG.tms}/api/imports/fleet-feed`,
       headers: { "Content-Type": "application/json" },
-      data: JSON.stringify({ token: CONFIG.token, positions: frota.map(paraTms) }),
+      data: JSON.stringify({
+        token: CONFIG.token,
+        positions: frota.map(paraTms),
+        ...ultimoCiclo,
+      }),
       timeout: 60000,
       onload: (res) => {
         if (res.status >= 200 && res.status < 300) {
@@ -298,11 +311,14 @@
   // O primeiro ciclo espera a tela assentar; os seguintes são agendados a partir do FIM do anterior,
   // então um ciclo lento nunca empilha em cima do próximo.
   setTimeout(function ciclo() {
+    const t0 = Date.now();
     try {
       atualizarTela();
     } catch (e) {
       erro("ciclo falhou:", String(e?.message ?? e).slice(0, 160));
     } finally {
+      // O pulso deste ciclo viaja na entrega do PRÓXIMO — ver `ultimoCiclo`.
+      ultimoCiclo = { cicloMs: CONFIG.intervaloMs, duracaoMs: Date.now() - t0 };
       setTimeout(ciclo, CONFIG.intervaloMs);
     }
   }, 15_000);
