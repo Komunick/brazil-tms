@@ -1125,7 +1125,9 @@
       "presetToday": "Hoje",
       "presetTomorrow": "Amanhã",
       "presetD2": "D2",
-      "presetNext7": "7 dias"
+      "presetNext7": "7 dias",
+      "colRegion": "Região",
+      "filterRegion": "Região"
     },
     "detail": {
       "back": "Voltar para a Torre de Controle",

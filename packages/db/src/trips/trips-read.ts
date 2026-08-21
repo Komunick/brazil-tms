@@ -89,6 +89,8 @@ export interface TripBoardRow {
   customerName: string;
   originCode: string;
   originName: string;
+  /** A região operacional da estação de ORIGEM; nula enquanto a estação não for classificada. */
+  originRegion: string | null;
   destinationCode: string;
   destinationName: string;
   laneLabel: string | null;
@@ -306,6 +308,7 @@ const boardColumns = {
   customerId: trips.customerId,
   customerName: customers.name,
   originCode: originLoc.code,
+  originRegion: originLoc.region,
   originName: originLoc.name,
   destinationCode: destLoc.code,
   destinationName: destLoc.name,
@@ -336,6 +339,7 @@ type BoardRow = {
   customerName: string | null;
   originCode: string | null;
   originName: string | null;
+  originRegion: string | null;
   destinationCode: string | null;
   destinationName: string | null;
   laneId: string | null;
@@ -365,6 +369,7 @@ function toBoardRow(row: BoardRow): TripBoardRow {
     customerName: row.customerName ?? "",
     originCode: row.originCode ?? "",
     originName: row.originName ?? "",
+    originRegion: row.originRegion ?? null,
     destinationCode: row.destinationCode ?? "",
     destinationName: row.destinationName ?? "",
     laneLabel: row.laneId ? `${row.originCode ?? ""} → ${row.destinationCode ?? ""}` : null,

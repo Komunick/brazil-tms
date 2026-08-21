@@ -3,14 +3,13 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
-  BILLING_PHASE_STATUSES,
-  SLA_STATUSES,
   boardFilterForDisplayStatus,
   isTripQueue,
   TRIP_DISPLAY_ORDER,
   VEHICLE_TYPE_VALUES,
   type TripBoardQuery,
   type TripDisplayStatus,
+  REGION_ORDER,
   saoPauloDate,
   termosDaBusca,
 } from "@brazil-tms/shared";
@@ -71,7 +70,6 @@ export function TripFilters({
   const t = useTranslations("Trips");
   const tCommon = useTranslations("Common");
   const tVehicle = useTranslations("VehicleTypes");
-  const tSla = useTranslations("Sla.status");
   const tDispatch = useTranslations("Dispatch");
 
   /**
@@ -98,6 +96,31 @@ export function TripFilters({
   useEffect(() => {
     setQ(query.q ?? "");
   }, [query.q]);
+
+  /**
+   * AS DATAS TAMBÉM MORAM EM ESTADO LOCAL, e o motivo é um bug que só aparece digitando.
+   *
+   * Num `<input type="date">` CONTROLADO, o navegador reporta o valor como VAZIO enquanto a data
+   * está incompleta. Digitando "21/08/2…", o `onChange` disparava com string vazia, o filtro tirava
+   * a data da URL, o campo era redesenhado sem valor — e o que a pessoa tinha digitado sumia bem no
+   * ano, que é o último pedaço. O relato foi exatamente esse: "quando chego na data de ano começa a
+   * sumir".
+   *
+   * A correção é a mesma da caixa de busca ao lado: guardar o que se digita aqui e mandar para a URL
+   * só quando a data está COMPLETA — ou ao sair do campo, que é como o apagar continua funcionando.
+   * Vazio vindo do `onChange` é ignorado de propósito; vazio vindo do `onBlur` limpa o filtro.
+   */
+  const [pickupFrom, setPickupFrom] = useState(query.pickupFrom ?? "");
+  const [pickupTo, setPickupTo] = useState(query.pickupTo ?? "");
+  useEffect(() => {
+    setPickupFrom(query.pickupFrom ?? "");
+  }, [query.pickupFrom]);
+  useEffect(() => {
+    setPickupTo(query.pickupTo ?? "");
+  }, [query.pickupTo]);
+
+  /** `yyyy-MM-dd` completo — o único formato que o campo nativo entrega quando termina de ser lido. */
+  const DATA_COMPLETA = /^d{4}-d{2}-d{2}$/;
 
   const locationList = options.locations;
   const codeOf = new Map(locationList.map((l) => [l.id, l.code]));
@@ -317,20 +340,29 @@ export function TripFilters({
             </Select>
           </div>
 
+          {/**
+           * A REGIÃO da estação de ORIGEM (2026-08-21, a pedido).
+           *
+           * Entra no lugar que era do filtro de faturamento, que saiu da tela junto — a etapa de
+           * faturamento está pausada e um filtro para uma fila vazia é ruído.
+           *
+           * É o MESMO parâmetro que os cartões do painel usam no link: clicar num cartão de frente
+           * cai aqui com este filtro ligado, e o número lá e o total daqui são o mesmo número.
+           */}
           <div className="space-y-1.5">
-            <Label>{t("board.filterBillingStatus")}</Label>
+            <Label>{t("board.filterRegion")}</Label>
             <Select
-              value={query.billingStatus ?? ""}
-              onValueChange={(v) => setFilters({ billingStatus: v === "__all__" ? undefined : v })}
+              value={query.region ?? ""}
+              onValueChange={(v) => setFilters({ region: v === "__all__" ? undefined : v })}
             >
               <SelectTrigger>
                 <SelectValue placeholder={t("board.all")} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__all__">{t("board.all")}</SelectItem>
-                {BILLING_PHASE_STATUSES.map((b) => (
-                  <SelectItem key={b} value={b}>
-                    {t(`billingStatus.${b}`)}
+                {REGION_ORDER.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {r}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -357,29 +389,13 @@ export function TripFilters({
             </Select>
           </div>
 
-          {/* 007 — SLA-risk filter. Picking a specific status clears the broad `atRisk` shorthand so
-              they never compose to an empty board (atRisk = at_risk|late|breached). */}
-          <div className="space-y-1.5">
-            <Label>{t("board.filterSlaStatus")}</Label>
-            <Select
-              value={query.slaStatus?.[0] ?? ""}
-              onValueChange={(v) =>
-                setFilters({ slaStatus: v === "__all__" ? [] : [v], atRisk: undefined })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t("board.all")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">{t("board.all")}</SelectItem>
-                {SLA_STATUSES.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {tSla(s)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/**
+           * SEM O FILTRO DE RISCO DE SLA (2026-08-21, a pedido).
+           *
+           * Saiu da TELA, não do sistema: o parâmetro continua valendo na URL, o atalho "Em risco"
+           * dos recortes rápidos continua funcionando, e o cálculo de risco segue rodando. O que
+           * saiu foi o seletor, que a operação não usava.
+           */}
 
           <div className="space-y-1.5">
             <Label>{t("board.filterOrigin")}</Label>
@@ -496,8 +512,14 @@ export function TripFilters({
             <Input
               id="pickup-from"
               type="date"
-              value={query.pickupFrom ?? ""}
-              onChange={(e) => setFilters({ pickupFrom: e.target.value || undefined })}
+              value={pickupFrom}
+              onChange={(e) => {
+                setPickupFrom(e.target.value);
+                if (DATA_COMPLETA.test(e.target.value)) setFilters({ pickupFrom: e.target.value });
+              }}
+              onBlur={() =>
+                setFilters({ pickupFrom: DATA_COMPLETA.test(pickupFrom) ? pickupFrom : undefined })
+              }
             />
           </div>
 
@@ -506,8 +528,14 @@ export function TripFilters({
             <Input
               id="pickup-to"
               type="date"
-              value={query.pickupTo ?? ""}
-              onChange={(e) => setFilters({ pickupTo: e.target.value || undefined })}
+              value={pickupTo}
+              onChange={(e) => {
+                setPickupTo(e.target.value);
+                if (DATA_COMPLETA.test(e.target.value)) setFilters({ pickupTo: e.target.value });
+              }}
+              onBlur={() =>
+                setFilters({ pickupTo: DATA_COMPLETA.test(pickupTo) ? pickupTo : undefined })
+              }
             />
           </div>
 
