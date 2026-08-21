@@ -135,7 +135,7 @@ const REGIOES: ReadonlyArray<readonly [string, string]> = [
    * por UF teria errado as duas.
    */
   ["XPT-LBA-73", "SUDESTE"], // XPT_BA_BOM JESUS DA LAPA_02 — Bahia, mas opera no Sudeste
-  ["XPT-LGO-97", "NONE"], // XPT_GO_CALDAS NOVAS — Goiás, mas opera no Norte-Nordeste
+  ["XPT-LGO-97", "SULCO"], // XPT_GO_CALDAS NOVAS — corrigida em 2026-08-21 (ver o bloco acima)
   ["FMH-CPS-01", "SUDESTE"], // FM Hub_SP_Campinas
   ["SOC-PR1", "SULCO"], // SoC_PR_Curitiba
 ];
