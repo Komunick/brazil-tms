@@ -56,6 +56,7 @@ import type {
   BillingItemView,
   BillingListRow,
   ExportBatchRow,
+  MotoristaDoPortal,
 } from "@brazil-tms/db";
 
 /**
@@ -1239,5 +1240,23 @@ export function usePortalAction(id: string) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
     },
+  });
+}
+
+/**
+ * Os motoristas que o PORTAL aceita, para a tela de atribuição.
+ *
+ * Cache longo de propósito: a lista vem do histórico de viagens e muda quando um motorista novo
+ * roda pela primeira vez — não a cada minuto. Recarregá-la a cada abertura de formulário seria uma
+ * consulta pesada para responder sempre a mesma coisa.
+ */
+export function usePortalDrivers() {
+  return useQuery({
+    queryKey: ["portal-drivers"],
+    queryFn: async () => {
+      const res = await fetch("/api/portal-drivers");
+      return asJson<{ items: MotoristaDoPortal[] }>(res);
+    },
+    staleTime: 10 * 60_000,
   });
 }

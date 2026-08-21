@@ -40,6 +40,7 @@ export type AuditAction =
   // nem por que recusou. Estas duas sao a resposta a essas perguntas.
   | "trip.portal_accept"
   | "trip.portal_reject"
+  | "trip.portal_assign"
   | "trip.create" // newValue = original_plan summary + initial status
   | "trip.plan_update" // accepted customer update to live planned_* fields (per-field prev/new)
   | "trip.fields_update" // the operation's own annotations (solicitação, checklist, SM Raster, CT-e, doca)
@@ -188,6 +189,7 @@ export const ALL_AUDIT_ACTIONS = [
   "vehicle.document_upload",
   "trip.portal_accept",
   "trip.portal_reject",
+  "trip.portal_assign",
 ] as const satisfies readonly AuditAction[];
 
 /**

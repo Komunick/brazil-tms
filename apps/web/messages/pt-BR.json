@@ -367,7 +367,8 @@
     "driver_document_upload": "Documento do motorista enviado",
     "vehicle_document_upload": "Documento do veículo enviado",
     "trip_portal_accept": "Aceite enviado ao portal",
-    "trip_portal_reject": "Recusa enviada ao portal"
+    "trip_portal_reject": "Recusa enviada ao portal",
+    "trip_portal_assign": "Atribuição enviada ao portal"
   },
   "Documents": {
     "title": "Documentos",
@@ -1354,6 +1355,25 @@
       "confirmTitle": "Você tem certeza?",
       "confirmRejectQuestion": "Recusar a viagem {lh}?",
       "sending": "Enviando ao portal…"
+    },
+    "portalAssign": {
+      "title": "Atribuir motorista",
+      "subtitle": "Viagem {lh}. A atribuição vai para o portal e fica registrada aqui.",
+      "driver": "Motorista",
+      "driverPlaceholder": "Busque pelo nome",
+      "secondDriver": "Segundo motorista (opcional)",
+      "secondDriverPlaceholder": "Busque pelo nome",
+      "noSecondDriver": "Sem segundo motorista",
+      "noDriver": "Nenhum motorista com esse nome.",
+      "loadingDrivers": "Carregando motoristas…",
+      "plate": "Placa do veículo",
+      "plateN": "Placa do veículo #{n}",
+      "addPlate": "Acrescentar placa",
+      "removePlate": "Remover",
+      "hint": "Os motoristas são os que o portal já usou nesta agência. Placa nova é validada por ele.",
+      "confirm": "Atribuir",
+      "cancel": "Cancelar",
+      "action": "Atribuir no portal"
     }
   },
   "Sla": {

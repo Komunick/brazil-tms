@@ -1,8 +1,11 @@
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import {
   impedimentoDaAcao,
+  impedimentoDaAtribuicao,
   motivoValido,
+  normalizarPlaca,
   type ImpedimentoDaAcao,
+  type ImpedimentoDaAtribuicao,
   type PortalAction,
 } from "@brazil-tms/shared";
 import { db } from "../client";
@@ -25,6 +28,10 @@ export interface OrdemDoPortal {
   action: PortalAction;
   reasonId: number | null;
   remark: string | null;
+  /** Atribuição: o id do motorista NO PORTAL, o segundo (se houver) e as placas. */
+  driverId: number | null;
+  secondDriverId: number | null;
+  plates: string[];
   status: "pending" | "sent" | "done" | "failed";
   attempts: number;
   lastError: string | null;
@@ -34,13 +41,26 @@ export interface OrdemDoPortal {
 
 /** Erro de REGRA, não de sistema: a rota traduz cada um para uma mensagem que a tela mostra. */
 export class OrdemRecusada extends Error {
-  constructor(readonly motivo: ImpedimentoDaAcao | "viagem_inexistente" | "motivo_invalido") {
+  constructor(
+    readonly motivo:
+      | ImpedimentoDaAcao
+      | ImpedimentoDaAtribuicao
+      | "viagem_inexistente"
+      | "motivo_invalido",
+  ) {
     super(motivo);
     this.name = "OrdemRecusada";
   }
 }
 
 const ABERTAS = ["pending", "sent"] as const;
+
+/** Cada ordem tem a sua linha na auditoria: é onde se responde "quem decidiu isso, e quando?". */
+const ACAO_AUDITADA = {
+  accept: "trip.portal_accept",
+  reject: "trip.portal_reject",
+  assign: "trip.portal_assign",
+} as const;
 
 /**
  * Grava a ordem, recusando tudo que o portal recusaria mais tarde.
@@ -59,8 +79,22 @@ export async function enfileirarOrdemDoPortal(entrada: {
   action: PortalAction;
   reasonId?: number | null;
   remark?: string | null;
+  /** Só para `assign`. As regras vivem em `domain/portal-assignment.ts`. */
+  driverId?: number | null;
+  secondDriverId?: number | null;
+  plates?: string[];
   requestedBy: string;
 }): Promise<OrdemDoPortal> {
+  if (entrada.action === "assign") {
+    // As regras vivem em `shared`, sob teste. Aqui só se recusa o que elas apontarem, com o mesmo
+    // vocabulário que a rota traduz para a tela.
+    const impedimento = impedimentoDaAtribuicao({
+      driverId: entrada.driverId ?? 0,
+      secondDriverId: entrada.secondDriverId ?? null,
+      plates: entrada.plates ?? [],
+    });
+    if (impedimento) throw new OrdemRecusada(impedimento);
+  }
   if (entrada.action === "reject" && !motivoValido(entrada.reasonId)) {
     // O portal não deixa rejeitar sem motivo — o botão dele abre um diálogo antes de qualquer
     // chamada. Recusar aqui poupa uma ida à VM para receber a mesma recusa em outra língua.
@@ -109,6 +143,12 @@ export async function enfileirarOrdemDoPortal(entrada: {
         action: entrada.action,
         reasonId: entrada.action === "reject" ? (entrada.reasonId ?? null) : null,
         remark: entrada.action === "reject" ? entrada.remark?.trim() || null : null,
+        driverId: entrada.action === "assign" ? (entrada.driverId ?? null) : null,
+        secondDriverId: entrada.action === "assign" ? (entrada.secondDriverId ?? null) : null,
+        plates:
+          entrada.action === "assign"
+            ? (entrada.plates ?? []).map(normalizarPlaca).filter(Boolean).join(",")
+            : null,
         requestedBy: entrada.requestedBy,
       })
       .returning();
@@ -123,7 +163,7 @@ export async function enfileirarOrdemDoPortal(entrada: {
      */
     await writeAudit(tx, {
       actorUserId: entrada.requestedBy,
-      action: entrada.action === "accept" ? "trip.portal_accept" : "trip.portal_reject",
+      action: ACAO_AUDITADA[entrada.action],
       entityType: "trip",
       entityId: entrada.tripId,
       previousValue: null,
@@ -132,6 +172,9 @@ export async function enfileirarOrdemDoPortal(entrada: {
         portalTripId: linha[0]!.portalTripId,
         reasonId: linha[0]!.reasonId,
         remark: linha[0]!.remark,
+        driverId: linha[0]!.driverId,
+        secondDriverId: linha[0]!.secondDriverId,
+        plates: linha[0]!.plates,
       },
     });
     return paraOrdem(linha[0]!);
@@ -239,6 +282,9 @@ function paraOrdem(r: typeof portalCommands.$inferSelect): OrdemDoPortal {
     action: r.action,
     reasonId: r.reasonId,
     remark: r.remark,
+    driverId: r.driverId,
+    secondDriverId: r.secondDriverId,
+    plates: (r.plates ?? "").split(",").filter(Boolean),
     status: r.status,
     attempts: r.attempts,
     lastError: r.lastError,

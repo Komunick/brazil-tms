@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — executor de decisões no portal
 // @namespace    braziltransports.com.br
-// @version      0.2.0
+// @version      0.3.0
 // @description  Executa no portal as decisões tomadas no TMS: aceitar e rejeitar viagem. NÃO decide nada.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -80,6 +80,19 @@
      */
     aceitar: "/api/line_haul/agency/trip/accept",
     rejeitar: "/api/line_haul/agency/trip/reject",
+    /**
+     * A ATRIBUIÇÃO TEM DUAS ROTAS, e a escolha não é de estilo (medido em 2026-08-21).
+     *
+     * Com UM motorista o portal chama `/trip/assign` e manda `operation_info`. Com DOIS ele chama
+     * `/trip/accept/assign_multiple_driver`, manda `driver_pool` e NÃO manda `operation_info`. Não é
+     * o mesmo pacote com um campo a mais — são chamadas distintas.
+     *
+     * Mandar dois motoristas pela rota de um faz o portal responder SUCESSO e ignorar o segundo em
+     * silêncio, que é o pior desfecho possível: a viagem sai com metade do que foi pedido e ninguém
+     * fica sabendo.
+     */
+    atribuir: "/api/line_haul/agency/trip/assign",
+    atribuirDois: "/api/line_haul/agency/trip/accept/assign_multiple_driver",
   };
 
   /** A versão vem do CABEÇALHO, não de uma constante copiada — que envelhece calada. */
@@ -128,7 +141,15 @@
    * confundir os dois faria o TMS dar por aceita uma viagem que continua pendente.
    */
   async function executar(ordem) {
-    const caminho = ordem.action === "accept" ? CONFIG.aceitar : CONFIG.rejeitar;
+    const doisMotoristas = ordem.action === "assign" && Boolean(ordem.secondDriverId);
+    const caminho =
+      ordem.action === "accept"
+        ? CONFIG.aceitar
+        : ordem.action === "reject"
+          ? CONFIG.rejeitar
+          : doisMotoristas
+            ? CONFIG.atribuirDois
+            : CONFIG.atribuir;
     /**
      * A ESTAÇÃO VAI NO CORPO, e é obrigatória.
      *
@@ -142,14 +163,30 @@
     const estacao = localStorage.getItem("stationId");
     if (!estacao) throw new Error("stationId não encontrado: a sessão do portal caiu?");
 
+    const base = {
+      trip_id: Number(ordem.portalTripId),
+      agency_current_station_id: Number(estacao),
+    };
     const corpo =
       ordem.action === "accept"
-        ? { trip_id: Number(ordem.portalTripId), agency_current_station_id: Number(estacao) }
-        : {
-            trip_id: Number(ordem.portalTripId),
-            reject_reason: ordem.reasonId,
-            agency_current_station_id: Number(estacao),
-          };
+        ? base
+        : ordem.action === "reject"
+          ? { ...base, reject_reason: ordem.reasonId }
+          : doisMotoristas
+            ? {
+                ...base,
+                driver_id: ordem.driverId,
+                driver_pool: [ordem.secondDriverId],
+                vehicle_plate_number_list: ordem.plates,
+              }
+            : {
+                ...base,
+                driver_id: ordem.driverId,
+                vehicle_plate_number_list: ordem.plates,
+                // Copiado do pacote real. O portal manda os dois assim na tela dele; não invento
+                // valor para campo que não entendo.
+                operation_info: { device_type: 1, operation_mode: 0 },
+              };
 
     const r = await fetch(caminho, {
       method: "POST",

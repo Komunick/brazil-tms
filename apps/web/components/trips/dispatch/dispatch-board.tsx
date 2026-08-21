@@ -3,7 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { ACEITACAO_PENDENTE, formatDateTime, saoPauloDate } from "@brazil-tms/shared";
+import {
+  ACEITACAO_PENDENTE,
+  formatDateTime,
+  saoPauloDate,
+  type VehicleType,
+} from "@brazil-tms/shared";
 import type { TripBoardRow, TripFilterOptions } from "@brazil-tms/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
 import { PortalDecisionButtons } from "@/components/trips/portal-decision-buttons";
+import { PortalAssignDialog } from "@/components/trips/portal-assign-dialog";
 import { useFilterOptions, useTripBoard } from "@/lib/trips/client";
 
 /**
@@ -94,6 +100,7 @@ export function DispatchBoard({
   const tCommon = useTranslations("Common");
   // The queue reuses the Control Tower's pagination wording — same board, same vocabulary.
   const tBoard = useTranslations("Trips.board");
+  const tPortal = useTranslations("Trips.portalAssign");
 
   // Queue search: what the user is typing, and the debounced term actually sent as `q` (the board's
   // server-side search — external trip id, customer, origin/destination). Debounced so a typed id
@@ -180,6 +187,15 @@ export function DispatchBoard({
 
   // The trip whose assign dialog is open.
   const [assignRow, setAssignRow] = useState<TripBoardRow | null>(null);
+  /**
+   * A ATRIBUIÇÃO QUE VAI AO PORTAL (2026-08-21) — outra coisa da atribuição interna.
+   *
+   * `assignRow` abre o formulário do TMS, que escolhe motorista e veículo do NOSSO cadastro e não
+   * sai daqui. Este manda no portal do cliente: pede o id de motorista DELE e a placa, e vira ordem
+   * para o robô. Os dois existem porque respondem a perguntas diferentes — quem a empresa escalou, e
+   * o que o cliente foi informado.
+   */
+  const [portalRow, setPortalRow] = useState<TripBoardRow | null>(null);
   // The trip whose cancel dialog is open (017).
 
   const items = board.data?.items ?? [];
@@ -339,9 +355,20 @@ export function DispatchBoard({
                       tamanho="sm"
                     />
                   ) : (
-                    <Button type="button" size="sm" onClick={() => setAssignRow(row)}>
-                      {t("assignAction")}
-                    </Button>
+                    <>
+                      {/* A que vai ao PORTAL vem primeiro: é a que o cliente espera. */}
+                      <Button type="button" size="sm" onClick={() => setPortalRow(row)}>
+                        {tPortal("action")}
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setAssignRow(row)}
+                      >
+                        {t("assignAction")}
+                      </Button>
+                    </>
                   )}
                 </div>
               </li>
@@ -383,6 +410,16 @@ export function DispatchBoard({
           ) : null}
         </DialogContent>
       </Dialog>
+
+      {portalRow ? (
+        <PortalAssignDialog
+          tripId={portalRow.id}
+          externalTripId={portalRow.externalTripId}
+          vehicleType={(portalRow.plannedVehicleType as VehicleType | null) ?? null}
+          open
+          onOpenChange={(aberto) => !aberto && setPortalRow(null)}
+        />
+      ) : null}
     </Card>
   );
 }
