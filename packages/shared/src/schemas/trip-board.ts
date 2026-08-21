@@ -103,9 +103,19 @@ export const tripBoardQuerySchema = z.object({
    * são exaustivas e mutuamente exclusivas por construção: juntas somam `received` inteiro.
    */
   queue: optParam(z.enum(TRIP_QUEUES)),
+  /**
+   * A busca livre — e, desde 2026-08-21, uma LISTA de LHs colada de uma vez.
+   *
+   * O teto subiu de 200 para 4000 caracteres porque 200 não cabia o caso de uso: um LH tem 13
+   * caracteres, então trinta deles já passavam de 400 e a colagem era recusada com erro de
+   * validação — sem que a mensagem dissesse que o problema era o tamanho.
+   *
+   * 4000 comporta ~280 LHs, acima do teto de 200 TERMOS que a leitura aplica. Os dois limites
+   * existem para coisas diferentes: este protege a URL, o outro protege a consulta.
+   */
   q: z.preprocess(
     (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-    z.string().trim().min(1).max(200).optional(),
+    z.string().trim().min(1).max(4000).optional(),
   ),
   scope: z.enum(["active", "all"]).default("active"),
   sort: z.enum(TRIP_BOARD_SORTS).default("pickupStart"),
@@ -183,4 +193,35 @@ export function tripBoardQueryFromParams(params: URLSearchParams): TripBoardQuer
 /** Parse + validate the export query (board filters without pagination). */
 export function tripExportQueryFromParams(params: URLSearchParams): TripExportQuery {
   return tripExportQuerySchema.parse(rawFromParams(params));
+}
+
+/**
+ * A caixa de busca em TERMOS.
+ *
+ * Quebra por quebra de linha, vírgula, ponto e vírgula, tabulação e espaço — porque uma lista colada
+ * vem em qualquer um desses formatos, dependendo de onde foi copiada. Planilha manda quebra de
+ * linha; e-mail manda vírgula; o portal manda espaço.
+ *
+ * O QUE ELA NÃO CONSERTA: espaço DENTRO de um código. `LT0Q8M02 E4PK1` vira dois termos, e não há
+ * como distinguir isso de duas buscas curtas legítimas sem inventar regra sobre o formato do código
+ * do cliente — que muda quando ele quiser. Espaço ENTRE códigos, em qualquer quantidade, é tratado.
+ *
+ * TETO DE 200 termos. Cada um vira seis `ILIKE` na consulta, e uma colagem acidental de mil linhas
+ * viraria seis mil comparações por viagem. O corte é silencioso de propósito? Não: quem cola mais
+ * que isso está enganado sobre o que está fazendo, e é melhor devolver as 200 primeiras do que
+ * pendurar o quadro.
+ */
+export function termosDaBusca(q: string): string[] {
+  const partes = q
+    // Invisíveis primeiro: cópia de planilha e de página web traz marca de ordem de bytes e espaço
+    // de largura zero grudados no código. Eles não são espaço para o `s`, então sobreviveriam ao
+    // corte e virariam parte do termo — a busca não acharia nada e ninguém veria o motivo.
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    // Quebra de linha, tabulação, vírgula, ponto e vírgula, barra vertical e espaço. Uma lista
+    // colada vem em qualquer um deles, dependendo de onde foi copiada: planilha manda quebra de
+    // linha e tabulação, e-mail manda vírgula, o portal manda espaço.
+    .split(/[\s,;|]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+  return [...new Set(partes)].slice(0, 200);
 }
