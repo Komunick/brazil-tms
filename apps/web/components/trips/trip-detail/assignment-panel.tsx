@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { TriangleAlert } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { formatDateTime } from "@brazil-tms/shared";
+import { ACEITACAO_PENDENTE, formatDateTime } from "@brazil-tms/shared";
 import type { TripAssignmentDto, TripDetailView, TripFilterOptions } from "@brazil-tms/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
@@ -33,7 +33,20 @@ export function AssignmentPanel({
 
   const current = trip.currentAssignment;
   const history = trip.assignmentHistory;
-  const canAssign = ASSIGNABLE_STATUSES.has(trip.currentStatus);
+  /**
+   * EM ANÁLISE NÃO ATRIBUI (2026-08-21, a pedido).
+   *
+   * A ordem da operação é aceitar primeiro, escalar depois: viagem em análise é uma PROPOSTA que o
+   * cliente ainda espera responder, e pôr motorista nela é comprometer recurso com um trabalho que
+   * a empresa pode recusar.
+   *
+   * A trava não podia morar no status: as duas filas vivem no mesmo `received`, e só a aceitação as
+   * separa. O histórico continua visível — o que some é o formulário.
+   */
+  const emAnalise =
+    ((trip.customerFields ?? {}) as Record<string, string>)["Aceitação (portal)"] ===
+    ACEITACAO_PENDENTE;
+  const canAssign = ASSIGNABLE_STATUSES.has(trip.currentStatus) && !emAnalise;
 
   return (
     <Card>
