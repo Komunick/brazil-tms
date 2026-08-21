@@ -239,6 +239,13 @@
       "when": 1787200000005,
       "tag": "0033_robot_cycles",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1787200000006,
+      "tag": "0034_fleet_alert_flags",
+      "breakpoints": true
     }
   ]
 }

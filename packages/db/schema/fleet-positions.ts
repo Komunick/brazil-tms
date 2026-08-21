@@ -79,10 +79,32 @@ export const fleetPositions = pgTable(
     kmTravelled: doublePrecision("km_travelled"),
     stoppedMinutes: integer("stopped_minutes"),
 
-    /** Faróis do rastreador — alertas de execução que o TMS não tem como derivar sozinho. */
+    /**
+     * OS FARÓIS DO RASTREADOR — os oito ícones da tela do fornecedor.
+     *
+     * Guardados CRUS, no vocabulário dele (`S`/`N`, `MAI`/`MEN`, `MAI`/`MOV`). A tradução para
+     * "aceso/apagado" mora em `shared/domain/fleet-alerts.ts`, num lugar só: se ele trocar um
+     * código, muda uma função — e não uma migração de dados sobre histórico já gravado.
+     *
+     * `no_position` é a exceção que prova a regra: vem `"S"` para a frota inteira porque é a
+     * CONFIGURAÇÃO do alerta, não o estado. O alfinete de posição é derivado do instante da última
+     * posição contra `no_position_limit_minutes`. A coluna fica porque é o que o fornecedor manda.
+     */
     offRoute: text("off_route"),
     noPosition: text("no_position"),
     stoppedFlag: text("stopped_flag"),
+    /** Jornada do motorista: `MAI` passou das quatro horas permitidas, `MEN` está dentro. */
+    drivingTimeFlag: text("driving_time_flag"),
+    /** `S` quando a viagem começou depois da hora prevista. */
+    lateStartFlag: text("late_start_flag"),
+    blockedFlag: text("blocked_flag"),
+    sirenFlag: text("siren_flag"),
+    /** A liberação vigente, texto do rastreador. Existir já é o alerta. */
+    releaseLabel: text("release_label"),
+    /** `S` quando o próprio rastreador considera a viagem atrasada — a régua dele, não a nossa. */
+    tripDelayFlag: text("trip_delay_flag"),
+    /** Minutos de silêncio que o rastreador considera demais nesta conta (hoje 60). */
+    noPositionLimitMinutes: integer("no_position_limit_minutes"),
 
     /** Quando o TMS gravou esta leitura. É o relógio de "o robô ainda está vivo?". */
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
