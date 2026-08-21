@@ -179,10 +179,26 @@ export function ControlTowerTable({
       ),
     },
     {
-      // 007 — server-computed SLA-risk indicator (the UI never computes it).
-      id: "sla",
-      header: () => t("board.colSla"),
-      cell: ({ row }) => <SlaCell row={row.original} />,
+      /**
+       * A REGIÃO da estação de ORIGEM, como ficha (2026-08-21, a pedido).
+       *
+       * Entra no lugar da coluna de risco de SLA, que saiu da tela junto com o filtro dela. A
+       * pergunta que a operação faz olhando a lista passou a ser "de qual frente é esta LH?", e ela
+       * não se responde pelo código da estação — quem não decorou os 78 códigos não sabe dizer.
+       *
+       * Estação sem região mostra um traço, não fica em branco: em branco parece coluna quebrada;
+       * traço diz que a pergunta foi feita e a resposta é "ainda não classificada".
+       */
+      id: "region",
+      header: () => t("board.colRegion"),
+      cell: ({ row }) =>
+        row.original.originRegion ? (
+          <span className="inline-flex items-center rounded border px-1.5 py-0.5 text-[0.68rem] font-medium uppercase tracking-wide text-muted-foreground">
+            {row.original.originRegion}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
     {
       // 006 — assignment row indicator + assigned resources (fills 005 FR-007).
@@ -190,11 +206,11 @@ export function ControlTowerTable({
       header: () => t("board.colAssignment"),
       cell: ({ row }) => <AssignmentCell row={row.original} />,
     },
-    {
-      id: "billing",
-      header: () => t("board.colBilling"),
-      cell: ({ row }) => t(`billingStatus.${row.original.billingStatus ?? "none"}`),
-    },
+    /**
+     * SEM a coluna de FATURAMENTO (2026-08-21, a pedido): a etapa está pausada, e uma coluna que
+     * mostra "—" em toda linha é largura gasta. O dado continua no modelo de leitura e nas telas de
+     * faturamento; voltar é reinserir estas quatro linhas.
+     */
     {
       id: "plannedPickup",
       header: () => <SortableHeader label={t("board.colPickup")} sortKey="pickupStart" />,
@@ -400,38 +416,13 @@ export function ControlTowerTable({
   );
 }
 
-const SLA_STATUS_CLASS: Record<string, string> = {
-  on_track: "bg-emerald-100 text-emerald-900",
-  at_risk: "bg-amber-100 text-amber-900",
-  late: "bg-orange-100 text-orange-900",
-  breached: "bg-destructive/15 text-destructive",
-};
-
-/** The server-computed SLA-risk cell (007): a coloured status pill; contributing reasons on hover. */
-function SlaCell({ row }: { row: TripBoardRow }) {
-  const t = useTranslations("Sla");
-  const status = row.slaStatus;
-  if (!status) return <span className="text-muted-foreground">—</span>;
-  const reasons = (row.slaReasons ?? [])
-    .map((r) => {
-      try {
-        return t(`reason.${r}` as Parameters<typeof t>[0]);
-      } catch {
-        return r;
-      }
-    })
-    .join(", ");
-  return (
-    <span
-      title={reasons || undefined}
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-        SLA_STATUS_CLASS[status] ?? "bg-muted text-muted-foreground"
-      }`}
-    >
-      {t(`status.${status}` as Parameters<typeof t>[0])}
-    </span>
-  );
-}
+/**
+ * A ficha de RISCO DE SLA saiu da tabela em 2026-08-21, a pedido — e o componente saiu junto, porque
+ * componente sem chamador vira código que ninguém mantém e ninguém apaga.
+ *
+ * NADA foi desligado: `slaStatus` e `slaReasons` continuam vindo no modelo de leitura, o cálculo
+ * segue rodando e o recorte rápido "Em risco" continua funcionando. O que saiu foi a coluna.
+ */
 
 /** The assignment row indicator: an assigned/unassigned icon + the assigned resource names (006). */
 function AssignmentCell({ row }: { row: TripBoardRow }) {

@@ -1118,7 +1118,16 @@
       "next": "Próxima",
       "exportButton": "Exportar CSV",
       "exportTooLarge": "O resultado excede {cap} linhas. Refine os filtros e exporte novamente.",
-      "exporting": "Exportando..."
+      "exporting": "Exportando...",
+      "searchTerms": "{count} códigos na busca",
+      "clearWithCount": "Limpar filtros ({count})",
+      "datePresets": "Atalhos",
+      "presetToday": "Hoje",
+      "presetTomorrow": "Amanhã",
+      "presetD2": "D2",
+      "presetNext7": "7 dias",
+      "colRegion": "Região",
+      "filterRegion": "Região"
     },
     "detail": {
       "back": "Voltar para a Torre de Controle",

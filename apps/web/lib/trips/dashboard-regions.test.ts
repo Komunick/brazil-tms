@@ -179,4 +179,20 @@ describe.skipIf(!hasDb)("cartões por região (integration)", () => {
     const totalHoje = hojeNone?.byStatus.reduce((n, s) => n + s.count, 0) ?? 0;
     expect(totalHoje).toBeGreaterThanOrEqual(1);
   });
+
+  /**
+   * A REGIÃO na linha do quadro (2026-08-21, a pedido): a ficha que diz de qual frente é a LH.
+   *
+   * Vem da estação de ORIGEM, a mesma regra dos cartões — se as duas divergissem, a ficha da linha
+   * contradiria o cartão que trouxe a pessoa até ela.
+   */
+  it("a linha do quadro carrega a região da estação de origem", async () => {
+    const query = tripBoardQueryFromParams(
+      new URLSearchParams({ region: "SUDESTE", scope: "all" }),
+    );
+    const { rows } = await queryTripBoard(query);
+    expect(rows.length).toBeGreaterThan(0);
+    // O filtro e a ficha falam a mesma língua: pedindo SUDESTE, nenhuma linha volta de outra frente.
+    expect(rows.every((r) => r.originRegion === "SUDESTE")).toBe(true);
+  });
 });
