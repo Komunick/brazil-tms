@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Gavel, X } from "lucide-react";
 import type { SpotOfferView } from "@brazil-tms/db";
 import { useSpotOffers } from "@/lib/trips/client";
-import { estadoInicial, novasOfertas } from "@/lib/spot/ofertas";
+import { decidirAviso, estadoInicial, novasOfertas } from "@/lib/spot/ofertas";
 import { tocarAviso } from "@/lib/spot/som";
 
 /**
@@ -69,15 +69,51 @@ export function OfertaDeSpot() {
   // A memória de "já anunciei" vive na sessão da tela, não em estado do React: recriá-la a cada
   // render faria a mesma oferta voltar a ser novidade. Ver `novasOfertas`.
   const memoria = useRef(estadoInicial());
+  /**
+   * QUANDO chegou a última oferta nova — o que separa uma rajada da seguinte.
+   *
+   * Em `useRef` e não em estado: mudá-la não deve redesenhar nada, e ela precisa sobreviver entre
+   * buscas sem virar dependência de efeito. Começa em zero, então a primeira oferta da sessão sempre
+   * começa rajada — que é o certo: depois de um recarregamento, a próxima oferta é novidade.
+   */
+  const ultimaOfertaEm = useRef(0);
   const [fila, setFila] = useState<SpotOfferView[]>([]);
   const [saindo, setSaindo] = useState(false);
+  /**
+   * Quantas foram para a caixa sem passar pela tela, desde este cartão.
+   *
+   * Existe para o cartão poder DIZER que absorveu — sem o número, quem viu uma oferta e sabe que a
+   * sexta tem cinquenta ficaria desconfiado de estar perdendo as outras. Zera quando o cartão sai:
+   * ele conta o que aconteceu enquanto ele estava lá, não o dia inteiro.
+   */
+  const [absorvidas, setAbsorvidas] = useState(0);
 
+  /**
+   * UM AVISO POR RAJADA; o resto vai para a caixa (2026-08-21, a pedido). Ver `decidirAviso`.
+   *
+   * O SILÊNCIO é medido FORA do `setFila`: ele descreve quando a oferta chegou, e o `setFila` pode ser
+   * reexecutado pelo React — recalcular o relógio lá dentro daria uma medida diferente a cada vez.
+   *
+   * O resto da decisão fica DENTRO dele: é o único lugar onde se sabe, sem correr risco de
+   * estado velho, se já existe um cartão na tela. Ler `fila` de fora do `setFila` traria o valor do
+   * render anterior — e numa TV que busca a cada poucos segundos, isso erra na hora exata em que
+   * mais importa acertar, que é durante a rajada.
+   */
   useEffect(() => {
     if (!ofertas) return;
     const novas = novasOfertas(memoria.current, ofertas);
     if (novas.length === 0) return;
-    setFila((atual) => [...atual, ...novas]);
-    tocarAviso();
+    const agora = Date.now();
+    const silencio = agora - ultimaOfertaEm.current;
+    ultimaOfertaEm.current = agora;
+    setFila((atual) => {
+      const decisao = decidirAviso(atual.length > 0, novas, silencio);
+      if (decisao.absorvidas > 0) setAbsorvidas((n) => n + decisao.absorvidas);
+      if (!decisao.anunciar) return atual;
+      // O som acompanha o cartão, não a oferta: o que foi para a caixa não faz barulho.
+      tocarAviso();
+      return [decisao.anunciar];
+    });
   }, [ofertas]);
 
   const atual = fila[0];
@@ -92,6 +128,7 @@ export function OfertaDeSpot() {
     setSaindo(true);
     setTimeout(() => {
       setSaindo(false);
+      setAbsorvidas(0);
       setFila((f) => f.slice(1));
     }, 220);
   }, []);
@@ -231,6 +268,21 @@ export function OfertaDeSpot() {
               ) : null}
               {atual.vehicle ? <Dado rotulo={t("vehicle")} valor={atual.vehicle} /> : null}
             </div>
+          ) : null}
+
+          {/**
+           * "+N na caixa" — o que chegou enquanto este cartão estava na tela (2026-08-21).
+           *
+           * Sem esta linha, o corte seria invisível: quem sabe que a sexta traz cinquenta ofertas e vê
+           * uma só na tela conclui que está perdendo as outras, e passa a desconfiar da tela inteira.
+           * Com ela, o cartão diz o que fez — e diz onde as outras estão.
+           *
+           * Só aparece quando houve absorção. Num dia normal ninguém vê esta linha.
+           */}
+          {absorvidas > 0 ? (
+            <p className="text-center text-[0.8rem] font-medium" style={{ color: MARCA.amarelo }}>
+              {t("absorbed", { count: absorvidas })}
+            </p>
           ) : null}
         </div>
 
