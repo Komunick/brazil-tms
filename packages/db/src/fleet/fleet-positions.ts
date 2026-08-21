@@ -220,7 +220,26 @@ export async function recordFleetPositions(
  * seriam 85 idas ao banco a cada carregamento de tela.
  */
 export async function readFleetPositions(): Promise<FleetPositionView[]> {
-  const linhas = await db.select().from(fleetPositions).orderBy(desc(fleetPositions.receivedAt));
+  /**
+   * DO MAIOR PROGRESSO PARA O MENOR (2026-08-21, a pedido).
+   *
+   * A ordem era por hora de leitura, que é a ordem em que o rastreador respondeu — informação sobre
+   * o robô, não sobre a operação. Quem abre esta tela quer saber quem está chegando, e isso se lê de
+   * cima para baixo quando o mais adiantado vem primeiro.
+   *
+   * `NULLS LAST` porque nulo aqui é "sem viagem para medir", não "progresso zero": caminhão parado
+   * sem viagem no topo da lista empurraria para baixo justamente quem está em movimento.
+   *
+   * A hora de leitura fica como critério de desempate — entre dois veículos no mesmo percentual,
+   * o de posição mais fresca primeiro.
+   */
+  const linhas = await db
+    .select()
+    .from(fleetPositions)
+    .orderBy(
+      sql`${fleetPositions.progressPercent} desc nulls last`,
+      desc(fleetPositions.receivedAt),
+    );
   const veiculos = linhas.map((l) => l.vehicleId).filter((v): v is string => v !== null);
 
   const viagens = veiculos.length

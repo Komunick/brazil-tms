@@ -165,7 +165,7 @@ export function FleetClient() {
                 <TableHead>{t("plate")}</TableHead>
                 <TableHead>{t("driver")}</TableHead>
                 <TableHead>{t("trip")}</TableHead>
-                <TableHead className="text-right">{t("progress")}</TableHead>
+                <TableHead>{t("progress")}</TableHead>
                 <TableHead>{t("eta")}</TableHead>
                 <TableHead>{t("risk")}</TableHead>
                 <TableHead>{t("alerts")}</TableHead>
@@ -258,8 +258,34 @@ function Linha({ v, t }: { v: FleetPositionView; t: (k: string, p?: never) => st
           <span className="text-muted-foreground">{v.tripStatus ?? "—"}</span>
         )}
       </TableCell>
-      <TableCell className="text-right text-sm tabular-nums">
-        {v.progressPercent == null ? "—" : `${v.progressPercent.toFixed(0)}%`}
+      {/**
+       * O PROGRESSO COMO BARRA (2026-08-21, a pedido).
+       *
+       * O número sozinho obriga a ler oitenta linhas para achar quem está quase chegando. A barra
+       * responde isso de relance, que é o que uma tela de acompanhamento precisa dar.
+       *
+       * O número FICA ao lado: barra sozinha não distingue 78% de 82%, e quem vai decidir sobre uma
+       * viagem específica precisa do valor. A barra é para varrer, o número é para agir.
+       *
+       * Sem viagem, um traço — e não uma barra vazia, que pareceria "parado no começo" quando na
+       * verdade não há percurso nenhum a medir.
+       */}
+      <TableCell className="w-[8.5rem]">
+        {v.progressPercent == null ? (
+          <span className="text-sm text-muted-foreground">—</span>
+        ) : (
+          <div className="flex items-center gap-2">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary"
+                style={{ width: `${Math.min(100, Math.max(0, v.progressPercent))}%` }}
+              />
+            </div>
+            <span className="w-9 shrink-0 text-right text-sm tabular-nums">
+              {v.progressPercent.toFixed(0)}%
+            </span>
+          </div>
+        )}
       </TableCell>
       <TableCell className="text-sm tabular-nums">{hora(v.etaAt)}</TableCell>
       <TableCell className="text-sm">
