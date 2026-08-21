@@ -26,8 +26,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { TripFilters } from "@/components/trips/trip-filters";
 import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
-import { CancelTripDialog } from "@/components/trips/cancel-trip-dialog";
-import { canCancelTrip, type CancelScope } from "@/lib/trips/cancel-scope";
 import { useFilterOptions, useTripBoard, useTripBoardFilters } from "@/lib/trips/client";
 
 /** Board `sort` values that map to a column header (R2 whitelist). */
@@ -50,13 +48,11 @@ export const BOARD_ANCHOR = "viagens";
 export function ControlTowerTable({
   filterOptions: initialFilterOptions,
   canAssign = false,
-  cancelScope = "none",
 }: {
   filterOptions: TripFilterOptions;
   /** 006 — additively reveal the per-row quick-assign action for `assign_resources` holders. */
   canAssign?: boolean;
   /** 017 — how far this user's cancel permission reaches (§18); computed server-side. */
-  cancelScope?: CancelScope;
 }) {
   // 019 — keep filters + quick-assign pickers fresh on an open tab; server data seeds it.
   const filterOptions = useFilterOptions(initialFilterOptions);
@@ -64,13 +60,11 @@ export function ControlTowerTable({
   const tCommon = useTranslations("Common");
   const tVehicle = useTranslations("VehicleTypes");
   const tDispatch = useTranslations("Dispatch");
-  const tCancel = useTranslations("Trips.cancel");
   const { query, search, setFilters, reset } = useTripBoardFilters();
 
   // The row whose quick-assign dialog is open (006, T063). One dialog instance, fed the row in scope.
   const [assignRow, setAssignRow] = useState<TripBoardRow | null>(null);
   // The row whose cancel dialog is open (017). Same one-instance pattern.
-  const [cancelRow, setCancelRow] = useState<TripBoardRow | null>(null);
 
   /** Label a (possibly unknown) vehicle-type string via the `VehicleTypes` namespace; "—" if absent. */
   function vehicleLabel(vt: string | null): string {
@@ -233,8 +227,10 @@ export function ControlTowerTable({
       cell: ({ row }) => formatDateTime(row.original.updatedAt),
     },
     // 006 — per-row quick-assign action (FR-022 third entry point) for `assign_resources` holders;
-    // 017 — per-row cancel action for `cancelScope` holders. One actions column serving both.
-    ...(canAssign || cancelScope !== "none"
+    // A coluna de ação da linha. O "Cancelar viagem" saiu daqui e do TMS inteiro em 2026-08-21, a
+    // pedido: quem cancela uma viagem é o CLIENTE, no portal dele, e o robô traz o cancelamento na
+    // leitura seguinte. Um botão nosso para isso oferecia um poder que a operação não tem.
+    ...(canAssign
       ? [
           {
             id: "actions",
@@ -268,18 +264,6 @@ export function ControlTowerTable({
                     onClick={() => setAssignRow(row.original)}
                   >
                     {tDispatch("assignAction")}
-                  </Button>
-                ) : null}
-                {/* 017 — cancel (issue #24): scope ∩ machine legality, per row status. */}
-                {canCancelTrip(cancelScope, row.original.currentStatus) ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="text-destructive"
-                    onClick={() => setCancelRow(row.original)}
-                  >
-                    {tCancel("action")}
                   </Button>
                 ) : null}
               </div>
@@ -415,16 +399,6 @@ export function ControlTowerTable({
           ) : null}
         </DialogContent>
       </Dialog>
-
-      {/* Cancel dialog (017) — the shared justified flow; one instance fed the row in scope. */}
-      {cancelRow ? (
-        <CancelTripDialog
-          tripId={cancelRow.id}
-          tripLabel={cancelRow.externalTripId}
-          open
-          onOpenChange={(open) => !open && setCancelRow(null)}
-        />
-      ) : null}
     </div>
   );
 }

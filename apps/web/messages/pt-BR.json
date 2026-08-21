@@ -1658,10 +1658,9 @@
       "REQUEST_FAILED": "Não foi possível concluir a operação. Tente novamente."
     },
     "expiredLicense": "CNH vencida em {date}",
-    "queueFilter": {
-      "todas": "Todas",
-      "in_analysis": "Aguardando decisão",
-      "to_assign": "Para atribuir"
+    "queueTab": {
+      "in_analysis": "Aceitar / Recusar",
+      "to_assign": "Atribuir"
     }
   },
   "Fleet": {
