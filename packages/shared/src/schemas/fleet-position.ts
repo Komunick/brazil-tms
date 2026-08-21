@@ -69,6 +69,39 @@ export const fleetPositionSchema = z.object({
   offRoute: z.string().trim().max(24).nullish(),
   noPosition: z.string().trim().max(24).nullish(),
   stoppedFlag: z.string().trim().max(24).nullish(),
+
+  /**
+   * OS CINCO FARÓIS QUE FALTAVAM (2026-08-21).
+   *
+   * A tela do fornecedor mostra OITO ícones por caminhão e o TMS guardava três. Os outros cinco
+   * vinham na mesma resposta e eram descartados a cada ciclo — não por decisão, por não terem sido
+   * procurados. O mapeamento de cada um está em `domain/fleet-alerts.ts`, com a nota de como foi
+   * conferido contra a cor do ícone na tela.
+   *
+   * TODOS OPCIONAIS, como o pulso do ciclo: um robô que ainda não foi atualizado continua
+   * entregando o retrato inteiro. Exigir campo novo transformaria uma coluna a mais numa
+   * interrupção de alimentação, que é o oposto do que ela serve.
+   */
+  /** Jornada do motorista: `MAI` passou das quatro horas, `MEN` está dentro. */
+  drivingTimeFlag: z.string().trim().max(24).nullish(),
+  /** `S` quando a viagem começou depois da hora prevista. */
+  lateStartFlag: z.string().trim().max(24).nullish(),
+  /** `S` com bloqueio ativo no veículo. */
+  blockedFlag: z.string().trim().max(24).nullish(),
+  /** `S` com sirene ativa. */
+  sirenFlag: z.string().trim().max(24).nullish(),
+  /** Liberação vigente, TEXTO livre do rastreador. Existir já é o alerta. */
+  releaseLabel: z.string().trim().max(300).nullish(),
+  /** `S` quando o próprio rastreador considera a viagem atrasada. */
+  tripDelayFlag: z.string().trim().max(24).nullish(),
+  /**
+   * Quantos minutos de silêncio o rastreador considera demais NESTA conta.
+   *
+   * Vem dele (`CMM_TEMPOALERTASEMPOSICAO`, hoje 60) em vez de ser constante nossa: é a régua com
+   * que a tela do fornecedor acende o alfinete, e as duas telas discordarem sobre quem está mudo
+   * seria pior do que não ter o alerta.
+   */
+  noPositionLimitMinutes: z.union([z.number(), z.string()]).nullish(),
 });
 
 export type FleetPositionInput = z.infer<typeof fleetPositionSchema>;
