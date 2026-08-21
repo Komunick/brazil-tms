@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { formatDateTime, saoPauloDate } from "@brazil-tms/shared";
+import { ACEITACAO_PENDENTE, formatDateTime, saoPauloDate } from "@brazil-tms/shared";
 import type { TripBoardRow, TripFilterOptions } from "@brazil-tms/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
 import { CancelTripDialog } from "@/components/trips/cancel-trip-dialog";
+import { PortalDecisionButtons } from "@/components/trips/portal-decision-buttons";
 import { canCancelTrip, type CancelScope } from "@/lib/trips/cancel-scope";
 import { useFilterOptions, useTripBoard } from "@/lib/trips/client";
 
@@ -47,17 +48,22 @@ import { useFilterOptions, useTripBoard } from "@/lib/trips/client";
  */
 
 /**
- * A FILA DE DESPACHO É SÓ O QUE JÁ FOI ACEITO (2026-08-21, a pedido).
+ * A FILA DE DESPACHO TEM AS DUAS FILAS, E CADA LINHA OFERECE O QUE CABE NELA (2026-08-21, a pedido).
  *
- * `received` guarda DUAS filas que pedem coisas diferentes: as que esperam o cliente responder
- * ("Em análise") e as que esperam motorista ("P/Atribuir"). Sem o recorte, as 617 propostas em
- * análise entravam aqui e ofereciam escalar recurso para um trabalho que a empresa ainda pode
- * recusar — e afogavam, em volume, as que de fato precisam de despacho.
+ * `received` guarda duas coisas que pedem ações diferentes: as que esperam o cliente responder
+ * ("Em análise") e as que esperam motorista ("P/Atribuir"). A primeira versão de hoje tirou as em
+ * análise daqui; o usuário pediu o contrário — que elas fiquem, com Aceitar e Recusar no lugar do
+ * Atribuir.
  *
- * A ordem da operação é aceitar primeiro, escalar depois. Aceitar agora se faz no próprio TMS, no
- * cartão de decisão da viagem.
+ * É a leitura certa da operação: a fila de expedição é onde se trabalha o que ainda não rodou, e a
+ * ordem dentro dela é aceitar primeiro, escalar depois. Duas telas para as duas metades obrigariam
+ * a pessoa a lembrar em qual delas está o que ela procura.
+ *
+ * O que NÃO se faz é oferecer Atribuir numa proposta: escalar motorista para um trabalho que a
+ * empresa ainda pode recusar é comprometer recurso à toa. Quem decide isso é a linha, pelo estado
+ * de aceitação dela.
  */
-const DISPATCH_QUERY = "assigned=false&status=received&queue=to_assign&sort=pickupStart";
+const DISPATCH_QUERY = "assigned=false&status=received&sort=pickupStart";
 
 /** How long the queue search waits after the last keystroke before hitting the board endpoint. */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -293,9 +299,17 @@ export function DispatchBoard({
                       {tCancel("action")}
                     </Button>
                   ) : null}
-                  <Button type="button" size="sm" onClick={() => setAssignRow(row)}>
-                    {t("assignAction")}
-                  </Button>
+                  {row.portalAcceptance === ACEITACAO_PENDENTE ? (
+                    <PortalDecisionButtons
+                      tripId={row.id}
+                      externalTripId={row.externalTripId}
+                      tamanho="sm"
+                    />
+                  ) : (
+                    <Button type="button" size="sm" onClick={() => setAssignRow(row)}>
+                      {t("assignAction")}
+                    </Button>
+                  )}
                 </div>
               </li>
             ))}

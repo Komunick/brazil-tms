@@ -1352,7 +1352,8 @@
       "confirmAccept": "Confirmar aceite",
       "noUndo": "Depois que o portal registrar, desfazer só falando com o cliente.",
       "confirmTitle": "Você tem certeza?",
-      "confirmRejectQuestion": "Recusar a viagem {lh}?"
+      "confirmRejectQuestion": "Recusar a viagem {lh}?",
+      "sending": "Enviando ao portal…"
     }
   },
   "Sla": {
