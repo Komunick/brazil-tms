@@ -1760,6 +1760,14 @@
     "divergences": "Status divergentes",
     "divergencesNone": "Todos os rótulos do portal batem com o status aqui.",
     "pendingAssignments": "Atribuições pendentes",
-    "pendingAssignmentsHint": "O portal já tem motorista e o TMS não conseguiu espelhar — falta cadastro, ou há conflito de agenda para alguém decidir."
+    "pendingAssignmentsHint": "O portal já tem motorista e o TMS não conseguiu espelhar — falta cadastro, ou há conflito de agenda para alguém decidir.",
+    "cyclesTitle": "Ritmo dos robôs",
+    "cyclesHint": "O intervalo configurado contra o que o último ciclo levou de fato. Ciclo esticando avisa antes de o dado parar.",
+    "cyclePace": "configurado {configurado} · real {real}",
+    "cycleHealth": {
+      "ok": "No ritmo",
+      "lento": "Lento",
+      "sem_dado": "Sem pulso"
+    }
   }
 }

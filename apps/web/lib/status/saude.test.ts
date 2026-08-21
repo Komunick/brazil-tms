@@ -20,13 +20,19 @@ const minutosAtras = (m: number): Date => new Date(AGORA.getTime() - m * 60_000)
 
 describe("saudeDaFonte — portal", () => {
   it("o ritmo normal do robô NÃO acusa", () => {
-    // Plano a cada 15 min, execução a cada 5. Meia hora ainda é rotina.
+    /**
+     * A régua caiu de 60 para 20 minutos em 2026-08-21, e o teste veio junto.
+     *
+     * O princípio nunca mudou — QUATRO ciclos perdidos — mas os ciclos passaram de 15 para 5 minutos
+     * e o 60 ficou para trás: era folga de quatro ciclos, virou folga de doze. Este caso afirmava a
+     * folga velha, e mantê-lo obrigaria a régua a mentir para ele.
+     */
     expect(saudeDaFonte("portal", minutosAtras(5), AGORA).saude).toBe("ok");
-    expect(saudeDaFonte("portal", minutosAtras(30), AGORA).saude).toBe("ok");
-    expect(saudeDaFonte("portal", minutosAtras(59), AGORA).saude).toBe("ok");
+    expect(saudeDaFonte("portal", minutosAtras(15), AGORA).saude).toBe("ok");
+    expect(saudeDaFonte("portal", minutosAtras(19), AGORA).saude).toBe("ok");
   });
 
-  it("uma hora calado acusa — são quatro ciclos perdidos", () => {
+  it("vinte minutos calado acusa — são quatro ciclos perdidos", () => {
     expect(saudeDaFonte("portal", minutosAtras(REGUA_MINUTOS.portal!), AGORA).saude).toBe(
       "atrasado",
     );

@@ -49,7 +49,11 @@ export function AuditHistorySection({ audit }: { audit: TripDetailView["audit"] 
               {ordered.map((entry) => (
                 <TableRow key={entry.id}>
                   <TableCell>{actionLabel(entry.action)}</TableCell>
-                  <TableCell className="text-muted-foreground">{entry.actorUserId}</TableCell>
+                  {/* O nome de quem alterou; o identificador só aparece quando o usuário não existe
+                      mais — melhor um id feio do que uma linha sem dono. */}
+                  <TableCell className="text-muted-foreground">
+                    {entry.actorName ?? entry.actorUserId}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap">
                     {formatDateTime(entry.createdAt)}
                   </TableCell>

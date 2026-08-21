@@ -17,9 +17,15 @@ export type Saude = "ok" | "atrasado" | "sem_dado" | "sem_regua";
  *
  * As três réguas são muito diferentes e nenhuma é arbitrária:
  *
- *   portal  60 min — o robô lê o plano a cada 15 e a execução a cada 5. Uma hora são quatro ciclos
- *                    perdidos: folga para uma sessão que expirou e se renovou, um deploy, um
- *                    relatório pesado — sem que o aviso vire ruído.
+ *   portal  20 min — QUATRO ciclos perdidos, e o número segue os ciclos: eram 15 minutos quando esta
+ *                    régua nasceu em 60, e passaram a 5 sem que ela acompanhasse. O princípio sempre
+ *                    foi "quatro ciclos"; o 60 é que ficou para trás. Vinte minutos mantêm a folga
+ *                    para uma sessão que expirou e se renovou, um deploy, um relatório pesado — sem
+ *                    que o aviso vire ruído.
+ *
+ *                    Se o ciclo baixar de novo, esta régua precisa baixar junto. O aviso que NÃO
+ *                    depende de calibragem é o de ciclo lento, logo abaixo: ele compara o robô com a
+ *                    promessa que o próprio robô declara.
  *
  *   bsc  30 h — o relatório do cliente é publicado uma vez por dia, de madrugada. Dado de 20 horas é
  *               rotina, e é o mesmo número que o cartão do painel já usa. Trinta horas significa que
@@ -30,7 +36,7 @@ export type Saude = "ok" | "atrasado" | "sem_dado" | "sem_regua";
  *                a última recebida como informação, sem cor de alarme.
  */
 export const REGUA_MINUTOS: Record<string, number | null> = {
-  portal: 60,
+  portal: 20,
   bsc: 30 * 60,
   spot: null,
 };
@@ -100,4 +106,33 @@ export function idadeEmTexto(minutos: number): string | null {
   const h = Math.round(m / 60);
   if (h < 48) return `${h} h`;
   return `${Math.round(h / 24)} dias`;
+}
+
+/**
+ * O ROBÔ ESTÁ SUFOCANDO? (2026-08-21)
+ *
+ * A régua acima pega a PARADA — mas só depois dela. Quando o navegador da VM começa a não dar conta,
+ * o sintoma vem antes e é outro: o ciclo configurado para 10 segundos passa a levar 45. O dado
+ * continua chegando, só que velho, o carimbo está fresco, a tela diz "ok" — e a operação decide sobre
+ * um retrato de um minuto atrás achando que é de agora.
+ *
+ * A conta é a comparação direta entre o que o robô prometeu e o que ele entregou.
+ *
+ * A FOLGA DE 50% não é generosidade: um ciclo é rede mais parsing mais gravação, e variar é normal.
+ * Acusar no primeiro ciclo que passar de 10,1 segundos criaria um alarme que pisca o dia inteiro — e
+ * alarme que pisca sempre é alarme que ninguém olha. Meia vez acima do prometido já é tendência.
+ */
+export const FOLGA_DO_CICLO = 1.5;
+
+export type SaudeDoCiclo = "ok" | "lento" | "sem_dado";
+
+export function saudeDoCiclo(
+  intervalMs: number | null,
+  durationMs: number | null,
+): { saude: SaudeDoCiclo; razao: number | null } {
+  if (intervalMs == null || durationMs == null || intervalMs <= 0) {
+    return { saude: "sem_dado", razao: null };
+  }
+  const razao = durationMs / intervalMs;
+  return { saude: razao > FOLGA_DO_CICLO ? "lento" : "ok", razao };
 }

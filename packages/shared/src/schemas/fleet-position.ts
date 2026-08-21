@@ -84,6 +84,15 @@ export type FleetPositionInput = z.infer<typeof fleetPositionSchema>;
  */
 export const fleetFeedBodySchema = z.object({
   token: z.string().trim().min(1).optional(),
+  /**
+   * O PULSO DO ROBÔ (2026-08-21): quanto o ciclo que acabou levou, e qual o intervalo configurado.
+   *
+   * Opcionais de propósito. Um robô que ainda não foi atualizado continua entregando normalmente —
+   * exigir o campo transformaria uma melhoria de vigilância em quebra de alimentação, que é o
+   * oposto do que ela serve.
+   */
+  cicloMs: z.number().int().min(0).max(86_400_000).optional(),
+  duracaoMs: z.number().int().min(0).max(86_400_000).optional(),
   positions: z.array(fleetPositionSchema).min(1).max(500),
 });
 
