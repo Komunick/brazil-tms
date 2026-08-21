@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — executor de decisões no portal
 // @namespace    braziltransports.com.br
-// @version      0.1.0
+// @version      0.2.0
 // @description  Executa no portal as decisões tomadas no TMS: aceitar e rejeitar viagem. NÃO decide nada.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -67,9 +67,19 @@
     intervaloMs: 30 * 1000,
     /** Quantas ordens pegar por vez. A fila é de decisão humana, não de volume. */
     porCiclo: 5,
-    /** As duas rotas do portal, medidas no bundle dele em 2026-08-21. */
-    aceitar: "/api/admin/transportation/agency/trip/accept",
-    rejeitar: "/api/admin/transportation/agency/trip/reject",
+    /**
+     * As duas rotas do portal, MEDIDAS NO FIO (2026-08-21) — e não as que o bundle sugeria.
+     *
+     * O bundle tem `/api/admin/transportation/agency/trip/accept` escrito em texto, e foi o que eu
+     * usei primeiro. O que o portal chama de verdade, capturado num aceite real do usuário, é
+     * `/api/line_haul/agency/...` — a mesma família que o robô de LEITURA já usa. Provavelmente são
+     * apelidos do mesmo serviço, mas "provavelmente" não serve para um POST que não tem volta.
+     *
+     * A recusa vai pela simetria da que foi medida. A primeira recusa real confirma ou desmente, e
+     * ela falha do jeito certo — a ordem fica em `failed` com a mensagem do portal, sem recusar nada.
+     */
+    aceitar: "/api/line_haul/agency/trip/accept",
+    rejeitar: "/api/line_haul/agency/trip/reject",
   };
 
   /** A versão vem do CABEÇALHO, não de uma constante copiada — que envelhece calada. */
@@ -119,10 +129,27 @@
    */
   async function executar(ordem) {
     const caminho = ordem.action === "accept" ? CONFIG.aceitar : CONFIG.rejeitar;
+    /**
+     * A ESTAÇÃO VAI NO CORPO, e é obrigatória.
+     *
+     * Não estava no que eu li do bundle; apareceu no pacote real: `agency_current_station_id: 5015`.
+     * É a mesma agência sob a qual a aba está logada, e sai do mesmo lugar de onde o robô de leitura
+     * a tira. Sem ela o portal não sabe QUEM está aceitando.
+     *
+     * Ausência dela é sessão caída, não descuido: a ordem falha com essa palavra, em vez de sair
+     * pela metade e receber um erro que ninguém sabe traduzir.
+     */
+    const estacao = localStorage.getItem("stationId");
+    if (!estacao) throw new Error("stationId não encontrado: a sessão do portal caiu?");
+
     const corpo =
       ordem.action === "accept"
-        ? { trip_id: Number(ordem.portalTripId) }
-        : { trip_id: Number(ordem.portalTripId), reject_reason: ordem.reasonId };
+        ? { trip_id: Number(ordem.portalTripId), agency_current_station_id: Number(estacao) }
+        : {
+            trip_id: Number(ordem.portalTripId),
+            reject_reason: ordem.reasonId,
+            agency_current_station_id: Number(estacao),
+          };
 
     const r = await fetch(caminho, {
       method: "POST",
