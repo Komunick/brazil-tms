@@ -116,6 +116,18 @@ export function DispatchBoard({
   const [pickupFrom, setPickupFrom] = useState(() => saoPauloDate());
   const [pickupTo, setPickupTo] = useState("");
 
+  /**
+   * O RECORTE DA FILA — e por que ele precisou existir no mesmo dia (2026-08-21).
+   *
+   * A fila tem 376 linhas e SETE delas esperam decisão. Os botões de Aceitar/Recusar entraram na
+   * linha certa e mesmo assim ninguém os encontrava: sete agulhas ordenadas por data no meio de
+   * trezentas e setenta e seis. Foi exatamente o relato — "não estou vendo aceitar nenhum".
+   *
+   * Uma ação que existe e não pode ser encontrada não existe. Os dois recortes são as duas perguntas
+   * que a operação faz nesta tela, e agora dá para escolher qual está sendo respondida.
+   */
+  const [recorte, setRecorte] = useState<"todas" | "in_analysis" | "to_assign">("todas");
+
   function applyPreset(key: DatePresetKey): void {
     const preset = DATE_PRESETS.find((p) => p.key === key);
     if (!preset) return;
@@ -153,6 +165,7 @@ export function DispatchBoard({
 
   const query = [
     DISPATCH_QUERY,
+    recorte === "todas" ? "" : `queue=${recorte}`,
     appliedSearch ? `q=${encodeURIComponent(appliedSearch)}` : "",
     pickupFrom ? `pickupFrom=${pickupFrom}` : "",
     pickupTo ? `pickupTo=${pickupTo}` : "",
@@ -214,6 +227,42 @@ export function DispatchBoard({
               onChange={(event) => setPickupTo(event.target.value)}
             />
           </div>
+        </div>
+
+        {/**
+         * As fichas do RECORTE vêm antes das de data: elas dizem QUE trabalho está sendo feito, e a
+         * data só limita quando. Trocar de recorte volta para a primeira página — a paginação é do
+         * conjunto anterior e continuar nela mostraria um pedaço do meio de outra lista.
+         */}
+        <div className="flex flex-wrap gap-1.5">
+          {(["todas", "in_analysis", "to_assign"] as const).map((chave) => (
+            <Button
+              key={chave}
+              type="button"
+              size="sm"
+              variant={recorte === chave ? "default" : "outline"}
+              onClick={() => {
+                setRecorte(chave);
+                setOffset(0);
+                /**
+                 * ESCOLHER "aguardando decisão" SOLTA O FILTRO DE DATA.
+                 *
+                 * A fila abre em "de hoje em diante", e cinco das sete pendentes de hoje têm coleta
+                 * no PASSADO — ficariam escondidas justamente por serem as mais atrasadas. Prazo
+                 * vencido não é motivo para sumir da tela; é motivo para aparecer primeiro.
+                 *
+                 * Só neste sentido: voltar para "todas" não repõe a data, porque aí o volume é de
+                 * centenas e o recorte de data é o que torna a lista utilizável.
+                 */
+                if (chave === "in_analysis") {
+                  setPickupFrom("");
+                  setPickupTo("");
+                }
+              }}
+            >
+              {t(`queueFilter.${chave}`)}
+            </Button>
+          ))}
         </div>
 
         <div className="flex flex-wrap gap-1.5">
