@@ -43,31 +43,39 @@ export function novasOfertas(estado: EstadoOfertas, recebidas: SpotOfferView[]):
 }
 
 /**
- * UMA POR VEZ NA TELA; O RESTO VAI PARA A CAIXA (2026-08-21, a pedido).
+ * UM AVISO POR RAJADA (2026-08-21, a pedido, depois de um teste com 30 ofertas).
  *
- * O aviso ocupa o meio da tela por trinta segundos e a fila passava uma atrás da outra. Nas sextas
- * chegam mais de cinquenta ofertas em sequência — o monitor manda UMA A UMA, então cada busca acha
- * uma nova — e a conta é direta: cinquenta avisos de trinta segundos são vinte e cinco minutos de
- * tela ocupada, com som a cada uma. Numa sala onde a TV serve para olhar de relance, isso deixa de
- * ser aviso e vira ruído que a operação aprende a ignorar.
+ * Toda sexta chegam mais de cinquenta ofertas em sequência, uma a uma. O aviso ocupa o meio da tela
+ * por trinta segundos, e a primeira versão desta regra só evitava a FILA — passados os trinta
+ * segundos, a oferta seguinte encontrava a tela livre e virava aviso de novo. No teste, 30 ofertas em
+ * 89 segundos viraram três cartões. O pedido era um.
  *
- * A regra: enquanto um cartão estiver na tela, oferta nova NÃO entra na fila. Ela continua chegando,
- * continua gravada, continua aparecendo na caixa de ofertas do dia — só não interrompe de novo.
+ * ── A PERGUNTA CERTA ───────────────────────────────────────────────────────────────────────────
  *
- * ── POR QUE NÃO É "AGRUPAR EM UM CARTÃO SÓ" ────────────────────────────────────────────────────
+ * Não é "tem cartão na tela?" — é "isto é o COMEÇO de uma rajada, ou a continuação de uma?".
  *
- * Porque elas não chegam juntas. Vindo uma a uma, espaçadas, não existe lote para agrupar: quando a
- * segunda chega, o cartão da primeira já está na tela. A pergunta certa não é "quantas vieram
- * juntas?", é "já tem uma aparecendo?".
+ * Uma oferta começa rajada quando vem depois de um silêncio. Vindo na esteira de outra, é
+ * continuação: entra na caixa e não interrompe. O silêncio é o que separa os dois, e é a única
+ * medida que não precisa saber quantas ofertas virão nem que dia é hoje.
+ *
+ * ── POR QUE NÃO É INTERVALO FIXO ENTRE AVISOS ──────────────────────────────────────────────────
+ *
+ * "No máximo um aviso a cada dez minutos" resolveria a sexta e estragaria a terça: duas ofertas
+ * legítimas separadas por oito minutos são dois avisos legítimos. O silêncio antes da oferta
+ * descreve o que está acontecendo; o relógio desde o último aviso, não.
  *
  * ── NADA SE PERDE ──────────────────────────────────────────────────────────────────────────────
  *
- * A caixa de ofertas do dia mostra TODAS, com a lista completa e clicável. O que este corte tira é a
- * interrupção, não a informação — e o próprio cartão diz quantas foram absorvidas enquanto ele
- * estava lá, para ninguém precisar desconfiar de que perdeu alguma.
+ * A caixa de ofertas do dia mostra TODAS, com a lista completa e clicável. E o cartão diz quantas
+ * absorveu — sem isso o corte seria invisível, e quem sabe que a sexta traz cinquenta veria uma só e
+ * concluiria que está perdendo as outras.
  */
+
+/** O silêncio que separa uma rajada da seguinte. Três minutos: mais que o aviso, menos que um café. */
+export const SILENCIO_ENTRE_RAJADAS_MS = 3 * 60_000;
+
 export interface DecisaoDeAviso {
-  /** A oferta que vai para a tela, ou `null` quando já há uma aparecendo. */
+  /** A oferta que vai para a tela, ou `null` quando é continuação de rajada. */
   anunciar: SpotOfferView | null;
   /** Quantas foram para a caixa sem passar pela tela. */
   absorvidas: number;
@@ -76,10 +84,12 @@ export interface DecisaoDeAviso {
 export function decidirAviso(
   temCartaoNaTela: boolean,
   novas: readonly SpotOfferView[],
+  msDesdeAUltimaOferta: number,
 ): DecisaoDeAviso {
   if (novas.length === 0) return { anunciar: null, absorvidas: 0 };
-  // Com um cartão na tela, TODAS vão para a caixa — inclusive quando a mesma busca traz várias.
-  if (temCartaoNaTela) return { anunciar: null, absorvidas: novas.length };
-  // Sem cartão, a mais antiga sobe (é a que conta a história na ordem) e as outras acumulam.
+  const comecaRajada = msDesdeAUltimaOferta >= SILENCIO_ENTRE_RAJADAS_MS;
+  // Cartão na tela OU continuação de rajada: tudo vai para a caixa, sem interromper.
+  if (temCartaoNaTela || !comecaRajada) return { anunciar: null, absorvidas: novas.length };
+  // Começo de rajada com a tela livre: a mais antiga sobe, as outras acumulam.
   return { anunciar: novas[0] ?? null, absorvidas: Math.max(0, novas.length - 1) };
 }
