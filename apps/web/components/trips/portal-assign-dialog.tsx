@@ -1,0 +1,204 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
+import {
+  impedimentoDaAtribuicao,
+  normalizarPlaca,
+  placasEsperadas,
+  type VehicleType,
+} from "@brazil-tms/shared";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { TripsError, usePortalAction, usePortalDrivers } from "@/lib/trips/client";
+
+/**
+ * ESCALAR MOTORISTA E PLACA SEM ABRIR O PORTAL (2026-08-21, a pedido).
+ *
+ * A segunda metade do fluxo do aceite. No portal, aceitar leva a esta mesma tela; aqui ela abre a
+ * partir da aba "Atribuir" — que é a fila de quem já foi aceito e ainda não tem quem dirija.
+ *
+ * ── O MOTORISTA VEM DA LISTA DO PORTAL, NÃO DO NOSSO CADASTRO ──────────────────────────────────
+ *
+ * O portal aceita o id DELE, e só quem está no cadastro dele. Nosso cadastro tem 1.378 nomes; o que
+ * serve aqui são os 536 que o portal já nos mostrou em viagens reais — ordenados por quem rodou mais
+ * recentemente, que é como a operação pensa neles. Ver `portal-drivers.ts`.
+ *
+ * ── UMA OU DUAS PLACAS ─────────────────────────────────────────────────────────────────────────
+ *
+ * Carreta leva duas (cavalo e reboque); o resto leva uma. O padrão vem do tipo do veículo da viagem,
+ * mas o campo é ACRESCENTÁVEL: a regra é nossa sobre um dado do fornecedor, e no dia em que ela não
+ * couber, quem está olhando a viagem conserta na hora — em vez de ficar preso a um formulário que
+ * discorda do que está na frente dele.
+ */
+export function PortalAssignDialog({
+  tripId,
+  externalTripId,
+  vehicleType,
+  open,
+  onOpenChange,
+}: {
+  tripId: string;
+  externalTripId: string | null;
+  /** O tipo planejado da viagem — decide quantas placas o formulário abre pedindo. */
+  vehicleType: VehicleType | null;
+  open: boolean;
+  onOpenChange: (aberto: boolean) => void;
+}) {
+  const t = useTranslations("Trips.portalAssign");
+  const motoristas = usePortalDrivers();
+  const acao = usePortalAction(tripId);
+
+  const quantas = placasEsperadas(vehicleType);
+  const [driverId, setDriverId] = useState("");
+  const [secondDriverId, setSecondDriverId] = useState("");
+  const [placas, setPlacas] = useState<string[]>(() => Array.from({ length: quantas }, () => ""));
+
+  // Reabrir para OUTRA viagem não pode herdar o que foi digitado na anterior — é o caminho mais curto
+  // para escalar o motorista certo na viagem errada.
+  useEffect(() => {
+    if (!open) return;
+    setDriverId("");
+    setSecondDriverId("");
+    setPlacas(Array.from({ length: quantas }, () => ""));
+    acao.reset();
+    // Depende de abrir e de QUAL viagem — `acao` é recriado a cada render e não pertence aqui.
+  }, [open, tripId, quantas, acao]);
+
+  const opcoes = useMemo(
+    () =>
+      (motoristas.data?.items ?? []).map((m) => ({
+        id: String(m.portalDriverId),
+        label: m.name,
+      })),
+    [motoristas.data],
+  );
+
+  const preenchidas = placas.map(normalizarPlaca).filter(Boolean);
+  const impedimento = impedimentoDaAtribuicao({
+    driverId: Number(driverId) || 0,
+    secondDriverId: secondDriverId ? Number(secondDriverId) : null,
+    plates: preenchidas,
+  });
+  const erroDoServidor = acao.error instanceof TripsError ? acao.error.message : null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("title")}</DialogTitle>
+          <DialogDescription>{t("subtitle", { lh: externalTripId ?? tripId })}</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor={`motorista-${tripId}`}>{t("driver")}</Label>
+            <SearchableSelect
+              id={`motorista-${tripId}`}
+              value={driverId}
+              onChange={setDriverId}
+              options={opcoes}
+              placeholder={motoristas.isLoading ? t("loadingDrivers") : t("driverPlaceholder")}
+              emptyText={t("noDriver")}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor={`motorista2-${tripId}`}>{t("secondDriver")}</Label>
+            <SearchableSelect
+              id={`motorista2-${tripId}`}
+              value={secondDriverId}
+              onChange={setSecondDriverId}
+              options={opcoes}
+              placeholder={t("secondDriverPlaceholder")}
+              emptyText={t("noDriver")}
+              clearable
+              clearLabel={t("noSecondDriver")}
+            />
+          </div>
+
+          {placas.map((placa, i) => (
+            <div key={i} className="space-y-1.5">
+              <Label htmlFor={`placa-${tripId}-${i}`}>
+                {placas.length > 1 ? t("plateN", { n: String(i + 1) }) : t("plate")}
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id={`placa-${tripId}-${i}`}
+                  value={placa}
+                  maxLength={8}
+                  autoComplete="off"
+                  className="uppercase"
+                  onChange={(e) =>
+                    setPlacas((atual) =>
+                      atual.map((p, j) => (j === i ? normalizarPlaca(e.target.value) : p)),
+                    )
+                  }
+                />
+                {placas.length > 1 ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setPlacas((atual) => atual.filter((_, j) => j !== i))}
+                  >
+                    {t("removePlate")}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+
+          {placas.length < 2 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setPlacas((a) => [...a, ""])}
+            >
+              {t("addPlate")}
+            </Button>
+          ) : null}
+
+          {erroDoServidor ? (
+            <p role="alert" className="text-sm text-destructive">
+              {erroDoServidor}
+            </p>
+          ) : null}
+          <p className="text-xs text-muted-foreground">{t("hint")}</p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="ghost" disabled={acao.isPending} onClick={() => onOpenChange(false)}>
+            {t("cancel")}
+          </Button>
+          <Button
+            disabled={acao.isPending || impedimento !== null}
+            onClick={() =>
+              acao.mutate(
+                {
+                  action: "assign",
+                  driverId: Number(driverId),
+                  secondDriverId: secondDriverId ? Number(secondDriverId) : null,
+                  plates: preenchidas,
+                },
+                { onSuccess: () => onOpenChange(false) },
+              )
+            }
+          >
+            {t("confirm")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

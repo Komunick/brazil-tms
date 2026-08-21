@@ -35,6 +35,9 @@ export async function POST(
       action: body.action,
       reasonId: body.reasonId ?? null,
       remark: body.remark ?? null,
+      driverId: body.driverId ?? null,
+      secondDriverId: body.secondDriverId ?? null,
+      plates: body.plates ?? [],
       requestedBy: ctx.userId,
     });
 
@@ -67,5 +70,15 @@ function traduzir(error: unknown): unknown {
       );
     case "motivo_invalido":
       return new Conflict("INVALID_REASON", "Escolha um dos motivos que o portal aceita.");
+    case "sem_motorista":
+      return new Conflict("NO_DRIVER", "Escolha o motorista.");
+    case "sem_placa":
+      return new Conflict("NO_PLATE", "Informe a placa do veículo.");
+    case "placa_invalida":
+      return new Conflict("INVALID_PLATE", "Placa inválida. Use o formato ABC1234 ou ABC1D23.");
+    case "placas_repetidas":
+      return new Conflict("DUPLICATE_PLATE", "As duas placas são iguais.");
+    case "motoristas_repetidos":
+      return new Conflict("DUPLICATE_DRIVER", "O segundo motorista é o mesmo do primeiro.");
   }
 }

@@ -77,6 +77,9 @@ export async function POST(request: Request): Promise<NextResponse> {
           reasonId: o.reasonId,
           reasonLabel: rotuloDoMotivo(o.reasonId),
           remark: o.remark,
+          driverId: o.driverId,
+          secondDriverId: o.secondDriverId,
+          plates: o.plates,
         })),
       }),
     );

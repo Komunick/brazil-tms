@@ -253,6 +253,13 @@
       "when": 1787200000007,
       "tag": "0035_portal_commands",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1787200000008,
+      "tag": "0036_portal_commands_assign",
+      "breakpoints": true
     }
   ]
 }

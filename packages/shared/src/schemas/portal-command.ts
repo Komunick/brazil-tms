@@ -10,7 +10,16 @@ import { MOTIVOS_DE_RECUSA } from "../domain/portal-acceptance";
  */
 export const portalActionBodySchema = z
   .object({
-    action: z.enum(["accept", "reject"]),
+    action: z.enum(["accept", "reject", "assign"]),
+    /**
+     * A ATRIBUIÇÃO (2026-08-21). `driverId` é o id do motorista NO PORTAL, não o do TMS.
+     *
+     * As regras — quantas placas, qual das duas rotas do portal, o que é placa válida — vivem em
+     * `domain/portal-assignment.ts`, sob teste. Aqui só se descreve a forma.
+     */
+    driverId: z.number().int().positive().nullish(),
+    secondDriverId: z.number().int().positive().nullish(),
+    plates: z.array(z.string().trim().min(1).max(16)).max(2).optional(),
     reasonId: z
       .union(
         MOTIVOS_DE_RECUSA.map((m) => z.literal(m.id)) as unknown as [
@@ -26,6 +35,14 @@ export const portalActionBodySchema = z
   .refine((v) => v.action !== "reject" || v.reasonId != null, {
     message: "Escolha o motivo da recusa.",
     path: ["reasonId"],
+  })
+  .refine((v) => v.action !== "assign" || v.driverId != null, {
+    message: "Escolha o motorista.",
+    path: ["driverId"],
+  })
+  .refine((v) => v.action !== "assign" || (v.plates?.length ?? 0) > 0, {
+    message: "Informe a placa.",
+    path: ["plates"],
   });
 
 export type PortalActionBody = z.infer<typeof portalActionBodySchema>;
