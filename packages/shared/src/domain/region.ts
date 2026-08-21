@@ -1,6 +1,3 @@
-import { DateTime } from "luxon";
-import { APP_TIME_ZONE } from "../formatting";
-
 /**
  * As REGIÕES OPERACIONAIS do cliente (2026-08-20).
  *
@@ -35,21 +32,4 @@ export function regionPosition(region: string | null): number {
   if (region === null) return REGION_ORDER.length + 1;
   const i = (REGION_ORDER as readonly string[]).indexOf(region);
   return i === -1 ? REGION_ORDER.length : i;
-}
-
-/**
- * O PRAZO DE ATRIBUIÇÃO já venceu para uma viagem que coleta HOJE? (2026-08-20, a pedido)
- *
- * A regra da operação: a viagem pode ser atribuída até o MEIO-DIA do próprio dia da coleta. Depois
- * disso, sem motorista, ela é uma LH atrasada — e o painel a mostra piscando, porque quem passa em
- * frente à TV precisa ver isso sem procurar.
- *
- * Vale só para o dia de HOJE. Amanhã e depois de amanhã têm o prazo inteiro pela frente, e pintar de
- * vermelho o que ainda tem um dia de folga ensina a operação a ignorar vermelho.
- *
- * O meio-dia é o de SÃO PAULO, não o do relógio de quem abriu a tela: o painel roda numa TV na
- * operação, mas também é aberto de casa, e a hora do fuso de casa não decide prazo de ninguém.
- */
-export function prazoDeAtribuicaoVencido(agora: DateTime = DateTime.now()): boolean {
-  return agora.setZone(APP_TIME_ZONE).hour >= 12;
 }

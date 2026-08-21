@@ -146,4 +146,37 @@ describe.skipIf(!hasDb)("cartões por região (integration)", () => {
     expect(total(tripsD1ByRegion, "SUDESTE")).toBeGreaterThanOrEqual(1);
     expect(total(tripsD2ByRegion, "NONE")).toBeGreaterThanOrEqual(1);
   });
+
+  /**
+   * A LH ATRASADA acumula os dias anteriores.
+   *
+   * O cálculo antigo morava no navegador e só sabia olhar "hoje": uma viagem de ONTEM que ninguém
+   * atribuiu não pertencia a nenhum dos três cartões de dia e sumia do painel — o pior desfecho
+   * possível para o caso mais grave. Este teste semeia exatamente essa viagem.
+   */
+  it("conta como atrasada a viagem de ONTEM que ninguém atribuiu", async () => {
+    const ontem = new Date(Date.now() - 26 * 60 * 60 * 1000);
+    const criada = await db
+      .insert(trips)
+      .values({
+        customerId,
+        originLocationId: locationIds[1]!, // NONE
+        destinationLocationId: locationIds[3]!,
+        originalPlan: {},
+        currentStatus: "received" as const,
+        plannedPickupWindowStart: ontem,
+        customerFields: { "Aceitação (portal)": "Accepted" },
+      })
+      .returning({ id: trips.id });
+    tripIds.push(...criada.map((t) => t.id));
+
+    const { lateToAssignByRegion, tripsTodayByRegion } = await queryDashboardMetrics();
+    const atrasadasNone = lateToAssignByRegion.find((r) => r.region === "NONE")?.count ?? 0;
+    expect(atrasadasNone).toBeGreaterThanOrEqual(1);
+
+    // E ela NÃO aparece no cartão de hoje, que é justamente por isso que a faixa precisa existir.
+    const hojeNone = tripsTodayByRegion.find((g) => g.region === "NONE");
+    const totalHoje = hojeNone?.byStatus.reduce((n, s) => n + s.count, 0) ?? 0;
+    expect(totalHoje).toBeGreaterThanOrEqual(1);
+  });
 });

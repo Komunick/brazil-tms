@@ -7,7 +7,6 @@ import {
   boardQueryForDisplayStatus,
   saoPauloDate,
   saoPauloMonthBounds,
-  prazoDeAtribuicaoVencido,
   regionPosition,
   TRIP_DISPLAY_ORDER,
   type TripDisplayStatus,
@@ -259,6 +258,10 @@ function RegionCard({
        * A regra da operação: a viagem pode ser atribuída até o MEIO-DIA do próprio dia da coleta.
        * Depois disso, sem motorista, é atraso — e numa TV isso precisa ser visto sem procurar.
        *
+       * VERMELHO CHEIO, com brilho (2026-08-20, a pedido): fundo sólido em vez de tinta clara, e um
+       * halo em volta. Numa TV vista de longe, borda fina com fundo pálido some entre doze cartões —
+       * e um aviso que só é visto por quem já está procurando não é aviso.
+       *
        * `motion-safe:` no pisca, e não animação crua: quem configurou o sistema para reduzir
        * movimento continua vendo a faixa vermelha, só que parada. O aviso é a COR e o número; o
        * pisca é reforço, e reforço não pode ser a única forma de perceber.
@@ -266,7 +269,7 @@ function RegionCard({
       {atrasadas > 0 ? (
         <Link
           href={`/trips?${boardQueryForDisplayStatus("to_assign")}${dateFilter}${extraFilter}&scope=all#${BOARD_ANCHOR}`}
-          className="mb-1.5 flex items-center justify-between gap-2 rounded border border-destructive/50 bg-destructive/10 px-1.5 py-1 text-xs font-semibold text-destructive motion-safe:animate-pulse"
+          className="mb-1.5 flex items-center justify-between gap-2 rounded bg-destructive px-1.5 py-1 text-xs font-bold uppercase tracking-wide text-destructive-foreground shadow-[0_0_10px_2px_hsl(var(--destructive)/0.75)] motion-safe:animate-pulse"
         >
           <span>{t("lateToAssign")}</span>
           <span className="tabular-nums">{atrasadas}</span>
@@ -386,7 +389,11 @@ export function DashboardWidgets() {
    * `atrasadas` só é calculado para HOJE, e só depois do meio-dia: é a regra da operação, e é o
    * único cartão em que o prazo pode ter vencido.
    */
-  const vencido = prazoDeAtribuicaoVencido();
+  /**
+   * As atrasadas vêm do SERVIDOR, por frente. O cálculo local sabia olhar só "hoje" e perdia a
+   * viagem de ontem que ninguém atribuiu — que é justamente a que mais precisa aparecer.
+   */
+  const atrasadasDe = new Map(summary.lateToAssignByRegion.map((r) => [r.region, r.count]));
   const porRegiao = new Map<string | null, Record<string, RegionSlice["byStatus"]>>();
   for (const [chave, lista] of [
     ["regionToday", summary.tripsTodayByRegion],
@@ -421,10 +428,8 @@ export function DashboardWidgets() {
           diaKey,
           byStatus,
           dateFilter: filtroDe[diaKey]!,
-          atrasadas:
-            diaKey === "regionToday" && vencido
-              ? (byStatus.find((linha) => linha.status === "to_assign")?.count ?? 0)
-              : 0,
+          // A faixa mora no cartão de HOJE, mas o número não é só de hoje: acumula o que venceu antes.
+          atrasadas: diaKey === "regionToday" ? (atrasadasDe.get(region) ?? 0) : 0,
         };
       }),
     }));
@@ -463,12 +468,6 @@ export function DashboardWidgets() {
        * de um cartão de spot no meio do caminho. Agora os três ficam lado a lado, na sequência em
        * que a operação pensa, e o que é avulso vai para o fim.
        */}
-      <StatusCard
-        titleKey="tripsToday"
-        emptyKey="empty"
-        byStatus={summary.tripsTodayByStatus}
-        dateFilter={`&pickupFrom=${hoje}&pickupTo=${hoje}`}
-      />
       {/**
        * As frentes, logo DEPOIS do total de hoje e antes de amanhã.
        *
@@ -513,6 +512,19 @@ export function DashboardWidgets() {
           ))}
         </div>
       ))}
+      {/**
+       * OS TRÊS RECORTES DE STATUS JUNTOS — hoje, amanhã, mês (2026-08-20, a pedido).
+       *
+       * O de hoje abria o painel, sozinho, com as linhas das frentes logo abaixo; e aí a comparação
+       * entre hoje, amanhã e o mês — que é a leitura destes três — exigia pular por cima de nove
+       * cartões de região. Juntos, eles voltam a ser lidos de uma vez.
+       */}
+      <StatusCard
+        titleKey="tripsToday"
+        emptyKey="empty"
+        byStatus={summary.tripsTodayByStatus}
+        dateFilter={`&pickupFrom=${hoje}&pickupTo=${hoje}`}
+      />
       {/* Amanhã (2026-08-17, a pedido): numa TV no meio da sala, de tarde, a pergunta que ainda tem
           resposta é a do dia seguinte. */}
       <StatusCard
