@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.11.0
+// @version      1.12.0
 // @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -76,7 +76,24 @@
      * Se um ciclo demorar mais que o intervalo, nada se acumula: `repetir` só agenda o próximo depois
      * que o anterior termina.
      */
-    intervaloPlanoMs: 5 * 60 * 1000,
+    /**
+     * O PLANO PASSA A UM MINUTO (2026-08-22, a pedido).
+     *
+     * O pedido foi "dá para ler de 10 em 10 segundos?". Não do jeito que ele lê: os TRÊS recortes
+     * juntos custam ~43 páginas e 136 s de trabalho por ciclo, e a execução sozinha leva 114 s —
+     * num ciclo de 20 s ela recomeçaria antes de terminar.
+     *
+     * Mas o que se espera é a LH NOVA aparecer, e ela nasce no PLANO, que é a parte barata: 6
+     * páginas, 18 s. Só ele desce para um minuto; execução e em curso ficam nos cinco.
+     *
+     * A conta do que isso custa AO CLIENTE, que é o limite que importa: de ~1,2 para ~6 páginas por
+     * minuto. Cinco vezes mais, sobre um número pequeno. Ler tudo de 20 em 20 segundos seria quinze
+     * vezes sobre um número grande — e o portal é do fornecedor, não nosso.
+     *
+     * 18 s de trabalho numa janela de 60 s deixa folga de sobra. Se um ciclo estourar o intervalo,
+     * nada empilha: `repetir` só agenda o próximo quando o anterior termina.
+     */
+    intervaloPlanoMs: 60 * 1000,
     intervaloExecucaoMs: 5 * 60 * 1000,
     /** Viagens por página. O portal aceita 100; o TMS aplica uma página por vez. */
     porPagina: 100,
