@@ -121,6 +121,31 @@ export function LocationsClient({ canArchive }: { canArchive: boolean }) {
       cell: ({ row }) =>
         row.original.region ?? <span className="text-xs text-warning">{t("regionNone")}</span>,
     },
+    {
+      /**
+       * ROTA NOSSA OU SÓ PROPOSTA (2026-08-21, a pedido).
+       *
+       * A lista misturava as duas e só o contador de "a classificar" sabia a diferença — quem abria
+       * a tela não tinha como saber se aquele lugar é da operação ou uma oferta que ninguém aceitou.
+       *
+       * A distinção ficou necessária quando o TMS passou a CRIAR estação sozinho, a partir de
+       * proposta que chega do portal: sem a marca, a lista cresceria com lugares que a empresa nunca
+       * rodou e nada na tela diria isso.
+       *
+       * Quem decide não é um cadastro à parte, é o ACEITE: `usedInAcceptedTrip` já é calculado a
+       * partir de viagem aceita de verdade. A coluna só mostra o que o sistema já sabia.
+       */
+      id: "ours",
+      header: () => t("ours"),
+      cell: ({ row }) =>
+        row.original.usedInAcceptedTrip ? (
+          <span className="rounded border border-success/50 px-1.5 py-0.5 text-xs text-success">
+            {t("oursYes")}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">{t("oursNo")}</span>
+        ),
+    },
   ];
 
   return (

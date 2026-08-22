@@ -150,6 +150,7 @@ function toStop(raw: Record<string, unknown>, index: number): PortalStop {
     stationValue: stationValue(stationId, stationName),
     stationId,
     stationName: stationName ?? "",
+    stationCode: trimmed(raw.station_code),
     plannedArrival: positive(raw.sta),
     plannedDeparture: positive(raw.std),
     actualArrival: positive(raw.ata),
