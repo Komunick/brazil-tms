@@ -101,8 +101,18 @@
   "use strict";
 
   const CONFIG = {
-    /** Endereço do TMS. Troque para o de produção quando for a hora. */
-    tms: "https://tmsdev.braziltransports.com.br",
+    /**
+     * Endereço do TMS. PRODUÇÃO desde 2026-08-22.
+     *
+     * Era o de dev, com um recado dizendo "troque quando for a hora". A hora chegou, e o recado
+     * quase custou caro no robô executor: instalar o arquivo do repositório por cima do que roda na
+     * VM apontou um robô de PRODUÇÃO para o dev. O estrago desse engano não dá sinal nenhum — robô
+     * vivo, sem erro em lugar algum, falando com um banco que ninguém olha.
+     *
+     * O arquivo do repositório é o que se instala. Ele tem de nascer apontando para onde de fato
+     * vai rodar; quem quiser testar contra o dev troca esta linha na cópia dele, não o contrário.
+     */
+    tms: "https://tms.braziltransports.com.br",
     /** O mesmo valor de PORTAL_FEED_TOKEN no servidor. */
     token: "COLE_AQUI_O_TOKEN",
     /**

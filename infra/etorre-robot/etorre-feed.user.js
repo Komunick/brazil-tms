@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do eTorre
 // @namespace    braziltransports.com.br
-// @version      0.2.4
+// @version      0.2.5
 // @description  Escuta o que a tela de Veículos Logísticos do eTorre já busca e entrega ao TMS. Somente leitura.
 // @match        https://torre.logae.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -45,8 +45,18 @@
   "use strict";
 
   const CONFIG = {
-    /** Endereço do TMS. Troque para o de produção quando for a hora. */
-    tms: "https://tmsdev.braziltransports.com.br",
+    /**
+     * Endereço do TMS. PRODUÇÃO desde 2026-08-22.
+     *
+     * Era o de dev, com um recado dizendo "troque quando for a hora". A hora chegou, e o recado
+     * quase custou caro no robô executor: instalar o arquivo do repositório por cima do que roda na
+     * VM apontou um robô de PRODUÇÃO para o dev. O estrago desse engano não dá sinal nenhum — robô
+     * vivo, sem erro em lugar algum, falando com um banco que ninguém olha.
+     *
+     * O arquivo do repositório é o que se instala. Ele tem de nascer apontando para onde de fato
+     * vai rodar; quem quiser testar contra o dev troca esta linha na cópia dele, não o contrário.
+     */
+    tms: "https://tms.braziltransports.com.br",
     /** O mesmo valor de PORTAL_FEED_TOKEN no servidor. Trocar aqui e lá ao mesmo tempo. */
     token: "COLE_AQUI_O_TOKEN",
     /** Só interessa esta chamada; as outras do `/apilog/` são lookups de tela. */
@@ -215,7 +225,19 @@
   let ultimoCiclo = {};
 
   function entregar(frota) {
-    if (!CONFIG.token || CONFIG.token === "COLE_AQUI_O_TOKEN") {
+    /**
+     * O TEXTO DE EXEMPLO ESCRITO PARTIDO — e é de propósito (2026-08-22).
+     *
+     * Instalar é copiar este arquivo e trocar o exemplo pelo token de verdade. Quem faz isso com
+     * um substituir-tudo (o `str.replace` do Python troca TODAS as ocorrências) troca também a que
+     * está aqui, e a guarda vira `if (token === <o token certo>)`: o robô passa a recusar
+     * exatamente o token válido, calado, dizendo que não há token nenhum.
+     *
+     * Aconteceu com o robô executor e custou uma hora. Partido em dois pedaços, nenhum
+     * substituir-tudo do literal inteiro encosta nesta linha.
+     */
+    const TOKEN_DE_EXEMPLO = "COLE_AQUI" + "_O_TOKEN";
+    if (!CONFIG.token || CONFIG.token === TOKEN_DE_EXEMPLO) {
       erro("token não configurado — o retrato foi lido e NÃO foi entregue");
       return;
     }
