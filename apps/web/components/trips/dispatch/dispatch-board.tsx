@@ -327,13 +327,18 @@ export function DispatchBoard({
                 : t("boardEmpty")}
           </p>
         ) : (
-          <ul className="space-y-3">
+          // A LISTA TEM LARGURA MÁXIMA (2026-08-22, a pedido). Cada linha ocupava a tela inteira,
+          // com o texto à esquerda e os botões colados na borda direita: num monitor largo, mais de
+          // mil pixels entre ler a LH e clicar em Aceitar, dezenas de vezes por hora. Com o teto os
+          // dois ficam a uma distância que a vista alcança sem varrer a tela — e as linhas ficaram
+          // mais baixas, que é o outro lado da queixa: cabe mais fila na mesma altura.
+          <ul className="max-w-4xl space-y-2">
             {items.map((row) => (
               <li
                 key={row.id}
-                className="flex flex-wrap items-start justify-between gap-3 rounded-md border p-3"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2"
               >
-                <div className="space-y-1">
+                <div className="min-w-0 space-y-0.5">
                   <Link
                     href={`/trips/${row.id}`}
                     className="font-medium text-primary hover:underline"
