@@ -45,6 +45,21 @@ export const BOARD_ANCHOR = "viagens";
  * later-slice dimensions (assignment → 006, SLA risk → 007, documents/billing detail → 008) are not
  * rendered as filterable/sortable columns here.
  */
+/**
+ * A COLUNA DE AÇÃO NÃO PODE DEPENDER DE ROLAGEM (2026-08-22, a pedido).
+ *
+ * A tabela tem doze colunas e não cabe na tela: para chegar no botão era preciso rolar a lista
+ * inteira para o lado, em cada linha. Quem trabalha a fila fazia isso dezenas de vezes por hora.
+ *
+ * Grudada na borda direita, a ação fica sempre no mesmo lugar — o olho e o mouse aprendem uma
+ * posição só. O fundo opaco é obrigatório: sem ele o conteúdo que passa por baixo aparece através
+ * da célula e vira sopa de letras.
+ */
+const fixaNaDireita = (colunaId: string): string =>
+  colunaId === "actions"
+    ? "sticky right-0 z-10 bg-card shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]"
+    : "";
+
 export function ControlTowerTable({
   filterOptions: initialFilterOptions,
   canAssign = false,
@@ -311,7 +326,10 @@ export function ControlTowerTable({
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id} className="whitespace-nowrap">
+                  <TableHead
+                    key={header.id}
+                    className={`whitespace-nowrap ${fixaNaDireita(header.column.id)}`}
+                  >
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -341,7 +359,7 @@ export function ControlTowerTable({
               table.getRowModel().rows.map((row) => (
                 <TableRow key={row.id} className="whitespace-nowrap">
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className={fixaNaDireita(cell.column.id)}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
