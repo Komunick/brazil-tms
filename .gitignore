@@ -39,6 +39,8 @@ Thumbs.db
 
 # Misc
 *.local
+# ...e o mesmo arquivo com extensão: rascunho.local.mjs, promocao.local.md.
+*.local.*
 
 # Local-only compose overrides
 **/docker-compose.override.yml
