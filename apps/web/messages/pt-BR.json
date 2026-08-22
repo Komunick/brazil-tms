@@ -1378,6 +1378,7 @@
       "cancel": "Cancelar",
       "action": "Atribuir no portal",
       "actionEdit": "Editar no portal",
+      "assignedTo": "Escalado",
       "titleEdit": "Editar atribuição"
     }
   },
