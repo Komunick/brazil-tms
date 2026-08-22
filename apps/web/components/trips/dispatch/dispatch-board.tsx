@@ -390,6 +390,23 @@ export function DispatchBoard({
                   <p className="text-xs text-muted-foreground">
                     {t("pickup")}: {formatDateTime(row.plannedPickupWindowStart)}
                   </p>
+                  {/**
+                   * QUEM JÁ ESTÁ ESCALADO, na própria linha (2026-08-22).
+                   *
+                   * Sem isto a fila mistura, sem nenhum sinal visível, o que falta escalar com o que
+                   * já está escalado — e a única pista era a palavra do botão, do outro lado da
+                   * linha. O usuário abriu a aba, viu a lista de sempre e concluiu, com razão, que
+                   * as atribuídas continuavam de fora.
+                   *
+                   * Vem do PORTAL, não da atribuição do TMS: é o que o cliente enxerga, e é o que
+                   * o botão ao lado vai editar.
+                   */}
+                  {row.portalDriverName ? (
+                    <p className="text-xs font-medium text-foreground">
+                      {tPortal("assignedTo")}: {row.portalDriverName}
+                      {row.portalPlate ? ` · ${row.portalPlate}` : ""}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="flex gap-2">
                   {row.portalAcceptance === ACEITACAO_PENDENTE ? (

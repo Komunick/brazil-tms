@@ -120,6 +120,7 @@ export interface TripBoardRow {
    */
   portalAcceptance: string | null;
   portalDriverId: string | null;
+  portalDriverName: string | null;
   portalPlate: string | null;
   /** O que o portal chama esta viagem — `Assigning` / `Assigned`. Ver `displayStatusOf`. */
   portalStatus: string | null;
@@ -334,6 +335,7 @@ const boardColumns = {
    * o motorista obrigaria a redigitar a placa, e redigitar é onde o erro entra.
    */
   portalDriverId: sql<string | null>`(${trips.customerFields} ->> 'ID do motorista (portal)')`,
+  portalDriverName: sql<string | null>`(${trips.customerFields} ->> 'Motorista (portal)')`,
   portalPlate: sql<string | null>`(${trips.customerFields} ->> 'Placa (portal)')`,
   portalStatus: sql<string | null>`(${trips.customerFields} ->> 'Status (portal)')`,
   assignmentId: boardAsg.id,
@@ -347,6 +349,7 @@ type BoardRow = {
   externalTripId: string | null;
   portalAcceptance: string | null;
   portalDriverId: string | null;
+  portalDriverName: string | null;
   portalPlate: string | null;
   portalStatus: string | null;
   customerId: string;
@@ -399,6 +402,7 @@ function toBoardRow(row: BoardRow): TripBoardRow {
     updatedAt: row.updatedAt.toISOString(),
     portalAcceptance: row.portalAcceptance ?? null,
     portalDriverId: row.portalDriverId ?? null,
+    portalDriverName: row.portalDriverName ?? null,
     portalPlate: row.portalPlate ?? null,
     portalStatus: row.portalStatus ?? null,
     isAssigned: row.assignmentId != null,
