@@ -12,6 +12,7 @@ import {
   isNull,
   lt,
   lte,
+  not,
   or,
   sql,
   type SQL,
@@ -42,6 +43,7 @@ import {
   vehicles,
 } from "../../schema";
 import {
+  ACEITACAO_PENDENTE,
   ACTIVE_TRIP_STATUSES,
   BILLING_PHASE_STATUSES,
   EXPORT_ROW_CAP,
@@ -576,6 +578,21 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
   } else if (query.queue) {
     conditions.push(eq(trips.currentStatus, "received"));
     conditions.push(tripQueueSql(query.queue));
+  }
+
+  /**
+   * O EIXO DA ACEITAÇÃO SOZINHO — sem dizer nada sobre motorista (2026-08-22).
+   *
+   * Independente de `queue` de propósito: quem pergunta isto quer a união de "aceita e sem
+   * motorista" com "aceita e já com motorista", que nenhum valor de `queue` sabe expressar.
+   *
+   * `IS DISTINCT FROM` e não `<>`: viagem sem aceitação gravada — digitada à mão, ou anterior a o
+   * TMS ler esse campo — conta como não-pendente, que é o que `displayStatusOf` já faz. Com `<>`,
+   * o nulo devolveria nulo e ela sumiria da lista sem nunca aparecer em lugar nenhum.
+   */
+  if (query.portalAccepted) {
+    const pendente = sql<boolean>`(${trips.customerFields} ->> 'Aceitação (portal)') IS NOT DISTINCT FROM ${ACEITACAO_PENDENTE}`;
+    conditions.push(query.portalAccepted === "true" ? not(pendente) : pendente);
   }
 
   // Feature 006 — assignment filters (data-model.md §5). These reference the LEFT-joined current

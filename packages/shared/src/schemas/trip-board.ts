@@ -104,6 +104,19 @@ export const tripBoardQuerySchema = z.object({
    */
   queue: optParam(z.enum(TRIP_QUEUES)),
   /**
+   * SÓ O EIXO DA ACEITAÇÃO, sem dizer nada sobre motorista (2026-08-22).
+   *
+   * As três filas são exaustivas e EXCLUSIVAS — foi o que as fez boas para rotular o quadro, e é
+   * exatamente o que atrapalha aqui. A tela de expedição precisa da UNIÃO de duas delas: aceita e
+   * sem motorista (`to_assign`) mais aceita e já com motorista (`awaiting_arrival`), porque escalar
+   * e REESCALAR são o mesmo trabalho, feito pela mesma pessoa, na mesma lista.
+   *
+   * Não dá para pedir isso com `queue`, que é um valor só. E alargar `to_assign` para cobrir as
+   * duas seria pior: os números das fichas do quadro saem de `displayStatusOf`, então a ficha
+   * "P/Atribuir" passaria a contar um conjunto e a listar outro.
+   */
+  portalAccepted: optParam(z.enum(["true", "false"])),
+  /**
    * A busca livre — e, desde 2026-08-21, uma LISTA de LHs colada de uma vez.
    *
    * O teto subiu de 200 para 4000 caracteres porque 200 não cabia o caso de uso: um LH tem 13
@@ -162,6 +175,7 @@ const PARAM_KEYS = [
   "missingDocuments",
   "awaitingAssignment",
   "queue",
+  "portalAccepted",
   "q",
   "scope",
   "sort",
