@@ -7,6 +7,7 @@ import type { SpotOfferView } from "@brazil-tms/db";
 import { useSpotOffers } from "@/lib/trips/client";
 import { decidirAviso, estadoInicial, novasOfertas } from "@/lib/spot/ofertas";
 import { tocarAviso } from "@/lib/spot/som";
+import { avisarNoSistema } from "@/lib/spot/aviso-do-sistema";
 
 /**
  * O AVISO DE OFERTA no meio da tela (2026-08-18).
@@ -112,6 +113,19 @@ export function OfertaDeSpot() {
       if (!decisao.anunciar) return atual;
       // O som acompanha o cartão, não a oferta: o que foi para a caixa não faz barulho.
       tocarAviso();
+      /**
+       * E o aviso do SISTEMA, para quem não está com o TMS na frente (2026-08-22, a pedido).
+       *
+       * Sai no mesmo ponto do som e do cartão, e não num efeito à parte: os três respondem à mesma
+       * decisão, e a regra da rajada — só a primeira anuncia — vale para os três de uma vez. Um aviso
+       * de sistema com regra própria acabaria disparando cinquenta vezes numa sexta-feira.
+       *
+       * Ele mesmo se cala quando a aba está visível: ver `aviso-do-sistema.ts`.
+       */
+      avisarNoSistema(
+        t("systemTitle"),
+        [decisao.anunciar.route, decisao.anunciar.price].filter(Boolean).join(" · "),
+      );
       return [decisao.anunciar];
     });
   }, [ofertas]);

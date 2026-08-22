@@ -6,6 +6,7 @@ import { Gavel } from "lucide-react";
 import type { SpotOfferView } from "@brazil-tms/db";
 import { formatTime } from "@brazil-tms/shared";
 import { useSpotOffers } from "@/lib/trips/client";
+import { AvisosDoSistema } from "@/components/spot/avisos-do-sistema";
 import { Card, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
@@ -110,6 +111,18 @@ export function OfertasDoDia() {
             </DialogTitle>
             <DialogDescription>{t("listHint")}</DialogDescription>
           </DialogHeader>
+
+          {/**
+           * Ligar o aviso da área de trabalho mora AQUI, e não numa tela de configurações.
+           *
+           * É aqui que a pessoa está quando pensa no assunto — abriu a caixa de ofertas justamente
+           * porque quer saber delas. Uma tela de preferências à parte é o lugar onde esse botão
+           * seria escrito, deployado e nunca encontrado.
+           */}
+          <div className="rounded border px-3 py-2">
+            <p className="mb-1.5 text-xs font-medium">{t("systemHeading")}</p>
+            <AvisosDoSistema />
+          </div>
 
           <ul className="flex flex-col gap-2">
             {ofertas.map((o) => (
