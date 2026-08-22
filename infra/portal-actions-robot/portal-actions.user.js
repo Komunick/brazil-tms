@@ -50,8 +50,18 @@
   "use strict";
 
   const CONFIG = {
-    /** Endereço do TMS. Troque para o de produção quando for a hora. */
-    tms: "https://tmsdev.braziltransports.com.br",
+    /**
+     * Endereço do TMS. PRODUÇÃO desde 2026-08-22.
+     *
+     * Era o de dev, com um recado dizendo "troque quando for a hora". A hora chegou e o recado
+     * quase custou caro: instalar este arquivo por cima do que roda na VM apontou o robô de
+     * PRODUÇÃO para o dev por alguns segundos — as ordens de verdade teriam ficado paradas numa
+     * fila que ninguém lê, sem erro nenhum aparecendo em lugar nenhum.
+     *
+     * O arquivo do repositório é o que se instala. Ele tem de nascer apontando para onde de fato
+     * vai rodar; quem quiser testar contra o dev troca esta linha na cópia dele, não o contrário.
+     */
+    tms: "https://tms.braziltransports.com.br",
     /** O mesmo valor de PORTAL_FEED_TOKEN no servidor. Trocar aqui e lá ao mesmo tempo. */
     token: "COLE_AQUI_O_TOKEN",
     /**
