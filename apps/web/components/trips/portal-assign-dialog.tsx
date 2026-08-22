@@ -47,6 +47,7 @@ export function PortalAssignDialog({
   vehicleType,
   driverAtual,
   placaAtual,
+  onSent,
   open,
   onOpenChange,
 }: {
@@ -63,6 +64,8 @@ export function PortalAssignDialog({
    */
   driverAtual?: string | null;
   placaAtual?: string | null;
+  /** Chamado quando a ordem entrou na fila — quem desenha usa para acompanhar o resultado. */
+  onSent?: () => void;
   open: boolean;
   onOpenChange: (aberto: boolean) => void;
 }) {
@@ -209,7 +212,12 @@ export function PortalAssignDialog({
                   secondDriverId: secondDriverId ? Number(secondDriverId) : null,
                   plates: preenchidas,
                 },
-                { onSuccess: () => onOpenChange(false) },
+                {
+                  onSuccess: () => {
+                    onSent?.();
+                    onOpenChange(false);
+                  },
+                },
               )
             }
           >

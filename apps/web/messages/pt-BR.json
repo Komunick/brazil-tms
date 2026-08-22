@@ -1359,6 +1359,14 @@
       "confirmRejectQuestion": "Recusar a viagem {lh}?",
       "sending": "Enviando ao portal…"
     },
+    "portalOrder": {
+      "queued": "Enviando ao portal…",
+      "running": "O portal está respondendo…",
+      "doneAssign": "Atribuição confirmada pelo portal",
+      "doneDecision": "Confirmado pelo portal",
+      "failed": "O portal recusou. Tente de novo.",
+      "failedWith": "O portal recusou: {erro}"
+    },
     "portalAssign": {
       "title": "Atribuir motorista",
       "subtitle": "Viagem {lh}. A atribuição vai para o portal e fica registrada aqui.",

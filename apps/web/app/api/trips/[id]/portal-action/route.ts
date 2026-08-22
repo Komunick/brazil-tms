@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { portalActionBodySchema } from "@brazil-tms/shared";
-import { enfileirarOrdemDoPortal, OrdemRecusada } from "@brazil-tms/db";
+import { enfileirarOrdemDoPortal, ordensDaViagem, OrdemRecusada } from "@brazil-tms/db";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
 import { Conflict, NotFound, handleRouteError } from "@/lib/api/respond";
 
@@ -20,6 +20,31 @@ export const dynamic = "force-dynamic";
  * sai, e um 200 diria que aconteceu. A tela mostra "enviando" até o robô voltar.
  * 409: NOT_PENDING / NO_PORTAL_ID / COMMAND_IN_FLIGHT / INVALID_REASON. 404 viagem inexistente.
  */
+/**
+ * GET /api/trips/:id/portal-action — em que pé está a última ordem desta viagem.
+ *
+ * O POST devolve 202: ACEITO, não FEITO. Entre apertar o botão e o portal responder passam alguns
+ * segundos, e até hoje a tela não contava nada nesse intervalo — o usuário apertou, não viu nada
+ * acontecer, foi conferir no portal e voltou achando que não tinha funcionado. Tinha.
+ *
+ * Esta rota existe para a tela poder dizer a verdade em cada momento: enfileirada, o robô pegou,
+ * o portal confirmou, o portal recusou (e por quê). É leitura pura sobre uma tabela indexada por
+ * viagem; a tela só pergunta enquanto há ordem em voo, e para sozinha quando ela fecha.
+ */
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  try {
+    const ctx = await requireAuth();
+    requirePermission(ctx, "assign_resources");
+    const { id } = await params;
+    return NextResponse.json({ items: await ordensDaViagem(id, 3) });
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
