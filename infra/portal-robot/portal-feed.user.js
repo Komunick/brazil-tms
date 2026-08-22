@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.12.0
+// @version      1.13.0
 // @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -93,7 +93,33 @@
      * 18 s de trabalho numa janela de 60 s deixa folga de sobra. Se um ciclo estourar o intervalo,
      * nada empilha: `repetir` só agenda o próximo quando o anterior termina.
      */
-    intervaloPlanoMs: 60 * 1000,
+    intervaloPlanoMs: 5 * 60 * 1000,
+    /**
+     * O PLANO INCREMENTAL — a leitura rápida que só pergunta o que mudou (2026-08-22).
+     *
+     * A execução sempre filtrou por `mtime` e volta com 1 página em 1 s. O plano perguntava "me dá
+     * tudo de novo": 6 páginas e 542 viagens a cada ciclo, para encontrar as duas que mudaram.
+     *
+     * MEDIDO NO PORTAL antes de escrever isto, porque o parâmetro não é documentado e o robô nunca
+     * o tinha usado neste endpoint — o mesmo `sta`, com e sem `mtime`, na mesma sessão:
+     *
+     *   sem filtro        542 viagens
+     *   mtime últimas 6h   48
+     *   mtime última 1h     2
+     *
+     * Filtra de verdade. Então o plano vira DOIS ciclos: este, de vinte em vinte segundos, e o
+     * completo, que fica nos cinco minutos.
+     */
+    intervaloPlanoNovoMs: 20 * 1000,
+    /**
+     * A janela do incremental é TRÊS VEZES o intervalo dele, e a folga é o ponto.
+     *
+     * Um ciclo que falhe — rede oscilando, portal lento, aba recarregando — não pode custar uma LH
+     * que só apareceria cinco minutos depois, no completo. Com a janela maior que o passo, o ciclo
+     * seguinte relê o que o anterior perdeu. O preço é reler duas ou três viagens; o preço de não
+     * ter a folga é alguém procurando na tela uma viagem que existe no portal.
+     */
+    planoNovoJanelaSegundos: 60,
     intervaloExecucaoMs: 5 * 60 * 1000,
     /** Viagens por página. O portal aceita 100; o TMS aplica uma página por vez. */
     porPagina: 100,
@@ -385,12 +411,41 @@
 
   log("ativo. Somente leitura: duas listagens, nenhum clique.");
 
-  repetir("plano", CONFIG.intervaloPlanoMs, () =>
+  /**
+   * O PLANO COMPLETO — a lista inteira, de cinco em cinco minutos.
+   *
+   * Continua existindo mesmo com o incremental, e por um motivo que o incremental não cobre:
+   * `mtime` mostra o que MUDOU, e viagem RETIRADA do portal não muda — ela some. Quem percebe a
+   * sumida é justamente quem relê a lista inteira e nota a ausência. Sem este ciclo, viagem
+   * cancelada no portal ficaria viva no TMS para sempre, gritando alerta.
+   */
+  repetir("plano completo", CONFIG.intervaloPlanoMs, () =>
     ciclo("plan", "/api/line_haul/agency/trip/list", {
       query_type: 1,
       sta: `${agora() - CONFIG.planoDiasAtras * DIA},${agora() + CONFIG.planoDiasAdiante * DIA}`,
     }),
     "plan",
+  );
+
+  /**
+   * O PLANO INCREMENTAL — o que mudou nos últimos segundos, de vinte em vinte.
+   *
+   * Mesmo endpoint, mesma entrega, mesmo `query_type`: para o TMS não há diferença nenhuma entre
+   * uma página que veio daqui e uma que veio do completo. A única diferença é a pergunta feita ao
+   * portal — e é ela que faz 1 página no lugar de 6.
+   *
+   * ELE NÃO ESCREVE O PULSO, e isso é deliberado. O pulso é gravado por modo de ENTREGA, e os dois
+   * ciclos entregam como `plan` — dividiriam o mesmo relógio. Pior: num período sem mudança nenhuma
+   * este ciclo não entrega nada (não há página), então a tela de Status veria "configurado 20 s,
+   * sem notícia há três minutos" e acusaria sufoco onde só há sossego. O relógio do plano continua
+   * sendo o do ciclo completo, que entrega sempre.
+   */
+  repetir("plano novo", CONFIG.intervaloPlanoNovoMs, () =>
+    ciclo("plan", "/api/line_haul/agency/trip/list", {
+      query_type: 1,
+      sta: `${agora() - CONFIG.planoDiasAtras * DIA},${agora() + CONFIG.planoDiasAdiante * DIA}`,
+      mtime: `${agora() - CONFIG.planoNovoJanelaSegundos},${agora()}`,
+    }),
   );
 
   // A aba "Aceito": o que está na estrada agora. Mesmo endpoint do plano, outro `query_type`.
