@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import {
   impedimentoDaAtribuicao,
   normalizarPlaca,
+  placasDoPortal,
   placasEsperadas,
   type VehicleType,
 } from "@brazil-tms/shared";
@@ -76,11 +77,23 @@ export function PortalAssignDialog({
   const quantas = placasEsperadas(vehicleType);
   const [driverId, setDriverId] = useState(driverAtual ?? "");
   const [secondDriverId, setSecondDriverId] = useState("");
+  /**
+   * AS PLACAS DO PORTAL VÊM NUMA STRING SÓ, separadas por vírgula (2026-08-22).
+   *
+   * Uma carreta chega como `"PXW0I78,EMU0J25"` — cavalo e reboque no mesmo campo. A primeira
+   * versão disto jogava a string inteira no campo 1, e como `normalizarPlaca` apaga tudo que não
+   * é letra ou número, a vírgula sumia e o campo virava `"PXW0I78EMU0J25"`: as duas placas
+   * grudadas num campo, o segundo vazio. Foi o usuário quem viu.
+   *
+   * QUANTOS CAMPOS MOSTRAR sai do maior entre o que o tipo do veículo pede e o que o portal já
+   * tem. O tipo é uma regra NOSSA sobre um dado deles e pode envelhecer; o que está escalado hoje
+   * é fato. Quando os dois discordam, esconder uma placa que existe seria o pior dos erros —
+   * salvar apagaria do portal um reboque que ninguém pediu para tirar.
+   */
   const [placas, setPlacas] = useState<string[]>(() => {
-    const vazias = Array.from({ length: quantas }, () => "");
-    // A primeira placa vem preenchida; a segunda o portal não nos conta, e chutar seria pior.
-    if (placaAtual) vazias[0] = normalizarPlaca(placaAtual);
-    return vazias;
+    const doPortal = placasDoPortal(placaAtual);
+    const campos = Math.max(quantas, doPortal.length);
+    return Array.from({ length: campos }, (_, i) => doPortal[i] ?? "");
   });
 
   /**
