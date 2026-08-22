@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, X } from "lucide-react";
 import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
@@ -10,7 +10,6 @@ import {
   VEHICLE_TYPE_VALUES,
   type TripBoardQuery,
   type VehicleType,
-  ACEITACAO_PENDENTE,
 } from "@brazil-tms/shared";
 import type { TripBoardRow, TripFilterOptions } from "@brazil-tms/db";
 import { Button } from "@/components/ui/button";
@@ -22,10 +21,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { TripFilters } from "@/components/trips/trip-filters";
-import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
 import { useFilterOptions, useTripBoard, useTripBoardFilters } from "@/lib/trips/client";
 
 /** Board `sort` values that map to a column header (R2 whitelist). */
@@ -45,28 +42,10 @@ export const BOARD_ANCHOR = "viagens";
  * later-slice dimensions (assignment → 006, SLA risk → 007, documents/billing detail → 008) are not
  * rendered as filterable/sortable columns here.
  */
-/**
- * A COLUNA DE AÇÃO NÃO PODE DEPENDER DE ROLAGEM (2026-08-22, a pedido).
- *
- * A tabela tem doze colunas e não cabe na tela: para chegar no botão era preciso rolar a lista
- * inteira para o lado, em cada linha. Quem trabalha a fila fazia isso dezenas de vezes por hora.
- *
- * Grudada na borda direita, a ação fica sempre no mesmo lugar — o olho e o mouse aprendem uma
- * posição só. O fundo opaco é obrigatório: sem ele o conteúdo que passa por baixo aparece através
- * da célula e vira sopa de letras.
- */
-const fixaNaDireita = (colunaId: string): string =>
-  colunaId === "actions"
-    ? "sticky right-0 z-10 bg-card shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]"
-    : "";
-
 export function ControlTowerTable({
   filterOptions: initialFilterOptions,
-  canAssign = false,
 }: {
   filterOptions: TripFilterOptions;
-  /** 006 — additively reveal the per-row quick-assign action for `assign_resources` holders. */
-  canAssign?: boolean;
   /** 017 — how far this user's cancel permission reaches (§18); computed server-side. */
 }) {
   // 019 — keep filters + quick-assign pickers fresh on an open tab; server data seeds it.
@@ -74,11 +53,8 @@ export function ControlTowerTable({
   const t = useTranslations("Trips");
   const tCommon = useTranslations("Common");
   const tVehicle = useTranslations("VehicleTypes");
-  const tDispatch = useTranslations("Dispatch");
   const { query, search, setFilters, reset } = useTripBoardFilters();
 
-  // The row whose quick-assign dialog is open (006, T063). One dialog instance, fed the row in scope.
-  const [assignRow, setAssignRow] = useState<TripBoardRow | null>(null);
   // The row whose cancel dialog is open (017). Same one-instance pattern.
 
   /** Label a (possibly unknown) vehicle-type string via the `VehicleTypes` namespace; "—" if absent. */
@@ -241,51 +217,6 @@ export function ControlTowerTable({
       header: () => <SortableHeader label={t("board.colUpdatedAt")} sortKey="updatedAt" />,
       cell: ({ row }) => formatDateTime(row.original.updatedAt),
     },
-    // 006 — per-row quick-assign action (FR-022 third entry point) for `assign_resources` holders;
-    // A coluna de ação da linha. O "Cancelar viagem" saiu daqui e do TMS inteiro em 2026-08-21, a
-    // pedido: quem cancela uma viagem é o CLIENTE, no portal dele, e o robô traz o cancelamento na
-    // leitura seguinte. Um botão nosso para isso oferecia um poder que a operação não tem.
-    ...(canAssign
-      ? [
-          {
-            id: "actions",
-            header: () => tCommon("actions"),
-            cell: ({ row }: { row: { original: TripBoardRow } }) => (
-              <div className="flex gap-2">
-                {/* Quick-assign is ASSIGN-only: shown for an UNASSIGNED `received` trip (slice 015;
-                    was `validated`). Reassigning an already-assigned trip needs the full
-                    current-assignment context (resources pre-filled), which only the Trip-Detail
-                    panel has — the board row carries just display names — so an assigned row is
-                    reached via its detail link, not a blank reassign form here. */}
-                {/**
-                 * EM ANÁLISE NÃO ATRIBUI (2026-08-21, a pedido).
-                 *
-                 * A ordem da operação é aceitar primeiro, escalar depois: a viagem em análise é uma
-                 * PROPOSTA que o cliente ainda espera resposta, e pôr motorista nela é comprometer
-                 * recurso com um trabalho que a empresa pode recusar.
-                 *
-                 * As duas filas vivem no mesmo `received` e só a aceitação as separa — por isso o
-                 * botão sumia sozinho: para o TMS as 617 em análise eram indistinguíveis das que já
-                 * podem ser escaladas. Quem decide nessa linha agora é o cartão de decisão.
-                 */}
-                {canAssign &&
-                !row.original.isAssigned &&
-                row.original.portalAcceptance !== ACEITACAO_PENDENTE &&
-                row.original.currentStatus === "received" ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setAssignRow(row.original)}
-                  >
-                    {tDispatch("assignAction")}
-                  </Button>
-                ) : null}
-              </div>
-            ),
-          } as ColumnDef<TripBoardRow>,
-        ]
-      : []),
   ];
 
   const table = useReactTable({
@@ -328,7 +259,7 @@ export function ControlTowerTable({
                 {headerGroup.headers.map((header) => (
                   <TableHead
                     key={header.id}
-                    className={`whitespace-nowrap ${fixaNaDireita(header.column.id)}`}
+                    className="whitespace-nowrap"
                   >
                     {header.isPlaceholder
                       ? null
@@ -359,7 +290,7 @@ export function ControlTowerTable({
               table.getRowModel().rows.map((row) => (
                 <TableRow key={row.id} className="whitespace-nowrap">
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} className={fixaNaDireita(cell.column.id)}>
+                    <TableCell key={cell.id}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
@@ -395,28 +326,6 @@ export function ControlTowerTable({
         </div>
       </div>
 
-      {/* Quick-assign dialog (006, T063) — the shared AssignmentForm for an UNASSIGNED `received` row
-          (slice 015; ASSIGN-only; reassignment/edit lives in the Trip-Detail panel, which has the full
-          current assignment for pre-filled pickers). currentAssignment is therefore always null here. */}
-      <Dialog open={assignRow != null} onOpenChange={(open) => !open && setAssignRow(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {tDispatch("openAssign")}
-              {assignRow?.externalTripId ? ` — ${assignRow.externalTripId}` : ""}
-            </DialogTitle>
-          </DialogHeader>
-          {assignRow ? (
-            <AssignmentForm
-              tripId={assignRow.id}
-              currentStatus={assignRow.currentStatus}
-              currentAssignment={null}
-              resourceOptions={filterOptions}
-              onDone={() => setAssignRow(null)}
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

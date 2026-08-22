@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TripsError, usePortalAction } from "@/lib/trips/client";
+import { PortalOrderStatus } from "@/components/trips/portal-order-status";
 
 /**
  * ACEITAR E RECUSAR, onde a operação estiver (2026-08-21, a pedido).
@@ -71,7 +72,14 @@ export function PortalDecisionButtons({
    * por um erro.
    */
   if (acao.isSuccess) {
-    return <span className="text-xs text-warning">{t("sending")}</span>;
+    /**
+     * E agora ele SEGUE a ordem em vez de congelar em "enviando".
+     *
+     * "Enviando" era verdade por poucos segundos e mentira depois: a palavra ficava ali igual
+     * tivesse o portal aceitado, recusado, ou nunca respondido. Quem lia não tinha como saber em
+     * qual dos três casos estava.
+     */
+    return <PortalOrderStatus tripId={tripId} />;
   }
 
   return (
