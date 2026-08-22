@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   impedimentoDaAtribuicao,
@@ -64,17 +64,19 @@ export function PortalAssignDialog({
   const [secondDriverId, setSecondDriverId] = useState("");
   const [placas, setPlacas] = useState<string[]>(() => Array.from({ length: quantas }, () => ""));
 
-  // Reabrir para OUTRA viagem não pode herdar o que foi digitado na anterior — é o caminho mais curto
-  // para escalar o motorista certo na viagem errada.
-  useEffect(() => {
-    if (!open) return;
-    setDriverId("");
-    setSecondDriverId("");
-    setPlacas(Array.from({ length: quantas }, () => ""));
-    acao.reset();
-    // Depende de abrir e de QUAL viagem — `acao` é recriado a cada render e não pertence aqui.
-  }, [open, tripId, quantas, acao]);
-
+  /**
+   * NÃO HÁ EFEITO PARA LIMPAR O FORMULÁRIO — e essa ausência é a correção.
+   *
+   * A primeira versão limpava os campos num `useEffect` ao abrir. Para calar o lint eu pus o objeto
+   * da mutação nas dependências, e ele é RECRIADO a cada render: efeito roda, muda estado,
+   * re-renderiza, roda de novo. Laço infinito, e a tela inteira caiu com "Maximum update depth" —
+   * na primeira vez que alguém tentou atribuir de verdade.
+   *
+   * Quem garante o formulário limpo agora é o `key={row.id}` de quem desenha este diálogo: trocar de
+   * viagem MONTA outro componente, e estado novo nasce vazio por definição. Sem efeito, sem
+   * dependência para errar, e sem o risco de herdar o motorista da viagem anterior — que era o que
+   * o efeito existia para evitar.
+   */
   const opcoes = useMemo(
     () =>
       (motoristas.data?.items ?? []).map((m) => ({

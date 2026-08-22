@@ -413,6 +413,8 @@ export function DispatchBoard({
 
       {portalRow ? (
         <PortalAssignDialog
+          /* Trocar de viagem MONTA outro diálogo: é o que garante o formulário limpo, sem efeito. */
+          key={portalRow.id}
           tripId={portalRow.id}
           externalTripId={portalRow.externalTripId}
           vehicleType={(portalRow.plannedVehicleType as VehicleType | null) ?? null}
