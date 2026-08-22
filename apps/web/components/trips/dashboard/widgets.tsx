@@ -17,7 +17,6 @@ import { useReconexao } from "@/lib/ui/reconexao";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { BOARD_ANCHOR } from "@/components/trips/control-tower-table";
 import { BscCard } from "@/components/trips/dashboard/bsc-card";
-import { OfertaDeSpot } from "@/components/spot/oferta-de-spot";
 import { OfertasDoDia } from "@/components/spot/ofertas-do-dia";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -447,10 +446,6 @@ export function DashboardWidgets() {
           {t("reconnecting")}
         </div>
       ) : null}
-      {/* O aviso de oferta de spot mora nas DUAS telas: aqui, onde a operação passa o dia, e no
-          painel de parede. Ele se posiciona sobre a tela e não ocupa lugar na grade — o que estiver
-          embaixo continua desenhado e clicável. */}
-      <OfertaDeSpot />
       {/**
        * O BSC ABRE O PAINEL: é a nota que decide contrato, e vem do cliente, não daqui.
        *

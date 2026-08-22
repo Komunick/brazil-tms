@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { decideAccess, verifySession } from "@/lib/auth/session";
 import { AppSidebar } from "@/components/shell/app-sidebar";
 import { Topbar } from "@/components/shell/topbar";
+import { OfertaDeSpot } from "@/components/spot/oferta-de-spot";
 import { COOKIE_MENU } from "@/lib/ui/menu-recolhido";
 
 /**
@@ -26,6 +27,20 @@ export default async function ShellLayout({ children }: { children: ReactNode })
         <Topbar userName={session.user.name} />
         <main className="flex-1 p-6">{children}</main>
       </div>
+      {/**
+       * O AVISO DE SPOT MORA NO SHELL, não numa tela (2026-08-22, a pedido).
+       *
+       * Ele nasceu dentro do painel do dia, e por isso só aparecia para quem estivesse justamente
+       * na tela Início. Quem passa o dia na Expedição ou na Torre — que é onde a operação trabalha —
+       * nunca via, e a oferta vale enquanto ninguém aceitou.
+       *
+       * Aqui em cima ele cobre TODAS as telas de uma vez, sem cada uma ter de lembrar de incluí-lo.
+       * Ele se posiciona sobre a página e não ocupa lugar no fluxo: o que estiver embaixo continua
+       * desenhado e clicável.
+       *
+       * O painel de parede tem o seu próprio (`(wall)`), porque não passa por este shell.
+       */}
+      <OfertaDeSpot />
     </div>
   );
 }
