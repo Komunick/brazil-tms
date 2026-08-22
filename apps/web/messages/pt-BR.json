@@ -1745,7 +1745,17 @@
     "originArrival": "STA",
     "openList": "Ver as ofertas de hoje",
     "listHint": "O que o aviso mostrou, pelo resto do dia.",
-    "absorbed": "+{count} na caixa de ofertas"
+    "absorbed": "+{count} na caixa de ofertas",
+    "systemTitle": "Nova oferta de spot",
+    "systemHeading": "Aviso na área de trabalho",
+    "systemHint": "Recebe o aviso mesmo com o TMS numa aba de fundo ou minimizado. Aba fechada não alcança — aí quem avisa é o Telegram.",
+    "systemEnable": "Ativar avisos",
+    "systemTest": "Enviar um teste",
+    "systemOn": "Avisos ativos",
+    "systemDenied": "O navegador está bloqueando. Libere nas permissões do site e recarregue.",
+    "systemUnavailable": "Este navegador não tem avisos do sistema.",
+    "systemTestTitle": "Teste — Brazil Transports TMS",
+    "systemTestBody": "Se você está lendo isto, os avisos de spot vão chegar aqui."
   },
   "Wallboard": {
     "title": "Brazil Transports · Torre",
