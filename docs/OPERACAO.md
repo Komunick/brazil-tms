@@ -235,13 +235,35 @@ diferente:
 |---|---|---|
 | portal | `/home/ubuntu/robo-portal/entrega/portal-feed.user.js` | VM Linux |
 | BSC | `/home/ubuntu/robo-portal/entrega/bsc-feed.user.js` | VM Linux |
+| eTorre | `/home/ubuntu/robo-portal/entrega/etorre-feed.user.js` | VM Linux |
+| executor | `/home/ubuntu/robo-portal/entrega/portal-actions.user.js` | VM Linux |
 | ofertas | script no Tampermonkey | VM Windows |
 
-Os dois primeiros são servidos em `http://127.0.0.1:8899` para o Tampermonkey. **Editar o arquivo não
-basta:** suba o `@version` e abra a URL no navegador da VM para o Tampermonkey oferecer a atualização
-— e recarregue a aba, porque a página em execução continua com o código antigo.
+Os quatro da VM Linux são servidos em `http://127.0.0.1:8899` para o Tampermonkey, por
+`infra/userscript-server/servir.py` (cópia em `/home/ubuntu/robo-portal/servir.py`). **Editar o
+arquivo não basta:** suba o `@version` e abra a URL no navegador da VM para o Tampermonkey oferecer
+a atualização — e recarregue a aba, porque a página em execução continua com o código antigo.
 
 O deploy **não** atualiza esses arquivos: eles são cópias com o token preenchido, fora do repositório.
+
+### Trocar o token: NUNCA com substituir-tudo
+
+O arquivo do repositório traz `COLE_AQUI_O_TOKEN` na configuração, e a guarda que verifica se alguém
+esqueceu de trocar precisa comparar com esse mesmo texto. Um substituir-tudo (o `str.replace` do
+Python troca TODAS as ocorrências) acerta as duas, e a guarda vira `if (token === <o token certo>)`:
+o robô passa a recusar exatamente o token válido, dizendo "token não configurado" com o token
+correto na mão. Custou uma hora em 2026-08-22.
+
+Troque **só a linha do `CONFIG`**. Desde a 0.4.3 o executor escreve o texto de exemplo partido em
+dois pedaços na guarda, justamente para que um substituir-tudo não a alcance — mas a regra vale para
+todos os robôs.
+
+### O servidor não pode ter cache
+
+`python -m http.server` responde sem `Cache-Control` e sem `ETag`. Nessa situação o Chromium aplica
+cache heurístico e pode executar um corpo antigo enquanto MOSTRA o novo — navegar até a URL
+revalida, o XHR de fundo do Tampermonkey não. `servir.py` manda `no-store` e registra cada download
+em `log/entrega.log`, que é o que responde à pergunta "ele chegou a baixar?".
 
 ---
 

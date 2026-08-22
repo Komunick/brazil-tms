@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — executor de decisões no portal
 // @namespace    braziltransports.com.br
-// @version      0.4.0
+// @version      0.4.3
 // @description  Executa no portal as decisões tomadas no TMS: aceitar e rejeitar viagem. NÃO decide nada.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -50,8 +50,18 @@
   "use strict";
 
   const CONFIG = {
-    /** Endereço do TMS. Troque para o de produção quando for a hora. */
-    tms: "https://tmsdev.braziltransports.com.br",
+    /**
+     * Endereço do TMS. PRODUÇÃO desde 2026-08-22.
+     *
+     * Era o de dev, com um recado dizendo "troque quando for a hora". A hora chegou e o recado
+     * quase custou caro: instalar este arquivo por cima do que roda na VM apontou o robô de
+     * PRODUÇÃO para o dev por alguns segundos — as ordens de verdade teriam ficado paradas numa
+     * fila que ninguém lê, sem erro nenhum aparecendo em lugar nenhum.
+     *
+     * O arquivo do repositório é o que se instala. Ele tem de nascer apontando para onde de fato
+     * vai rodar; quem quiser testar contra o dev troca esta linha na cópia dele, não o contrário.
+     */
+    tms: "https://tms.braziltransports.com.br",
     /** O mesmo valor de PORTAL_FEED_TOKEN no servidor. Trocar aqui e lá ao mesmo tempo. */
     token: "COLE_AQUI_O_TOKEN",
     /**
@@ -215,8 +225,40 @@
   }
 
   async function ciclo() {
-    if (!CONFIG.token || CONFIG.token === "COLE_AQUI_O_TOKEN") {
-      erro("token não configurado — nenhuma ordem será buscada");
+    /**
+     * O TEXTO DE EXEMPLO ESCRITO PARTIDO — e é de propósito (2026-08-22).
+     *
+     * Instalar este robô é copiar o arquivo do repositório e trocar o texto de exemplo pelo token
+     * de verdade. Quem faz isso com um substituir-tudo — `str.replace` do Python troca TODAS as
+     * ocorrências, e foi o que eu fiz — troca também a que está AQUI. A guarda vira
+     * `if (token === <o token certo>)`, e o robô passa a recusar exatamente o token válido,
+     * calado, dizendo "token não configurado" com o token correto na mão.
+     *
+     * Custou uma hora de caça a um fantasma: o arquivo certo no disco, a versão certa rodando, o
+     * token certo conferido contra o servidor — e a mensagem insistindo que não havia token.
+     *
+     * Partido em dois pedaços, nenhum substituir-tudo do literal inteiro encosta nesta linha. A
+     * ocorrência do `CONFIG` continua inteira, que é a única que deve ser trocada.
+     */
+    const TOKEN_DE_EXEMPLO = "COLE_AQUI" + "_O_TOKEN";
+    if (!CONFIG.token || CONFIG.token === TOKEN_DE_EXEMPLO) {
+      /**
+       * A MENSAGEM DIZ O QUE ELE LEU, não só que está errado (2026-08-22).
+       *
+       * "token não configurado" mandou meia hora de caça a um fantasma: o arquivo no disco tinha
+       * o token certo, o Tampermonkey MOSTRAVA o arquivo certo, e mesmo assim isto aparecia a cada
+       * ciclo. Sem saber O QUE ele tinha em mãos, não dava para separar "veio vazio" de "veio o
+       * texto de exemplo" — problemas diferentes, com causas diferentes.
+       *
+       * O TAMANHO basta para distinguir e não expõe o segredo: 0 é vazio, 17 é o texto de exemplo
+       * do repositório, 48 é um token de verdade (e aí o defeito está em outro lugar).
+       */
+      const lido = String(CONFIG.token || "");
+      erro(
+        `token não configurado — li ${lido.length} caractere(s)` +
+          `${lido === TOKEN_DE_EXEMPLO ? " (é o texto de exemplo do repositório)" : ""}` +
+          ". Nenhuma ordem será buscada.",
+      );
       return;
     }
     const { ordens } = await aoTms({ limite: CONFIG.porCiclo });
