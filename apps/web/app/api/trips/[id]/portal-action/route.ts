@@ -80,5 +80,10 @@ function traduzir(error: unknown): unknown {
       return new Conflict("DUPLICATE_PLATE", "As duas placas são iguais.");
     case "motoristas_repetidos":
       return new Conflict("DUPLICATE_DRIVER", "O segundo motorista é o mesmo do primeiro.");
+    case "nao_aceita":
+      return new Conflict(
+        "NOT_ACCEPTED",
+        "Só dá para atribuir depois que a viagem for aceita no portal.",
+      );
   }
 }

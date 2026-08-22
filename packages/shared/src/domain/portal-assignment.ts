@@ -1,3 +1,4 @@
+import { ACEITACAO_ACEITA } from "./portal-acceptance";
 import type { VehicleType } from "../schemas/master-data";
 
 /**
@@ -105,4 +106,33 @@ export function rotaDaAtribuicao(
   v: Pick<AtribuicaoNoPortal, "secondDriverId">,
 ): "assign" | "multi" {
   return v.secondDriverId ? "multi" : "assign";
+}
+
+/**
+ * A VIAGEM PODE RECEBER ATRIBUIÇÃO? (2026-08-22)
+ *
+ * Guarda SEPARADO do de aceitar/recusar, e a separação é a correção de um bug que teria aparecido
+ * no primeiro uso real: o guarda do aceite exige `Pending`, e eu o estava aplicando a TODAS as
+ * ações. Atribuir só acontece em viagem ACEITA — então toda atribuição seria recusada com "esta
+ * viagem não está esperando decisão", sem o portal nunca ser chamado.
+ *
+ * As duas ações olham para o mesmo eixo e esperam valores OPOSTOS. Um guarda só não daria conta.
+ *
+ * ── E ATRIBUIR DE NOVO É LEGÍTIMO ──────────────────────────────────────────────────────────────
+ *
+ * Nada aqui exige que a viagem esteja SEM motorista. No portal, "Atribuir" e "Editar" levam ao
+ * mesmo lugar e chamam a mesma coisa: trocar quem dirige é operação corriqueira — motorista passou
+ * mal, veículo quebrou. Recusar a segunda atribuição seria inventar uma regra que o cliente não tem.
+ */
+export type ImpedimentoParaAtribuir = "nao_aceita" | "sem_id_do_portal" | "ordem_em_andamento";
+
+export function impedimentoParaAtribuir(alvo: {
+  acceptanceStatus: string | null | undefined;
+  portalTripId: string | null | undefined;
+  temOrdemAberta: boolean;
+}): ImpedimentoParaAtribuir | null {
+  if ((alvo.acceptanceStatus ?? "") !== ACEITACAO_ACEITA) return "nao_aceita";
+  if (!(alvo.portalTripId ?? "").trim()) return "sem_id_do_portal";
+  if (alvo.temOrdemAberta) return "ordem_em_andamento";
+  return null;
 }

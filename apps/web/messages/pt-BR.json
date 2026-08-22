@@ -1376,7 +1376,9 @@
       "hint": "Os motoristas são os que o portal já usou nesta agência. Placa nova é validada por ele.",
       "confirm": "Atribuir",
       "cancel": "Cancelar",
-      "action": "Atribuir no portal"
+      "action": "Atribuir no portal",
+      "actionEdit": "Editar no portal",
+      "titleEdit": "Editar atribuição"
     }
   },
   "Sla": {

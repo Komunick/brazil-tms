@@ -3,6 +3,7 @@ import {
   impedimentoDaAtribuicao,
   normalizarPlaca,
   placasEsperadas,
+  impedimentoParaAtribuir,
   rotaDaAtribuicao,
 } from "./portal-assignment";
 
@@ -86,5 +87,37 @@ describe("impedimentoDaAtribuicao", () => {
         plates: ["THC8G85", "THF7H82"],
       }),
     ).toBeNull();
+  });
+});
+
+describe("impedimentoParaAtribuir", () => {
+  const base = { acceptanceStatus: "Accepted", portalTripId: "4007760", temOrdemAberta: false };
+
+  /**
+   * A REGRA QUE QUASE MATOU A ATRIBUIÇÃO INTEIRA.
+   *
+   * Aceitar exige `Pending`; atribuir exige `Accepted` — o mesmo campo, valores opostos. Aplicar o
+   * guarda do aceite às três ações fazia toda atribuição ser recusada antes de o portal ser chamado.
+   */
+  it("viagem aceita pode receber atribuição", () => {
+    expect(impedimentoParaAtribuir(base)).toBeNull();
+  });
+
+  it("viagem ainda pendente NÃO pode — é o oposto da regra do aceite", () => {
+    expect(impedimentoParaAtribuir({ ...base, acceptanceStatus: "Pending" })).toBe("nao_aceita");
+    expect(impedimentoParaAtribuir({ ...base, acceptanceStatus: null })).toBe("nao_aceita");
+  });
+
+  /**
+   * Reatribuir é operação corriqueira — motorista passou mal, veículo quebrou —, e no portal
+   * "Atribuir" e "Editar" são o mesmo botão. Nada aqui pode exigir que a viagem esteja sem motorista.
+   */
+  it("nada exige que a viagem esteja sem motorista: reatribuir é legítimo", () => {
+    expect(impedimentoParaAtribuir(base)).toBeNull();
+  });
+
+  it("sem id do portal não há destinatário; ordem em voo bloqueia a segunda", () => {
+    expect(impedimentoParaAtribuir({ ...base, portalTripId: null })).toBe("sem_id_do_portal");
+    expect(impedimentoParaAtribuir({ ...base, temOrdemAberta: true })).toBe("ordem_em_andamento");
   });
 });

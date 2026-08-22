@@ -45,6 +45,8 @@ export function PortalAssignDialog({
   tripId,
   externalTripId,
   vehicleType,
+  driverAtual,
+  placaAtual,
   open,
   onOpenChange,
 }: {
@@ -52,6 +54,15 @@ export function PortalAssignDialog({
   externalTripId: string | null;
   /** O tipo planejado da viagem — decide quantas placas o formulário abre pedindo. */
   vehicleType: VehicleType | null;
+  /**
+   * O que o PORTAL tem escalado hoje, para a edição abrir preenchida — como a dele abre.
+   *
+   * Sem isto, trocar só o motorista obrigaria a redigitar a placa, e redigitar é onde o erro entra.
+   * Vem do portal e não da atribuição do TMS de propósito: o que se está editando é o que o CLIENTE
+   * enxerga.
+   */
+  driverAtual?: string | null;
+  placaAtual?: string | null;
   open: boolean;
   onOpenChange: (aberto: boolean) => void;
 }) {
@@ -60,9 +71,14 @@ export function PortalAssignDialog({
   const acao = usePortalAction(tripId);
 
   const quantas = placasEsperadas(vehicleType);
-  const [driverId, setDriverId] = useState("");
+  const [driverId, setDriverId] = useState(driverAtual ?? "");
   const [secondDriverId, setSecondDriverId] = useState("");
-  const [placas, setPlacas] = useState<string[]>(() => Array.from({ length: quantas }, () => ""));
+  const [placas, setPlacas] = useState<string[]>(() => {
+    const vazias = Array.from({ length: quantas }, () => "");
+    // A primeira placa vem preenchida; a segunda o portal não nos conta, e chutar seria pior.
+    if (placaAtual) vazias[0] = normalizarPlaca(placaAtual);
+    return vazias;
+  });
 
   /**
    * NÃO HÁ EFEITO PARA LIMPAR O FORMULÁRIO — e essa ausência é a correção.
@@ -98,7 +114,7 @@ export function PortalAssignDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{t("title")}</DialogTitle>
+          <DialogTitle>{driverAtual ? t("titleEdit") : t("title")}</DialogTitle>
           <DialogDescription>{t("subtitle", { lh: externalTripId ?? tripId })}</DialogDescription>
         </DialogHeader>
 

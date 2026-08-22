@@ -67,7 +67,18 @@ import { useFilterOptions, useTripBoard } from "@/lib/trips/client";
  * empresa ainda pode recusar é comprometer recurso à toa. Quem decide isso é a linha, pelo estado
  * de aceitação dela.
  */
-const DISPATCH_QUERY = "assigned=false&status=received&sort=pickupStart";
+/**
+ * A FILA NÃO EXCLUI MAIS AS JÁ ATRIBUÍDAS (2026-08-22, a pedido).
+ *
+ * `assigned=false` fazia sentido quando a fila só servia para escalar recurso do TMS: atribuído é
+ * trabalho feito, sai da lista. Mas a atribuição que vai ao PORTAL é editável — lá o botão se chama
+ * "Atribuir/editar" e leva ao mesmo lugar, porque trocar quem dirige é corriqueiro: motorista passou
+ * mal, veículo quebrou.
+ *
+ * Com o filtro, a LH sumia da tela no instante em que ganhava motorista, e não havia de onde
+ * corrigi-la. A linha agora mostra quem está escalado, e o botão vira "Editar no portal".
+ */
+const DISPATCH_QUERY = "status=received&sort=pickupStart";
 
 /** How long the queue search waits after the last keystroke before hitting the board endpoint. */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -363,7 +374,7 @@ export function DispatchBoard({
                     <>
                       {/* A que vai ao PORTAL vem primeiro: é a que o cliente espera. */}
                       <Button type="button" size="sm" onClick={() => setPortalRow(row)}>
-                        {tPortal("action")}
+                        {row.isAssigned ? tPortal("actionEdit") : tPortal("action")}
                       </Button>
                       <Button
                         type="button"
@@ -423,6 +434,8 @@ export function DispatchBoard({
           tripId={portalRow.id}
           externalTripId={portalRow.externalTripId}
           vehicleType={(portalRow.plannedVehicleType as VehicleType | null) ?? null}
+          driverAtual={portalRow.portalDriverId}
+          placaAtual={portalRow.portalPlate}
           open
           onOpenChange={(aberto) => !aberto && setPortalRow(null)}
         />
