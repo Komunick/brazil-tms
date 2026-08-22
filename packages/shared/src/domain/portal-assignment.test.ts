@@ -4,7 +4,8 @@ import {
   normalizarPlaca,
   placasEsperadas,
   impedimentoParaAtribuir,
-  rotaDaAtribuicao,
+  rotaDaAtribuicao,
+  placasDoPortal,
 } from "./portal-assignment";
 
 describe("placasEsperadas", () => {
@@ -119,5 +120,28 @@ describe("impedimentoParaAtribuir", () => {
   it("sem id do portal não há destinatário; ordem em voo bloqueia a segunda", () => {
     expect(impedimentoParaAtribuir({ ...base, portalTripId: null })).toBe("sem_id_do_portal");
     expect(impedimentoParaAtribuir({ ...base, temOrdemAberta: true })).toBe("ordem_em_andamento");
+  });
+});
+
+describe("placasDoPortal", () => {
+  it("separa as duas placas da carreta, que o portal manda numa string só", () => {
+    expect(placasDoPortal("PXW0I78,EMU0J25")).toEqual(["PXW0I78", "EMU0J25"]);
+  });
+
+  it("aceita ponto e vírgula, que é o que sai de planilha", () => {
+    expect(placasDoPortal("MTD9D19; QIT0728")).toEqual(["MTD9D19", "QIT0728"]);
+  });
+
+  it("devolve uma só quando o veículo leva uma", () => {
+    expect(placasDoPortal("SEN2G44")).toEqual(["SEN2G44"]);
+  });
+
+  it("não inventa campo vazio a partir de vírgula sobrando", () => {
+    expect(placasDoPortal("PXW0I78,")).toEqual(["PXW0I78"]);
+  });
+
+  it("sem campo nenhum, devolve lista vazia — a viagem ainda não foi escalada", () => {
+    expect(placasDoPortal(null)).toEqual([]);
+    expect(placasDoPortal("")).toEqual([]);
   });
 });

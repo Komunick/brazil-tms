@@ -56,6 +56,27 @@ export function placasEsperadas(tipo: VehicleType | null | undefined): 1 | 2 {
   return tipo && DOIS_CONJUNTOS.has(tipo) ? 2 : 1;
 }
 
+/**
+ * AS PLACAS QUE O PORTAL JÁ TEM nesta viagem, lidas do campo que ele manda (2026-08-22).
+ *
+ * Ele grava as duas numa string só: uma carreta chega como `"PXW0I78,EMU0J25"` — cavalo e reboque
+ * separados por vírgula. A tela de edição precisa delas SEPARADAS, um campo cada, senão editar uma
+ * atribuição exige apagar tudo e redigitar — e redigitar é onde o erro entra.
+ *
+ * A primeira versão da edição não separava: jogava a string inteira no primeiro campo e, como
+ * `normalizarPlaca` apaga tudo que não é letra ou número, a vírgula sumia e as duas placas ficavam
+ * grudadas (`"PXW0I78EMU0J25"`). Foi o usuário quem viu.
+ *
+ * Aceita `;` também: é o separador que aparece quando alguém copia de planilha, e recusar por causa
+ * do sinal seria recusar por um detalhe que não muda o que a pessoa quis dizer.
+ */
+export function placasDoPortal(campo: string | null | undefined): string[] {
+  return (campo ?? "")
+    .split(/[,;]/)
+    .map(normalizarPlaca)
+    .filter((placa) => placa !== "");
+}
+
 /** O que a tela junta para mandar ao portal. */
 export interface AtribuicaoNoPortal {
   /** O id do motorista NO PORTAL — não o do TMS. É a única chave que os dois lados compartilham. */
