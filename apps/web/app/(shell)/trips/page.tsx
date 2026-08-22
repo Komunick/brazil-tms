@@ -25,7 +25,6 @@ export default async function TripsPage() {
 
   const t = await getTranslations("Trips");
   const filterOptions = await getTripFilterOptions();
-  const canAssign = can(session.user.role, "assign_resources");
   // 017 — reveal the per-row cancel action per §18 (any | dispatch_phase | none); BFF re-enforces.
 
   return (
@@ -38,7 +37,7 @@ export default async function TripsPage() {
           tabela abaixo já mostra por viagem, enquanto onde está o caminhão era informação que o TMS
           não tinha. O cartão abre a página de rastreamento. */}
       <FleetSummaryCard />
-      <ControlTowerTable filterOptions={filterOptions} canAssign={canAssign} />
+      <ControlTowerTable filterOptions={filterOptions} />
     </div>
   );
 }

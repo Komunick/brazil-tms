@@ -1244,6 +1244,42 @@ export function usePortalAction(id: string) {
 }
 
 /**
+ * EM QUE PÉ ESTÁ A ORDEM que acabou de ser mandada ao portal (2026-08-22, a pedido).
+ *
+ * O caminho tem três tempos — o TMS enfileira, o robô pega, o portal responde — e a tela mostrava
+ * zero deles. Quem apertava ficava sem saber se tinha funcionado, e o jeito de descobrir era abrir
+ * o portal: exatamente o passo que este recurso existe para eliminar.
+ *
+ * PERGUNTA DE SEGUNDO EM SEGUNDO, E SÓ ENQUANTO INTERESSA. A ordem em voo dura poucos segundos, e
+ * um intervalo de cinco faria a confirmação chegar depois do fato. Assim que ela fecha — `done` ou
+ * `failed` — o `refetchInterval` devolve `false` e a pergunta para sozinha. Sem ordem em voo, o
+ * componente nem é desenhado, então isto não é um relógio rodando no fundo da tela.
+ */
+export interface OrdemDoPortalDaTela {
+  id: string;
+  action: "accept" | "reject" | "assign";
+  status: "pending" | "sent" | "done" | "failed";
+  lastError: string | null;
+  requestedAt: string;
+  settledAt: string | null;
+}
+
+export function useOrdensDoPortal(id: string, ativo: boolean) {
+  return useQuery({
+    queryKey: [...TRIPS_ROOT, id, "portal-commands"],
+    enabled: ativo,
+    queryFn: async () => {
+      const res = await fetch(`/api/trips/${id}/portal-action`);
+      return asJson<{ items: OrdemDoPortalDaTela[] }>(res);
+    },
+    refetchInterval: (consulta) => {
+      const ultima = consulta.state.data?.items?.[0];
+      return ultima && (ultima.status === "pending" || ultima.status === "sent") ? 1000 : false;
+    },
+  });
+}
+
+/**
  * Os motoristas que o PORTAL aceita, para a tela de atribuição.
  *
  * Cache longo de propósito: a lista vem do histórico de viagens e muda quando um motorista novo

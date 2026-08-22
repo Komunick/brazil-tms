@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — executor de decisões no portal
 // @namespace    braziltransports.com.br
-// @version      0.3.0
+// @version      0.4.0
 // @description  Executa no portal as decisões tomadas no TMS: aceitar e rejeitar viagem. NÃO decide nada.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -57,14 +57,20 @@
     /**
      * De quanto em quanto tempo perguntar se há ordem.
      *
-     * Trinta segundos, e não cinco minutos como os robôs de leitura: aqui tem GENTE ESPERANDO. A
-     * pessoa apertou "Aceitar" e está olhando a tela; cinco minutos de silêncio fariam ela ir
-     * conferir no portal, que é exatamente o passo que este recurso existe para eliminar.
+     * CINCO segundos, e não os trinta iniciais (2026-08-22, a pedido). Aqui tem GENTE ESPERANDO: a
+     * pessoa apertou "Atribuir" e está olhando a tela. O ciclo é a espera INTEIRA — a chamada ao
+     * portal, medida numa atribuição real, levou 759 ms; os outros 27 segundos daquele clique foram
+     * este robô dormindo. Trinta segundos de silêncio fazem a pessoa ir conferir no portal, que é
+     * exatamente o passo que este recurso existe para eliminar.
      *
-     * O custo é uma requisição ao NOSSO servidor a cada 30 s, que não devolve nada em 99% das vezes.
-     * Ao portal do fornecedor não chega nada enquanto não houver ordem.
+     * O custo é uma requisição ao NOSSO servidor a cada 5 s — 17 mil por dia, contra uma tabela
+     * indexada por status, que não devolve nada em 99% das vezes. Ao portal do fornecedor não chega
+     * nada enquanto não houver ordem, e é só isso que precisa ser econômico.
+     *
+     * Não descemos mais que isso porque abaixo de uns segundos o ganho some dentro do tempo de
+     * resposta do próprio portal, e o que sobra é só barulho.
      */
-    intervaloMs: 30 * 1000,
+    intervaloMs: 5 * 1000,
     /** Quantas ordens pegar por vez. A fila é de decisão humana, não de volume. */
     porCiclo: 5,
     /**

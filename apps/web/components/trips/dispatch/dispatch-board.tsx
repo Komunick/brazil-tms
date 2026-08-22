@@ -9,23 +9,16 @@ import {
   saoPauloDate,
   type VehicleType,
 } from "@brazil-tms/shared";
-import type { TripBoardRow, TripFilterOptions } from "@brazil-tms/db";
+import type { TripBoardRow } from "@brazil-tms/db";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
 import { PortalDecisionButtons } from "@/components/trips/portal-decision-buttons";
 import { PortalAssignDialog } from "@/components/trips/portal-assign-dialog";
-import { useFilterOptions, useTripBoard } from "@/lib/trips/client";
+import { PortalOrderStatus } from "@/components/trips/portal-order-status";
+import { useTripBoard } from "@/lib/trips/client";
 
 /**
  * The Dispatch Board (006 US5, §15.6): the dispatcher's daily workspace — the unassigned-by-pickup
@@ -128,13 +121,7 @@ type DatePresetKey = (typeof DATE_PRESETS)[number]["key"];
 /** Rows per page. Sent explicitly so the footer's arithmetic can never drift from the server's. */
 const PAGE_SIZE = 50;
 
-export function DispatchBoard({
-  resourceOptions: initialResourceOptions,
-}: {
-  resourceOptions: TripFilterOptions;
-}) {
-  // 019 — keep the assign pickers fresh on an open tab (60s poll + focus refetch); server seed.
-  const resourceOptions = useFilterOptions(initialResourceOptions);
+export function DispatchBoard() {
   const t = useTranslations("Dispatch");
   const tCommon = useTranslations("Common");
   // The queue reuses the Control Tower's pagination wording — same board, same vocabulary.
@@ -224,17 +211,16 @@ export function DispatchBoard({
     .join("&");
   const board = useTripBoard(query);
 
-  // The trip whose assign dialog is open.
-  const [assignRow, setAssignRow] = useState<TripBoardRow | null>(null);
-  /**
-   * A ATRIBUIÇÃO QUE VAI AO PORTAL (2026-08-21) — outra coisa da atribuição interna.
-   *
-   * `assignRow` abre o formulário do TMS, que escolhe motorista e veículo do NOSSO cadastro e não
-   * sai daqui. Este manda no portal do cliente: pede o id de motorista DELE e a placa, e vira ordem
-   * para o robô. Os dois existem porque respondem a perguntas diferentes — quem a empresa escalou, e
-   * o que o cliente foi informado.
-   */
+  /** A viagem cujo formulário de atribuição NO PORTAL está aberto. */
   const [portalRow, setPortalRow] = useState<TripBoardRow | null>(null);
+  /**
+   * As viagens cuja ordem acabou de sair daqui, para a linha acompanhar o que o portal responde.
+   *
+   * Um conjunto e não um id só: dá tempo de mandar a segunda antes de a primeira fechar, e nesse
+   * caso as duas precisam continuar contando o que aconteceu. Ele não é limpo — a linha some da
+   * lista quando o robô leitor traz o estado novo, e leva o acompanhamento junto.
+   */
+  const [emVoo, setEmVoo] = useState<ReadonlySet<string>>(() => new Set());
   // The trip whose cancel dialog is open (017).
 
   const items = board.data?.items ?? [];
@@ -401,6 +387,7 @@ export function DispatchBoard({
                    * Vem do PORTAL, não da atribuição do TMS: é o que o cliente enxerga, e é o que
                    * o botão ao lado vai editar.
                    */}
+                  {emVoo.has(row.id) ? <PortalOrderStatus tripId={row.id} /> : null}
                   {row.portalDriverName ? (
                     <p className="text-xs font-medium text-foreground">
                       {tPortal("assignedTo")}: {row.portalDriverName}
@@ -417,17 +404,20 @@ export function DispatchBoard({
                     />
                   ) : (
                     <>
-                      {/* A que vai ao PORTAL vem primeiro: é a que o cliente espera. */}
+                      {/**
+                       * UM BOTÃO SÓ (2026-08-22, a pedido).
+                       *
+                       * Eram dois, lado a lado, os dois escritos "Atribuir": este, que vai ao
+                       * portal, e a escala interna do TMS, que não vai. O usuário apertou o de
+                       * dentro, confirmou, foi conferir no portal e não achou nada — porque nada
+                       * tinha ido. A fila de ordens estava vazia, e estava certa.
+                       *
+                       * A escala interna não some por ser confusa; some por não servir a ninguém:
+                       * das 2.790 atribuições vigentes em produção, 2.790 foram do robô leitor e
+                       * NENHUMA de uma pessoa. Quem preenche aquilo é a leitura do portal.
+                       */}
                       <Button type="button" size="sm" onClick={() => setPortalRow(row)}>
                         {row.isAssigned ? tPortal("actionEdit") : tPortal("action")}
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setAssignRow(row)}
-                      >
-                        {t("assignAction")}
                       </Button>
                     </>
                   )}
@@ -451,35 +441,6 @@ export function DispatchBoard({
         ) : null}
       </CardContent>
 
-      {/* Assign dialog — the shared AssignmentForm for the queued trip (one write path, FR-022). */}
-      <Dialog open={assignRow != null} onOpenChange={(open) => !open && setAssignRow(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {t("openAssign")}
-              {assignRow?.externalTripId ? ` — ${assignRow.externalTripId}` : ""}
-            </DialogTitle>
-            {/**
-             * DIZ QUE NÃO VAI AO PORTAL, porque já enganou (2026-08-22).
-             *
-             * O usuário abriu este diálogo achando que era a escala do portal, apertou "Confirmar
-             * atribuição" e foi conferir lá — nada tinha mudado, e nada mudaria: esta tela escala
-             * recurso NOSSO, e o portal não fica sabendo. Os dois botões diziam "Atribuir" um do
-             * lado do outro; a culpa é do rótulo, não de quem clicou.
-             */}
-            <DialogDescription>{t("openAssignHint")}</DialogDescription>
-          </DialogHeader>
-          {assignRow ? (
-            <AssignmentForm
-              tripId={assignRow.id}
-              currentStatus={assignRow.currentStatus}
-              currentAssignment={null}
-              resourceOptions={resourceOptions}
-              onDone={() => setAssignRow(null)}
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
 
       {portalRow ? (
         <PortalAssignDialog
@@ -490,6 +451,7 @@ export function DispatchBoard({
           vehicleType={(portalRow.plannedVehicleType as VehicleType | null) ?? null}
           driverAtual={portalRow.portalDriverId}
           placaAtual={portalRow.portalPlate}
+          onSent={() => setEmVoo((atual) => new Set(atual).add(portalRow.id))}
           open
           onOpenChange={(aberto) => !aberto && setPortalRow(null)}
         />
