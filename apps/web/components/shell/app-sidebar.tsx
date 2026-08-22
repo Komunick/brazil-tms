@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl";
 import {
   BarChart3,
   Building2,
+  CalendarRange,
   Container,
   Factory,
   History,
@@ -30,6 +31,7 @@ import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, LucideIcon> = {
   LayoutDashboard,
+  CalendarRange,
   BarChart3,
   Users,
   ScrollText,

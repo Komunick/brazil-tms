@@ -166,6 +166,7 @@ export {
   OrdemRecusada,
   type OrdemDoPortal,
 } from "./trips/portal-commands";
+export { readProgramacao, type BlocoDaFrente } from "./trips/programacao";
 export { listarMotoristasDoPortal, type MotoristaDoPortal } from "./trips/portal-drivers";
 export { createExportBatch, countBillableTrips, getExportDownload } from "./billing/export";
 export {

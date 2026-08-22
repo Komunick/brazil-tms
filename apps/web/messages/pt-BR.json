@@ -59,6 +59,7 @@
   "Nav": {
     "administration": "Administração",
     "home": "Início",
+      "programacao": "Programação",
     "trips": "Torre de Controle",
     "dispatch": "Expedição",
     "adminUsers": "Usuários e Perfis",
@@ -1310,6 +1311,22 @@
       "errorNOT_FOUND": "Viagem não encontrada.",
       "errorVALIDATION": "Verifique os campos destacados.",
       "errorREQUEST_FAILED": "Não foi possível salvar. Tente novamente."
+    },
+    "programacao": {
+      "title": "Programação por frente",
+      "subtitle": "Cada frente abre para o lado. O alarme de origem aparece mesmo fechada.",
+      "plan": "Plan.",
+      "spot": "Spot",
+      "origem": "Origem",
+      "tendencia": "Tendência",
+      "h12": "H+12",
+      "h24": "H+24",
+      "h2": "H-2",
+      "aceito": "Aceito",
+      "naoAceito": "Ñ aceito",
+      "origemAtrasada": "Origem atrasada",
+      "semRegiao": "Sem região",
+      "vazio": "Nenhuma viagem programada."
     },
     "dashboard": {
       "title": "Painel do dia",

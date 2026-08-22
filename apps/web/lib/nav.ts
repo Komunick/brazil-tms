@@ -17,6 +17,9 @@ export interface NavItem {
  */
 export const NAV_ITEMS: readonly NavItem[] = [
   { key: "home", href: "/", icon: "LayoutDashboard" },
+  // Programação (2026-08-22): os cartões que moravam no Painel do dia, quando ele virou a visão
+  // por frente. Vem logo depois da casa porque é a mesma leitura, um nível abaixo.
+  { key: "programacao", href: "/programacao", icon: "CalendarRange", permission: "view_all_trips" },
   // 005 — Control Tower board (view_all_trips: all 7 internal roles).
   { key: "trips", href: "/trips", icon: "Truck", permission: "view_all_trips" },
   // 006 — Dispatch Board (assign_resources: Admin, Ops Manager, Dispatcher, Fleet Coordinator).

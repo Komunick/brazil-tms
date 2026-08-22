@@ -57,6 +57,7 @@ import type {
   BillingListRow,
   ExportBatchRow,
   MotoristaDoPortal,
+  BlocoDaFrente,
 } from "@brazil-tms/db";
 
 /**
@@ -226,6 +227,20 @@ export function useTripDetail(id: string): UseQueryResult<{ item: TripDetailView
  * O resumo do painel traz o BSC junto (2026-08-17) — mesma tela, mesmo passo de atualização. Numa
  * chamada separada, o cartão do cliente piscaria fora de sincronia com o resto.
  */
+/**
+ * A PROGRAMAÇÃO POR FRENTE — o quadro por região (2026-08-22, a pedido).
+ *
+ * Mesmo ritmo do resumo do painel: é a mesma tela, e dois relógios diferentes fariam metade dos
+ * números envelhecerem enquanto a outra metade não.
+ */
+export function useProgramacao(): UseQueryResult<{ frentes: BlocoDaFrente[] }> {
+  return useQuery({
+    queryKey: ["programacao"],
+    queryFn: async () => asJson<{ frentes: BlocoDaFrente[] }>(await fetch(`/api/programacao`)),
+    refetchInterval: DASHBOARD_POLL_MS,
+  });
+}
+
 export function useDashboardSummary(): UseQueryResult<{
   summary: DashboardSummary;
   bsc: BscSnapshotView[];
