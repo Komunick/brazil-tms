@@ -2,10 +2,12 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import {
   impedimentoDaAcao,
   impedimentoDaAtribuicao,
+  impedimentoParaAtribuir,
   motivoValido,
   normalizarPlaca,
   type ImpedimentoDaAcao,
   type ImpedimentoDaAtribuicao,
+  type ImpedimentoParaAtribuir,
   type PortalAction,
 } from "@brazil-tms/shared";
 import { db } from "../client";
@@ -45,6 +47,7 @@ export class OrdemRecusada extends Error {
     readonly motivo:
       | ImpedimentoDaAcao
       | ImpedimentoDaAtribuicao
+      | ImpedimentoParaAtribuir
       | "viagem_inexistente"
       | "motivo_invalido",
   ) {
@@ -127,11 +130,20 @@ export async function enfileirarOrdemDoPortal(entrada: {
       )
       .limit(1);
 
-    const impedimento = impedimentoDaAcao({
+    /**
+     * CADA AÇÃO TEM O SEU GUARDA, e isso não é simetria de estilo.
+     *
+     * Aceitar e recusar exigem `Pending`; atribuir exige `Accepted` — o MESMO campo, valores
+     * opostos. Eu aplicava o guarda do aceite a todas as ações, e a atribuição teria sido recusada
+     * sempre, com uma mensagem que fala de decisão para quem estava escalando motorista.
+     */
+    const alvo = {
       acceptanceStatus: campos["Aceitação (portal)"],
       portalTripId: campos["ID (portal)"],
       temOrdemAberta: abertas.length > 0,
-    });
+    };
+    const impedimento =
+      entrada.action === "assign" ? impedimentoParaAtribuir(alvo) : impedimentoDaAcao(alvo);
     if (impedimento) throw new OrdemRecusada(impedimento);
 
     const linha = await tx

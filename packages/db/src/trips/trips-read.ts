@@ -117,6 +117,8 @@ export interface TripBoardRow {
    * Sem isto, o quadro teria de adivinhar ou fazer uma segunda consulta por linha.
    */
   portalAcceptance: string | null;
+  portalDriverId: string | null;
+  portalPlate: string | null;
   /** O que o portal chama esta viagem — `Assigning` / `Assigned`. Ver `displayStatusOf`. */
   portalStatus: string | null;
 }
@@ -323,6 +325,14 @@ const boardColumns = {
   plannedVehicleType: trips.plannedVehicleType,
   updatedAt: trips.updatedAt,
   portalAcceptance: sql<string | null>`(${trips.customerFields} ->> 'Aceitação (portal)')`,
+  /**
+   * QUEM O PORTAL TEM ESCALADO nesta viagem — não quem o TMS atribuiu (2026-08-22).
+   *
+   * Serve para o formulário de EDIÇÃO abrir preenchido, como o do portal abre. Sem isso, trocar só
+   * o motorista obrigaria a redigitar a placa, e redigitar é onde o erro entra.
+   */
+  portalDriverId: sql<string | null>`(${trips.customerFields} ->> 'ID do motorista (portal)')`,
+  portalPlate: sql<string | null>`(${trips.customerFields} ->> 'Placa (portal)')`,
   portalStatus: sql<string | null>`(${trips.customerFields} ->> 'Status (portal)')`,
   assignmentId: boardAsg.id,
   assignedDriverName: boardDriver.name,
@@ -334,6 +344,8 @@ type BoardRow = {
   id: string;
   externalTripId: string | null;
   portalAcceptance: string | null;
+  portalDriverId: string | null;
+  portalPlate: string | null;
   portalStatus: string | null;
   customerId: string;
   customerName: string | null;
@@ -384,6 +396,8 @@ function toBoardRow(row: BoardRow): TripBoardRow {
     plannedVehicleType: row.plannedVehicleType,
     updatedAt: row.updatedAt.toISOString(),
     portalAcceptance: row.portalAcceptance ?? null,
+    portalDriverId: row.portalDriverId ?? null,
+    portalPlate: row.portalPlate ?? null,
     portalStatus: row.portalStatus ?? null,
     isAssigned: row.assignmentId != null,
     assignedDriverName: row.assignedDriverName,
