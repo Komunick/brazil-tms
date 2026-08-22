@@ -612,7 +612,10 @@
       "archivedMsg": "Local arquivado.",
       "region": "Região",
       "regionNone": "Sem região",
-      "missingRegion": "A classificar ({count})"
+      "missingRegion": "A classificar ({count})",
+      "ours": "Situação",
+      "oursYes": "Rota nossa",
+      "oursNo": "Só proposta"
     },
     "lanes": {
       "title": "Rotas",
