@@ -11,6 +11,7 @@ import {
 import { db } from "../client";
 import { trips } from "../../schema";
 import { createTrip } from "./trips-service";
+import { garantirEstacao } from "./portal-station-autocreate";
 import { updateTripPlan } from "./trip-plan";
 // `isCancelledAtPortal` vem de lá para os DOIS caminhos julgarem o cancelamento pela mesma regra —
 // foi a falta disso que deixou o Concluído sem saber cancelar (2026-08-17).
@@ -181,12 +182,27 @@ export async function applyPortalPlanTrip(
 
   for (const leg of portal.legs) {
     const base = { externalTripId: portal.externalTripId, legNumber: leg.legNumber };
-    const originLocationId = leg.origin.stationId
-      ? stationMap.get(leg.origin.stationId)
-      : undefined;
-    const destinationLocationId = leg.destination.stationId
-      ? stationMap.get(leg.destination.stationId)
-      : undefined;
+    /**
+     * ESTAÇÃO QUE O TMS NÃO CONHECE NASCE AQUI, do catálogo do próprio cliente (2026-08-21).
+     *
+     * Antes, a viagem inteira era descartada — nem viagem, nem linha de importação, só um aviso no
+     * console da VM. Ver `portal-station-autocreate.ts` para por que copiar o que o cliente afirma
+     * não é adivinhar, e por que isso não transforma proposta em rota nossa.
+     *
+     * O mapa é atualizado na hora: a mesma estação costuma aparecer em dezenas de viagens do mesmo
+     * lote, e sem isso cada uma tentaria criá-la de novo.
+     */
+    const resolver = async (parada: (typeof leg)["origin"]): Promise<string | undefined> => {
+      if (!parada.stationId) return undefined;
+      const conhecido = stationMap.get(parada.stationId);
+      if (conhecido) return conhecido;
+      const criada = await garantirEstacao(customerId, parada, actorUserId);
+      if (!criada) return undefined;
+      stationMap.set(parada.stationId, criada.locationId);
+      return criada.locationId;
+    };
+    const originLocationId = await resolver(leg.origin);
+    const destinationLocationId = await resolver(leg.destination);
 
     if (!originLocationId || !destinationLocationId) {
       outcomes.push({

@@ -46,6 +46,19 @@ export interface PortalStop {
   stationId: string | null;
   /** The station name without the bracketed id — what matches a TMS location name. */
   stationName: string;
+  /**
+   * O CÓDIGO OPERACIONAL da estação — `SOC-PE2`, `XPT-LPE-92` (2026-08-21).
+   *
+   * Não é a chave de reconciliação: quem casa estação com local é o `stationId`. Este é o código
+   * que os DOIS lados usam para falar da mesma estação, e é ele que vira `locations.code` quando o
+   * TMS precisa cadastrar um lugar que ainda não conhece.
+   *
+   * Vinha sendo descartado na leitura da API. Enquanto o cadastro de estação era manual isso não
+   * custava nada; quando o TMS passou a poder criar o lugar sozinho, virou a peça que faltava.
+   *
+   * Opcional porque a planilha não tem esse campo — viagem vinda de import manual não o carrega.
+   */
+  stationCode?: string | null;
   /** A label ("13/08/2026 09:47") from the export, or an epoch-second instant from the API. */
   plannedArrival: string | number | null;
   plannedDeparture: string | number | null;
