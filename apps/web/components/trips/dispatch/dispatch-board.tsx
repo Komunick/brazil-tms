@@ -15,7 +15,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
 import { PortalDecisionButtons } from "@/components/trips/portal-decision-buttons";
 import { PortalAssignDialog } from "@/components/trips/portal-assign-dialog";
@@ -77,8 +83,30 @@ import { useFilterOptions, useTripBoard } from "@/lib/trips/client";
  *
  * Com o filtro, a LH sumia da tela no instante em que ganhava motorista, e não havia de onde
  * corrigi-la. A linha agora mostra quem está escalado, e o botão vira "Editar no portal".
+ *
+ * ── E `assigned` TAMBÉM É DA FILA (2026-08-22, segunda passada) ────────────────────────────────
+ *
+ * Tirar `assigned=false` não bastou, e a primeira versão disto não consertou nada: viagem que ganha
+ * motorista no portal muda de STATUS para `assigned` aqui, e a fila pedia `status=received`. Medido
+ * em produção: das 41 viagens `assigned` dos últimos dois dias, as 41 têm motorista do portal — ou
+ * seja, exatamente as que o usuário queria editar eram exatamente as que a consulta excluía.
+ *
+ * A fila são os DOIS estados anteriores ao caminhão andar. De `at_origin` em diante a viagem está
+ * em execução, e trocar quem dirige ali não é edição de escala, é ocorrência — outro assunto.
+ *
+ * ── E A ABA DEIXA DE PEDIR `queue=to_assign` ───────────────────────────────────────────────────
+ *
+ * Faltava o principal: `to_assign` quer dizer, textualmente, "aceita e AINDA SEM motorista" — a
+ * viagem escalada no portal cai em `awaiting_arrival` e nunca apareceria aqui, por mais que o
+ * status batesse. Era essa a razão de o "Editar" não ter mudado nada na prática.
+ *
+ * A aba pergunta agora pelo eixo que de fato governa quem pode ser escalado — a ACEITAÇÃO — e
+ * ignora o motorista. As fichas do quadro continuam com as três filas exclusivas de sempre.
  */
-const DISPATCH_QUERY = "status=received&sort=pickupStart";
+const FILA_ATRIBUIR = "status=received&status=assigned&portalAccepted=true";
+
+/** A aba de análise continua sendo a fila exclusiva de sempre: proposta que ninguém decidiu. */
+const FILA_ANALISE = "queue=in_analysis";
 
 /** How long the queue search waits after the last keystroke before hitting the board endpoint. */
 const SEARCH_DEBOUNCE_MS = 300;
@@ -184,8 +212,8 @@ export function DispatchBoard({
   }
 
   const query = [
-    DISPATCH_QUERY,
-    `queue=${aba}`,
+    aba === "in_analysis" ? FILA_ANALISE : FILA_ATRIBUIR,
+    "sort=pickupStart",
     appliedSearch ? `q=${encodeURIComponent(appliedSearch)}` : "",
     pickupFrom ? `pickupFrom=${pickupFrom}` : "",
     pickupTo ? `pickupTo=${pickupTo}` : "",
@@ -414,6 +442,15 @@ export function DispatchBoard({
               {t("openAssign")}
               {assignRow?.externalTripId ? ` — ${assignRow.externalTripId}` : ""}
             </DialogTitle>
+            {/**
+             * DIZ QUE NÃO VAI AO PORTAL, porque já enganou (2026-08-22).
+             *
+             * O usuário abriu este diálogo achando que era a escala do portal, apertou "Confirmar
+             * atribuição" e foi conferir lá — nada tinha mudado, e nada mudaria: esta tela escala
+             * recurso NOSSO, e o portal não fica sabendo. Os dois botões diziam "Atribuir" um do
+             * lado do outro; a culpa é do rótulo, não de quem clicou.
+             */}
+            <DialogDescription>{t("openAssignHint")}</DialogDescription>
           </DialogHeader>
           {assignRow ? (
             <AssignmentForm
