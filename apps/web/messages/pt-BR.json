@@ -81,7 +81,15 @@
     "documentRequirements": "Requisitos de Documentos",
     "reports": "Relatórios",
     "freightRates": "Tabela de Fretes",
-    "serverStatus": "Status do Sistema"
+    "serverStatus": "Status do Sistema",
+    "grupos": {
+      "operacao": "Operação",
+      "faturamento": "Faturamento",
+      "analise": "Análise",
+      "importacao": "Importação",
+      "cadastros": "Cadastros",
+      "sistema": "Sistema"
+    }
   },
   "FreightRates": {
     "screenTitle": "Tabela de Fretes",
