@@ -3,11 +3,7 @@
 import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
-import {
-  createLaneSchema,
-  VEHICLE_TYPE_VALUES,
-  type CreateLaneInput,
-} from "@brazil-tms/shared";
+import { createLaneSchema, VEHICLE_TYPE_VALUES, type CreateLaneInput } from "@brazil-tms/shared";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -199,7 +195,12 @@ export function LaneForm({
           htmlFor="standardDistanceKm"
           error={errors.standardDistanceKm?.message}
         >
-          <Input id="standardDistanceKm" type="number" step="any" {...register("standardDistanceKm")} />
+          <Input
+            id="standardDistanceKm"
+            type="number"
+            step="any"
+            {...register("standardDistanceKm")}
+          />
         </Field>
       </div>
 
@@ -220,6 +221,21 @@ export function LaneForm({
           <Input id="tollEstimateCents" type="number" step="1" {...register("tollEstimateCents")} />
         </Field>
       </div>
+
+      {/*
+        A MALHA (2026-08-23, a pedido): esta rota é nossa?
+
+        Fica por último e sozinha porque não é um dado da rota como distância ou pedágio — é uma
+        DECISÃO sobre ela, e é a única coisa nesta tela que muda o comportamento do painel: fora
+        da malha, a rota não acende alarme de LH atrasada.
+      */}
+      <label className="flex items-start gap-2.5 rounded-md border p-3">
+        <input type="checkbox" className="mt-1 h-4 w-4" {...register("inNetwork")} />
+        <span>
+          <span className="text-sm font-medium">{t("inNetwork")}</span>
+          <span className="block text-xs text-muted-foreground">{t("inNetworkHelp")}</span>
+        </span>
+      </label>
     </EntityFormShell>
   );
 }

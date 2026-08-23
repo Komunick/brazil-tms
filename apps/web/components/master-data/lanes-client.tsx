@@ -111,6 +111,27 @@ export function LanesClient({ canArchive }: { canArchive: boolean }) {
       header: () => t("destination"),
       cell: ({ row }) => locationName(row.original.destinationLocationId),
     },
+    /**
+     * A MALHA, em coluna própria (2026-08-23, a pedido).
+     *
+     * Esta tela lista TODA rota que já passou pelo portal — o TMS cadastra o par na primeira
+     * viagem que vê, inclusive a de uma oferta que nunca foi nossa. Sem esta coluna não havia
+     * como olhar a lista e saber quais delas a empresa roda, que é a pergunta que ela responde.
+     */
+    {
+      accessorKey: "inNetwork",
+      header: () => t("inNetwork"),
+      cell: ({ row }) =>
+        row.original.inNetwork ? (
+          <span className="whitespace-nowrap rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+            {t("inNetworkYes")}
+          </span>
+        ) : (
+          <span className="whitespace-nowrap text-xs text-muted-foreground">
+            {t("inNetworkNo")}
+          </span>
+        ),
+    },
   ];
 
   return (

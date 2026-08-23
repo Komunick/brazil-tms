@@ -662,7 +662,11 @@
       "degenerate": "A origem e o destino devem ser diferentes.",
       "created": "Rota criada.",
       "updated": "Rota atualizada.",
-      "archivedMsg": "Rota arquivada."
+      "archivedMsg": "Rota arquivada.",
+      "inNetwork": "Nossa malha",
+      "inNetworkYes": "Nossa",
+      "inNetworkNo": "Fora",
+      "inNetworkHelp": "A empresa roda esta rota. Fora da malha, ela continua aparecendo no TMS, mas não acende alarme de LH atrasada."
     }
   },
   "PortalImport": {

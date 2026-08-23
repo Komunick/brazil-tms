@@ -16,6 +16,8 @@ export interface LaneDto {
   standardRateCents: number | null;
   tollEstimateCents: number | null;
   standardDistanceKm: number | null;
+  /** A rota faz parte da malha da empresa. Ver a coluna `in_network` em `schema/lanes.ts`. */
+  inNetwork: boolean;
   archived: boolean;
   archivedAt: string | null;
   createdAt: string;
@@ -33,6 +35,7 @@ interface LaneRow {
   tollEstimateCents: number | null;
   // `numeric` columns come back as strings from the driver; coerced to number in toDto.
   standardDistanceKm: string | null;
+  inNetwork: boolean;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -49,6 +52,7 @@ function toDto(row: LaneRow): LaneDto {
     standardRateCents: row.standardRateCents,
     tollEstimateCents: row.tollEstimateCents,
     standardDistanceKm: row.standardDistanceKm === null ? null : Number(row.standardDistanceKm),
+    inNetwork: row.inNetwork,
     archived: row.archivedAt !== null,
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
@@ -182,6 +186,7 @@ export async function createLane(input: CreateLaneInput, actorUserId: string): P
         tollEstimateCents: input.tollEstimateCents ?? null,
         standardDistanceKm:
           input.standardDistanceKm == null ? null : String(input.standardDistanceKm),
+        inNetwork: input.inNetwork ?? false,
       })
       .returning();
     const row = inserted[0];
@@ -233,6 +238,7 @@ export async function updateLane(
     "standardRateCents",
     "tollEstimateCents",
     "standardDistanceKm",
+    "inNetwork",
   ];
   for (const field of fields) {
     if (input[field] === undefined) continue;
