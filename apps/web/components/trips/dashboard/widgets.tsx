@@ -678,13 +678,24 @@ export function DashboardWidgets() {
   return (
     <div className="space-y-2.5">
       {/**
-       * O BOTÃO FICA DISCRETO, no canto, e some do caminho (2026-08-23).
+       * O TÍTULO MORA AQUI, junto do botão (2026-08-23, a pedido).
        *
-       * Personalizar é coisa que se faz UMA vez; o painel é coisa que se olha o dia inteiro. Um
-       * botão em destaque ali em cima competiria com os números todos os dias por causa de um
-       * clique por pessoa — e este painel também vive numa TV, onde ninguém vai clicar nele.
+       * O `Personalizar` flutuava sozinho entre o subtítulo e o primeiro cartão, e lia como um
+       * elemento perdido: não pertencia ao cabeçalho nem ao conteúdo. O lugar dele é a linha do
+       * título, que é onde se procura o que age sobre a tela inteira.
+       *
+       * Para isso o cabeçalho desceu do `page.tsx` para cá. É a troca: a página perde duas linhas
+       * renderizadas no servidor, e o botão ganha um lugar que se explica sozinho.
+       *
+       * ELE CONTINUA DISCRETO, e o argumento não mudou: personalizar é coisa que se faz UMA vez; o
+       * painel é coisa que se olha o dia inteiro. Botão em destaque competiria com os números por
+       * causa de um clique por pessoa — e este painel também vive numa TV, onde ninguém clica.
        */}
-      <div className="flex justify-end">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">{t("title")}</h1>
+          <p className="text-muted-foreground">{t("subtitle")}</p>
+        </div>
         <button
           type="button"
           onClick={() => setPersonalizando((v) => !v)}
@@ -699,7 +710,7 @@ export function DashboardWidgets() {
           <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
           {t("personalizar")}
         </button>
-      </div>
+      </header>
       {personalizando ? (
         <PainelPersonalizar
           itens={itensDoPainel}
