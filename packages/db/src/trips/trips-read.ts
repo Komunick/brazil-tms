@@ -66,6 +66,7 @@ import { loadTripDetail, type TripDetail } from "./trip-dto";
 import { onTimeExpr } from "./on-time";
 import { tripQueueSql } from "./portal-withdrawn";
 import { readOrigemAtrasadaPorRegiao, readSpotPorRegiao } from "./programacao";
+import { lateToAssignSql, origemAtrasadaSql } from "./atrasos";
 
 /**
  * Feature 005 — Control Tower read models (board / detail / dashboard / export). These are the
@@ -560,6 +561,16 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
     conditions.push(inArray(trips.slaStatus, ["at_risk", "late", "breached"]));
   }
 
+  /**
+   * As duas faixas vermelhas do cartão da frente, como filtro do quadro (2026-08-23).
+   *
+   * Existem para o clique na faixa abrir EXATAMENTE as viagens que ela contou. Antes o atalho
+   * mandava a fila inteira do dia, e aí o cartão dizia 16 e a lista mostrava outra coisa — erro em
+   * que nenhum dos dois lados parece errado sozinho. Nenhum dos dois tem botão na barra de
+   * filtros: são destinos de atalho, e a barra já tem o que se usa digitando.
+   */
+  if (query.lateToAssign === "true") conditions.push(lateToAssignSql());
+  if (query.origemAtrasada === "true") conditions.push(origemAtrasadaSql());
   // A fila do despacho — o MESMO predicado que o cartão do painel conta. Ver `awaitingAssignmentSql`.
   if (query.awaitingAssignment === "true") {
     conditions.push(inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]));
@@ -732,25 +743,6 @@ function boardSelect() {
 const diaColetaSaoPaulo = sql<string>`(${trips}.planned_pickup_window_start AT TIME ZONE ${sql.raw(
   `'${APP_TIME_ZONE}'`,
 )})::date`;
-
-/**
- * O PRAZO DE ATRIBUIÇÃO desta viagem já venceu?
- *
- * A regra da operação: a viagem pode ser atribuída até o MEIO-DIA do próprio dia da coleta. Escrita
- * como "agora passou do meio-dia do dia da coleta", ela cobre os dois casos de uma vez — a viagem de
- * hoje depois das 12h E a de qualquer dia anterior, cujo meio-dia passou faz tempo.
- *
- * É por isso que o cálculo veio para o SERVIDOR. No navegador ele só sabia olhar "hoje": uma viagem
- * de ontem que ninguém atribuiu não aparecia em cartão nenhum e sumia do painel — o pior desfecho
- * possível justamente para o caso mais grave.
- *
- * O meio-dia é o de São Paulo, e a volta para `timestamptz` é o que garante isso: quem abre a tela
- * de outro fuso vê o mesmo prazo, porque quem decide é o relógio da operação.
- */
-const prazoDeAtribuicaoVencidoSql = sql<boolean>`now() > (
-  ((${trips}.planned_pickup_window_start AT TIME ZONE ${sql.raw(`'${APP_TIME_ZONE}'`)})::date
-    + interval '12 hours') AT TIME ZONE ${sql.raw(`'${APP_TIME_ZONE}'`)}
-)`;
 
 const displayStatusSql = sql<string>`CASE
   -- "NA ORIGEM" e UMA linha so: a fila do portal e a chegada de verdade (2026-08-19, a pedido).
@@ -1042,15 +1034,16 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
     /**
      * As ATRASADAS por frente, sem recorte de data: o prazo é que define, não o dia.
      *
-     * `to_assign` e só ele. `in_analysis` é proposta que o CLIENTE não decidiu — cobrar atraso de
-     * quem está esperando resposta do outro lado seria acusar a operação de uma demora que não é
-     * dela. E `awaiting_arrival` já tem motorista no portal.
+     * A regra mora em `lateToAssignSql` — inclusive o conserto de 2026-08-23, quando ela deixou
+     * de contar só `to_assign` e passou a contar também `in_analysis`. O predicado é o MESMO que
+     * o filtro `lateToAssign=true` do quadro usa, para o número daqui e o total de lá não
+     * divergirem.
      */
     db
       .select({ region: locations.region, value: count() })
       .from(trips)
       .innerJoin(locations, eq(locations.id, trips.originLocationId))
-      .where(and(sql`${displayStatusSql} = 'to_assign'`, prazoDeAtribuicaoVencidoSql))
+      .where(lateToAssignSql())
       .groupBy(locations.region),
     // O mesmo recorte, no dia SEGUINTE — o que ainda dá tempo de arrumar.
     db

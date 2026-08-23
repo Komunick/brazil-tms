@@ -271,7 +271,9 @@ function RegionCard({
        * A LH ATRASADA, piscando (2026-08-20, a pedido).
        *
        * A regra da operação: a viagem pode ser atribuída até o MEIO-DIA do próprio dia da coleta.
-       * Depois disso, sem motorista, é atraso — e numa TV isso precisa ser visto sem procurar.
+       * Depois disso, sem ninguém escalado, é atraso — e numa TV isso precisa ser visto sem
+       * procurar. Falta ACEITAR e falta ESCALAR contam as duas (2026-08-23): são duas pendências
+       * nossas, com ações diferentes e a mesma consequência.
        *
        * VERMELHO CHEIO, com brilho (2026-08-20, a pedido): fundo sólido em vez de tinta clara, e um
        * halo em volta. Numa TV vista de longe, borda fina com fundo pálido some entre doze cartões —
@@ -283,7 +285,7 @@ function RegionCard({
        */}
       {atrasadas > 0 ? (
         <Link
-          href={`/trips?${boardQueryForDisplayStatus("to_assign")}${dateFilter}${extraFilter}&scope=all#${BOARD_ANCHOR}`}
+          href={`/trips?lateToAssign=true${extraFilter}&scope=all#${BOARD_ANCHOR}`}
           className="mb-1.5 flex items-center justify-between gap-2 rounded bg-destructive px-1.5 py-1 text-xs font-bold uppercase tracking-wide text-destructive-foreground shadow-[0_0_10px_2px_hsl(var(--destructive)/0.75)] motion-safe:animate-pulse"
         >
           <span>{t("lateToAssign")}</span>
@@ -297,12 +299,14 @@ function RegionCard({
        * já tinha o formato certo e a operação já sabia lê-lo. Reaproveitar a faixa é o oposto de
        * inventar linguagem — duas faixas iguais, uma embaixo da outra, se leem sem aprender nada.
        *
-       * O atalho leva à lista das viagens que ainda não chegaram, com a mesma data e a mesma
-       * frente: o número aqui e o total de lá são o mesmo número.
+       * O atalho leva à lista pelo MESMO predicado que contou o número (`origemAtrasada=true`),
+       * e SEM recorte de data: a regra já traz a sua própria janela. Passar a data do cartão por
+       * cima faria a lista mostrar menos do que o cartão diz — foi o que acontecia antes, quando
+       * o atalho mandava a fila inteira do dia.
        */}
       {origemAtrasada > 0 ? (
         <Link
-          href={`/trips?status=received&status=assigned${dateFilter}${extraFilter}&scope=all#${BOARD_ANCHOR}`}
+          href={`/trips?origemAtrasada=true${extraFilter}&scope=all#${BOARD_ANCHOR}`}
           className="mb-1.5 flex items-center justify-between gap-2 rounded bg-destructive px-1.5 py-1 text-xs font-bold uppercase tracking-wide text-destructive-foreground shadow-[0_0_10px_2px_hsl(var(--destructive)/0.75)] motion-safe:animate-pulse"
         >
           <span>{t("origemAtrasada")}</span>
