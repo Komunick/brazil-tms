@@ -23,19 +23,33 @@ import { db } from "../client";
  * rodando de vinte em vinte segundos a chegada de agora é lida agora. Um filtro assim descartava 588
  * entregas legítimas — as mais recentes, justamente.
  *
- * ── E POR QUE O NÚMERO DE VIAGENS ANDA SEMPRE JUNTO ───────────────────────────────────────────
+ * ── E POR QUE EXISTE UMA NOTA, ALÉM DO PERCENTUAL ─────────────────────────────────────────────
  *
- * Porque 100% em duas viagens não é melhor do que 86% em dezesseis, e um ranking que mostra só o
- * percentual faz exatamente essa troca. Quem consome estes dados — inclusive a tela de atribuição —
- * recebe os dois e decide com os dois à vista.
+ * Porque o percentual cru premia quem rodou pouco: "duas entregas, 100%" passa na frente de "vinte
+ * entregas, 93%", e escalar por isso é escalar por sorte. O defeito foi apontado pelo usuário
+ * olhando a primeira versão desta tela, e é o clássico de todo ranking por proporção.
+ *
+ * A nota é o percentual com um CRÉDITO INICIAL: cada motorista começa como se tivesse cinco
+ * entregas na média da empresa, e o próprio desempenho puxa esse número conforme ele roda. Quem
+ * tem volume chega perto do seu percentual real; quem tem duas viagens fica perto da média — que é
+ * a afirmação honesta: ainda não sabemos.
+ *
+ * Medido no dado real: 2 entregas a 100% dá nota 84, e 20 entregas a 93% dá 91. A ordem inverte, e
+ * é a inversão certa. No topo da empresa, quem tem 50 entregas a 94% passa à frente de quem tem 8
+ * a 100%.
+ *
+ * A nota ORDENA; o percentual cru e o número de entregas EXPLICAM, e os três ficam na tela.
+ * Esconder qualquer um seria pedir confiança cega.
  */
 
 export interface DesempenhoDoMotorista {
   motorista: string;
   entregas: number;
   noPrazo: number;
-  /** 0–100, arredondado. `entregas` sempre acompanha: sem ele o percentual mente. */
+  /** O percentual CRU, 0–100: o que de fato aconteceu. Nunca ordena sozinho — ver `nota`. */
   pct: number;
+  /** O percentual com o crédito inicial, 0–100. É por ele que se ordena. */
+  nota: number;
   /** Está em viagem agora? Quem escala precisa saber antes de contar com ele. */
   emViagem: boolean;
 }
@@ -68,6 +82,18 @@ const ENTREGAS = sql`
   group by t.id, t.lane_id, 3, t.planned_delivery_window_start
 `;
 
+/**
+ * O peso do crédito inicial, em entregas.
+ *
+ * Cinco: com cinco entregas o motorista vale metade do próprio desempenho e metade da média da
+ * empresa; com vinte, a média quase não pesa mais. É escolha, não medida — está aqui, com nome,
+ * para ser discutida.
+ */
+const CREDITO_INICIAL = 5;
+
+/** A média da empresa, que é o palpite inicial sobre quem ainda não tem histórico. */
+const MEDIA_DA_EMPRESA = sql`(select avg(case when no_prazo then 1.0 else 0.0 end) from entregas)`;
+
 /** Quem está com viagem em andamento agora — do `assigned` ao `unloaded`. */
 const EM_VIAGEM = sql`
   select distinct t.customer_fields ->> 'Motorista (portal)' as motorista
@@ -82,6 +108,7 @@ export async function readDesempenhoGeral(): Promise<DesempenhoDoMotorista[]> {
     motorista: string;
     entregas: string;
     no_prazo: string;
+    nota: string;
     em_viagem: boolean;
   }>(sql`
     with entregas as (${ENTREGAS}), em_viagem as (${EM_VIAGEM})
@@ -89,10 +116,12 @@ export async function readDesempenhoGeral(): Promise<DesempenhoDoMotorista[]> {
       x.motorista,
       count(*) as entregas,
       count(*) filter (where x.no_prazo) as no_prazo,
+      round(100 * (count(*) filter (where x.no_prazo) + ${CREDITO_INICIAL} * ${MEDIA_DA_EMPRESA})
+            / (count(*) + ${CREDITO_INICIAL})) as nota,
       exists (select 1 from em_viagem v where v.motorista = x.motorista) as em_viagem
     from entregas x
     group by 1
-    order by 2 desc
+    order by 4 desc, 2 desc
   `);
 
   return linhas.map(paraDesempenho);
@@ -114,6 +143,7 @@ export async function readDesempenhoPorRota(): Promise<DesempenhoNaRota[]> {
     motorista: string;
     entregas: string;
     no_prazo: string;
+    nota: string;
     em_viagem: boolean;
   }>(sql`
     with entregas as (${ENTREGAS}), em_viagem as (${EM_VIAGEM})
@@ -125,6 +155,8 @@ export async function readDesempenhoPorRota(): Promise<DesempenhoNaRota[]> {
       x.motorista,
       count(*) as entregas,
       count(*) filter (where x.no_prazo) as no_prazo,
+      round(100 * (count(*) filter (where x.no_prazo) + ${CREDITO_INICIAL} * ${MEDIA_DA_EMPRESA})
+            / (count(*) + ${CREDITO_INICIAL})) as nota,
       exists (select 1 from em_viagem v where v.motorista = x.motorista) as em_viagem
     from entregas x
     join lanes l on l.id = x.lane_id
@@ -132,7 +164,7 @@ export async function readDesempenhoPorRota(): Promise<DesempenhoNaRota[]> {
     join locations ld on ld.id = l.destination_location_id
     group by 1, 2, 3, 4, 5
     having count(*) >= 2
-    order by 2, 3, 6 desc
+    order by 2, 3, 7 desc
   `);
 
   return linhas.map((r) => ({
@@ -148,6 +180,7 @@ function paraDesempenho(r: {
   motorista: string;
   entregas: string;
   no_prazo: string;
+  nota: string;
   em_viagem: boolean;
 }): DesempenhoDoMotorista {
   const entregas = Number(r.entregas);
@@ -157,6 +190,7 @@ function paraDesempenho(r: {
     entregas,
     noPrazo,
     pct: entregas === 0 ? 0 : Math.round((noPrazo / entregas) * 100),
+    nota: Number(r.nota),
     emViagem: r.em_viagem,
   };
 }
