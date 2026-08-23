@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { faixaDo, indicadoresNaTela, ORDEM_BSC, PREMISSAS } from "./indicadores";
+import {
+  faixaDo,
+  indicadoresNaTela,
+  ORDEM_BSC,
+  PREMISSAS,
+  PRINCIPAIS_BSC,
+  resumoNaTela,
+} from "./indicadores";
 
 /**
  * O defeito que estes testes existem para não repetir: o painel mostrava SEIS indicadores enquanto o
@@ -23,12 +30,11 @@ describe("indicadoresNaTela", () => {
       "SPOT",
       "Aderência de Perfil",
     ]);
-    expect(indicadoresNaTela(VINTE).slice(4, 8).map((n) => PREMISSAS[n]!.pilar)).toEqual([
-      "FIELD",
-      "FIELD",
-      "FIELD",
-      "FIELD",
-    ]);
+    expect(
+      indicadoresNaTela(VINTE)
+        .slice(4, 8)
+        .map((n) => PREMISSAS[n]!.pilar),
+    ).toEqual(["FIELD", "FIELD", "FIELD", "FIELD"]);
   });
 
   it("indicador que a Shopee inventar aparece no fim, e não some", () => {
@@ -100,5 +106,20 @@ describe("PREMISSAS — o que foi lido da página do cliente", () => {
     for (const [nome, p] of Object.entries(PREMISSAS)) {
       expect({ nome, ok: p.minimo <= p.target }).toEqual({ nome, ok: true });
     }
+  });
+});
+
+describe("resumoNaTela", () => {
+  it("traz os seis principais, na ordem da lista e não na do snapshot", () => {
+    const indicators = { Reversa: 99, Telemetria: 98, SPOT: 91, CMK: 97, "ETA Origem": 96 };
+    // CMK não é do resumo; "ETA Destino" e "No Show" não vieram nesta leitura e não podem
+    // aparecer como buraco.
+    expect(resumoNaTela(indicators)).toEqual(["SPOT", "ETA Origem", "Telemetria", "Reversa"]);
+  });
+
+  it("é um subconjunto do que a tela inteira mostra — encolher nunca inventa indicador", () => {
+    const indicators = Object.fromEntries(PRINCIPAIS_BSC.map((nome) => [nome, 99]));
+    const inteira = indicadoresNaTela(indicators);
+    for (const nome of resumoNaTela(indicators)) expect(inteira).toContain(nome);
   });
 });
