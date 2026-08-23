@@ -232,6 +232,11 @@ export function mapPortalApiTrips(payload: PortalApiEnvelope): PortalParseResult
           ? (ACCEPTANCE_LABEL[raw.acceptance_status] ?? `Aceitação ${raw.acceptance_status}`)
           : null,
       operatorLabel: trimmed(raw.operator),
+      // De quem é a viagem. `0` é proposta em aberto — ver `PortalTrip.agencyId`. Medido em
+      // 2026-08-23 no Planejado: 169 de 204 vinham como 1450 (BRAZIL TRANSPORTS) e 35 como 0.
+      // Um terceiro valor nunca apareceu, e se aparecer é notícia — não silêncio.
+      agencyId: typeof raw.agency_id === "number" ? raw.agency_id : null,
+      agencyName: trimmed(raw.agency_name),
       priceCents: portalPriceCents(raw.cost_unit),
       vehicleLabel: trimmed(raw.vehicle_type_name),
       plateLabel: trimmed(raw.vehicle_number),

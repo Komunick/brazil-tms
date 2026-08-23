@@ -118,6 +118,20 @@ export interface PortalTrip {
   acceptanceStatus?: string | null;
   /** Quem o portal nomeia como operador da viagem (nome, não e-mail). */
   operatorLabel?: string | null;
+  /**
+   * DE QUEM É ESTA VIAGEM — a transportadora a que o portal já a entregou (2026-08-23).
+   *
+   * `0` (com nome vazio) é PROPOSTA EM ABERTO: a Shopee ainda não deu a viagem a ninguém, e ela
+   * aparece na nossa listagem como oferta. Não é trabalho da Brazil Transports — pode nunca vir a
+   * ser, e o mais provável é que não venha: das 35 medidas em 2026-08-23, nenhuma era de rota
+   * nossa. Ver `semAsPropostasEmAberto` no feed para o que se faz com isso.
+   *
+   * `undefined` é outra coisa: a origem não disse (a planilha não tem esse campo, e nem toda
+   * listagem do portal o traz). Ausência de informação nunca vira acusação — quem não sabe, passa.
+   */
+  agencyId?: number | null;
+  /** O nome da transportadora, quando há uma. Vazio na proposta em aberto. */
+  agencyName?: string | null;
   /** O que a transportadora recebe por esta viagem, em centavos, quando o portal já precificou. */
   priceCents?: number | null;
   vehicleLabel: string | null;
