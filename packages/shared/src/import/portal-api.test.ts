@@ -236,3 +236,23 @@ describe("mapPortalApiTrips", () => {
     ).toBe("Aceitação 2");
   });
 });
+
+describe("de quem é a viagem (agency_id)", () => {
+  it("lê a transportadora e distingue a proposta em aberto de quem não informa", () => {
+    const { trips } = mapPortalApiTrips(
+      envelope(
+        viagem({ trip_number: "LH-NOSSA", agency_id: 1450, agency_name: "BRAZIL TRANSPORTS" }),
+        viagem({ trip_number: "LH-ABERTA", agency_id: 0, agency_name: "" }),
+        viagem({ trip_number: "LH-SEM-CAMPO" }),
+      ),
+    );
+    const de = (id: string) => trips.find((t) => t.externalTripId === id)!;
+    expect(de("LH-NOSSA").agencyId).toBe(1450);
+    expect(de("LH-NOSSA").agencyName).toBe("BRAZIL TRANSPORTS");
+    // Zero é a proposta que a Shopee ainda não deu a ninguém — e é o que o feed recusa.
+    expect(de("LH-ABERTA").agencyId).toBe(0);
+    expect(de("LH-ABERTA").agencyName).toBeNull();
+    // Sem o campo é "não sei", e não sei nunca vira acusação: fica nulo, e o feed deixa passar.
+    expect(de("LH-SEM-CAMPO").agencyId).toBeNull();
+  });
+});
