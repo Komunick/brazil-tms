@@ -1,6 +1,6 @@
 import { sql, type SQL } from "drizzle-orm";
 import { APP_TIME_ZONE, PORTAL_ATRIBUIDA } from "@brazil-tms/shared";
-import { trips } from "../../schema";
+import { lanes, trips } from "../../schema";
 
 /**
  * AS DUAS FAIXAS VERMELHAS DO CARTÃO DA FRENTE, escritas UMA vez (2026-08-23).
@@ -29,6 +29,25 @@ import { trips } from "../../schema";
  * como literal (`sql.raw`) porque como parâmetro o Postgres veria expressões diferentes entre o
  * SELECT e o GROUP BY.
  */
+/**
+ * A VIAGEM É DE ROTA NOSSA?
+ *
+ * Escrito uma vez porque a mesma pergunta aparece no alarme e no filtro do quadro, e as duas
+ * respostas têm de ser a mesma — número que abre uma lista diferente do que conta é o erro em que
+ * nenhum dos dois lados parece errado sozinho.
+ *
+ * `lane_id` é preenchido na importação desde 2026-08-16 (`resolveLaneId` cria a rota na primeira
+ * viagem do par); medido em produção, nenhuma viagem está sem ele. Ainda assim o `EXISTS` responde
+ * `false` para nulo, e o lado seguro é esse: sem rota conhecida e sem aceite, não acende alarme.
+ */
+export const rotaNossaSql = sql<boolean>`(
+  (${trips.customerFields} ->> 'Aceitação (portal)') = 'Accepted'
+  OR EXISTS (
+    SELECT 1 FROM ${lanes} l
+    WHERE l.id = ${trips.laneId} AND l.in_network AND l.archived_at IS NULL
+  )
+)`;
+
 const MEIO_DIA_DA_COLETA = sql`(
   ((${trips}.planned_pickup_window_start AT TIME ZONE ${sql.raw(`'${APP_TIME_ZONE}'`)})::date
     + interval '12 hours') AT TIME ZONE ${sql.raw(`'${APP_TIME_ZONE}'`)}
@@ -54,12 +73,30 @@ const MEIO_DIA_DA_COLETA = sql`(
  *
  * SEM RECORTE DE DATA, de propósito: o prazo é que define. A LH de ontem que ninguém atribuiu é
  * justamente a que mais precisa aparecer.
+ *
+ * ── E SÓ PARA ROTA NOSSA (2026-08-23, a pedido) ───────────────────────────────────────────────
+ *
+ * O portal mostra à transportadora as viagens que já são dela E as ofertas que ainda não têm dono.
+ * Sem esta condição, a faixa cobrava atribuição de rota que a empresa não roda: 41 viagens de
+ * vermelho no dia em que isto foi medido, das quais 40 eram oferta alheia. Uma tela que pisca por
+ * coisa que ninguém vai fazer ensina a operação a não olhar a tela.
+ *
+ * NOSSA É UMA DAS DUAS COISAS, e as duas precisam estar aqui:
+ *
+ *   A ROTA ESTÁ NA MALHA (`lanes.in_network`) — o cadastro que a operação controla, semeado com o
+ *   que a empresa provou rodar. É a resposta para a viagem que ainda não foi aceita.
+ *
+ *   OU A VIAGEM JÁ FOI ACEITA. Aceitar é o ato que torna a rota nossa, e ele vale MESMO que o
+ *   cadastro não conheça a rota — foi assim que 8 viagens de Jaboatão → Simões Filho apareceram,
+ *   rota nova de verdade. Sem esta metade, uma rota nova aceita ficaria sem alarme justamente
+ *   enquanto ninguém a escalasse, que é quando o alarme serve.
  */
 export function lateToAssignSql(): SQL<boolean> {
   return sql<boolean>`(
     ${trips.currentStatus} = 'received'
     AND (${trips.customerFields} ->> 'Status (portal)') IS DISTINCT FROM ${PORTAL_ATRIBUIDA}
     AND now() > ${MEIO_DIA_DA_COLETA}
+    AND ${rotaNossaSql}
   )`;
 }
 
