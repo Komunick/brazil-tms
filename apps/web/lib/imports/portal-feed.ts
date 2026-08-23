@@ -1,12 +1,6 @@
 import "server-only";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
-import {
-  mapPortalApiDetail,
-  mapPortalApiTrips,
-  type PortalApiEnvelope,
-  type PortalParseResult,
-  type PortalTrip,
-} from "@brazil-tms/shared";
+import { mapPortalApiDetail, mapPortalApiTrips, type PortalApiEnvelope } from "@brazil-tms/shared";
 import { customers, db, importBatches, trips, users } from "@brazil-tms/db";
 import { Conflict, NotFound } from "@/lib/api/respond";
 import {
@@ -165,7 +159,7 @@ export async function ingestPortalFeed(input: {
     );
   }
 
-  const parsed = semAsPropostasEmAberto(mapPortalApiTrips(input.payload));
+  const parsed = mapPortalApiTrips(input.payload);
   const customerId = await activeCustomerId(input.customerCode);
   const actorUserId = await feedActorId();
 
@@ -204,50 +198,21 @@ export async function ingestPortalFeed(input: {
 }
 
 /**
- * FORA AS PROPOSTAS EM ABERTO — as viagens que não são nossas (2026-08-23, a pedido).
+ * NADA É RECUSADO NA ENTRADA — nem a proposta que ainda não é nossa (2026-08-23, a pedido).
  *
- * O Planejado do portal mistura duas coisas: as viagens que a Shopee JÁ ENTREGOU à Brazil
- * Transports e as que ela ainda está oferecendo, sem dono. As segundas vinham entrando como
- * viagem nossa — pediam atribuição, contavam no painel e, desde o conserto das faixas, acendiam
- * a LH ATRASADA. Vinte e quatro delas estavam de vermelho na tela quando o usuário olhou as
- * rotas e disse a frase que abriu isto: "nenhuma dessas rotas é nossa".
+ * Por algumas horas deste dia foi o contrário: as viagens com `agency_id = 0` (oferta do portal,
+ * ainda sem dono) eram recusadas aqui. O motivo era real — 24 delas acendiam a LH ATRASADA no
+ * painel, e nenhuma era trabalho nosso.
  *
- * O portal sempre disse de quem era: `agency_id`. Medido em 2026-08-23 no mesmo payload que o
- * robô lê — 204 viagens, 169 com `1450 · BRAZIL TRANSPORTS` e 35 com `0` e nome vazio.
+ * O usuário desfez, e a razão dele é melhor do que a minha: recusar troca ruído por CEGUEIRA. A
+ * proposta existe, é oferecida a nós e pode virar trabalho a qualquer momento; quem decide isso é
+ * a operação, olhando — e não dá para olhar o que não entrou. O barulho não vinha de elas estarem
+ * no sistema, vinha de os ALARMES tratarem-nas como nossas.
  *
- * ── REJEITADA, E NÃO IGNORADA ─────────────────────────────────────────────────────────────
- *
- * Elas entram na lista de rejeitadas do lote, com o motivo escrito. Descartar em silêncio faria
- * o dia em que o portal mudar o campo passar despercebido: a alimentação continuaria "sem erro"
- * e o TMS ficaria vazio. Rejeição é um número que aparece.
- *
- * ── E QUEM JÁ ESTÁ DENTRO SAI SOZINHO ──────────────────────────────────────────────────────
- *
- * Sem apagar nada à mão. Parando de alimentá-las, elas viram ausência na listagem — e ausência
- * já tem dono: `marcarRetiradasDoPortal` apaga em três horas o que sumiu do portal, com as cinco
- * travas dela e auditoria por viagem. É o mesmo caminho da proposta que o cliente retira, que é
- * exatamente o que estas são.
- *
- * QUEM NÃO DIZ, PASSA. `agencyId` nulo é origem que não traz o campo (planilha, e listagens do
- * portal que não o incluem). Ausência de informação não vira acusação — o filtro só age sobre o
- * zero explícito.
+ * Então a separação mudou de lugar: tudo entra, e quem distingue é a tela (ver o escopo dos
+ * alarmes no painel e o filtro do quadro). `agencyId` continua sendo lido do portal — de graça, em
+ * toda listagem — porque é a única afirmação do fornecedor sobre de quem é a viagem.
  */
-export function semAsPropostasEmAberto(parsed: PortalParseResult): PortalParseResult {
-  const emAberto = (t: PortalTrip) => t.agencyId === 0;
-  if (!parsed.trips.some(emAberto)) return parsed;
-  return {
-    trips: parsed.trips.filter((t) => !emAberto(t)),
-    rejected: [
-      ...parsed.rejected,
-      ...parsed.trips.filter(emAberto).map((t, i) => ({
-        row: parsed.rejected.length + i + 1,
-        externalTripId: t.externalTripId,
-        reason: "Proposta em aberto no portal (sem transportadora): não é viagem nossa.",
-      })),
-    ],
-  };
-}
-
 /** How many trips one answer may ask the robot to fetch in detail — one call each, so it is capped. */
 const DETAIL_BATCH = 25;
 
