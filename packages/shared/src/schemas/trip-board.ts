@@ -104,6 +104,19 @@ export const tripBoardQuerySchema = z.object({
    */
   queue: optParam(z.enum(TRIP_QUEUES)),
   /**
+   * AS DUAS FAIXAS VERMELHAS DO PAINEL, como recorte do quadro (2026-08-23).
+   *
+   * `lateToAssign` — o prazo venceu e não há ninguém escalado (falta aceitar OU falta atribuir).
+   * `origemAtrasada` — tem motorista, passou do STA e ele não deu entrada na origem.
+   *
+   * Existem como parâmetro próprio porque nenhum dos dois cabe nos filtros que já havia: o
+   * primeiro é a UNIÃO de duas filas (`queue` aceita um valor só) mais um prazo, e o segundo
+   * cruza motorista com hora. Escritos aqui de novo, o número do cartão e o total da lista
+   * divergiriam — o predicado é o MESMO do painel, em `atrasos.ts`.
+   */
+  lateToAssign: optParam(z.enum(["true", "false"])),
+  origemAtrasada: optParam(z.enum(["true", "false"])),
+  /**
    * SÓ O EIXO DA ACEITAÇÃO, sem dizer nada sobre motorista (2026-08-22).
    *
    * As três filas são exaustivas e EXCLUSIVAS — foi o que as fez boas para rotular o quadro, e é
@@ -175,6 +188,8 @@ const PARAM_KEYS = [
   "missingDocuments",
   "awaitingAssignment",
   "queue",
+  "lateToAssign",
+  "origemAtrasada",
   "portalAccepted",
   "q",
   "scope",
