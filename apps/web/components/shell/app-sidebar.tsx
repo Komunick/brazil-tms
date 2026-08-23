@@ -111,7 +111,12 @@ export function AppSidebar({
           )}
         </button>
       </div>
-      <nav className={cn("flex flex-1 flex-col gap-1 overflow-y-auto py-3", recolhido ? "px-2" : "px-3")}>
+      <nav
+        className={cn(
+          "rolagem-discreta flex flex-1 flex-col gap-1 overflow-y-auto py-3",
+          recolhido ? "px-2" : "px-3",
+        )}
+      >
         {visibleItems.map((item) => {
           const Icon = ICONS[item.icon] ?? LayoutDashboard;
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);

@@ -43,3 +43,5 @@ export * from "./fleet-positions";
 export * from "./spx-router-events";
 export * from "./robot-cycles";
 export * from "./portal-commands";
+// Preferências de tela por usuário — o painel do dia de cada um.
+export * from "./user-dashboard-prefs";
