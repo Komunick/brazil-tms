@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, date, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, date, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { carriers } from "./carriers";
 import { ownershipType, resourceStatus } from "./enums";
 
@@ -21,6 +21,34 @@ export const drivers = pgTable(
     phone: text("phone"),
     email: text("email"), // dormant — see the table doc comment
     cpf: text("cpf"),
+    /**
+     * O ID DESTE MOTORISTA NO PORTAL DO CLIENTE (2026-08-23).
+     *
+     * A única chave que os dois cadastros compartilham de verdade. Sem ela, casar motorista do
+     * portal com motorista do TMS é casar por NOME — e nome é frágil por natureza: um acento fora do
+     * lugar já custou três motoristas que existiam e o sistema jurava não existirem.
+     *
+     * Nasce na importação do cadastro do portal e é o que permite a próxima carga ser exata em vez
+     * de aproximada. Nulo é o normal para quem foi cadastrado à mão aqui e nunca apareceu lá.
+     */
+    portalDriverId: text("portal_driver_id"),
+    /**
+     * TUDO O QUE O PORTAL MANDA E O TMS NÃO TEM COLUNA PARA GUARDAR (2026-08-23, a pedido).
+     *
+     * Endereço, nascimento, RENAVAM, fabricante e ano do veículo, dono, estações, taxas, tipo de
+     * contrato — são uns cinquenta campos, e criar cinquenta colunas para dados que ninguém filtra
+     * seria pagar migração por cada mudança de cadastro do fornecedor.
+     *
+     * É o MESMO padrão que a viagem já usa em `customer_fields`, e pela mesma razão: campo novo na
+     * semana que vem aparece sem migração. Quem precisar FILTRAR por algum deles ganha uma coluna
+     * de verdade — a promoção é a exceção, não a regra.
+     *
+     * Guardado como o portal manda, sem tradução: no dia em que ele renomear um campo, a diferença
+     * fica visível aqui em vez de sumir num mapeamento nosso.
+     */
+    portalFields: jsonb("portal_fields"),
+    /** Quando o robô leu este motorista pela última vez. É o relógio de "o cadastro está fresco?". */
+    portalSyncedAt: timestamp("portal_synced_at", { withTimezone: true }),
     licenseNumber: text("license_number"),
     licenseCategory: text("license_category"),
     licenseExpiry: date("license_expiry"),
