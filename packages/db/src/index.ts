@@ -218,3 +218,5 @@ export {
   readMelhoresDaRotaDaViagem,
 } from "./reporting/motoristas";
 export type { DesempenhoDoMotorista, DesempenhoNaRota } from "./reporting/motoristas";
+export { readMinhaProgramacao, acompanharViagem, pararDeAcompanhar } from "./users/programacao";
+export type { ViagemAcompanhada } from "./users/programacao";
