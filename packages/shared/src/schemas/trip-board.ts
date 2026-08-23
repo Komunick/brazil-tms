@@ -114,6 +114,14 @@ export const tripBoardQuerySchema = z.object({
    * cruza motorista com hora. Escritos aqui de novo, o número do cartão e o total da lista
    * divergiriam — o predicado é o MESMO do painel, em `atrasos.ts`.
    */
+  /**
+   * SÓ AS ROTAS QUE A EMPRESA RODA (2026-08-23, a pedido).
+   *
+   * O portal mostra à transportadora as viagens que já são dela E as ofertas ainda sem dono, e a
+   * fila de aceite mistura as duas. `true` deixa só o que é nosso — rota marcada na malha, ou
+   * viagem já aceita, que é o ato que torna a rota nossa.
+   */
+  rotaNossa: optParam(z.enum(["true", "false"])),
   lateToAssign: optParam(z.enum(["true", "false"])),
   origemAtrasada: optParam(z.enum(["true", "false"])),
   /**
@@ -188,6 +196,7 @@ const PARAM_KEYS = [
   "missingDocuments",
   "awaitingAssignment",
   "queue",
+  "rotaNossa",
   "lateToAssign",
   "origemAtrasada",
   "portalAccepted",
