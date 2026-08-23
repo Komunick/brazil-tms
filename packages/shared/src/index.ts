@@ -48,3 +48,4 @@ export * from "./schemas/spot-offer";
 export * from "./schemas/fleet-position";
 export * from "./schemas/portal-command";
 export * from "./schemas/dashboard-prefs";
+export * from "./import/portal-drivers-api";

@@ -220,3 +220,9 @@ export {
 export type { DesempenhoDoMotorista, DesempenhoNaRota } from "./reporting/motoristas";
 export { readMinhaProgramacao, acompanharViagem, pararDeAcompanhar } from "./users/programacao";
 export type { ViagemAcompanhada } from "./users/programacao";
+export {
+  applyPortalDrivers,
+  applyDriverSensitive,
+  contarSemTelefone,
+} from "./fleet/portal-drivers-apply";
+export type { ResumoDoCadastro, FaltaRevelar } from "./fleet/portal-drivers-apply";
