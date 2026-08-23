@@ -47,3 +47,4 @@ export * from "./schemas/freight-rate";
 export * from "./schemas/spot-offer";
 export * from "./schemas/fleet-position";
 export * from "./schemas/portal-command";
+export * from "./schemas/dashboard-prefs";

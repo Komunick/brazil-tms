@@ -124,3 +124,49 @@
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
 }
+
+@layer components {
+  /**
+   * ROLAGEM DISCRETA (2026-08-23, a pedido: "está feio com essa barra de descer e subir").
+   *
+   * A barra padrão do Chromium tem 15 px, trilho cinza e cantos vivos. Num menu de 64 px ela come
+   * um décimo da largura e vira a coisa mais chamativa da lateral — um controle desenhado para ser
+   * agarrado com o mouse, num lugar onde ninguém agarra, porque a roda e o teclado já rolam.
+   *
+   * Aqui ela vira um traço de 6 px sem trilho, e o polegar só ganha cor quando o ponteiro entra na
+   * área ou o teclado foca algo dentro dela. Discreta, não ausente: continua arrastável, e continua
+   * ocupando a mesma largura o tempo todo — barra que aparece e some empurra o conteúdo de lado a
+   * cada passagem do mouse, e aí o que era enfeite vira tremor.
+   *
+   * `currentColor` em vez de uma cor fixa: a mesma classe serve na lateral escura e numa caixa
+   * clara, porque o polegar assume a cor do texto de quem rola. E `scrollbar-width: thin` fica no
+   * lugar para o Firefox, que ignora os pseudo-elementos do WebKit.
+   */
+  .rolagem-discreta {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    /* A rolagem morre aqui: chegando ao fim, a página atrás não começa a descer junto. */
+    overscroll-behavior: contain;
+  }
+  .rolagem-discreta:hover,
+  .rolagem-discreta:focus-within {
+    scrollbar-color: currentColor transparent;
+  }
+  .rolagem-discreta::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .rolagem-discreta::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .rolagem-discreta::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 9999px;
+    transition: background-color 150ms ease;
+  }
+  .rolagem-discreta:hover::-webkit-scrollbar-thumb,
+  .rolagem-discreta:focus-within::-webkit-scrollbar-thumb {
+    background-color: currentColor;
+    opacity: 0.3;
+  }
+}
