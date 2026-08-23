@@ -35,6 +35,34 @@ export const NAV_GRUPOS = [
  * additive only — the BFF stays authoritative (FR-011). Operational areas (features 002–009)
  * are added here as those features land.
  */
+/**
+ * OS ÍCONES, revistos (2026-08-23, a pedido).
+ *
+ * O defeito que motivou a revisão era real e passava despercebido: o MESMO caminhão marcava a
+ * Torre de Controle e o cadastro de Veículos. Dois lugares diferentes com o mesmo desenho é pior
+ * do que um desenho genérico — e com o menu recolhido, onde só o ícone resta, viravam a mesma
+ * coisa.
+ *
+ * As trocas:
+ *
+ *   Torre de Controle   caminhão → torre de controle (o nome da tela vira o desenho)
+ *   Expedição           prancheta → pacote conferido (despachar, não conferir lista)
+ *   Tarifas             cifrão → moedas            ┐ três telas de dinheiro seguidas com o mesmo
+ *   Tabela de Fretes    nota → tabela              ┘ peso; agora cada uma diz o que é
+ *   Locais              alfinete → alfinete fixado (estação, não um ponto qualquer)
+ *   Motoristas          pessoa → crachá (a pessoa cadastrada, não um usuário do sistema)
+ *   Transportadoras     fábrica → aperto de mão (parceiro, não indústria)
+ *
+ * ── POR QUE OS ÍCONES NÃO GANHARAM COR ────────────────────────────────────────────────────────
+ *
+ * Foi oferecido, e a resposta é a mesma que vale no resto do sistema: COR AQUI SIGNIFICA ESTADO.
+ * Vermelho é atraso, verde é andando, laranja é oportunidade — e essa gramática só funciona
+ * enquanto a cor for rara. Vinte e quatro ícones coloridos na barra gastariam a paleta inteira em
+ * decoração, e o vermelho da LH atrasada passaria a ser mais um vermelho na tela.
+ *
+ * Quem separa os grupos são os títulos, que já fazem esse trabalho sem custo. E a cor continua
+ * onde decide alguma coisa: no item ativo, que é a única pergunta que a barra responde com tinta.
+ */
 export const NAV_ITEMS: readonly NavItem[] = [
   { key: "home", href: "/", icon: "LayoutDashboard", grupo: "operacao" },
   // Minha Programação (2026-08-23): a lista pessoal de viagens acompanhadas. Logo abaixo do
@@ -47,12 +75,18 @@ export const NAV_ITEMS: readonly NavItem[] = [
     grupo: "operacao",
   },
   // 005 — Control Tower board (view_all_trips: all 7 internal roles).
-  { key: "trips", href: "/trips", icon: "Truck", permission: "view_all_trips", grupo: "operacao" },
+  {
+    key: "trips",
+    href: "/trips",
+    icon: "TowerControl",
+    permission: "view_all_trips",
+    grupo: "operacao",
+  },
   // 006 — Dispatch Board (assign_resources: Admin, Ops Manager, Dispatcher, Fleet Coordinator).
   {
     key: "dispatch",
     href: "/dispatch",
-    icon: "ClipboardCheck",
+    icon: "PackageCheck",
     permission: "assign_resources",
     grupo: "operacao",
   },
@@ -91,7 +125,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   {
     key: "rates",
     href: "/billing/rates",
-    icon: "DollarSign",
+    icon: "Coins",
     permission: "edit_rates",
     grupo: "faturamento",
   },
@@ -100,7 +134,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   {
     key: "freightRates",
     href: "/freight-rates",
-    icon: "Banknote",
+    icon: "Table2",
     permission: "view_freight_rates",
     grupo: "faturamento",
   },
@@ -146,7 +180,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   {
     key: "locations",
     href: "/admin/locations",
-    icon: "MapPin",
+    icon: "MapPinned",
     permission: "manage_commercial_data",
     grupo: "cadastros",
   },
@@ -184,7 +218,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   {
     key: "drivers",
     href: "/resources/drivers",
-    icon: "UserRound",
+    icon: "IdCard",
     permission: "manage_fleet_data",
     grupo: "cadastros",
   },
@@ -205,7 +239,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   {
     key: "carriers",
     href: "/resources/carriers",
-    icon: "Factory",
+    icon: "Handshake",
     permission: "manage_fleet_data",
     grupo: "cadastros",
   },
