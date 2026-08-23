@@ -41,6 +41,7 @@ import type {
   TripDetailView,
   TripFilterOptions,
   DashboardSummary,
+  RotaDaMalha,
   BscSnapshotView,
   SpotOfferView,
   WallboardSummary,
@@ -292,6 +293,20 @@ export function useExceptionReport(search: string): UseQueryResult<ExceptionRepo
   });
 }
 
+/**
+ * A malha — os pares origem → destino e o que já rodou em cada um.
+ *
+ * Sem `search`: a lista é a mesma para todo mundo, e o recorte (busca e frente) acontece na tela,
+ * sobre 156 linhas. Filtrar no servidor custaria uma ida por tecla digitada para reduzir uma tabela
+ * que já cabe inteira na memória.
+ */
+export function useMalhaDeRotas(): UseQueryResult<{ rotas: RotaDaMalha[] }> {
+  return useQuery({
+    queryKey: [...REPORTS_ROOT, "rotas"],
+    queryFn: async () => asJson<{ rotas: RotaDaMalha[] }>(await fetch(`/api/reports/rotas`)),
+    refetchInterval: REPORTS_POLL_MS,
+  });
+}
 /** Billing-readiness report (US3). */
 export function useBillingReadinessReport(search: string): UseQueryResult<BillingReadinessReport> {
   return useQuery({

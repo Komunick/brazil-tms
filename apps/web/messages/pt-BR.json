@@ -230,7 +230,8 @@
     "tabs": {
       "sla": "SLA",
       "exceptions": "Exceções",
-      "billingReadiness": "Prontidão de cobrança"
+      "billingReadiness": "Prontidão de cobrança",
+      "rotas": "Rotas"
     },
     "filters": {
       "customer": "Cliente",
@@ -297,6 +298,25 @@
       "low": "Baixa",
       "medium": "Média",
       "high": "Alta"
+    },
+    "rotas": {
+      "paresRodados": "pares já rodados",
+      "paresNunca": "pares nunca rodados",
+      "viagensRodadas": "viagens executadas",
+      "buscar": "Filtrar por estação…",
+      "todas": "Todas",
+      "semFrente": "Sem frente",
+      "jaRodamos": "Já rodamos",
+      "jaRodamosAjuda": "Rotas nossas com prova: houve viagem que chegou à origem, rodou ou terminou. É a lista para conferir contra a planilha da operação.",
+      "nuncaRodamos": "Nunca rodamos",
+      "nuncaRodamosAjuda": "Apareceram no portal e nenhuma chegou a rodar. Aqui convivem duas coisas: oferta de rota que não é nossa, e rota nova que a Shopee passou a oferecer.",
+      "rota": "Rota",
+      "frente": "Frente",
+      "rodadas": "Rodadas",
+      "total": "Viagens",
+      "ultima": "Última",
+      "vistaAte": "Vista até",
+      "vazio": "Nada com esse recorte."
     }
   },
   "AuditActions": {

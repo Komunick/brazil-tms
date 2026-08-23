@@ -9,6 +9,7 @@ import { ReportFilters, type ReportFiltersValue } from "@/components/reports/rep
 import { SlaReport } from "@/components/reports/sla-report";
 import { ExceptionReport } from "@/components/reports/exception-report";
 import { BillingReadinessReport } from "@/components/reports/billing-readiness-report";
+import { RotasReport } from "@/components/reports/rotas-report";
 
 /**
  * Feature 009 — the Reports screen shell (US1–US3). Three tabs (SLA · Exceções · Prontidão de
@@ -17,7 +18,7 @@ import { BillingReadinessReport } from "@/components/reports/billing-readiness-r
  * lane picker + grouping are hidden there. Filter state is component-local (the screen is self-contained).
  */
 
-type Tab = "sla" | "exceptions" | "billing";
+type Tab = "sla" | "exceptions" | "billing" | "rotas";
 
 /** Build the report-filter query string from the filter state (only non-empty values). */
 export function reportSearch(value: ReportFiltersValue): string {
@@ -40,6 +41,7 @@ export function ReportsClient({ options: initialOptions }: { options: TripFilter
     { key: "sla", label: t("tabs.sla") },
     { key: "exceptions", label: t("tabs.exceptions") },
     { key: "billing", label: t("tabs.billingReadiness") },
+    { key: "rotas", label: t("tabs.rotas") },
   ];
 
   return (
@@ -64,17 +66,24 @@ export function ReportsClient({ options: initialOptions }: { options: TripFilter
         ))}
       </div>
 
-      <ReportFilters
-        value={filters}
-        onChange={setFilters}
-        options={options}
-        showLaneAndGroup={tab !== "billing"}
-      />
+      {/* A MALHA NÃO TEM PERÍODO NEM CLIENTE (2026-08-23): ela responde "quais rotas são
+          nossas", que é uma pergunta sobre o histórico inteiro. Uma barra de filtros por cima
+          dela sugeriria um recorte que a tabela ignora — e filtro que não filtra é pior que
+          filtro nenhum. O recorte dela (busca e frente) mora dentro da própria aba. */}
+      {tab === "rotas" ? null : (
+        <ReportFilters
+          value={filters}
+          onChange={setFilters}
+          options={options}
+          showLaneAndGroup={tab !== "billing"}
+        />
+      )}
 
       {/* Tab bodies — filled per story (US1 SLA, US2 Exceções, US3 Prontidão de cobrança). */}
       {tab === "sla" ? <SlaReport search={search} /> : null}
       {tab === "exceptions" ? <ExceptionReport search={search} /> : null}
       {tab === "billing" ? <BillingReadinessReport search={search} /> : null}
+      {tab === "rotas" ? <RotasReport /> : null}
     </div>
   );
 }
