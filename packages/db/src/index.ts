@@ -212,5 +212,9 @@ export { readDashboardPrefs, writeDashboardPrefs } from "./users/dashboard-prefs
 export type { PainelGuardado } from "./users/dashboard-prefs";
 export { readMalhaDeRotas } from "./reporting/malha";
 export type { RotaDaMalha } from "./reporting/malha";
-export { readDesempenhoGeral, readDesempenhoPorRota } from "./reporting/motoristas";
+export {
+  readDesempenhoGeral,
+  readDesempenhoPorRota,
+  readMelhoresDaRotaDaViagem,
+} from "./reporting/motoristas";
 export type { DesempenhoDoMotorista, DesempenhoNaRota } from "./reporting/motoristas";

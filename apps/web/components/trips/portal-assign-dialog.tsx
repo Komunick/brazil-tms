@@ -21,6 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { MelhoresDaRota } from "@/components/trips/melhores-da-rota";
 import { TripsError, usePortalAction, usePortalDrivers } from "@/lib/trips/client";
 
 /**
@@ -128,87 +129,101 @@ export function PortalAssignDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{driverAtual ? t("titleEdit") : t("title")}</DialogTitle>
           <DialogDescription>{t("subtitle", { lh: externalTripId ?? tripId })}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor={`motorista-${tripId}`}>{t("driver")}</Label>
-            <SearchableSelect
-              id={`motorista-${tripId}`}
-              value={driverId}
-              onChange={setDriverId}
-              options={opcoes}
-              placeholder={motoristas.isLoading ? t("loadingDrivers") : t("driverPlaceholder")}
-              emptyText={t("noDriver")}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor={`motorista2-${tripId}`}>{t("secondDriver")}</Label>
-            <SearchableSelect
-              id={`motorista2-${tripId}`}
-              value={secondDriverId}
-              onChange={setSecondDriverId}
-              options={opcoes}
-              placeholder={t("secondDriverPlaceholder")}
-              emptyText={t("noDriver")}
-              clearable
-              clearLabel={t("noSecondDriver")}
-            />
-          </div>
-
-          {placas.map((placa, i) => (
-            <div key={i} className="space-y-1.5">
-              <Label htmlFor={`placa-${tripId}-${i}`}>
-                {placas.length > 1 ? t("plateN", { n: String(i + 1) }) : t("plate")}
-              </Label>
-              <div className="flex gap-2">
-                <Input
-                  id={`placa-${tripId}-${i}`}
-                  value={placa}
-                  maxLength={8}
-                  autoComplete="off"
-                  className="uppercase"
-                  onChange={(e) =>
-                    setPlacas((atual) =>
-                      atual.map((p, j) => (j === i ? normalizarPlaca(e.target.value) : p)),
-                    )
-                  }
-                />
-                {placas.length > 1 ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => setPlacas((atual) => atual.filter((_, j) => j !== i))}
-                  >
-                    {t("removePlate")}
-                  </Button>
-                ) : null}
-              </div>
+        {/**
+         * DUAS COLUNAS: o formulário e, ao lado, quem já entregou bem NESTA rota.
+         *
+         * Ao lado e não embaixo — a lista existe para ser lida ENQUANTO se escolhe o nome, e um
+         * painel abaixo do botão de confirmar chega depois da decisão. Em tela estreita ele desce,
+         * porque aí não há "ao lado".
+         *
+         * Ele NÃO seleciona ninguém: é sugestão ao lado do campo. Motorista tem folga, região,
+         * carreta e mil coisas que o TMS não sabe.
+         */}
+        <div className="grid gap-4 sm:grid-cols-[1fr_18rem]">
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor={`motorista-${tripId}`}>{t("driver")}</Label>
+              <SearchableSelect
+                id={`motorista-${tripId}`}
+                value={driverId}
+                onChange={setDriverId}
+                options={opcoes}
+                placeholder={motoristas.isLoading ? t("loadingDrivers") : t("driverPlaceholder")}
+                emptyText={t("noDriver")}
+              />
             </div>
-          ))}
 
-          {placas.length < 2 ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setPlacas((a) => [...a, ""])}
-            >
-              {t("addPlate")}
-            </Button>
-          ) : null}
+            <div className="space-y-1.5">
+              <Label htmlFor={`motorista2-${tripId}`}>{t("secondDriver")}</Label>
+              <SearchableSelect
+                id={`motorista2-${tripId}`}
+                value={secondDriverId}
+                onChange={setSecondDriverId}
+                options={opcoes}
+                placeholder={t("secondDriverPlaceholder")}
+                emptyText={t("noDriver")}
+                clearable
+                clearLabel={t("noSecondDriver")}
+              />
+            </div>
 
-          {erroDoServidor ? (
-            <p role="alert" className="text-sm text-destructive">
-              {erroDoServidor}
-            </p>
-          ) : null}
-          <p className="text-xs text-muted-foreground">{t("hint")}</p>
+            {placas.map((placa, i) => (
+              <div key={i} className="space-y-1.5">
+                <Label htmlFor={`placa-${tripId}-${i}`}>
+                  {placas.length > 1 ? t("plateN", { n: String(i + 1) }) : t("plate")}
+                </Label>
+                <div className="flex gap-2">
+                  <Input
+                    id={`placa-${tripId}-${i}`}
+                    value={placa}
+                    maxLength={8}
+                    autoComplete="off"
+                    className="uppercase"
+                    onChange={(e) =>
+                      setPlacas((atual) =>
+                        atual.map((p, j) => (j === i ? normalizarPlaca(e.target.value) : p)),
+                      )
+                    }
+                  />
+                  {placas.length > 1 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setPlacas((atual) => atual.filter((_, j) => j !== i))}
+                    >
+                      {t("removePlate")}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+
+            {placas.length < 2 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPlacas((a) => [...a, ""])}
+              >
+                {t("addPlate")}
+              </Button>
+            ) : null}
+
+            {erroDoServidor ? (
+              <p role="alert" className="text-sm text-destructive">
+                {erroDoServidor}
+              </p>
+            ) : null}
+            <p className="text-xs text-muted-foreground">{t("hint")}</p>
+          </div>
+
+          <MelhoresDaRota tripId={tripId} aberto={open} opcoes={opcoes} onEscolher={setDriverId} />
         </div>
 
         <DialogFooter>
