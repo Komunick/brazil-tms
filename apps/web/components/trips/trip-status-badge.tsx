@@ -47,17 +47,19 @@ const STATUS_CLASS: Record<TripDisplayStatus, string> = {
    * que o cliente já fez.
    */
   /**
-   * VERDE FORTE, e o rótulo virou ETA ORIGEM (2026-08-23, a pedido).
+   * VERDE FRACO, e o rótulo virou "ETA Origem" (2026-08-23, a pedido, em duas rodadas).
    *
-   * Era verde-água claro, o mesmo tom das etapas de destino, com o argumento de que aqui não há
-   * trabalho pendente — o cliente já escalou e só falta o motorista chegar. A operação lê essa
-   * fila o dia inteiro, e num quadro de 40 linhas o tom claro sumia entre os outros claros.
+   * Era verde-água claro, o mesmo tom das etapas de destino. Passou por verde forte e voltou para
+   * um verde claro — desta vez o verde da família, não o azul-esverdeado: o forte foi para o EM
+   * TRÂNSITO, que é o que o quadro precisa achar de longe. Aqui o caminhão ainda está a caminho, e
+   * a espera saudável não compete com quem já está na estrada.
    *
-   * O nome também mudou: "NA ORIGEM" dizia que o caminhão JÁ estava lá, e ele não está — está a
-   * caminho, com hora marcada para chegar. ETA Origem é o que o próprio portal chama.
+   * O nome mudou junto: "NA ORIGEM" dizia que o caminhão JÁ estava lá, e ele não está — está a
+   * caminho, com hora marcada. ETA Origem é o que o próprio portal chama, e em caixa normal: as
+   * outras etiquetas todas são assim, e só ela gritava.
    */
   awaiting_arrival:
-    "bg-green-600 text-white border-green-700 dark:bg-green-500 dark:text-white dark:border-green-400",
+    "bg-green-100 text-green-800 border-green-200 dark:bg-green-500/15 dark:text-green-300 dark:border-green-400/25",
   // `received` continua existindo na MÁQUINA e no histórico: um evento antigo aponta para ele, e
   // sem esta entrada a linha do tempo ficaria sem cor. Na tela ele nunca aparece sozinho — quem
   // decide o rótulo é `displayStatusOf`.
@@ -74,13 +76,14 @@ const STATUS_CLASS: Record<TripDisplayStatus, string> = {
   loaded:
     "bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-400/25",
   /**
-   * VERDE CANA (2026-08-23, a pedido). Continua sendo a única cheia junto com a de ETA Origem: é
-   * onde o caminhão está andando, e o quadro precisa achá-la de longe. Trocou o azul pelo verde
-   * amarelado, e as duas cheias ficam vizinhas na leitura — a que está a caminho da origem e a que
-   * já está na estrada.
+   * VERDE FORTE, e agora sozinha nele (2026-08-23, a pedido, segunda rodada).
+   *
+   * É a única etiqueta cheia do quadro, e isso é o ponto: é onde o caminhão está andando, e num
+   * quadro de 40 linhas precisa ser achada sem ler. Passou pelo azul e por um verde cana antes de
+   * ficar aqui — o verde que o ETA Origem estreou de manhã e devolveu à tarde.
    */
   in_transit:
-    "border-[hsl(78_45%_26%)] bg-[hsl(78_42%_34%)] text-white dark:border-[hsl(78_40%_52%)] dark:bg-[hsl(78_40%_42%)] dark:text-white",
+    "bg-green-600 text-white border-green-700 dark:bg-green-500 dark:text-white dark:border-green-400",
   at_destination:
     "bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-500/15 dark:text-teal-300 dark:border-teal-400/25",
   unloading:
