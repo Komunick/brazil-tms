@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { getTranslations } from "next-intl/server";
 import { can } from "@brazil-tms/shared";
 import { verifySession } from "@/lib/auth/session";
 import { DashboardWidgets } from "@/components/trips/dashboard/widgets";
@@ -26,15 +25,7 @@ export default async function HomePage() {
   if (!session.authenticated) redirect("/login");
   if (!can(session.user.role, "view_all_trips")) redirect("/");
 
-  const t = await getTranslations("Trips.dashboard");
-
-  return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold">{t("title")}</h1>
-        <p className="text-muted-foreground">{t("subtitle")}</p>
-      </header>
-      <DashboardWidgets />
-    </div>
-  );
+  // O título e o subtítulo mudaram de casa (2026-08-23): moram no `DashboardWidgets`, para o botão
+  // de personalizar poder sentar na mesma linha deles. Ver o comentário lá.
+  return <DashboardWidgets />;
 }

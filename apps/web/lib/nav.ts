@@ -8,7 +8,27 @@ export interface NavItem {
   icon: string;
   /** Required permission; `undefined` = visible to any authenticated user. */
   permission?: PermissionKey;
+  /**
+   * O grupo em que este item aparece, sob a chave `Nav.grupos` (2026-08-23, a pedido).
+   *
+   * O menu chegou a vinte e três itens sem nenhuma hierarquia: Início e Auditoria tinham o mesmo
+   * peso, e achar qualquer coisa exigia ler a lista inteira de cima a baixo.
+   *
+   * O grupo é uma etiqueta, não uma pasta: nada recolhe, nada esconde. O que ele faz é dar ao olho
+   * pontos de parada — e o item continua a um clique, como sempre foi.
+   */
+  grupo: "operacao" | "faturamento" | "analise" | "importacao" | "cadastros" | "sistema";
 }
+
+/** A ordem dos grupos na barra. Do que se usa todo dia para o que se abre uma vez por mês. */
+export const NAV_GRUPOS = [
+  "operacao",
+  "faturamento",
+  "analise",
+  "importacao",
+  "cadastros",
+  "sistema",
+] as const;
 
 /**
  * Role-gated navigation. The sidebar filters items via `can(role, permission)`; hiding is
@@ -16,47 +36,168 @@ export interface NavItem {
  * are added here as those features land.
  */
 export const NAV_ITEMS: readonly NavItem[] = [
-  { key: "home", href: "/", icon: "LayoutDashboard" },
+  { key: "home", href: "/", icon: "LayoutDashboard", grupo: "operacao" },
   // 005 — Control Tower board (view_all_trips: all 7 internal roles).
-  { key: "trips", href: "/trips", icon: "Truck", permission: "view_all_trips" },
+  { key: "trips", href: "/trips", icon: "Truck", permission: "view_all_trips", grupo: "operacao" },
   // 006 — Dispatch Board (assign_resources: Admin, Ops Manager, Dispatcher, Fleet Coordinator).
-  { key: "dispatch", href: "/dispatch", icon: "ClipboardCheck", permission: "assign_resources" },
+  {
+    key: "dispatch",
+    href: "/dispatch",
+    icon: "ClipboardCheck",
+    permission: "assign_resources",
+    grupo: "operacao",
+  },
   // 007 — Exception Management queue (view_all_trips: all 7 internal roles read) + per-customer SLA
   // rules admin (manage_commercial_data: Admin, Ops Manager).
-  { key: "exceptions", href: "/exceptions", icon: "TriangleAlert", permission: "view_all_trips" },
-  { key: "slaRules", href: "/sla-rules", icon: "Gauge", permission: "manage_commercial_data" },
+  {
+    key: "exceptions",
+    href: "/exceptions",
+    icon: "TriangleAlert",
+    permission: "view_all_trips",
+    grupo: "operacao",
+  },
+  {
+    key: "slaRules",
+    href: "/sla-rules",
+    icon: "Gauge",
+    permission: "manage_commercial_data",
+    grupo: "operacao",
+  },
   // 008 — Documents + Billing (view_all_trips: all 7 internal roles read) + Rates (edit_rates:
   // Admin, Finance).
-  { key: "documents", href: "/documents", icon: "FileCheck", permission: "view_all_trips" },
-  { key: "billing", href: "/billing", icon: "Receipt", permission: "view_all_trips" },
-  { key: "rates", href: "/billing/rates", icon: "DollarSign", permission: "edit_rates" },
+  {
+    key: "documents",
+    href: "/documents",
+    icon: "FileCheck",
+    permission: "view_all_trips",
+    grupo: "operacao",
+  },
+  {
+    key: "billing",
+    href: "/billing",
+    icon: "Receipt",
+    permission: "view_all_trips",
+    grupo: "faturamento",
+  },
+  {
+    key: "rates",
+    href: "/billing/rates",
+    icon: "DollarSign",
+    permission: "edit_rates",
+    grupo: "faturamento",
+  },
   // 016 — Freight rate lookup / "Tabela de Fretes" (view_freight_rates: all 7 internal roles).
   // NOT named "Rotas": that label belongs to the Lanes screen below.
-  { key: "freightRates", href: "/freight-rates", icon: "Banknote", permission: "view_freight_rates" },
+  {
+    key: "freightRates",
+    href: "/freight-rates",
+    icon: "Banknote",
+    permission: "view_freight_rates",
+    grupo: "faturamento",
+  },
   // 009 — Reports (view_all_trips: all 7 internal roles, mirroring the 005 dashboard).
-  { key: "reports", href: "/reports", icon: "BarChart3", permission: "view_all_trips" },
+  {
+    key: "reports",
+    href: "/reports",
+    icon: "BarChart3",
+    permission: "view_all_trips",
+    grupo: "analise",
+  },
   // Status do Sistema (2026-08-19): o pulso dos robôs e do worker. Mesma chave do painel, e não uma
   // de administração — quem precisa saber que os números pararam de chegar é quem os usa.
-  { key: "serverStatus", href: "/status", icon: "Activity", permission: "view_all_trips" },
-  { key: "adminUsers", href: "/admin/users", icon: "Users", permission: "manage_users" },
-  { key: "adminAudit", href: "/admin/audit", icon: "ScrollText", permission: "view_audit_log" },
+  {
+    key: "serverStatus",
+    href: "/status",
+    icon: "Activity",
+    permission: "view_all_trips",
+    grupo: "analise",
+  },
+  {
+    key: "adminUsers",
+    href: "/admin/users",
+    icon: "Users",
+    permission: "manage_users",
+    grupo: "sistema",
+  },
+  {
+    key: "adminAudit",
+    href: "/admin/audit",
+    icon: "ScrollText",
+    permission: "view_audit_log",
+    grupo: "sistema",
+  },
   // 002 — commercial master data (manage_commercial_data: Admin, Ops Manager).
-  { key: "customers", href: "/admin/customers", icon: "Building2", permission: "manage_commercial_data" },
-  { key: "locations", href: "/admin/locations", icon: "MapPin", permission: "manage_commercial_data" },
-  { key: "lanes", href: "/admin/lanes", icon: "Route", permission: "manage_commercial_data" },
+  {
+    key: "customers",
+    href: "/admin/customers",
+    icon: "Building2",
+    permission: "manage_commercial_data",
+    grupo: "cadastros",
+  },
+  {
+    key: "locations",
+    href: "/admin/locations",
+    icon: "MapPin",
+    permission: "manage_commercial_data",
+    grupo: "cadastros",
+  },
+  {
+    key: "lanes",
+    href: "/admin/lanes",
+    icon: "Route",
+    permission: "manage_commercial_data",
+    grupo: "cadastros",
+  },
   // 008 — per-customer document-requirement checklists + the document-type master.
   {
     key: "documentRequirements",
     href: "/admin/document-requirements",
     icon: "ListChecks",
     permission: "manage_commercial_data",
+    grupo: "cadastros",
   },
   // 004 — trip import (import_trips: Admin, Ops Manager, Dispatcher).
-  { key: "imports", href: "/imports", icon: "Upload", permission: "import_trips" },
-  { key: "importHistory", href: "/imports/history", icon: "History", permission: "import_trips" },
+  {
+    key: "imports",
+    href: "/imports",
+    icon: "Upload",
+    permission: "import_trips",
+    grupo: "importacao",
+  },
+  {
+    key: "importHistory",
+    href: "/imports/history",
+    icon: "History",
+    permission: "import_trips",
+    grupo: "importacao",
+  },
   // 002 — fleet master data (manage_fleet_data: Admin, Ops Manager, Fleet Coordinator).
-  { key: "drivers", href: "/resources/drivers", icon: "UserRound", permission: "manage_fleet_data" },
-  { key: "vehicles", href: "/resources/vehicles", icon: "Truck", permission: "manage_fleet_data" },
-  { key: "trailers", href: "/resources/trailers", icon: "Container", permission: "manage_fleet_data" },
-  { key: "carriers", href: "/resources/carriers", icon: "Factory", permission: "manage_fleet_data" },
+  {
+    key: "drivers",
+    href: "/resources/drivers",
+    icon: "UserRound",
+    permission: "manage_fleet_data",
+    grupo: "cadastros",
+  },
+  {
+    key: "vehicles",
+    href: "/resources/vehicles",
+    icon: "Truck",
+    permission: "manage_fleet_data",
+    grupo: "cadastros",
+  },
+  {
+    key: "trailers",
+    href: "/resources/trailers",
+    icon: "Container",
+    permission: "manage_fleet_data",
+    grupo: "cadastros",
+  },
+  {
+    key: "carriers",
+    href: "/resources/carriers",
+    icon: "Factory",
+    permission: "manage_fleet_data",
+    grupo: "cadastros",
+  },
 ];

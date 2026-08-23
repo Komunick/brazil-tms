@@ -207,3 +207,36 @@
     margin: 0 -0.25rem;
   }
 }
+
+@layer base {
+  /**
+   * O CAMPO DE DATA, NO TEMA DA TELA (2026-08-23, a pedido).
+   *
+   * O `<input type="date">` é o controle do NAVEGADOR, e a única parte dele que se pode pintar é o
+   * ícone do calendário. No tema escuro ele vem preto sobre fundo escuro — quase invisível — e no
+   * claro vem com o preto cheio do sistema, mais pesado que qualquer outro ícone da tela.
+   *
+   * `invert(1)` no escuro é o único caminho: o ícone é uma imagem do navegador, não um SVG nosso, e
+   * não existe propriedade que troque a cor dele. A opacidade aproxima os dois temas do peso dos
+   * ícones vizinhos, e a mão no cursor diz que ali se clica — coisa que o padrão não diz.
+   *
+   * Não tentamos redesenhar o resto do controle. Um seletor de data próprio é uma peça grande, com
+   * teclado, fuso e acessibilidade — e o nativo faz tudo isso certo. Aqui só se ajusta o que destoa.
+   */
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 150ms ease;
+  }
+  input[type="date"]:hover::-webkit-calendar-picker-indicator {
+    opacity: 0.9;
+  }
+  :root[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) input[type="date"]::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+    }
+  }
+}

@@ -24,7 +24,7 @@ import {
   Activity,
 } from "lucide-react";
 import { can, type Role } from "@brazil-tms/shared";
-import { NAV_ITEMS } from "@/lib/nav";
+import { NAV_GRUPOS, NAV_ITEMS } from "@/lib/nav";
 import { gravarMenuRecolhido } from "@/lib/ui/menu-recolhido";
 import { cn } from "@/lib/utils";
 
@@ -57,6 +57,7 @@ export function AppSidebar({
   recolhidoInicial?: boolean;
 }) {
   const t = useTranslations("Nav");
+  const tGrupo = useTranslations("Nav.grupos");
   const tCommon = useTranslations("Common");
   const pathname = usePathname();
   const [recolhido, setRecolhido] = useState(recolhidoInicial);
@@ -117,35 +118,68 @@ export function AppSidebar({
           recolhido ? "px-2" : "px-3",
         )}
       >
-        {visibleItems.map((item) => {
-          const Icon = ICONS[item.icon] ?? LayoutDashboard;
-          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
-          const rotulo = t(item.key);
+        {/**
+         * O MENU EM GRUPOS (2026-08-23, a pedido).
+         *
+         * Vinte e três itens sem hierarquia: Início e Auditoria tinham o mesmo peso, e achar
+         * qualquer coisa exigia ler a lista inteira. Os grupos dão ao olho pontos de parada.
+         *
+         * ETIQUETA, NÃO PASTA. Nada recolhe, nada esconde, e todo item continua a um clique — a
+         * ordem também não mudou, para quem já sabe onde as coisas estão continuar sabendo.
+         *
+         * COM O MENU RECOLHIDO vira um traço, porque ali não há largura para palavra nenhuma; e um
+         * grupo cujos itens todos foram escondidos pela permissão não desenha título nem traço,
+         * senão sobraria uma etiqueta anunciando o vazio.
+         */}
+        {NAV_GRUPOS.map((grupo, i) => {
+          const doGrupo = visibleItems.filter((item) => item.grupo === grupo);
+          if (doGrupo.length === 0) return null;
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              // O nome vira balão quando some da tela. Sem isto, um menu de ícones exige decorar
-              // dezoito desenhos — e o único jeito de conferir seria abrindo a página.
-              title={recolhido ? rotulo : undefined}
-              className={cn(
-                // A marca da esquerda é o que diz onde você está sem precisar comparar tons de
-                // fundo — de relance, a linha aparece antes da cor.
-                "flex items-center rounded-md border-l-2 py-2 text-sm font-medium transition-colors",
-                recolhido ? "justify-center px-0" : "gap-3 px-3",
-                active
-                  ? "border-sidebar-primary bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "border-transparent text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+            <div key={grupo} className={cn("flex flex-col gap-1", i > 0 && "mt-3")}>
+              {recolhido ? (
+                i > 0 ? (
+                  <span aria-hidden className="mx-2 mb-1 border-t border-sidebar-border" />
+                ) : null
+              ) : (
+                <span className="px-3 pb-0.5 text-[0.62rem] font-semibold uppercase tracking-wider text-sidebar-foreground/45">
+                  {tGrupo(grupo)}
+                </span>
               )}
-            >
-              <Icon
-                className={cn("h-4 w-4 shrink-0", active ? "text-sidebar-primary" : "opacity-70")}
-                aria-hidden
-              />
-              {/* O rótulo sai do DOM em vez de ficar escondido: leitor de tela não deve anunciar
+              {doGrupo.map((item) => {
+                const Icon = ICONS[item.icon] ?? LayoutDashboard;
+                const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                const rotulo = t(item.key);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    // O nome vira balão quando some da tela. Sem isto, um menu de ícones exige decorar
+                    // dezoito desenhos — e o único jeito de conferir seria abrindo a página.
+                    title={recolhido ? rotulo : undefined}
+                    className={cn(
+                      // A marca da esquerda é o que diz onde você está sem precisar comparar tons de
+                      // fundo — de relance, a linha aparece antes da cor.
+                      "flex items-center rounded-md border-l-2 py-2 text-sm font-medium transition-colors",
+                      recolhido ? "justify-center px-0" : "gap-3 px-3",
+                      active
+                        ? "border-sidebar-primary bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "border-transparent text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        "h-4 w-4 shrink-0",
+                        active ? "text-sidebar-primary" : "opacity-70",
+                      )}
+                      aria-hidden
+                    />
+                    {/* O rótulo sai do DOM em vez de ficar escondido: leitor de tela não deve anunciar
                   duas vezes o que o `title` já diz, e um `<span>` de largura zero encolhe o ícone. */}
-              {recolhido ? <span className="sr-only">{rotulo}</span> : <span>{rotulo}</span>}
-            </Link>
+                    {recolhido ? <span className="sr-only">{rotulo}</span> : <span>{rotulo}</span>}
+                  </Link>
+                );
+              })}
+            </div>
           );
         })}
       </nav>
