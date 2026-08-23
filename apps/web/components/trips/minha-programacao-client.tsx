@@ -10,9 +10,10 @@ import {
   useTripBoard,
 } from "@/lib/trips/client";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
-import type { TripDisplayStatus } from "@brazil-tms/shared";
+import { REGION_ORDER, type TripDisplayStatus } from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -50,15 +51,37 @@ export function MinhaProgramacaoClient() {
   const parar = usePararDeAcompanhar();
 
   const [termo, setTermo] = useState("");
+  const [frente, setFrente] = useState("");
   const busca = termo.trim();
 
   /**
-   * Só busca com três caracteres: um LH tem treze, e procurar por "L" varreria o banco inteiro para
-   * devolver uma lista que não ajuda ninguém.
+   * DOIS JEITOS DE ACHAR A VIAGEM (2026-08-23, a pedido: "melhor que digitar às vezes").
+   *
+   * Digitar o LH serve para quem já tem o número em mãos. Escolher a FRENTE serve para quem está
+   * montando a própria lista — abre as próximas viagens ativas daquela região e a pessoa escolhe
+   * olhando, que é como se pensa quando ainda não se sabe qual LH acompanhar.
+   *
+   * Os dois SOMAM: com a frente escolhida, digitar afunila dentro dela.
+   *
+   * Três caracteres para a busca por texto, e nenhum para a frente. Procurar por "L" varreria o
+   * banco para devolver o que não ajuda; escolher SUDESTE é um recorte que o banco já sabe fazer.
+   *
+   * `scope=active` sem busca por texto: quem escolhe pela frente quer o que ainda vai acontecer, e
+   * despejar as concluídas do mês encheria a lista de coisa que não se acompanha mais. Com o LH
+   * digitado o recorte abre para tudo — quem procurou um número específico quer AQUELE, tenha ele
+   * terminado ou não.
    */
-  const resultados = useTripBoard(
-    busca.length >= 3 ? `q=${encodeURIComponent(busca)}&scope=all&limit=8&sort=pickupStart` : "",
-  );
+  const consulta = [
+    busca.length >= 3 ? `q=${encodeURIComponent(busca)}` : "",
+    frente ? `region=${encodeURIComponent(frente)}` : "",
+    busca.length >= 3 ? "scope=all" : "scope=active",
+    "limit=12",
+    "sort=pickupStart",
+  ]
+    .filter(Boolean)
+    .join("&");
+  const procurando = busca.length >= 3 || frente !== "";
+  const resultados = useTripBoard(procurando ? consulta : "");
 
   const jaNaLista = useMemo(
     () => new Set((lista.data?.viagens ?? []).map((v) => v.tripId)),
@@ -84,7 +107,31 @@ export function MinhaProgramacaoClient() {
             />
           </div>
 
-          {busca.length >= 3 ? (
+          {/* A frente da estação de ORIGEM, como no painel — a mesma régua em toda a tela. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-xs text-muted-foreground">{t("porFrente")}</span>
+            {[
+              { valor: "", rotulo: t("todasAsFrentes") },
+              ...REGION_ORDER.map((r) => ({ valor: r, rotulo: r })),
+            ].map((f) => (
+              <button
+                key={f.valor || "todas"}
+                type="button"
+                aria-pressed={frente === f.valor}
+                onClick={() => setFrente(f.valor)}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-xs transition-colors",
+                  frente === f.valor
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {f.rotulo}
+              </button>
+            ))}
+          </div>
+
+          {procurando ? (
             <div className="space-y-1">
               {resultados.isPending ? <Skeleton className="h-16 w-full max-w-md" /> : null}
               {!resultados.isPending && (resultados.data?.items.length ?? 0) === 0 ? (
