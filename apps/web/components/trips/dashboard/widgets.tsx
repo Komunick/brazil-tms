@@ -320,16 +320,23 @@ function RegionCard({
         extraFilter={extraFilter}
       />
       {/**
-       * O SPOT NO RODAPÉ, discreto de propósito.
+       * O SPOT EM LARANJA, no rodapé do cartão (2026-08-23, a pedido).
        *
-       * É oportunidade, não pendência: ninguém precisa AGIR por causa dele, e o que não pede ação
-       * não pode competir com o que pede. Some quando não houve leilão nenhum na frente — uma linha
-       * de zeros repetida em quatro cartões é ruído que ensina a não ler o rodapé.
+       * Nasceu como uma linha de texto cinza, com o argumento de que é oportunidade e não pendência
+       * — ninguém PRECISA agir por causa dela. O argumento continua de pé e é justamente por isso
+       * que ela é laranja e não vermelha: chama sem cobrar, e não pisca. As duas faixas que piscam
+       * continuam sendo as únicas que exigem alguém.
+       *
+       * Some quando não houve leilão nenhum na frente: uma linha de zeros repetida em quatro
+       * cartões é ruído que ensina a não ler o rodapé.
        */}
       {spot && spot.aceito + spot.naoAceito > 0 ? (
-        <p className="mt-1.5 border-t pt-1.5 text-[0.68rem] text-muted-foreground">
-          {t("spotRodape", { aceito: spot.aceito, passou: spot.naoAceito })}
-        </p>
+        <div className="mt-1.5 flex items-center justify-between gap-2 rounded border border-[hsl(28_75%_78%)] bg-[hsl(30_95%_93%)] px-1.5 py-1 text-[0.68rem] font-semibold uppercase tracking-wide text-[hsl(22_80%_34%)] dark:border-[hsl(28_50%_34%)] dark:bg-[hsl(26_55%_18%)] dark:text-[hsl(30_90%_72%)]">
+          <span>{t("spotRotulo")}</span>
+          <span className="tabular-nums">
+            {t("spotNumeros", { aceito: spot.aceito, passou: spot.naoAceito })}
+          </span>
+        </div>
       ) : null}
     </Card>
   );
