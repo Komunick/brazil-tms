@@ -210,3 +210,5 @@ export { recordRobotCycle, queryRobotCycles, countRobotsSufocando } from "./repo
 export type { RobotCycleInput, RobotCycleView } from "./reporting/robot-cycles";
 export { readDashboardPrefs, writeDashboardPrefs } from "./users/dashboard-prefs";
 export type { PainelGuardado } from "./users/dashboard-prefs";
+export { readMalhaDeRotas } from "./reporting/malha";
+export type { RotaDaMalha } from "./reporting/malha";
