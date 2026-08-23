@@ -1,4 +1,4 @@
-import { eq, isNull, or, sql } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import type { PortalDriver } from "@brazil-tms/shared";
 import { db } from "../client";
 import { drivers } from "../../schema";
@@ -164,24 +164,85 @@ export async function applyPortalDrivers(entrada: PortalDriver[]): Promise<{
  * Separado do laço acima porque vem em outra ida do robô: ele pergunta, o portal responde um campo,
  * e isso volta aqui. Preenche só se ainda estiver vazio — entre o pedido e a resposta alguém pode
  * ter digitado, e o que a pessoa digitou vale mais.
+ *
+ * ── O NOME É O QUE DESATA O NÓ, E A PRIMEIRA VERSÃO NÃO DESATAVA ──────────────────────────────
+ *
+ * Na primeira carga NINGUÉM tem `portal_driver_id` ainda, e a listagem devolve o nome VAZIO — é
+ * justamente ele que o portal mascara. Então o laço acima não casava por id (não existe), não casava
+ * por nome (não veio) e se recusava a criar sem nome: os 1.391 saíam como "falta revelar" e nada era
+ * gravado. A revelação chegava com o nome e procurava a linha `where portal_driver_id = X` — que
+ * também não existia. Um esperava pelo outro, e o cadastro ficava parado em zero para sempre
+ * (medido em produção 2026-08-23: 1.391 lidos, 0 gravados).
+ *
+ * Quem quebra o ciclo é o nome revelado: com ele em mãos dá para achar o motorista que JÁ existe
+ * aqui e carimbar o id, ou criar o que ainda não existe. A partir daí a listagem casa por id e traz
+ * telefone, CPF, CNH e validade sozinha, na passada seguinte.
  */
 export async function applyDriverSensitive(
   portalDriverId: string,
   campo: "driver_name" | "phone" | "national_id",
   valor: string,
 ): Promise<boolean> {
+  const limpo = valor.trim();
+  if (!limpo) return false;
+
   /** O nome do campo lá e a coluna daqui — a tradução mora num lugar só. */
   const coluna =
     campo === "phone" ? drivers.phone : campo === "national_id" ? drivers.cpf : drivers.name;
   const nomeDaColuna = campo === "phone" ? "phone" : campo === "national_id" ? "cpf" : "name";
   const resultado = await db
     .update(drivers)
-    .set({ [nomeDaColuna]: valor, updatedAt: new Date() })
+    .set({ [nomeDaColuna]: limpo, updatedAt: new Date() })
     .where(
       sql`${drivers.portalDriverId} = ${portalDriverId} and (${coluna} is null or trim(${coluna}) = '')`,
     )
     .returning({ id: drivers.id });
-  return resultado.length > 0;
+  if (resultado.length > 0) return true;
+
+  // Telefone e CPF não abrem caminho nenhum: sem o vínculo, não se sabe de quem são.
+  if (campo !== "driver_name") return false;
+
+  const [jaVinculado] = await db
+    .select({ id: drivers.id })
+    .from(drivers)
+    .where(eq(drivers.portalDriverId, portalDriverId))
+    .limit(1);
+  // O vínculo existe e o nome já estava preenchido: o `update` acima não achou por isso, e não há
+  // nada a fazer — o nome digitado aqui vale mais que o do portal.
+  if (jaVinculado) return false;
+
+  const [porNome] = await db
+    .select({ id: drivers.id })
+    .from(drivers)
+    .where(
+      sql`upper(trim(${drivers.name})) = upper(trim(${limpo}))
+          and ${drivers.archivedAt} is null
+          and ${drivers.portalDriverId} is null`,
+    )
+    .limit(1);
+
+  if (porNome) {
+    await db
+      .update(drivers)
+      .set({ portalDriverId, updatedAt: new Date() })
+      .where(eq(drivers.id, porNome.id));
+    return true;
+  }
+
+  /**
+   * Motorista que existe lá e não existe aqui. Nasce só com nome e vínculo de propósito: o resto
+   * (telefone, CPF, CNH, validade, o retrato bruto) chega na próxima listagem, que agora casa por
+   * id. `status` fica no padrão `active` da coluna — a listagem é quem sabe a situação real, e ela
+   * passa aqui em minutos.
+   */
+  await db.insert(drivers).values({
+    name: limpo,
+    portalDriverId,
+    // Mesma razão do laço acima: `owned` é o único valor que a CHECK aceita sem transportadora.
+    ownershipType: "owned",
+    notes: "Cadastro espelhado do portal do cliente.",
+  });
+  return true;
 }
 
 /** Quantos ainda estão sem telefone — o número que diz se vale continuar revelando. */
@@ -189,9 +250,13 @@ export async function contarSemTelefone(): Promise<number> {
   const [linha] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(drivers)
+    // `&&` aqui era JavaScript, não SQL: o `or(...)` é um objeto (sempre verdadeiro), então a
+    // expressão inteira virava só a condição da direita e o "sem telefone" sumia do WHERE.
     .where(
-      or(isNull(drivers.phone), sql`trim(${drivers.phone}) = ''`) &&
+      and(
+        or(isNull(drivers.phone), sql`trim(${drivers.phone}) = ''`),
         sql`${drivers.portalDriverId} is not null`,
+      ),
     );
   return linha?.n ?? 0;
 }
