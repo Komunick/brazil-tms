@@ -231,7 +231,8 @@
       "sla": "SLA",
       "exceptions": "Exceções",
       "billingReadiness": "Prontidão de cobrança",
-      "rotas": "Rotas"
+      "rotas": "Rotas",
+      "motoristas": "Motoristas"
     },
     "filters": {
       "customer": "Cliente",
@@ -316,6 +317,23 @@
       "total": "Viagens",
       "ultima": "Última",
       "vistaAte": "Vista até",
+      "vazio": "Nada com esse recorte."
+    },
+    "motoristas": {
+      "entregasMedidas": "entregas medidas",
+      "pctGeral": "no prazo",
+      "motoristas": "motoristas",
+      "emViagemAgora": "em viagem agora",
+      "buscar": "Filtrar por motorista ou estação…",
+      "geral": "Quem entrega no prazo",
+      "geralAjuda": "Chegada no destino até a hora que o cliente publicou, com a hora do portal. Abaixo de 4 entregas a linha não é ranqueada — o percentual fica cinza e vai para o fim.",
+      "porRota": "E quem entrega no prazo em cada rota",
+      "porRotaAjuda": "O mesmo cálculo, por rota. É a resposta para \"quem eu escalo nesta\" — sempre com o número de entregas ao lado, porque 100% em duas viagens não é melhor que 86% em dezesseis.",
+      "motorista": "Motorista",
+      "entregas": "Entregas",
+      "noPrazo": "No prazo",
+      "pct": "%",
+      "emViagem": "em viagem",
       "vazio": "Nada com esse recorte."
     }
   },
