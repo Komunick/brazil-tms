@@ -194,3 +194,39 @@ function paraDesempenho(r: {
     emViagem: r.em_viagem,
   };
 }
+
+/**
+ * OS MELHORES DA ROTA DESTA VIAGEM — o ranking no momento de escalar (2026-08-23, a pedido).
+ *
+ * Mesma conta das outras duas, com um recorte: a rota é resolvida a partir da PRÓPRIA viagem, e
+ * não pedida a quem chama. Quem abre o diálogo de atribuição tem o id da viagem em mãos; obrigar a
+ * tela a descobrir a rota antes seria uma ida a mais e um jeito a mais de perguntar pela rota
+ * errada.
+ *
+ * Devolve lista vazia quando a rota nunca rodou — e a tela DIZ isso, em vez de inventar uma ordem.
+ * Rota nova é caso real: das viagens esperando motorista hoje, nove estão em rota sem histórico.
+ */
+export async function readMelhoresDaRotaDaViagem(tripId: string): Promise<DesempenhoDoMotorista[]> {
+  const linhas = await db.execute<{
+    motorista: string;
+    entregas: string;
+    no_prazo: string;
+    nota: string;
+    em_viagem: boolean;
+  }>(sql`
+    with entregas as (${ENTREGAS}), em_viagem as (${EM_VIAGEM})
+    select
+      x.motorista,
+      count(*) as entregas,
+      count(*) filter (where x.no_prazo) as no_prazo,
+      round(100 * (count(*) filter (where x.no_prazo) + ${CREDITO_INICIAL} * ${MEDIA_DA_EMPRESA})
+            / (count(*) + ${CREDITO_INICIAL})) as nota,
+      exists (select 1 from em_viagem v where v.motorista = x.motorista) as em_viagem
+    from entregas x
+    where x.lane_id = (select lane_id from trips where id = ${tripId})
+    group by 1
+    order by 4 desc, 2 desc
+  `);
+
+  return linhas.map(paraDesempenho);
+}

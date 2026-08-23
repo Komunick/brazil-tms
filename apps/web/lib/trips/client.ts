@@ -322,6 +322,30 @@ export function useDesempenhoDeMotoristas(): UseQueryResult<{
   });
 }
 
+/**
+ * Quem entrega no prazo NA ROTA desta viagem — o painel do diálogo de atribuição.
+ *
+ * `enabled` porque o diálogo vive montado atrás da tela: sem isso, abrir a Expedição dispararia uma
+ * consulta por linha da lista, para painéis que ninguém abriu.
+ *
+ * `staleTime` de cinco minutos: é histórico de meses, não muda enquanto o diálogo está aberto — e
+ * reconsultar a cada foco piscaria a lista embaixo de quem está escolhendo.
+ */
+export function useMelhoresMotoristas(
+  tripId: string,
+  enabled: boolean,
+): UseQueryResult<{ motoristas: DesempenhoDoMotorista[] }> {
+  return useQuery({
+    queryKey: [...TRIPS_ROOT, tripId, "melhores-motoristas"],
+    queryFn: async () =>
+      asJson<{ motoristas: DesempenhoDoMotorista[] }>(
+        await fetch(`/api/trips/${tripId}/melhores-motoristas`),
+      ),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+}
+
 export function useMalhaDeRotas(): UseQueryResult<{ rotas: RotaDaMalha[] }> {
   return useQuery({
     queryKey: [...REPORTS_ROOT, "rotas"],
