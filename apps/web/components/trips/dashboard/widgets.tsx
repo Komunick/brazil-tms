@@ -303,13 +303,35 @@ function RegionCard({
    */
   const extraFilter = region ? `&region=${encodeURIComponent(region)}` : "";
 
+  /**
+   * HOJE PESA MAIS QUE AMANHÃ (2026-08-23, a pedido).
+   *
+   * Os nove cartões eram idênticos, e não são a mesma coisa: hoje é o que se resolve agora; D1 e
+   * D2 são planejamento, e olhar para eles é uma decisão, não o padrão. Com o mesmo peso, os três
+   * disputavam a mesma atenção e a linha inteira virava uma parede uniforme.
+   *
+   * A diferença é de SUPERFÍCIE, não de cor: os de amanhã e depois recuam para o fundo cinza e o
+   * título fica apagado; o de hoje continua sendo um cartão branco, com o título em tinta cheia e o
+   * total um degrau maior. Nada foi escondido e nenhuma cor nova entrou — o vermelho e o laranja
+   * continuam significando só o que significavam.
+   */
+  const eHoje = diaKey === "regionToday";
+
   return (
-    <Card className="p-2.5">
+    <Card className={cn("p-2.5", !eHoje && "border-transparent bg-muted/40 shadow-none")}>
       <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <CardTitle className="text-[0.68rem] font-medium uppercase leading-tight tracking-wide text-muted-foreground">
+        <CardTitle
+          className={cn(
+            "text-[0.68rem] font-medium uppercase leading-tight tracking-wide",
+            eHoje ? "text-foreground" : "text-muted-foreground",
+          )}
+        >
           {region ? t(diaKey, { region }) : t("regionUnassigned")}
         </CardTitle>
-        <span className="text-sm font-semibold tabular-nums">{total}</span>
+        <Numero
+          valor={total}
+          className={cn("font-semibold", eHoje ? "text-base" : "text-sm text-muted-foreground")}
+        />
       </div>
       {/**
        * A LH ATRASADA, piscando (2026-08-20, a pedido).
