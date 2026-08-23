@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { MasterDataTable } from "@/components/master-data/master-data-table";
 import { LaneForm } from "@/components/master-data/lane-form";
 import {
@@ -32,6 +33,8 @@ export function LanesClient({ canArchive }: { canArchive: boolean }) {
 
   const [search, setSearch] = useState("");
   const [includeArchived, setIncludeArchived] = useState(false);
+  /** "" = todas · "nossa" = na malha · "fora" = fora dela. Ver a faixa de filtros abaixo. */
+  const [malha, setMalha] = useState<"" | "nossa" | "fora">("");
   const [createOpen, setCreateOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -86,14 +89,19 @@ export function LanesClient({ canArchive }: { canArchive: boolean }) {
   const rows = query.data ?? [];
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return rows;
-    return rows.filter(
-      (l) =>
+    return rows.filter((l) => {
+      if (malha === "nossa" && !l.inNetwork) return false;
+      if (malha === "fora" && l.inNetwork) return false;
+      if (!term) return true;
+      return (
         customerName(l.customerId).toLowerCase().includes(term) ||
         locationName(l.originLocationId).toLowerCase().includes(term) ||
-        locationName(l.destinationLocationId).toLowerCase().includes(term),
-    );
-  }, [rows, search, customerName, locationName]);
+        locationName(l.destinationLocationId).toLowerCase().includes(term)
+      );
+    });
+  }, [rows, search, malha, customerName, locationName]);
+
+  const naMalha = rows.filter((l) => l.inNetwork).length;
 
   const columns: ColumnDef<LaneDto>[] = [
     {
@@ -156,6 +164,41 @@ export function LanesClient({ canArchive }: { canArchive: boolean }) {
           {feedback}
         </p>
       ) : null}
+
+      {/**
+       * O FILTRO DA MALHA (2026-08-23, a pedido).
+       *
+       * Esta tela lista TODA rota que já passou pelo portal, e a maioria não é nossa. Sem o
+       * recorte, conferir a malha significava ler 291 linhas procurando um selo — e a lista
+       * cresce sozinha, a cada oferta nova que o portal manda.
+       *
+       * A contagem vai no rótulo porque é a resposta que a pessoa veio buscar: quantas são
+       * nossas. Um filtro que não diz o tamanho do que filtra obriga a contar na mão.
+       */}
+      <div className="flex flex-wrap items-center gap-2">
+        {(
+          [
+            { valor: "", rotulo: t("filterAll"), conta: rows.length },
+            { valor: "nossa", rotulo: t("inNetworkYes"), conta: naMalha },
+            { valor: "fora", rotulo: t("inNetworkNo"), conta: rows.length - naMalha },
+          ] as const
+        ).map((f) => (
+          <button
+            key={f.valor || "todas"}
+            type="button"
+            aria-pressed={malha === f.valor}
+            onClick={() => setMalha(f.valor)}
+            className={cn(
+              "rounded-full border px-3 py-1 text-xs transition-colors",
+              malha === f.valor
+                ? "border-primary bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {f.rotulo} <span className="tabular-nums opacity-70">{f.conta}</span>
+          </button>
+        ))}
+      </div>
 
       <MasterDataTable
         rows={filtered}
