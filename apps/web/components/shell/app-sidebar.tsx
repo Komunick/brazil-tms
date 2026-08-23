@@ -72,9 +72,18 @@ export function AppSidebar({
   return (
     // As bordas são as DO MENU, não as do app: com a barra escura, a borda clara do tema geral
     // desenhava uma linha branca no meio do azul.
+    //
+    // O MENU ACOMPANHA A ROLAGEM (2026-08-23, a pedido). Ele tinha a altura da PÁGINA, então em
+    // tela comprida — o painel do dia, a lista de viagens — descia junto e sumia: para trocar de
+    // área era preciso voltar ao topo primeiro. Agora tem a altura da JANELA e fica grudado no
+    // alto; a rolagem corre só no conteúdo. `self-start` é o que impede o flex de esticá-lo de
+    // volta até a altura da página, o que anularia o `sticky` sem erro nenhum aparecer.
+    //
+    // O `overflow-y-auto` do <nav> é o par disso: preso à janela, o menu não pode mais crescer
+    // para caber, então quem tiver muitos itens (ou tela baixa) rola a lista dentro dele.
     <aside
       className={cn(
-        "flex shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200",
+        "sticky top-0 flex h-screen shrink-0 flex-col self-start border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-200",
         recolhido ? "w-16" : "w-64",
       )}
     >
@@ -102,7 +111,12 @@ export function AppSidebar({
           )}
         </button>
       </div>
-      <nav className={cn("flex flex-1 flex-col gap-1 py-3", recolhido ? "px-2" : "px-3")}>
+      <nav
+        className={cn(
+          "rolagem-discreta flex flex-1 flex-col gap-1 overflow-y-auto py-3",
+          recolhido ? "px-2" : "px-3",
+        )}
+      >
         {visibleItems.map((item) => {
           const Icon = ICONS[item.icon] ?? LayoutDashboard;
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);

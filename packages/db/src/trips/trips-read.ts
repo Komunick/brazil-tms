@@ -65,6 +65,7 @@ import { Conflict } from "../errors";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
 import { onTimeExpr } from "./on-time";
 import { tripQueueSql } from "./portal-withdrawn";
+import { readOrigemAtrasadaPorRegiao, readSpotPorRegiao } from "./programacao";
 
 /**
  * Feature 005 — Control Tower read models (board / detail / dashboard / export). These are the
@@ -220,6 +221,16 @@ export interface DashboardSummary {
    * desfecho possível para o caso mais grave.
    */
   lateToAssignByRegion: { region: string | null; count: number }[];
+  /**
+   * QUEM JÁ DEVIA TER CAMINHÃO NA ORIGEM E NÃO TEM (2026-08-22, a pedido).
+   *
+   * Vizinho de `lateToAssignByRegion` e diferente dele: aquele é "ninguém foi escalado", este é
+   * "foi escalado e não chegou". São duas falhas distintas, com ações distintas — atribuir contra
+   * ligar para o motorista —, e somá-las esconderia qual das duas está acontecendo.
+   */
+  origemAtrasadaByRegion: { region: string | null; count: number }[];
+  /** O leilão de spot da frente nas últimas 24h: o que a empresa pegou e o que passou. */
+  spotByRegion: { region: string | null; aceito: number; naoAceito: number }[];
   /**
    * A fila do DESPACHO: aceita pelo cliente e ainda sem motorista no portal (2026-08-17).
    *
@@ -984,6 +995,8 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
     pickupPct,
     arrivalPct,
     missingDocs,
+    origemAtrasada,
+    spot,
   ] = await Promise.all([
     db
       .select({ status: displayStatusSql, value: count() })
@@ -1141,6 +1154,14 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
           missingBillingDocumentsSql(),
         ),
       ),
+    /**
+     * Os dois recortes que faltavam no cartão da região, vindos de `programacao.ts`.
+     *
+     * Entram AQUI, na mesma rajada, e não numa chamada depois: o painel é uma tela só, e uma
+     * leitura em série faria metade dos números envelhecer esperando a outra metade.
+     */
+    readOrigemAtrasadaPorRegiao(),
+    readSpotPorRegiao(),
   ]);
 
   const pct = (rows: Array<{ denom: number; num: number }>): number | null => {
@@ -1161,6 +1182,8 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
     lateToAssignByRegion: atrasadasPorRegiao
       .map((r) => ({ region: r.region ?? null, count: r.value }))
       .sort((a, b) => regionPosition(a.region) - regionPosition(b.region)),
+    origemAtrasadaByRegion: origemAtrasada,
+    spotByRegion: spot,
     tripsTomorrowByStatus: byStatusAmanha.map((r) => ({
       status: r.status as TripDisplayStatus,
       count: r.value,

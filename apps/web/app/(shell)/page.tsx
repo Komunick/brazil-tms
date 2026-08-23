@@ -10,6 +10,11 @@ import { DashboardWidgets } from "@/components/trips/dashboard/widgets";
  * the client `DashboardWidgets` polls the summary aggregates (60s, no Realtime). The welcome tone is
  * carried by the dashboard title/subtitle, replacing the old static Shell card.
  *
+ * O QUADRO BRANCO ENTRA NOS CARTÕES QUE JÁ EXISTEM (2026-08-22, a pedido). Uma tela por frente
+ * chegou a ser feita e foi descartada: PLAN e TENDÊNCIA já viviam aqui (os cartões de hoje/D1/D2
+ * e a lista de status), e o que faltava — origem atrasada e spot — cabe dentro do cartão da
+ * região. Tela nova para metade de uma informação que já estava na tela é tela a mais.
+ *
  * SEM A SUPERFÍCIE DE ALERTAS (2026-08-19, a pedido). Depois que o portal passou a criar viagens
  * sozinho, o aviso "sem atribuição na janela" disparava para cada viagem nova — chegou a 253 avisos
  * ativos que ninguém podia resolver, e uma lista assim ensina a operação a ignorar a lista. Nada foi

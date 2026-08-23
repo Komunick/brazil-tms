@@ -59,6 +59,7 @@
   "Nav": {
     "administration": "Administração",
     "home": "Início",
+    "programacao": "Programação",
     "trips": "Torre de Controle",
     "dispatch": "Expedição",
     "adminUsers": "Usuários e Perfis",
@@ -1332,7 +1333,13 @@
       "regionToday": "{region} — hoje",
       "regionD1": "{region} — D1 (amanhã)",
       "regionD2": "{region} — D2",
-      "lateToAssign": "LH ATRASADA"
+      "lateToAssign": "LH ATRASADA",
+      "origemAtrasada": "ORIGEM ATRASADA",
+      "spotRodape": "Spot: {aceito} aceita(s) · {passou} passou",
+      "personalizar": "Personalizar",
+      "personalizarTitulo": "Cartões do painel",
+      "personalizarAjuda": "Desligue o que não é da sua frente. Vale só para você, e cartão novo sempre nasce ligado.",
+      "restaurarPadrao": "Mostrar todos"
     },
     "portalDecision": {
       "title": "Decisão da proposta",

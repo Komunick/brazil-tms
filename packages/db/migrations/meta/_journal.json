@@ -260,6 +260,13 @@
       "when": 1787200000008,
       "tag": "0036_portal_commands_assign",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1787200000009,
+      "tag": "0037_user_dashboard_prefs",
+      "breakpoints": true
     }
   ]
 }

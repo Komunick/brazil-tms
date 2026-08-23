@@ -2,18 +2,22 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { Eye, EyeOff, SlidersHorizontal } from "lucide-react";
 import {
   boardQueryForDisplayStatus,
   saoPauloDate,
   saoPauloMonthBounds,
   regionPosition,
+  chaveDaFrente,
   TRIP_DISPLAY_ORDER,
   type TripDisplayStatus,
 } from "@brazil-tms/shared";
 import type { DashboardSummary, RegionSlice } from "@brazil-tms/db";
 import { useDashboardSummary } from "@/lib/trips/client";
 import { useReconexao } from "@/lib/ui/reconexao";
+import { usePainelDoUsuario } from "@/lib/ui/painel-do-usuario";
+import { cn } from "@/lib/utils";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { BOARD_ANCHOR } from "@/components/trips/control-tower-table";
 import { BscCard } from "@/components/trips/dashboard/bsc-card";
@@ -221,6 +225,8 @@ function RegionCard({
   dateFilter,
   diaKey,
   atrasadas = 0,
+  origemAtrasada = 0,
+  spot,
 }: {
   region: string | null;
   byStatus: DashboardSummary["tripsTodayByStatus"];
@@ -233,6 +239,16 @@ function RegionCard({
    * ensina a operação a ignorar vermelho.
    */
   atrasadas?: number;
+  /**
+   * Quantas viagens deste cartão já passaram do prazo de CHEGADA NA ORIGEM — coleta menos duas
+   * horas. Vizinha de `atrasadas` e diferente dela: aquela é "ninguém foi escalado", esta é "foi
+   * escalado e não chegou". Duas falhas, duas ações — atribuir contra ligar para o motorista.
+   *
+   * Só o cartão de HOJE recebe: uma viagem de amanhã tem o prazo inteiro pela frente.
+   */
+  origemAtrasada?: number;
+  /** O leilão de spot da frente nas últimas 24h, para o rodapé do cartão. */
+  spot?: { aceito: number; naoAceito: number };
 }) {
   const t = useTranslations("Trips.dashboard");
   const total = byStatus.reduce((n, s) => n + s.count, 0);
@@ -274,19 +290,137 @@ function RegionCard({
           <span className="tabular-nums">{atrasadas}</span>
         </Link>
       ) : null}
+      {/**
+       * A ORIGEM ATRASADA, na MESMA faixa vermelha da de cima (2026-08-22, a pedido).
+       *
+       * Chegou a existir uma tela própria para isto, com desenho novo, e foi descartada: o cartão
+       * já tinha o formato certo e a operação já sabia lê-lo. Reaproveitar a faixa é o oposto de
+       * inventar linguagem — duas faixas iguais, uma embaixo da outra, se leem sem aprender nada.
+       *
+       * O atalho leva à lista das viagens que ainda não chegaram, com a mesma data e a mesma
+       * frente: o número aqui e o total de lá são o mesmo número.
+       */}
+      {origemAtrasada > 0 ? (
+        <Link
+          href={`/trips?status=received&status=assigned${dateFilter}${extraFilter}&scope=all#${BOARD_ANCHOR}`}
+          className="mb-1.5 flex items-center justify-between gap-2 rounded bg-destructive px-1.5 py-1 text-xs font-bold uppercase tracking-wide text-destructive-foreground shadow-[0_0_10px_2px_hsl(var(--destructive)/0.75)] motion-safe:animate-pulse"
+        >
+          <span>{t("origemAtrasada")}</span>
+          <span className="tabular-nums">{origemAtrasada}</span>
+        </Link>
+      ) : null}
       <StatusList
         byStatus={byStatus}
         emptyKey="emptyRegion"
         dateFilter={dateFilter}
         extraFilter={extraFilter}
       />
+      {/**
+       * O SPOT NO RODAPÉ, discreto de propósito.
+       *
+       * É oportunidade, não pendência: ninguém precisa AGIR por causa dele, e o que não pede ação
+       * não pode competir com o que pede. Some quando não houve leilão nenhum na frente — uma linha
+       * de zeros repetida em quatro cartões é ruído que ensina a não ler o rodapé.
+       */}
+      {spot && spot.aceito + spot.naoAceito > 0 ? (
+        <p className="mt-1.5 border-t pt-1.5 text-[0.68rem] text-muted-foreground">
+          {t("spotRodape", { aceito: spot.aceito, passou: spot.naoAceito })}
+        </p>
+      ) : null}
     </Card>
   );
 }
+/**
+ * O PAINEL DE CADA UM (2026-08-23, a pedido).
+ *
+ * Quem cuida de uma frente olhava nove cartões de região para usar três. Aqui a pessoa desliga o
+ * que não é dela, e a escolha fica gravada nela — não no navegador, porque a operação divide
+ * máquina e o segundo a sentar desfaria a escolha do primeiro sem perceber.
+ *
+ * ── ESCONDER, E NÃO REORDENAR ─────────────────────────────────────────────────────────────────
+ *
+ * É a primeira etapa de propósito. O incômodo medido é RUÍDO — cartão que não é meu —, e esconder
+ * resolve isso com um clique, sem biblioteca de arrastar, sem ordem guardada e sem a pergunta
+ * "onde foi parar o cartão?" que arrastar cria. Se depois de rodar faltar mover, mover encaixa em
+ * cima disto sem desfazer nada.
+ *
+ * ── PASTILHA, E NÃO CAIXA DE MARCAR ───────────────────────────────────────────────────────────
+ *
+ * Vinte caixas de marcar empilhadas viram um formulário; as pastilhas cabem em três linhas e se
+ * leem de relance. Continua sendo um `role="switch"` de verdade — o leitor de tela anuncia ligado
+ * ou desligado, e a tecla de espaço alterna, coisas que um `div` clicável perderia.
+ */
+function PainelPersonalizar({
+  itens,
+  escondidos,
+  alternar,
+  restaurarPadrao,
+}: {
+  itens: { chave: string; rotulo: string }[];
+  escondidos: Set<string>;
+  alternar: (chave: string) => void;
+  restaurarPadrao: () => void;
+}) {
+  const t = useTranslations("Trips.dashboard");
+  const algoEscondido = itens.some((i) => escondidos.has(i.chave));
+
+  return (
+    <Card className="p-3">
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <CardTitle className="text-[0.68rem] font-medium uppercase tracking-wide text-muted-foreground">
+          {t("personalizarTitulo")}
+        </CardTitle>
+        {/* Só aparece quando há o que restaurar: um botão que não faz nada ensina a não ler botão. */}
+        {algoEscondido ? (
+          <button
+            type="button"
+            onClick={restaurarPadrao}
+            className="rounded text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            {t("restaurarPadrao")}
+          </button>
+        ) : null}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {itens.map(({ chave, rotulo }) => {
+          const visivel = !escondidos.has(chave);
+          const Icone = visivel ? Eye : EyeOff;
+          return (
+            <button
+              key={chave}
+              type="button"
+              role="switch"
+              aria-checked={visivel}
+              onClick={() => alternar(chave)}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                visivel
+                  ? "border-primary/30 bg-primary/10 text-foreground hover:bg-primary/15"
+                  : "border-dashed border-border text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Icone className="h-3 w-3 shrink-0 opacity-70" aria-hidden />
+              {rotulo}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-[0.68rem] leading-snug text-muted-foreground">
+        {t("personalizarAjuda")}
+      </p>
+    </Card>
+  );
+}
+
 export function DashboardWidgets() {
   const t = useTranslations("Trips.dashboard");
   const tCommon = useTranslations("Common");
+  const tBsc = useTranslations("Bsc");
+  const tSpot = useTranslations("Spot");
   const { data, isLoading, isError } = useDashboardSummary();
+  // O painel de cada um: quais cartões esta pessoa escondeu. Ver `usePainelDoUsuario`.
+  const { escondidos, alternar, restaurarPadrao } = usePainelDoUsuario();
+  const [personalizando, setPersonalizando] = useState(false);
   // Numa TV, a queda de um deploy não pode apagar a tela — e a volta tem que trazer a versão nova
   // sem ninguém dar F5. Ver `useReconexao`.
   const { desatualizado } = useReconexao(isError);
@@ -393,6 +527,8 @@ export function DashboardWidgets() {
    * viagem de ontem que ninguém atribuiu — que é justamente a que mais precisa aparecer.
    */
   const atrasadasDe = new Map(summary.lateToAssignByRegion.map((r) => [r.region, r.count]));
+  const origemAtrasadaDe = new Map(summary.origemAtrasadaByRegion.map((r) => [r.region, r.count]));
+  const spotDe = new Map(summary.spotByRegion.map((r) => [r.region, r]));
   const porRegiao = new Map<string | null, Record<string, RegionSlice["byStatus"]>>();
   for (const [chave, lista] of [
     ["regionToday", summary.tripsTodayByRegion],
@@ -429,130 +565,211 @@ export function DashboardWidgets() {
           dateFilter: filtroDe[diaKey]!,
           // A faixa mora no cartão de HOJE, mas o número não é só de hoje: acumula o que venceu antes.
           atrasadas: diaKey === "regionToday" ? (atrasadasDe.get(region) ?? 0) : 0,
+          // Mesma regra: quem tem coleta amanhã ainda tem o prazo inteiro pela frente.
+          origemAtrasada: diaKey === "regionToday" ? (origemAtrasadaDe.get(region) ?? 0) : 0,
+          // O leilão é de agora; repetir o mesmo número em três cartões diria três vezes a mesma coisa.
+          spot: diaKey === "regionToday" ? spotDe.get(region) : undefined,
         };
       }),
     }));
 
+  /**
+   * O CATÁLOGO DE CARTÕES do editor — montado do que esta tela REALMENTE desenhou.
+   *
+   * Não é uma lista fixa em outro arquivo, e isso é o que impede a divergência: um cartão que sai
+   * do painel sai daqui junto, e um que entra aparece para ser desligado sem ninguém lembrar de
+   * cadastrá-lo. As frentes vêm inteiras (as três, mesmo as escondidas), senão desligar uma seria
+   * um caminho sem volta.
+   */
+  const itensDoPainel: { chave: string; rotulo: string }[] = [
+    ...(bsc.length > 0 ? [{ chave: "bsc", rotulo: tBsc("source") }] : []),
+    ...regioesDosTresDias.map(({ region }) => ({
+      chave: chaveDaFrente(region),
+      rotulo: region ?? t("regionUnassigned"),
+    })),
+    { chave: "hoje", rotulo: t("tripsToday") },
+    { chave: "amanha", rotulo: t("tripsTomorrow") },
+    { chave: "mes", rotulo: t("tripsMonth") },
+    { chave: "spot", rotulo: tSpot("todayTitle") },
+    ...cartoes.map((m) => ({ chave: m.titleKey, rotulo: t(m.titleKey) })),
+  ];
+  const escondido = (chave: string) => escondidos.has(chave);
+  const frentesVisiveis = regioesDosTresDias.filter((r) => !escondido(chaveDaFrente(r.region)));
+  const numerosVisiveis = cartoes.filter((m) => !escondido(m.titleKey));
+
   return (
-    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-      {/* Uma faixa fina, e só quando há o que avisar: a tela continua inteira, mas quem olhar sabe
-          que está vendo um retrato de antes da queda. Volta sozinha quando o servidor voltar. */}
-      {desatualizado ? (
-        <div
-          role="status"
-          className="col-span-full flex items-center gap-2 rounded border border-warning/40 bg-warning/10 px-2.5 py-1.5 text-xs font-medium text-warning"
+    <div className="space-y-2.5">
+      {/**
+       * O BOTÃO FICA DISCRETO, no canto, e some do caminho (2026-08-23).
+       *
+       * Personalizar é coisa que se faz UMA vez; o painel é coisa que se olha o dia inteiro. Um
+       * botão em destaque ali em cima competiria com os números todos os dias por causa de um
+       * clique por pessoa — e este painel também vive numa TV, onde ninguém vai clicar nele.
+       */}
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setPersonalizando((v) => !v)}
+          aria-expanded={personalizando}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors",
+            personalizando
+              ? "bg-muted text-foreground"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          )}
         >
-          <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-warning" />
-          {t("reconnecting")}
-        </div>
+          <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
+          {t("personalizar")}
+        </button>
+      </div>
+      {personalizando ? (
+        <PainelPersonalizar
+          itens={itensDoPainel}
+          escondidos={escondidos}
+          alternar={alternar}
+          restaurarPadrao={restaurarPadrao}
+        />
       ) : null}
-      {/**
-       * O BSC ABRE O PAINEL: é a nota que decide contrato, e vem do cliente, não daqui.
-       *
-       * Saiu e voltou no mesmo dia (2026-08-20), nas duas vezes a pedido. Fica registrado porque a
-       * ida e volta prova o desenho: o cartão nunca dependeu de nada além desta linha e do import —
-       * o robô continuou lendo e o payload continuou trazendo o recorte enquanto ele estava fora.
-       * Tirar e repor um cartão daqui é decisão de tela, não mudança de sistema.
-       */}
-      {bsc.length > 0 ? <BscCard snapshots={bsc} /> : null}
-      {/**
-       * A ORDEM É A DO TEMPO: hoje, amanhã, o mês (2026-08-19, a pedido).
-       *
-       * Os dois números avulsos abriam a fila e empurravam os três quadros para o meio da grade,
-       * onde a comparação entre eles — que é a leitura principal desta tela — exigia pular por cima
-       * de um cartão de spot no meio do caminho. Agora os três ficam lado a lado, na sequência em
-       * que a operação pensa, e o que é avulso vai para o fim.
-       */}
-      {/**
-       * As frentes, logo DEPOIS do total de hoje e antes de amanhã.
-       *
-       * A ordem conta uma leitura: o número do dia, a quebra desse mesmo número por frente, e só
-       * então o dia seguinte. Pôr as regiões no fim obrigaria a voltar à primeira coluna para
-       * comparar a parte com o todo.
-       *
-       * A ordem entre elas vem do servidor (`REGION_ORDER`), não do alfabeto: num painel de parede a
-       * posição do cartão é como as pessoas o encontram.
-       */}
-      {/**
-       * TRÊS CARTÕES POR REGIÃO, agrupados por FRENTE e não por dia (2026-08-20, a pedido).
-       *
-       * Quem cuida de uma frente vê os três dias dela lado a lado — hoje, amanhã, depois. Agrupar
-       * por dia espalharia a mesma frente em três lugares da grade e obrigaria a caçar.
-       *
-       * A ordem das frentes vem do servidor; a dos dias é fixa aqui, porque é a do tempo.
-       */}
-      {regioesDosTresDias.map(({ region, dias }) => (
-        /**
-         * UMA LINHA POR FRENTE (2026-08-20, a pedido): NONE em cima, SUDESTE embaixo, SULCO por
-         * último — e os três dias de cada uma lado a lado, dentro da linha dela.
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+        {/* Uma faixa fina, e só quando há o que avisar: a tela continua inteira, mas quem olhar sabe
+          que está vendo um retrato de antes da queda. Volta sozinha quando o servidor voltar. */}
+        {desatualizado ? (
+          <div
+            role="status"
+            className="col-span-full flex items-center gap-2 rounded border border-warning/40 bg-warning/10 px-2.5 py-1.5 text-xs font-medium text-warning"
+          >
+            <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-warning" />
+            {t("reconnecting")}
+          </div>
+        ) : null}
+        {/**
+         * O BSC ABRE O PAINEL: é a nota que decide contrato, e vem do cliente, não daqui.
          *
-         * `col-span-full` com grade própria dentro, em vez de deixar os nove cartões fluírem na
-         * grade de fora. Fluindo, eles se acomodavam pelo espaço que sobrava e a mesma frente
-         * quebrava no meio da tela — quem cuida de uma região perdia a comparação entre os dias dela,
-         * que é justamente a leitura que estes cartões existem para dar.
-         */
-        <div
-          key={region ?? "__sem_regiao__"}
-          className="col-span-full grid grid-cols-1 gap-2.5 sm:grid-cols-3"
-        >
-          {dias.map(({ diaKey, byStatus, dateFilter, atrasadas }) => (
-            <RegionCard
-              key={diaKey}
-              region={region}
-              byStatus={byStatus}
-              dateFilter={dateFilter}
-              diaKey={diaKey}
-              atrasadas={atrasadas}
-            />
-          ))}
-        </div>
-      ))}
-      {/**
-       * OS TRÊS RECORTES DE STATUS JUNTOS — hoje, amanhã, mês (2026-08-20, a pedido).
-       *
-       * O de hoje abria o painel, sozinho, com as linhas das frentes logo abaixo; e aí a comparação
-       * entre hoje, amanhã e o mês — que é a leitura destes três — exigia pular por cima de nove
-       * cartões de região. Juntos, eles voltam a ser lidos de uma vez.
-       */}
-      <StatusCard
-        titleKey="tripsToday"
-        emptyKey="empty"
-        byStatus={summary.tripsTodayByStatus}
-        dateFilter={`&pickupFrom=${hoje}&pickupTo=${hoje}`}
-      />
-      {/* Amanhã (2026-08-17, a pedido): numa TV no meio da sala, de tarde, a pergunta que ainda tem
-          resposta é a do dia seguinte. */}
-      <StatusCard
-        titleKey="tripsTomorrow"
-        emptyKey="emptyTomorrow"
-        byStatus={summary.tripsTomorrowByStatus}
-        dateFilter={`&pickupFrom=${amanha}&pickupTo=${amanha}`}
-      />
-      {/* Trocou o cartão de "Faturamento pendente" (2026-08-17, a pedido): o número do faturamento
-          vive na tela de Faturamento, e aqui a pergunta é sobre a operação. */}
-      <StatusCard
-        titleKey="tripsMonth"
-        emptyKey="emptyMonth"
-        byStatus={summary.tripsByStatus}
-        dateFilter={`&pickupFrom=${mes.first}&pickupTo=${mes.last}`}
-      />
-      {/* O destino do aviso depois que ele sai do meio da tela: mesma consulta, tamanho de cartão. */}
-      <OfertasDoDia />
-      {/**
-       * OS DOIS NÚMEROS EMPILHADOS numa coluna só (2026-08-19, a pedido), risco de SLA em cima.
-       *
-       * Eles são cartões de uma linha ao lado de quadros de dez, e enfileirados na horizontal cada um
-       * gastava uma coluna inteira da grade para mostrar dois dígitos. Empilhados, os dois ocupam uma
-       * coluna e sobra a sexta — que o usuário previu e aceitou: espaço vazio na borda incomoda menos
-       * do que um quadro de status espremido.
-       *
-       * O `self-start` mora AQUI, e não nos cartões: é este item da grade que não pode esticar até a
-       * altura da linha. Dentro da coluna, os dois já têm a altura do próprio conteúdo.
-       */}
-      <div className="flex flex-col gap-2.5 self-start">
-        {cartoes.map((m) => (
-          <MetricCard key={m.titleKey} {...m} />
+         * Saiu e voltou no mesmo dia (2026-08-20), nas duas vezes a pedido. Fica registrado porque a
+         * ida e volta prova o desenho: o cartão nunca dependeu de nada além desta linha e do import —
+         * o robô continuou lendo e o payload continuou trazendo o recorte enquanto ele estava fora.
+         * Tirar e repor um cartão daqui é decisão de tela, não mudança de sistema.
+         */}
+        {bsc.length > 0 && !escondido("bsc") ? <BscCard snapshots={bsc} /> : null}
+        {/**
+         * A ORDEM É A DO TEMPO: hoje, amanhã, o mês (2026-08-19, a pedido).
+         *
+         * Os dois números avulsos abriam a fila e empurravam os três quadros para o meio da grade,
+         * onde a comparação entre eles — que é a leitura principal desta tela — exigia pular por cima
+         * de um cartão de spot no meio do caminho. Agora os três ficam lado a lado, na sequência em
+         * que a operação pensa, e o que é avulso vai para o fim.
+         */}
+        {/**
+         * As frentes, logo DEPOIS do total de hoje e antes de amanhã.
+         *
+         * A ordem conta uma leitura: o número do dia, a quebra desse mesmo número por frente, e só
+         * então o dia seguinte. Pôr as regiões no fim obrigaria a voltar à primeira coluna para
+         * comparar a parte com o todo.
+         *
+         * A ordem entre elas vem do servidor (`REGION_ORDER`), não do alfabeto: num painel de parede a
+         * posição do cartão é como as pessoas o encontram.
+         */}
+        {/**
+         * TRÊS CARTÕES POR REGIÃO, agrupados por FRENTE e não por dia (2026-08-20, a pedido).
+         *
+         * Quem cuida de uma frente vê os três dias dela lado a lado — hoje, amanhã, depois. Agrupar
+         * por dia espalharia a mesma frente em três lugares da grade e obrigaria a caçar.
+         *
+         * A ordem das frentes vem do servidor; a dos dias é fixa aqui, porque é a do tempo.
+         */}
+        {/**
+         * UMA LINHA POR FRENTE (2026-08-20, a pedido): NONE em cima, SULCO embaixo, SUDESTE por
+         * último — e os três dias de cada uma lado a lado, dentro da faixa dela. A ordem das frentes
+         * é a de `REGION_ORDER`, e mudou junto com esta faixa (2026-08-23, a pedido).
+         *
+         * Uma grade por frente, em vez de deixar os nove cartões fluírem na grade de fora. Fluindo,
+         * eles se acomodavam pelo espaço que sobrava e a mesma frente quebrava no meio da tela — quem
+         * cuida de uma região perdia a comparação entre os dias dela, que é justamente a leitura que
+         * estes cartões existem para dar.
+         *
+         * QUATRO COLUNAS NA TELA LARGA (2026-08-23, a pedido: "estão meio largos"). A faixa continua
+         * sendo da frente inteira, mas os três cartões param de dividir a largura em três: dividem em
+         * quatro, e o último quarto fica vazio. É uma diminuição, não um redesenho — e o quarto vazio
+         * é o preço de manter a frente empilhada.
+         *
+         * Chegou a existir aqui uma versão de SEIS colunas com duas frentes por faixa: enchia a tela,
+         * e por isso mesmo desfazia o "NONE em cima, SULCO embaixo" que a operação pediu no mesmo dia.
+         * Empilhado vale mais do que preenchido.
+         */}
+        {frentesVisiveis.map(({ region, dias }) => (
+          <div
+            key={region ?? "__sem_regiao__"}
+            className="col-span-full grid grid-cols-1 gap-2.5 sm:grid-cols-3 xl:grid-cols-4"
+          >
+            {dias.map(({ diaKey, byStatus, dateFilter, atrasadas, origemAtrasada, spot }) => (
+              <RegionCard
+                key={diaKey}
+                region={region}
+                byStatus={byStatus}
+                dateFilter={dateFilter}
+                diaKey={diaKey}
+                atrasadas={atrasadas}
+                origemAtrasada={origemAtrasada}
+                spot={spot}
+              />
+            ))}
+          </div>
         ))}
+        {/**
+         * OS TRÊS RECORTES DE STATUS JUNTOS — hoje, amanhã, mês (2026-08-20, a pedido).
+         *
+         * O de hoje abria o painel, sozinho, com as linhas das frentes logo abaixo; e aí a comparação
+         * entre hoje, amanhã e o mês — que é a leitura destes três — exigia pular por cima de nove
+         * cartões de região. Juntos, eles voltam a ser lidos de uma vez.
+         */}
+        {!escondido("hoje") ? (
+          <StatusCard
+            titleKey="tripsToday"
+            emptyKey="empty"
+            byStatus={summary.tripsTodayByStatus}
+            dateFilter={`&pickupFrom=${hoje}&pickupTo=${hoje}`}
+          />
+        ) : null}
+        {/* Amanhã (2026-08-17, a pedido): numa TV no meio da sala, de tarde, a pergunta que ainda tem
+          resposta é a do dia seguinte. */}
+        {!escondido("amanha") ? (
+          <StatusCard
+            titleKey="tripsTomorrow"
+            emptyKey="emptyTomorrow"
+            byStatus={summary.tripsTomorrowByStatus}
+            dateFilter={`&pickupFrom=${amanha}&pickupTo=${amanha}`}
+          />
+        ) : null}
+        {/* Trocou o cartão de "Faturamento pendente" (2026-08-17, a pedido): o número do faturamento
+          vive na tela de Faturamento, e aqui a pergunta é sobre a operação. */}
+        {!escondido("mes") ? (
+          <StatusCard
+            titleKey="tripsMonth"
+            emptyKey="emptyMonth"
+            byStatus={summary.tripsByStatus}
+            dateFilter={`&pickupFrom=${mes.first}&pickupTo=${mes.last}`}
+          />
+        ) : null}
+        {/* O destino do aviso depois que ele sai do meio da tela: mesma consulta, tamanho de cartão. */}
+        {!escondido("spot") ? <OfertasDoDia /> : null}
+        {/**
+         * OS DOIS NÚMEROS EMPILHADOS numa coluna só (2026-08-19, a pedido), risco de SLA em cima.
+         *
+         * Eles são cartões de uma linha ao lado de quadros de dez, e enfileirados na horizontal cada um
+         * gastava uma coluna inteira da grade para mostrar dois dígitos. Empilhados, os dois ocupam uma
+         * coluna e sobra a sexta — que o usuário previu e aceitou: espaço vazio na borda incomoda menos
+         * do que um quadro de status espremido.
+         *
+         * O `self-start` mora AQUI, e não nos cartões: é este item da grade que não pode esticar até a
+         * altura da linha. Dentro da coluna, os dois já têm a altura do próprio conteúdo.
+         */}
+        {numerosVisiveis.length > 0 ? (
+          <div className="flex flex-col gap-2.5 self-start">
+            {numerosVisiveis.map((m) => (
+              <MetricCard key={m.titleKey} {...m} />
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );
