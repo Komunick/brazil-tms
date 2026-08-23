@@ -162,6 +162,19 @@ export function DispatchBoard() {
    * decisão abre primeiro porque é ela que trava a outra — não se escala o que não foi aceito.
    */
   const [aba, setAba] = useState<"in_analysis" | "to_assign">("in_analysis");
+  /**
+   * GERAL × NOSSAS ROTAS (2026-08-23, a pedido) — e só na fila de aceite.
+   *
+   * É ali que a mistura existe: o portal oferece à transportadora tanto as viagens que já são
+   * dela quanto as que ainda não têm dono, e no dia em que isto foi escrito 40 das 41 propostas
+   * vencidas eram de rota que a empresa nunca rodou. Na aba de atribuir a pergunta não se
+   * coloca: não existe viagem para escalar que não seja nossa — se ela chegou lá, foi aceita.
+   *
+   * NASCE EM "NOSSAS ROTAS" porque é a lista de trabalho; Geral fica a um clique, ao lado, com
+   * o rótulo à vista. Esconder por padrão só é honesto quando o caminho de volta está na mesma
+   * linha do olho — e está.
+   */
+  const [soNossas, setSoNossas] = useState(true);
 
   function applyPreset(key: DatePresetKey): void {
     const preset = DATE_PRESETS.find((p) => p.key === key);
@@ -200,6 +213,7 @@ export function DispatchBoard() {
 
   const query = [
     aba === "in_analysis" ? FILA_ANALISE : FILA_ATRIBUIR,
+    aba === "in_analysis" && soNossas ? "rotaNossa=true" : "",
     "sort=pickupStart",
     appliedSearch ? `q=${encodeURIComponent(appliedSearch)}` : "",
     pickupFrom ? `pickupFrom=${pickupFrom}` : "",
@@ -300,6 +314,35 @@ export function DispatchBoard() {
             </button>
           ))}
         </div>
+
+        {/* O recorte da malha, só onde ele significa alguma coisa. Ver `soNossas`. */}
+        {aba === "in_analysis" ? (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {(
+              [
+                { valor: true, rotulo: t("malha.nossas") },
+                { valor: false, rotulo: t("malha.geral") },
+              ] as const
+            ).map((op) => (
+              <button
+                key={String(op.valor)}
+                type="button"
+                aria-pressed={soNossas === op.valor}
+                onClick={() => {
+                  setSoNossas(op.valor);
+                  setOffset(0);
+                }}
+                className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                  soNossas === op.valor
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {op.rotulo}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         <div className="flex flex-wrap gap-1.5">
           {DATE_PRESETS.map((preset) => (
@@ -440,7 +483,6 @@ export function DispatchBoard() {
           </div>
         ) : null}
       </CardContent>
-
 
       {portalRow ? (
         <PortalAssignDialog

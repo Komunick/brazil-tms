@@ -1726,6 +1726,10 @@
     "queueTab": {
       "in_analysis": "Aceitar / Recusar",
       "to_assign": "Atribuir"
+    },
+    "malha": {
+      "nossas": "Nossas rotas",
+      "geral": "Geral"
     }
   },
   "Fleet": {
