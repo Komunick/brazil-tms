@@ -1181,7 +1181,9 @@
       "presetD2": "D2",
       "presetNext7": "7 dias",
       "colRegion": "Região",
-      "filterRegion": "Região"
+      "filterRegion": "Região",
+      "moreFilters": "Mais filtros",
+      "moreFiltersWithCount": "Mais filtros ({count})"
     },
     "detail": {
       "back": "Voltar para a Torre de Controle",
