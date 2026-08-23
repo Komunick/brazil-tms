@@ -208,4 +208,5 @@ export type {
 // O pulso dos robôs (2026-08-21): intervalo prometido contra duração real do último ciclo.
 export { recordRobotCycle, queryRobotCycles, countRobotsSufocando } from "./reporting/robot-cycles";
 export type { RobotCycleInput, RobotCycleView } from "./reporting/robot-cycles";
-export { readDashboardHidden, writeDashboardHidden } from "./users/dashboard-prefs";
+export { readDashboardPrefs, writeDashboardPrefs } from "./users/dashboard-prefs";
+export type { PainelGuardado } from "./users/dashboard-prefs";

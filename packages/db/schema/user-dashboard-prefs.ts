@@ -20,5 +20,16 @@ export const userDashboardPrefs = pgTable("user_dashboard_prefs", {
     .array()
     .notNull()
     .default(sql`'{}'::text[]`),
+  /**
+   * Os cartões que a pessoa deixou ENCOLHIDOS — hoje só o BSC, que ocupa a linha inteira.
+   *
+   * Coluna própria em vez de uma marca dentro de `hidden_cards`: escondido e minimizado são
+   * estados diferentes do mesmo cartão, e juntá-los obrigaria a inventar um prefixo — que é onde
+   * este tipo de lista começa a virar linguagem secreta que só o código entende.
+   */
+  minimizedCards: text("minimized_cards")
+    .array()
+    .notNull()
+    .default(sql`'{}'::text[]`),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

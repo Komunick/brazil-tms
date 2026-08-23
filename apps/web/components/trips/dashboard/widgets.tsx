@@ -423,7 +423,8 @@ export function DashboardWidgets() {
   const tSpot = useTranslations("Spot");
   const { data, isLoading, isError } = useDashboardSummary();
   // O painel de cada um: quais cartões esta pessoa escondeu. Ver `usePainelDoUsuario`.
-  const { escondidos, alternar, restaurarPadrao } = usePainelDoUsuario();
+  const { escondidos, minimizados, alternar, alternarMinimizado, restaurarPadrao } =
+    usePainelDoUsuario();
   const [personalizando, setPersonalizando] = useState(false);
   // Numa TV, a queda de um deploy não pode apagar a tela — e a volta tem que trazer a versão nova
   // sem ninguém dar F5. Ver `useReconexao`.
@@ -654,7 +655,13 @@ export function DashboardWidgets() {
          * o robô continuou lendo e o payload continuou trazendo o recorte enquanto ele estava fora.
          * Tirar e repor um cartão daqui é decisão de tela, não mudança de sistema.
          */}
-        {bsc.length > 0 && !escondido("bsc") ? <BscCard snapshots={bsc} /> : null}
+        {bsc.length > 0 && !escondido("bsc") ? (
+          <BscCard
+            snapshots={bsc}
+            minimizado={minimizados.has("bsc")}
+            onAlternarMinimizado={() => alternarMinimizado("bsc")}
+          />
+        ) : null}
         {/**
          * A ORDEM É A DO TEMPO: hoje, amanhã, o mês (2026-08-19, a pedido).
          *

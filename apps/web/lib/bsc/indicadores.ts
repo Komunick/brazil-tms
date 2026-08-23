@@ -93,3 +93,36 @@ export function indicadoresNaTela(indicators: Record<string, number>): string[] 
   const novos = Object.keys(indicators).filter((nome) => !(nome in PREMISSAS));
   return [...conhecidos, ...novos];
 }
+
+/**
+ * OS SEIS DO RESUMO — o cartão minimizado (2026-08-23, a pedido).
+ *
+ * São exatamente os seis da PRIMEIRA versão deste cartão, na ordem em que ela os mostrava. O
+ * pedido foi por eles pelo nome ("aquelas principais da primeira vez"), e isso já é razão
+ * bastante: é a lista que a operação decorou.
+ *
+ * ── POR QUE ISTO NÃO É O DEFEITO ANTIGO DE VOLTA ──────────────────────────────────────────────
+ *
+ * A lista de seis já existiu aqui como FILTRO, e o resultado foi o painel mostrar seis enquanto o
+ * banco guardava vinte, sem nada na tela dizendo que faltava algo — mentir por omissão silenciosa.
+ * A diferença agora é que minimizar é uma AÇÃO da pessoa, com um botão do lado para desfazer: os
+ * quatorze não sumiram, estão a um clique. Quem minimizou sabe o que escondeu.
+ */
+export const PRINCIPAIS_BSC = [
+  "SPOT",
+  "ETA Origem",
+  "ETA Destino",
+  "Telemetria",
+  "No Show",
+  "Reversa",
+] as const;
+
+/**
+ * Os seis do resumo que ESTA leitura trouxe, na ordem da lista.
+ *
+ * Filtra pelo que existe no snapshot em vez de assumir: o BSC já mudou de rótulo antes, e um
+ * `undefined!` no meio do resumo quebraria o cartão inteiro em vez de mostrar cinco.
+ */
+export function resumoNaTela(indicators: Record<string, number>): string[] {
+  return PRINCIPAIS_BSC.filter((nome) => indicators[nome] != null);
+}

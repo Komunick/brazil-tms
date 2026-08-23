@@ -267,6 +267,13 @@
       "when": 1787200000009,
       "tag": "0037_user_dashboard_prefs",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1787200000010,
+      "tag": "0038_dashboard_prefs_minimized",
+      "breakpoints": true
     }
   ]
 }

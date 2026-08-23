@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronsDownUp, ChevronsUpDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { formatDateTime } from "@brazil-tms/shared";
 import type { BscPeriod, BscSnapshotView } from "@brazil-tms/db";
@@ -10,6 +11,7 @@ import {
   faixaDo,
   indicadoresNaTela,
   PREMISSAS,
+  resumoNaTela,
   type Faixa,
   type Premissa,
 } from "@/lib/bsc/indicadores";
@@ -77,7 +79,28 @@ function larguraAteAMeta(valor: number, premissa: Premissa | undefined): string 
   return `${Math.max(0, Math.min(100, (valor / premissa.target) * 100))}%`;
 }
 
-export function BscCard({ snapshots }: { snapshots: BscSnapshotView[] }) {
+/**
+ * O CARTÃO ENCOLHIDO (2026-08-23, a pedido).
+ *
+ * Com os vinte indicadores este cartão ocupa a linha inteira e empurra o resto do painel para
+ * baixo — e ele é o único cartão daqui cujo número não é da operação. Quem passa o dia olhando
+ * o painel quer a nota e os seis de sempre; os vinte servem para conferir com o cliente, e isso
+ * não é diário.
+ *
+ * Encolhido mostra a NOTA e os seis de `PRINCIPAIS_BSC` — os mesmos da primeira versão deste
+ * cartão. O carimbo e o aviso de BSC parado ficam nos DOIS estados: são o que impede o número
+ * velho de passar por atual, e escondê-los ao encolher seria esconder justamente a parte que
+ * não pode faltar.
+ */
+export function BscCard({
+  snapshots,
+  minimizado = false,
+  onAlternarMinimizado,
+}: {
+  snapshots: BscSnapshotView[];
+  minimizado?: boolean;
+  onAlternarMinimizado?: () => void;
+}) {
   const t = useTranslations("Bsc");
   // Começa no mês: é o recorte em que o contrato é avaliado.
   const [periodo, setPeriodo] = useState<BscPeriod>("month");
@@ -128,6 +151,24 @@ export function BscCard({ snapshots }: { snapshots: BscSnapshotView[] }) {
                 {t(`period.${p}`)}
               </button>
             ))}
+          {/* O botão fica JUNTO das abas de recorte: os dois mudam o que este cartão mostra,
+              e separá-los faria procurar em dois cantos por controles do mesmo cartão. */}
+          {onAlternarMinimizado ? (
+            <button
+              type="button"
+              onClick={onAlternarMinimizado}
+              aria-expanded={!minimizado}
+              title={t(minimizado ? "expandir" : "minimizar")}
+              className="ml-1 rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              {minimizado ? (
+                <ChevronsUpDown className="h-3.5 w-3.5" aria-hidden />
+              ) : (
+                <ChevronsDownUp className="h-3.5 w-3.5" aria-hidden />
+              )}
+              <span className="sr-only">{t(minimizado ? "expandir" : "minimizar")}</span>
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -186,7 +227,7 @@ export function BscCard({ snapshots }: { snapshots: BscSnapshotView[] }) {
         {/* Quatro colunas nas telas largas porque o BSC também usa quatro: cada fileira é um pilar,
             na mesma sequência do relatório. Quem confere os dois lado a lado não precisa procurar. */}
         <ul className="grid min-w-[280px] flex-1 grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-          {indicadoresNaTela(atual.indicators).map((nome) => {
+          {(minimizado ? resumoNaTela : indicadoresNaTela)(atual.indicators).map((nome) => {
             const valor = atual.indicators[nome]!;
             const premissa: Premissa | undefined = PREMISSAS[nome];
             const faixa = faixaDo(valor, premissa);
@@ -227,7 +268,9 @@ export function BscCard({ snapshots }: { snapshots: BscSnapshotView[] }) {
         </ul>
       </div>
 
-      {atual.periodLabel ? (
+      {/* O rótulo do período sai no cartão encolhido: vira uma linha inteira de rodapé para
+          uma informação de conferência, e encolher é justamente dizer "hoje não vou conferir". */}
+      {atual.periodLabel && !minimizado ? (
         <div className="mt-2 border-t pt-1.5 text-[0.68rem] text-muted-foreground">
           {atual.periodLabel}
         </div>
