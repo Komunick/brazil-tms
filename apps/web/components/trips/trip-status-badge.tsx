@@ -46,8 +46,18 @@ const STATUS_CLASS: Record<TripDisplayStatus, string> = {
    * — é uma espera saudável. Mandar essa linha para "p/atribuir" seria pedir à operação um trabalho
    * que o cliente já fez.
    */
+  /**
+   * VERDE FORTE, e o rótulo virou ETA ORIGEM (2026-08-23, a pedido).
+   *
+   * Era verde-água claro, o mesmo tom das etapas de destino, com o argumento de que aqui não há
+   * trabalho pendente — o cliente já escalou e só falta o motorista chegar. A operação lê essa
+   * fila o dia inteiro, e num quadro de 40 linhas o tom claro sumia entre os outros claros.
+   *
+   * O nome também mudou: "NA ORIGEM" dizia que o caminhão JÁ estava lá, e ele não está — está a
+   * caminho, com hora marcada para chegar. ETA Origem é o que o próprio portal chama.
+   */
   awaiting_arrival:
-    "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-500/10 dark:text-teal-300 dark:border-teal-400/20",
+    "bg-green-600 text-white border-green-700 dark:bg-green-500 dark:text-white dark:border-green-400",
   // `received` continua existindo na MÁQUINA e no histórico: um evento antigo aponta para ele, e
   // sem esta entrada a linha do tempo ficaria sem cor. Na tela ele nunca aparece sozinho — quem
   // decide o rótulo é `displayStatusOf`.
@@ -63,25 +73,39 @@ const STATUS_CLASS: Record<TripDisplayStatus, string> = {
     "bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-400/25",
   loaded:
     "bg-sky-100 text-sky-800 border-sky-200 dark:bg-sky-500/15 dark:text-sky-300 dark:border-sky-400/25",
-  // A única que o quadro precisa achar de longe: é onde o caminhão está andando.
+  /**
+   * VERDE CANA (2026-08-23, a pedido). Continua sendo a única cheia junto com a de ETA Origem: é
+   * onde o caminhão está andando, e o quadro precisa achá-la de longe. Trocou o azul pelo verde
+   * amarelado, e as duas cheias ficam vizinhas na leitura — a que está a caminho da origem e a que
+   * já está na estrada.
+   */
   in_transit:
-    "bg-blue-600 text-white border-blue-700 dark:bg-blue-500 dark:text-white dark:border-blue-400",
+    "border-[hsl(78_45%_26%)] bg-[hsl(78_42%_34%)] text-white dark:border-[hsl(78_40%_52%)] dark:bg-[hsl(78_40%_42%)] dark:text-white",
   at_destination:
     "bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-500/15 dark:text-teal-300 dark:border-teal-400/25",
   unloading:
     "bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-500/15 dark:text-teal-300 dark:border-teal-400/25",
   unloaded:
     "bg-teal-100 text-teal-800 border-teal-200 dark:bg-teal-500/15 dark:text-teal-300 dark:border-teal-400/25",
+  /**
+   * BEGE (2026-08-23, a pedido). Concluída sai do verde e vira um tom neutro e quente: ela é o
+   * arquivo do dia, não a novidade. O verde forte fica para o que ainda está acontecendo.
+   */
   completed:
-    "bg-green-100 text-green-800 border-green-200 dark:bg-green-500/15 dark:text-green-300 dark:border-green-400/25",
+    "border-[hsl(38_30%_74%)] bg-[hsl(40_44%_88%)] text-[hsl(34_38%_26%)] dark:border-[hsl(38_22%_34%)] dark:bg-[hsl(38_22%_20%)] dark:text-[hsl(40_42%_76%)]",
   billing_pending:
     "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-400/25",
   billing_ready:
     "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-500/15 dark:text-amber-300 dark:border-amber-400/25",
   billed:
     "bg-green-100 text-green-800 border-green-200 dark:bg-green-500/15 dark:text-green-300 dark:border-green-400/25",
+  /**
+   * VERMELHO FRACO (2026-08-23, a pedido). Era cinza, de propósito — cancelada é fim de linha e não
+   * pede ação. O vermelho claro a distingue do resto sem competir com a disputa, que é o vermelho
+   * de verdade e essa sim pede alguém.
+   */
   cancelled:
-    "bg-gray-200 text-gray-700 border-gray-300 dark:bg-gray-500/15 dark:text-gray-400 dark:border-gray-400/25",
+    "bg-red-50 text-red-700 border-red-200 dark:bg-red-500/10 dark:text-red-300/90 dark:border-red-400/20",
   disputed:
     "bg-red-100 text-red-800 border-red-200 dark:bg-red-500/15 dark:text-red-300 dark:border-red-400/25",
 };

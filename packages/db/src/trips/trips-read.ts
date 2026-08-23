@@ -66,7 +66,7 @@ import { loadTripDetail, type TripDetail } from "./trip-dto";
 import { onTimeExpr } from "./on-time";
 import { tripQueueSql } from "./portal-withdrawn";
 import { readOrigemAtrasadaPorRegiao, readSpotPorRegiao } from "./programacao";
-import { lateToAssignSql, origemAtrasadaSql } from "./atrasos";
+import { lateToAssignSql, origemAtrasadaSql, rotaNossaSql } from "./atrasos";
 
 /**
  * Feature 005 — Control Tower read models (board / detail / dashboard / export). These are the
@@ -569,6 +569,15 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
    * que nenhum dos dois lados parece errado sozinho. Nenhum dos dois tem botão na barra de
    * filtros: são destinos de atalho, e a barra já tem o que se usa digitando.
    */
+  /**
+   * A malha como recorte do quadro: o MESMO predicado que decide se o alarme acende.
+   *
+   * Escrito uma vez em `rotaNossaSql`. Se a lista mostrasse um conjunto e o vermelho contasse
+   * outro, os dois estariam certos sozinhos e errados juntos — que é como este tipo de defeito
+   * sobrevive por meses.
+   */
+  if (query.rotaNossa === "true") conditions.push(rotaNossaSql);
+  if (query.rotaNossa === "false") conditions.push(not(rotaNossaSql));
   if (query.lateToAssign === "true") conditions.push(lateToAssignSql());
   if (query.origemAtrasada === "true") conditions.push(origemAtrasadaSql());
   // A fila do despacho — o MESMO predicado que o cartão do painel conta. Ver `awaitingAssignmentSql`.

@@ -1067,7 +1067,7 @@
       "received": "P/Atribuir",
       "in_analysis": "Em Análise",
       "to_assign": "P/Atribuir",
-      "awaiting_arrival": "NA ORIGEM",
+      "awaiting_arrival": "ETA ORIGEM",
       "assigned": "Atribuída",
       "confirmed": "Confirmada",
       "at_origin": "Na origem",
@@ -1360,11 +1360,12 @@
       "regionD2": "{region} — D2",
       "lateToAssign": "LH ATRASADA",
       "origemAtrasada": "ORIGEM ATRASADA",
-      "spotRodape": "Spot: {aceito} aceita(s) · {passou} passou",
       "personalizar": "Personalizar",
       "personalizarTitulo": "Cartões do painel",
       "personalizarAjuda": "Desligue o que não é da sua frente. Vale só para você, e cartão novo sempre nasce ligado.",
-      "restaurarPadrao": "Mostrar todos"
+      "restaurarPadrao": "Mostrar todos",
+      "spotRotulo": "Spot",
+      "spotNumeros": "{aceito} aceita(s) · {passou} passou"
     },
     "portalDecision": {
       "title": "Decisão da proposta",
@@ -1726,6 +1727,10 @@
     "queueTab": {
       "in_analysis": "Aceitar / Recusar",
       "to_assign": "Atribuir"
+    },
+    "malha": {
+      "nossas": "Nossas rotas",
+      "geral": "Geral"
     }
   },
   "Fleet": {
@@ -1814,7 +1819,7 @@
       "received": "P/Atribuir",
       "in_analysis": "Em Análise",
       "to_assign": "P/Atribuir",
-      "awaiting_arrival": "NA ORIGEM",
+      "awaiting_arrival": "ETA ORIGEM",
       "assigned": "Atribuída",
       "confirmed": "Confirmada",
       "at_origin": "Na origem",
