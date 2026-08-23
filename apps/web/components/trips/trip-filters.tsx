@@ -28,6 +28,7 @@ import type { TripFilterOptions } from "@brazil-tms/db";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { exportHref } from "@/lib/trips/client";
+import { SlidersHorizontal } from "lucide-react";
 import { DEFAULT_TRIP_VIEWS } from "@/lib/trips/views";
 import { cn } from "@/lib/utils";
 
@@ -90,6 +91,9 @@ export function TripFilters({
         valor !== undefined &&
         !(Array.isArray(valor) && valor.length === 0),
     ).length + (query.scope !== "active" ? 1 : 0);
+
+  /** O painel dos nove seletores. Nasce aberto quando já se chega com filtro ligado. */
+  const [filtrosAbertos, setFiltrosAbertos] = useState(filtrosAtivos > 0);
 
   // Local search box state, synced to the URL `q` param on submit (Enter / blur).
   const [q, setQ] = useState(query.q ?? "");
@@ -318,275 +322,318 @@ export function TripFilters({
           </div>
         </div>
 
-        {/* Data-backed filters (AND) ------------------------------------------------------- */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <div className="space-y-1.5">
-            <Label>{t("board.filterCustomer")}</Label>
-            <Select
-              value={query.customerId ?? ""}
-              onValueChange={(v) => setFilters({ customerId: v === "__all__" ? undefined : v })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t("board.all")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">{t("board.all")}</SelectItem>
-                {options.customers.map((c) => (
-                  <SelectItem key={c.id} value={c.id}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/**
-           * A REGIÃO da estação de ORIGEM (2026-08-21, a pedido).
-           *
-           * Entra no lugar que era do filtro de faturamento, que saiu da tela junto — a etapa de
-           * faturamento está pausada e um filtro para uma fila vazia é ruído.
-           *
-           * É o MESMO parâmetro que os cartões do painel usam no link: clicar num cartão de frente
-           * cai aqui com este filtro ligado, e o número lá e o total daqui são o mesmo número.
-           */}
-          <div className="space-y-1.5">
-            <Label>{t("board.filterRegion")}</Label>
-            <Select
-              value={query.region ?? ""}
-              onValueChange={(v) => setFilters({ region: v === "__all__" ? undefined : v })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t("board.all")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">{t("board.all")}</SelectItem>
-                {REGION_ORDER.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {r}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>{t("board.filterVehicleType")}</Label>
-            <Select
-              value={query.vehicleType ?? ""}
-              onValueChange={(v) => setFilters({ vehicleType: v === "__all__" ? undefined : v })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t("board.all")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">{t("board.all")}</SelectItem>
-                {VEHICLE_TYPE_VALUES.map((vt) => (
-                  <SelectItem key={vt} value={vt}>
-                    {tVehicle(vt)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/**
-           * SEM O FILTRO DE RISCO DE SLA (2026-08-21, a pedido).
-           *
-           * Saiu da TELA, não do sistema: o parâmetro continua valendo na URL, o atalho "Em risco"
-           * dos recortes rápidos continua funcionando, e o cálculo de risco segue rodando. O que
-           * saiu foi o seletor, que a operação não usava.
-           */}
-
-          <div className="space-y-1.5">
-            <Label>{t("board.filterOrigin")}</Label>
-            <Select
-              value={query.originLocationId ?? ""}
-              onValueChange={(v) =>
-                setFilters({ originLocationId: v === "__all__" ? undefined : v })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t("board.all")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">{t("board.all")}</SelectItem>
-                {locationList.map((l) => (
-                  <SelectItem key={l.id} value={l.id}>
-                    {l.code} — {l.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>{t("board.filterDestination")}</Label>
-            <Select
-              value={query.destinationLocationId ?? ""}
-              onValueChange={(v) =>
-                setFilters({ destinationLocationId: v === "__all__" ? undefined : v })
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t("board.all")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">{t("board.all")}</SelectItem>
-                {locationList.map((l) => (
-                  <SelectItem key={l.id} value={l.id}>
-                    {l.code} — {l.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label>{t("board.filterLane")}</Label>
-            <Select
-              value={query.laneId ?? ""}
-              onValueChange={(v) => setFilters({ laneId: v === "__all__" ? undefined : v })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={t("board.all")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">{t("board.all")}</SelectItem>
-                {options.lanes.map((lane) => (
-                  <SelectItem key={lane.id} value={lane.id}>
-                    {codeOf.get(lane.originLocationId) ?? "?"} →{" "}
-                    {codeOf.get(lane.destinationLocationId) ?? "?"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* 006 — assigned-resource filters (server-loaded active fleet lists); 018 — searchable
-              comboboxes (type/paste to find; "Todos" = pinned clear item → unset). */}
-          <div className="space-y-1.5">
-            <Label htmlFor="filter-driver">{t("board.filterDriver")}</Label>
-            <SearchableSelect
-              id="filter-driver"
-              value={query.driverId ?? ""}
-              options={options.drivers}
-              onChange={(v) => setFilters({ driverId: v || undefined })}
-              placeholder={t("board.all")}
-              emptyText={tDispatch("searchNoResults")}
-              clearable
-              clearLabel={t("board.all")}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="filter-vehicle">{t("board.filterVehicle")}</Label>
-            <SearchableSelect
-              id="filter-vehicle"
-              value={query.vehicleId ?? ""}
-              options={options.vehicles}
-              onChange={(v) => setFilters({ vehicleId: v || undefined })}
-              placeholder={t("board.all")}
-              emptyText={tDispatch("searchNoResults")}
-              mode="plate"
-              clearable
-              clearLabel={t("board.all")}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="filter-carrier">{t("board.filterCarrier")}</Label>
-            <SearchableSelect
-              id="filter-carrier"
-              value={query.carrierId ?? ""}
-              options={options.carriers}
-              onChange={(v) => setFilters({ carrierId: v || undefined })}
-              placeholder={t("board.all")}
-              emptyText={tDispatch("searchNoResults")}
-              clearable
-              clearLabel={t("board.all")}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="pickup-from">{t("board.filterPickupFrom")}</Label>
-            <Input
-              id="pickup-from"
-              type="date"
-              value={pickupFrom}
-              onChange={(e) => {
-                setPickupFrom(e.target.value);
-                if (DATA_COMPLETA.test(e.target.value)) setFilters({ pickupFrom: e.target.value });
-              }}
-              onBlur={() =>
-                setFilters({ pickupFrom: DATA_COMPLETA.test(pickupFrom) ? pickupFrom : undefined })
-              }
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="pickup-to">{t("board.filterPickupTo")}</Label>
-            <Input
-              id="pickup-to"
-              type="date"
-              value={pickupTo}
-              onChange={(e) => {
-                setPickupTo(e.target.value);
-                if (DATA_COMPLETA.test(e.target.value)) setFilters({ pickupTo: e.target.value });
-              }}
-              onBlur={() =>
-                setFilters({ pickupTo: DATA_COMPLETA.test(pickupTo) ? pickupTo : undefined })
-              }
-            />
-          </div>
-
-          {/**
-           * ATALHOS DE DATA (2026-08-21, a pedido: "está muito ruim digitar").
-           *
-           * O campo nativo obriga a digitar dia, mês e ano em três pedaços, e erra o primeiro se a
-           * pessoa começar pelo dia errado. Mas trocar o widget seria resolver o sintoma: quem opera
-           * o quadro quase nunca quer uma data qualquer — quer HOJE, AMANHÃ, ou os próximos dias.
-           *
-           * Os atalhos cobrem esses casos com um clique e o campo continua ali para a data solta. É
-           * a mesma escolha do painel, onde os cartões são hoje, D1 e D2 e não um calendário.
-           *
-           * Cada atalho grava as DUAS pontas: um intervalo pela metade traz mais do que a pessoa
-           * pediu e ela não vê o que sobrou.
-           */}
-          <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
-            <Label>{t("board.datePresets")}</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {(
-                [
-                  ["presetToday", 0, 0],
-                  ["presetTomorrow", 1, 1],
-                  ["presetD2", 2, 2],
-                  ["presetNext7", 0, 6],
-                ] as const
-              ).map(([chave, de, ate]) => {
-                const inicio = saoPauloDate(de);
-                const fim = saoPauloDate(ate);
-                const ligado = query.pickupFrom === inicio && query.pickupTo === fim;
-                return (
-                  <Button
-                    key={chave}
-                    type="button"
-                    size="sm"
-                    variant={ligado ? "default" : "outline"}
-                    onClick={() =>
-                      setFilters(
-                        ligado
-                          ? { pickupFrom: undefined, pickupTo: undefined }
-                          : { pickupFrom: inicio, pickupTo: fim },
-                      )
-                    }
-                  >
-                    {t(`board.${chave}`)}
-                  </Button>
-                );
-              })}
-            </div>
-          </div>
+        {/**
+         * OS NOVE SELETORES FICAM DOBRADOS (2026-08-23, a pedido).
+         *
+         * Medido na tela: com eles abertos, a Torre de Controle carregava e NENHUMA viagem aparecia
+         * sem rolar — o bloco de filtros comia a primeira tela inteira. Numa tela que a operação usa
+         * o dia todo para olhar viagens, o recorte estava ocupando o lugar do conteúdo.
+         *
+         * Quem filtra sabe procurar; quem só quer ver o quadro não deveria pagar por isso. O que
+         * continua sempre visível é o que se usa sem pensar: busca, abrangência, atribuição, as
+         * visões e as fichas de status.
+         *
+         * NADA FICA ESCONDIDO EM SILÊNCIO: o botão traz o número de filtros ligados, e ele já
+         * existia no `Limpar` ao lado. Um painel fechado que esconde um recorte ativo é como uma
+         * lista vazia sem explicação — o pior desfecho desta tela.
+         *
+         * E abre sozinho quando se chega com filtro ligado (um atalho do painel, um link colado):
+         * aí a pergunta não é "quero filtrar?", é "o que está filtrando?".
+         */}
+        <div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-expanded={filtrosAbertos}
+            onClick={() => setFiltrosAbertos((v) => !v)}
+          >
+            <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+            {filtrosAtivos > 0
+              ? t("board.moreFiltersWithCount", { count: filtrosAtivos })
+              : t("board.moreFilters")}
+          </Button>
         </div>
+
+        {filtrosAbertos ? (
+          <>
+            {/* Data-backed filters (AND) ------------------------------------------------------- */}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="space-y-1.5">
+                <Label>{t("board.filterCustomer")}</Label>
+                <Select
+                  value={query.customerId ?? ""}
+                  onValueChange={(v) => setFilters({ customerId: v === "__all__" ? undefined : v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("board.all")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">{t("board.all")}</SelectItem>
+                    {options.customers.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/**
+               * A REGIÃO da estação de ORIGEM (2026-08-21, a pedido).
+               *
+               * Entra no lugar que era do filtro de faturamento, que saiu da tela junto — a etapa de
+               * faturamento está pausada e um filtro para uma fila vazia é ruído.
+               *
+               * É o MESMO parâmetro que os cartões do painel usam no link: clicar num cartão de frente
+               * cai aqui com este filtro ligado, e o número lá e o total daqui são o mesmo número.
+               */}
+              <div className="space-y-1.5">
+                <Label>{t("board.filterRegion")}</Label>
+                <Select
+                  value={query.region ?? ""}
+                  onValueChange={(v) => setFilters({ region: v === "__all__" ? undefined : v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("board.all")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">{t("board.all")}</SelectItem>
+                    {REGION_ORDER.map((r) => (
+                      <SelectItem key={r} value={r}>
+                        {r}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>{t("board.filterVehicleType")}</Label>
+                <Select
+                  value={query.vehicleType ?? ""}
+                  onValueChange={(v) =>
+                    setFilters({ vehicleType: v === "__all__" ? undefined : v })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("board.all")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">{t("board.all")}</SelectItem>
+                    {VEHICLE_TYPE_VALUES.map((vt) => (
+                      <SelectItem key={vt} value={vt}>
+                        {tVehicle(vt)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/**
+               * SEM O FILTRO DE RISCO DE SLA (2026-08-21, a pedido).
+               *
+               * Saiu da TELA, não do sistema: o parâmetro continua valendo na URL, o atalho "Em risco"
+               * dos recortes rápidos continua funcionando, e o cálculo de risco segue rodando. O que
+               * saiu foi o seletor, que a operação não usava.
+               */}
+
+              <div className="space-y-1.5">
+                <Label>{t("board.filterOrigin")}</Label>
+                <Select
+                  value={query.originLocationId ?? ""}
+                  onValueChange={(v) =>
+                    setFilters({ originLocationId: v === "__all__" ? undefined : v })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("board.all")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">{t("board.all")}</SelectItem>
+                    {locationList.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.code} — {l.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>{t("board.filterDestination")}</Label>
+                <Select
+                  value={query.destinationLocationId ?? ""}
+                  onValueChange={(v) =>
+                    setFilters({ destinationLocationId: v === "__all__" ? undefined : v })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("board.all")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">{t("board.all")}</SelectItem>
+                    {locationList.map((l) => (
+                      <SelectItem key={l.id} value={l.id}>
+                        {l.code} — {l.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>{t("board.filterLane")}</Label>
+                <Select
+                  value={query.laneId ?? ""}
+                  onValueChange={(v) => setFilters({ laneId: v === "__all__" ? undefined : v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={t("board.all")} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">{t("board.all")}</SelectItem>
+                    {options.lanes.map((lane) => (
+                      <SelectItem key={lane.id} value={lane.id}>
+                        {codeOf.get(lane.originLocationId) ?? "?"} →{" "}
+                        {codeOf.get(lane.destinationLocationId) ?? "?"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* 006 — assigned-resource filters (server-loaded active fleet lists); 018 — searchable
+              comboboxes (type/paste to find; "Todos" = pinned clear item → unset). */}
+              <div className="space-y-1.5">
+                <Label htmlFor="filter-driver">{t("board.filterDriver")}</Label>
+                <SearchableSelect
+                  id="filter-driver"
+                  value={query.driverId ?? ""}
+                  options={options.drivers}
+                  onChange={(v) => setFilters({ driverId: v || undefined })}
+                  placeholder={t("board.all")}
+                  emptyText={tDispatch("searchNoResults")}
+                  clearable
+                  clearLabel={t("board.all")}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="filter-vehicle">{t("board.filterVehicle")}</Label>
+                <SearchableSelect
+                  id="filter-vehicle"
+                  value={query.vehicleId ?? ""}
+                  options={options.vehicles}
+                  onChange={(v) => setFilters({ vehicleId: v || undefined })}
+                  placeholder={t("board.all")}
+                  emptyText={tDispatch("searchNoResults")}
+                  mode="plate"
+                  clearable
+                  clearLabel={t("board.all")}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="filter-carrier">{t("board.filterCarrier")}</Label>
+                <SearchableSelect
+                  id="filter-carrier"
+                  value={query.carrierId ?? ""}
+                  options={options.carriers}
+                  onChange={(v) => setFilters({ carrierId: v || undefined })}
+                  placeholder={t("board.all")}
+                  emptyText={tDispatch("searchNoResults")}
+                  clearable
+                  clearLabel={t("board.all")}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="pickup-from">{t("board.filterPickupFrom")}</Label>
+                <Input
+                  id="pickup-from"
+                  type="date"
+                  value={pickupFrom}
+                  onChange={(e) => {
+                    setPickupFrom(e.target.value);
+                    if (DATA_COMPLETA.test(e.target.value))
+                      setFilters({ pickupFrom: e.target.value });
+                  }}
+                  onBlur={() =>
+                    setFilters({
+                      pickupFrom: DATA_COMPLETA.test(pickupFrom) ? pickupFrom : undefined,
+                    })
+                  }
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="pickup-to">{t("board.filterPickupTo")}</Label>
+                <Input
+                  id="pickup-to"
+                  type="date"
+                  value={pickupTo}
+                  onChange={(e) => {
+                    setPickupTo(e.target.value);
+                    if (DATA_COMPLETA.test(e.target.value))
+                      setFilters({ pickupTo: e.target.value });
+                  }}
+                  onBlur={() =>
+                    setFilters({ pickupTo: DATA_COMPLETA.test(pickupTo) ? pickupTo : undefined })
+                  }
+                />
+              </div>
+
+              {/**
+               * ATALHOS DE DATA (2026-08-21, a pedido: "está muito ruim digitar").
+               *
+               * O campo nativo obriga a digitar dia, mês e ano em três pedaços, e erra o primeiro se a
+               * pessoa começar pelo dia errado. Mas trocar o widget seria resolver o sintoma: quem opera
+               * o quadro quase nunca quer uma data qualquer — quer HOJE, AMANHÃ, ou os próximos dias.
+               *
+               * Os atalhos cobrem esses casos com um clique e o campo continua ali para a data solta. É
+               * a mesma escolha do painel, onde os cartões são hoje, D1 e D2 e não um calendário.
+               *
+               * Cada atalho grava as DUAS pontas: um intervalo pela metade traz mais do que a pessoa
+               * pediu e ela não vê o que sobrou.
+               */}
+              <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
+                <Label>{t("board.datePresets")}</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      ["presetToday", 0, 0],
+                      ["presetTomorrow", 1, 1],
+                      ["presetD2", 2, 2],
+                      ["presetNext7", 0, 6],
+                    ] as const
+                  ).map(([chave, de, ate]) => {
+                    const inicio = saoPauloDate(de);
+                    const fim = saoPauloDate(ate);
+                    const ligado = query.pickupFrom === inicio && query.pickupTo === fim;
+                    return (
+                      <Button
+                        key={chave}
+                        type="button"
+                        size="sm"
+                        variant={ligado ? "default" : "outline"}
+                        onClick={() =>
+                          setFilters(
+                            ligado
+                              ? { pickupFrom: undefined, pickupTo: undefined }
+                              : { pickupFrom: inicio, pickupTo: fim },
+                          )
+                        }
+                      >
+                        {t(`board.${chave}`)}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </>
+        ) : null}
 
         {/* Status multi-select (toggle chips) ---------------------------------------------- */}
         <div className="space-y-1.5">
