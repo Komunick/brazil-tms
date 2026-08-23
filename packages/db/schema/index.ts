@@ -45,3 +45,5 @@ export * from "./robot-cycles";
 export * from "./portal-commands";
 // Preferências de tela por usuário — o painel do dia de cada um.
 export * from "./user-dashboard-prefs";
+// A lista pessoal de viagens acompanhadas — "Minha Programação".
+export * from "./user-watched-trips";

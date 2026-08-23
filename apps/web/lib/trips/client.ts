@@ -42,6 +42,7 @@ import type {
   TripFilterOptions,
   DashboardSummary,
   RotaDaMalha,
+  ViagemAcompanhada,
   DesempenhoDoMotorista,
   DesempenhoNaRota,
   BscSnapshotView,
@@ -343,6 +344,50 @@ export function useMelhoresMotoristas(
       ),
     enabled,
     staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * MINHA PROGRAMAÇÃO — a lista pessoal, e os dois botões que a mexem.
+ *
+ * As três chamadas devolvem a LISTA INTEIRA já atualizada, e a tela pinta o que voltou. É uma ida
+ * a mais no servidor por clique, e ela paga o próprio preço: sem isso, entrar numa viagem exigiria
+ * um segundo pedido para buscar o telefone e a rota dela, e a linha nasceria pela metade.
+ */
+const PROGRAMACAO = [...TRIPS_ROOT, "minha-programacao"] as const;
+
+export function useMinhaProgramacao(): UseQueryResult<{ viagens: ViagemAcompanhada[] }> {
+  return useQuery({
+    queryKey: PROGRAMACAO,
+    queryFn: async () =>
+      asJson<{ viagens: ViagemAcompanhada[] }>(await fetch(`/api/me/programacao`)),
+    refetchInterval: DASHBOARD_POLL_MS,
+  });
+}
+
+export function useAcompanharViagem() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (tripId: string) =>
+      asJson<{ viagens: ViagemAcompanhada[] }>(
+        await fetch(`/api/me/programacao`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tripId }),
+        }),
+      ),
+    onSuccess: (resposta) => queryClient.setQueryData(PROGRAMACAO, resposta),
+  });
+}
+
+export function usePararDeAcompanhar() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (tripId: string) =>
+      asJson<{ viagens: ViagemAcompanhada[] }>(
+        await fetch(`/api/me/programacao?tripId=${tripId}`, { method: "DELETE" }),
+      ),
+    onSuccess: (resposta) => queryClient.setQueryData(PROGRAMACAO, resposta),
   });
 }
 

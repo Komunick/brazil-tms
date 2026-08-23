@@ -89,7 +89,8 @@
       "importacao": "Importação",
       "cadastros": "Cadastros",
       "sistema": "Sistema"
-    }
+    },
+    "minhaProgramacao": "Minha Programação"
   },
   "FreightRates": {
     "screenTitle": "Tabela de Fretes",
@@ -1940,5 +1941,26 @@
       "lento": "Lento",
       "sem_dado": "Sem pulso"
     }
+  },
+  "Programacao": {
+    "title": "Minha Programação",
+    "subtitle": "As viagens que você está acompanhando, com quem dirige e como falar com ele.",
+    "adicionar": "Acompanhar uma LH",
+    "adicionarPlaceholder": "Digite o número da LH, ou escolha uma frente abaixo…",
+    "nadaEncontrado": "Nenhuma viagem com esse número.",
+    "acompanhar": "Acompanhar",
+    "jaAcompanha": "Já está na lista",
+    "vazio": "Sua lista está vazia. Busque uma LH acima para começar a acompanhar.",
+    "lh": "LH",
+    "rota": "Rota",
+    "coleta": "Coleta",
+    "status": "Status",
+    "motorista": "Motorista",
+    "placa": "Placa",
+    "contato": "Contato",
+    "semContato": "sem contato",
+    "remover": "Tirar da lista",
+    "porFrente": "Por frente:",
+    "todasAsFrentes": "Todas"
   }
 }

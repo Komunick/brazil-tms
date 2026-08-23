@@ -16,6 +16,7 @@ import {
   PanelLeftOpen,
   Route,
   ScrollText,
+  Star,
   Truck,
   Upload,
   UserRound,
@@ -30,6 +31,7 @@ import { cn } from "@/lib/utils";
 
 const ICONS: Record<string, LucideIcon> = {
   LayoutDashboard,
+  Star,
   BarChart3,
   Users,
   ScrollText,
