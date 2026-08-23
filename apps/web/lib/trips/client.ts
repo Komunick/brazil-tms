@@ -42,6 +42,8 @@ import type {
   TripFilterOptions,
   DashboardSummary,
   RotaDaMalha,
+  DesempenhoDoMotorista,
+  DesempenhoNaRota,
   BscSnapshotView,
   SpotOfferView,
   WallboardSummary,
@@ -300,6 +302,26 @@ export function useExceptionReport(search: string): UseQueryResult<ExceptionRepo
  * sobre 156 linhas. Filtrar no servidor custaria uma ida por tecla digitada para reduzir uma tabela
  * que já cabe inteira na memória.
  */
+/**
+ * O desempenho dos motoristas: o geral e o recorte por rota, numa resposta só.
+ *
+ * Sem `search` pelo mesmo motivo da malha — a tabela inteira cabe na memória, e filtrar no
+ * servidor custaria uma ida por tecla digitada.
+ */
+export function useDesempenhoDeMotoristas(): UseQueryResult<{
+  geral: DesempenhoDoMotorista[];
+  porRota: DesempenhoNaRota[];
+}> {
+  return useQuery({
+    queryKey: [...REPORTS_ROOT, "motoristas"],
+    queryFn: async () =>
+      asJson<{ geral: DesempenhoDoMotorista[]; porRota: DesempenhoNaRota[] }>(
+        await fetch(`/api/reports/motoristas`),
+      ),
+    refetchInterval: REPORTS_POLL_MS,
+  });
+}
+
 export function useMalhaDeRotas(): UseQueryResult<{ rotas: RotaDaMalha[] }> {
   return useQuery({
     queryKey: [...REPORTS_ROOT, "rotas"],
