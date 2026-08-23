@@ -1312,22 +1312,6 @@
       "errorVALIDATION": "Verifique os campos destacados.",
       "errorREQUEST_FAILED": "Não foi possível salvar. Tente novamente."
     },
-    "programacao": {
-      "title": "Programação por frente",
-      "subtitle": "Cada frente abre para o lado. O alarme de origem aparece mesmo fechada.",
-      "plan": "Plan.",
-      "spot": "Spot",
-      "origem": "Origem",
-      "tendencia": "Tendência",
-      "h12": "H+12",
-      "h24": "H+24",
-      "h2": "H-2",
-      "aceito": "Aceito",
-      "naoAceito": "Ñ aceito",
-      "origemAtrasada": "Origem atrasada",
-      "semRegiao": "Sem região",
-      "vazio": "Nenhuma viagem programada."
-    },
     "dashboard": {
       "title": "Painel do dia",
       "subtitle": "O que precisa de atenção hoje.",
@@ -1349,7 +1333,9 @@
       "regionToday": "{region} — hoje",
       "regionD1": "{region} — D1 (amanhã)",
       "regionD2": "{region} — D2",
-      "lateToAssign": "LH ATRASADA"
+      "lateToAssign": "LH ATRASADA",
+      "origemAtrasada": "ORIGEM ATRASADA",
+      "spotRodape": "Spot: {aceito} aceita(s) · {passou} passou"
     },
     "portalDecision": {
       "title": "Decisão da proposta",

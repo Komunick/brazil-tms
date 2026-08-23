@@ -221,6 +221,8 @@ function RegionCard({
   dateFilter,
   diaKey,
   atrasadas = 0,
+  origemAtrasada = 0,
+  spot,
 }: {
   region: string | null;
   byStatus: DashboardSummary["tripsTodayByStatus"];
@@ -233,6 +235,16 @@ function RegionCard({
    * ensina a operação a ignorar vermelho.
    */
   atrasadas?: number;
+  /**
+   * Quantas viagens deste cartão já passaram do prazo de CHEGADA NA ORIGEM — coleta menos duas
+   * horas. Vizinha de `atrasadas` e diferente dela: aquela é "ninguém foi escalado", esta é "foi
+   * escalado e não chegou". Duas falhas, duas ações — atribuir contra ligar para o motorista.
+   *
+   * Só o cartão de HOJE recebe: uma viagem de amanhã tem o prazo inteiro pela frente.
+   */
+  origemAtrasada?: number;
+  /** O leilão de spot da frente nas últimas 24h, para o rodapé do cartão. */
+  spot?: { aceito: number; naoAceito: number };
 }) {
   const t = useTranslations("Trips.dashboard");
   const total = byStatus.reduce((n, s) => n + s.count, 0);
@@ -274,12 +286,43 @@ function RegionCard({
           <span className="tabular-nums">{atrasadas}</span>
         </Link>
       ) : null}
+      {/**
+       * A ORIGEM ATRASADA, na MESMA faixa vermelha da de cima (2026-08-22, a pedido).
+       *
+       * Chegou a existir uma tela própria para isto, com desenho novo, e foi descartada: o cartão
+       * já tinha o formato certo e a operação já sabia lê-lo. Reaproveitar a faixa é o oposto de
+       * inventar linguagem — duas faixas iguais, uma embaixo da outra, se leem sem aprender nada.
+       *
+       * O atalho leva à lista das viagens que ainda não chegaram, com a mesma data e a mesma
+       * frente: o número aqui e o total de lá são o mesmo número.
+       */}
+      {origemAtrasada > 0 ? (
+        <Link
+          href={`/trips?status=received&status=assigned${dateFilter}${extraFilter}&scope=all#${BOARD_ANCHOR}`}
+          className="mb-1.5 flex items-center justify-between gap-2 rounded bg-destructive px-1.5 py-1 text-xs font-bold uppercase tracking-wide text-destructive-foreground shadow-[0_0_10px_2px_hsl(var(--destructive)/0.75)] motion-safe:animate-pulse"
+        >
+          <span>{t("origemAtrasada")}</span>
+          <span className="tabular-nums">{origemAtrasada}</span>
+        </Link>
+      ) : null}
       <StatusList
         byStatus={byStatus}
         emptyKey="emptyRegion"
         dateFilter={dateFilter}
         extraFilter={extraFilter}
       />
+      {/**
+       * O SPOT NO RODAPÉ, discreto de propósito.
+       *
+       * É oportunidade, não pendência: ninguém precisa AGIR por causa dele, e o que não pede ação
+       * não pode competir com o que pede. Some quando não houve leilão nenhum na frente — uma linha
+       * de zeros repetida em quatro cartões é ruído que ensina a não ler o rodapé.
+       */}
+      {spot && spot.aceito + spot.naoAceito > 0 ? (
+        <p className="mt-1.5 border-t pt-1.5 text-[0.68rem] text-muted-foreground">
+          {t("spotRodape", { aceito: spot.aceito, passou: spot.naoAceito })}
+        </p>
+      ) : null}
     </Card>
   );
 }
@@ -393,6 +436,8 @@ export function DashboardWidgets() {
    * viagem de ontem que ninguém atribuiu — que é justamente a que mais precisa aparecer.
    */
   const atrasadasDe = new Map(summary.lateToAssignByRegion.map((r) => [r.region, r.count]));
+  const origemAtrasadaDe = new Map(summary.origemAtrasadaByRegion.map((r) => [r.region, r.count]));
+  const spotDe = new Map(summary.spotByRegion.map((r) => [r.region, r]));
   const porRegiao = new Map<string | null, Record<string, RegionSlice["byStatus"]>>();
   for (const [chave, lista] of [
     ["regionToday", summary.tripsTodayByRegion],
@@ -429,6 +474,10 @@ export function DashboardWidgets() {
           dateFilter: filtroDe[diaKey]!,
           // A faixa mora no cartão de HOJE, mas o número não é só de hoje: acumula o que venceu antes.
           atrasadas: diaKey === "regionToday" ? (atrasadasDe.get(region) ?? 0) : 0,
+          // Mesma regra: quem tem coleta amanhã ainda tem o prazo inteiro pela frente.
+          origemAtrasada: diaKey === "regionToday" ? (origemAtrasadaDe.get(region) ?? 0) : 0,
+          // O leilão é de agora; repetir o mesmo número em três cartões diria três vezes a mesma coisa.
+          spot: diaKey === "regionToday" ? spotDe.get(region) : undefined,
         };
       }),
     }));
@@ -495,7 +544,7 @@ export function DashboardWidgets() {
           key={region ?? "__sem_regiao__"}
           className="col-span-full grid grid-cols-1 gap-2.5 sm:grid-cols-3"
         >
-          {dias.map(({ diaKey, byStatus, dateFilter, atrasadas }) => (
+          {dias.map(({ diaKey, byStatus, dateFilter, atrasadas, origemAtrasada, spot }) => (
             <RegionCard
               key={diaKey}
               region={region}
@@ -503,6 +552,8 @@ export function DashboardWidgets() {
               dateFilter={dateFilter}
               diaKey={diaKey}
               atrasadas={atrasadas}
+              origemAtrasada={origemAtrasada}
+              spot={spot}
             />
           ))}
         </div>
