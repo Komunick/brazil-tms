@@ -530,34 +530,43 @@ export function DashboardWidgets() {
        *
        * A ordem das frentes vem do servidor; a dos dias é fixa aqui, porque é a do tempo.
        */}
-      {regioesDosTresDias.map(({ region, dias }) => (
-        /**
-         * UMA LINHA POR FRENTE (2026-08-20, a pedido): NONE em cima, SUDESTE embaixo, SULCO por
-         * último — e os três dias de cada uma lado a lado, dentro da linha dela.
-         *
-         * `col-span-full` com grade própria dentro, em vez de deixar os nove cartões fluírem na
-         * grade de fora. Fluindo, eles se acomodavam pelo espaço que sobrava e a mesma frente
-         * quebrava no meio da tela — quem cuida de uma região perdia a comparação entre os dias dela,
-         * que é justamente a leitura que estes cartões existem para dar.
-         */
-        <div
-          key={region ?? "__sem_regiao__"}
-          className="col-span-full grid grid-cols-1 gap-2.5 sm:grid-cols-3"
-        >
-          {dias.map(({ diaKey, byStatus, dateFilter, atrasadas, origemAtrasada, spot }) => (
-            <RegionCard
-              key={diaKey}
-              region={region}
-              byStatus={byStatus}
-              dateFilter={dateFilter}
-              diaKey={diaKey}
-              atrasadas={atrasadas}
-              origemAtrasada={origemAtrasada}
-              spot={spot}
-            />
-          ))}
-        </div>
-      ))}
+      {/**
+       * UMA LINHA POR FRENTE (2026-08-20, a pedido): NONE em cima, SUDESTE embaixo, SULCO por
+       * último — e os três dias de cada uma lado a lado, dentro da faixa dela.
+       *
+       * Uma grade só para as frentes, em vez de deixar os nove cartões fluírem na grade de fora.
+       * Fluindo, eles se acomodavam pelo espaço que sobrava e a mesma frente quebrava no meio da
+       * tela — quem cuida de uma região perdia a comparação entre os dias dela, que é justamente a
+       * leitura que estes cartões existem para dar.
+       *
+       * SEIS COLUNAS NA TELA LARGA (2026-08-23, a pedido: "estão meio largos"). Antes cada frente
+       * tomava a largura inteira, e por isso os seus três cartões saíam com o DOBRO da largura dos
+       * demais: um cartão de região media dois cartões de status, na mesma tela, dizendo coisas do
+       * mesmo tamanho. Agora todos medem uma coluna — e o espaço que sobra não fica vazio, porque
+       * duas frentes passam a dividir a faixa.
+       *
+       * `contents` é o que permite isso sem desfazer o agrupamento: o div da frente continua no
+       * JSX (com a chave nele) mas some do desenho, então os três cartões dela entram direto na
+       * grade de cima — e continuam vizinhos, porque três divide seis.
+       */}
+      <div className="col-span-full grid grid-cols-1 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
+        {regioesDosTresDias.map(({ region, dias }) => (
+          <div key={region ?? "__sem_regiao__"} className="contents">
+            {dias.map(({ diaKey, byStatus, dateFilter, atrasadas, origemAtrasada, spot }) => (
+              <RegionCard
+                key={diaKey}
+                region={region}
+                byStatus={byStatus}
+                dateFilter={dateFilter}
+                diaKey={diaKey}
+                atrasadas={atrasadas}
+                origemAtrasada={origemAtrasada}
+                spot={spot}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
       {/**
        * OS TRÊS RECORTES DE STATUS JUNTOS — hoje, amanhã, mês (2026-08-20, a pedido).
        *
