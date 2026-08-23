@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { can } from "@brazil-tms/shared";
 import { verifySession } from "@/lib/auth/session";
-import { ProgramacaoBoard } from "@/components/trips/dashboard/programacao-board";
+import { DashboardWidgets } from "@/components/trips/dashboard/widgets";
 
 /**
  * Home daily dashboard (US4, §15.2). Server guard enforces `view_all_trips` (held by all 7 internal
@@ -10,8 +10,10 @@ import { ProgramacaoBoard } from "@/components/trips/dashboard/programacao-board
  * the client `DashboardWidgets` polls the summary aggregates (60s, no Realtime). The welcome tone is
  * carried by the dashboard title/subtitle, replacing the old static Shell card.
  *
- * A VISÃO POR FRENTE (2026-08-22, a pedido) — o quadro branco da sala virou esta tela. Os cartões
- * que moravam aqui não foram apagados: mudaram para a aba Programação, inteiros.
+ * O QUADRO BRANCO ENTRA NOS CARTÕES QUE JÁ EXISTEM (2026-08-22, a pedido). Uma tela por frente
+ * chegou a ser feita e foi descartada: PLAN e TENDÊNCIA já viviam aqui (os cartões de hoje/D1/D2
+ * e a lista de status), e o que faltava — origem atrasada e spot — cabe dentro do cartão da
+ * região. Tela nova para metade de uma informação que já estava na tela é tela a mais.
  *
  * SEM A SUPERFÍCIE DE ALERTAS (2026-08-19, a pedido). Depois que o portal passou a criar viagens
  * sozinho, o aviso "sem atribuição na janela" disparava para cada viagem nova — chegou a 253 avisos
@@ -24,7 +26,7 @@ export default async function HomePage() {
   if (!session.authenticated) redirect("/login");
   if (!can(session.user.role, "view_all_trips")) redirect("/");
 
-  const t = await getTranslations("Trips.programacao");
+  const t = await getTranslations("Trips.dashboard");
 
   return (
     <div className="space-y-6">
@@ -32,7 +34,7 @@ export default async function HomePage() {
         <h1 className="text-2xl font-semibold">{t("title")}</h1>
         <p className="text-muted-foreground">{t("subtitle")}</p>
       </header>
-      <ProgramacaoBoard />
+      <DashboardWidgets />
     </div>
   );
 }
