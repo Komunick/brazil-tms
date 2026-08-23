@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   bigint,
+  boolean,
   check,
   index,
   integer,
@@ -39,6 +40,19 @@ export const lanes = pgTable(
     standardRateCents: bigint("standard_rate_cents", { mode: "number" }),
     tollEstimateCents: bigint("toll_estimate_cents", { mode: "number" }),
     standardDistanceKm: numeric("standard_distance_km"),
+    /**
+     * ESTA ROTA É NOSSA? (2026-08-23, a pedido.)
+     *
+     * A lane existe assim que o par aparece — `resolveLaneId` a cria na primeira viagem, venha ela
+     * de onde vier. Isso é bom para relatório e péssimo para alarme: o portal mostra à
+     * transportadora tanto as viagens que já são dela quanto as ofertas em aberto, e sem esta
+     * coluna o painel cobrava atribuição de rota que a empresa não roda.
+     *
+     * `false` por padrão: rota nova nasce fora da malha e alguém diz que entrou. O contrário —
+     * nascer dentro — faria cada oferta do portal virar trabalho nosso em silêncio, que é
+     * exatamente o defeito que esta coluna existe para consertar.
+     */
+    inNetwork: boolean("in_network").notNull().default(false),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

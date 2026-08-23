@@ -382,6 +382,17 @@ const laneBase = z.object({
   standardRateCents: numberFromInput(moneyCentsSchema),
   tollEstimateCents: numberFromInput(moneyCentsSchema),
   standardDistanceKm: numberFromInput(z.number().nonnegative("A distância não pode ser negativa.")),
+  /**
+   * A rota faz parte da MALHA da empresa — ou seja, é nossa (2026-08-23).
+   *
+   * Opcional e SEM `.default()`. Quem cadastra uma rota à mão está dizendo que ela é nossa, e a
+   * tela manda `true`; o padrão `false` mora na criação, em `createLane`.
+   *
+   * O `.default()` aqui seria uma armadilha silenciosa: `updateLaneSchema` é `laneBase.partial()`
+   * e um default sobrevive ao `.partial()`, então toda edição que não mandasse o campo receberia
+   * `false` do próprio Zod — e a rota sairia da malha ao ter o preço corrigido.
+   */
+  inNetwork: z.boolean().optional(),
 });
 
 /** origin ≠ destination (degenerate-lane guard, mirrors the DB CHECK). */
