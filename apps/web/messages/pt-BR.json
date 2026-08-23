@@ -326,15 +326,16 @@
       "emViagemAgora": "em viagem agora",
       "buscar": "Filtrar por motorista ou estação…",
       "geral": "Quem entrega no prazo",
-      "geralAjuda": "Chegada no destino até a hora que o cliente publicou, com a hora do portal. Abaixo de 4 entregas a linha não é ranqueada — o percentual fica cinza e vai para o fim.",
+      "geralAjuda": "Chegada no destino até a hora que o cliente publicou, com a hora do portal. A NOTA é o percentual com um crédito inicial de 5 entregas na média da empresa — é ela que ordena, para 2 entregas a 100% não passarem na frente de 20 a 93%.",
       "porRota": "E quem entrega no prazo em cada rota",
-      "porRotaAjuda": "O mesmo cálculo, por rota. É a resposta para \"quem eu escalo nesta\" — sempre com o número de entregas ao lado, porque 100% em duas viagens não é melhor que 86% em dezesseis.",
+      "porRotaAjuda": "O mesmo cálculo, por rota. É a resposta para \"quem eu escalo nesta\". Percentual apagado = menos de 4 entregas, ainda diz pouco.",
       "motorista": "Motorista",
       "entregas": "Entregas",
       "noPrazo": "No prazo",
       "pct": "%",
       "emViagem": "em viagem",
-      "vazio": "Nada com esse recorte."
+      "vazio": "Nada com esse recorte.",
+      "nota": "Nota"
     }
   },
   "AuditActions": {

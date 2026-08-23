@@ -23,42 +23,55 @@ import {
  * A régua e o porquê de não ser a chegada na origem moram em `readDesempenhoGeral`. Aqui importa o
  * que a tela faz para o número não mentir:
  *
- *   O NÚMERO DE ENTREGAS ANDA COLADO NO PERCENTUAL, sempre. 100% em duas viagens não é melhor que
- *   86% em dezesseis, e mostrar só o percentual faz exatamente essa troca.
+ *   A NOTA ORDENA, O PERCENTUAL EXPLICA. O percentual cru premia quem rodou pouco — duas entregas
+ *   a 100% na frente de vinte a 93% —, e escalar por isso é escalar por sorte. A nota é o mesmo
+ *   percentual com um crédito inicial na média da empresa; quem tem volume chega perto do próprio
+ *   número, quem tem duas viagens fica perto da média. Ver `readDesempenhoGeral`.
  *
- *   ABAIXO DE QUATRO ENTREGAS, A LINHA NÃO É RANQUEADA — ela aparece marcada como pouca amostra, e
- *   depois de todas as outras. Some seria pior: quem procura um motorista precisa saber que ele
- *   rodou a rota duas vezes, e não concluir que nunca rodou.
+ *   OS TRÊS FICAM NA TELA — entregas, percentual e nota. Esconder qualquer um seria pedir
+ *   confiança cega; e quem tem pouca amostra continua visível, só que embaixo, porque a nota o
+ *   coloca lá. Sumir seria pior: quem procura motorista precisa saber que ele rodou a rota duas
+ *   vezes, e não concluir que nunca rodou.
  *
  *   ROTA SEM HISTÓRICO DIZ QUE NÃO SABE. Um ranking que sempre tem resposta é um ranking em que não
  *   dá para confiar.
  */
 
 /**
- * Abaixo disto a linha não é ranqueada — percentual apagado e depois das outras.
+ * Abaixo disto a amostra é pouca, e a tela diz isso apagando o percentual.
+ *
+ * Não muda a ORDEM — quem ordena é a nota, que já cuida disso sozinha. É só o aviso visual de que
+ * aquele número ainda não significa muito.
  *
  * Mora AQUI, e não no pacote de banco: é decisão de tela, e importar um VALOR de lá num componente
  * de cliente arrasta o driver do Postgres para o pacote do navegador — o build quebra pedindo `net`
  * e `tls`. Tipo se apaga na compilação e pode vir de lá; valor, não.
  */
-const MINIMO_PARA_RANQUEAR = 4;
+const POUCA_AMOSTRA = 4;
 
 function Percentual({ pct, entregas }: { pct: number; entregas: number }) {
-  const pouca = entregas < MINIMO_PARA_RANQUEAR;
+  return (
+    <span
+      className={cn(
+        "tabular-nums",
+        entregas < POUCA_AMOSTRA ? "text-muted-foreground" : "text-foreground",
+      )}
+    >
+      {pct}%
+    </span>
+  );
+}
+
+/** A nota é o número que ordena — por isso é ela que ganha cor e peso. */
+function Nota({ nota }: { nota: number }) {
   return (
     <span
       className={cn(
         "font-semibold tabular-nums",
-        pouca
-          ? "text-muted-foreground"
-          : pct >= 90
-            ? "text-success"
-            : pct >= 75
-              ? "text-warning"
-              : "text-destructive",
+        nota >= 90 ? "text-success" : nota >= 80 ? "text-warning" : "text-destructive",
       )}
     >
-      {pct}%
+      {nota}
     </span>
   );
 }
@@ -80,18 +93,16 @@ function LinhaDoMotorista({ d }: { d: DesempenhoDoMotorista }) {
       <TableCell className="text-right">
         <Percentual pct={d.pct} entregas={d.entregas} />
       </TableCell>
+      <TableCell className="text-right">
+        <Nota nota={d.nota} />
+      </TableCell>
     </>
   );
 }
 
-/** A ordem do ranking: quem tem amostra primeiro, melhor percentual, e o volume desempata. */
+/** A ordem do ranking é a da NOTA; o volume só desempata. */
 function ordenar<T extends DesempenhoDoMotorista>(lista: T[]): T[] {
-  return [...lista].sort(
-    (a, b) =>
-      Number(b.entregas >= MINIMO_PARA_RANQUEAR) - Number(a.entregas >= MINIMO_PARA_RANQUEAR) ||
-      b.pct - a.pct ||
-      b.entregas - a.entregas,
-  );
+  return [...lista].sort((a, b) => b.nota - a.nota || b.entregas - a.entregas);
 }
 
 export function MotoristasReport() {
@@ -194,6 +205,7 @@ export function MotoristasReport() {
                 <TableHead className="text-right">{tM("entregas")}</TableHead>
                 <TableHead className="text-right">{tM("noPrazo")}</TableHead>
                 <TableHead className="text-right">{tM("pct")}</TableHead>
+                <TableHead className="text-right">{tM("nota")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -204,7 +216,7 @@ export function MotoristasReport() {
               ))}
               {geral.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-sm text-muted-foreground">
+                  <TableCell colSpan={5} className="text-sm text-muted-foreground">
                     {tM("vazio")}
                   </TableCell>
                 </TableRow>
