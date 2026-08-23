@@ -20,7 +20,6 @@ import {
   TripsError,
   useAssignTrip,
   useAssignmentCheck,
-  useConfirmAssignment,
   useReassignTrip,
   useUnassignTrip,
 } from "@/lib/trips/client";
@@ -101,7 +100,6 @@ export function AssignmentForm({
 
   const assign = useAssignTrip(tripId);
   const reassign = useReassignTrip(tripId);
-  const confirm = useConfirmAssignment(tripId);
   const unassign = useUnassignTrip(tripId);
   const check = useAssignmentCheck(tripId);
 
@@ -150,7 +148,16 @@ export function AssignmentForm({
   const overrideMissing = hasWarn && overrideReason.trim() === "";
 
   const isReassign = currentStatus === "assigned" || currentStatus === "confirmed";
-  const showConfirm = currentStatus === "assigned";
+  /**
+   * O "CONFIRMAR ATRIBUIÇÃO" SAIU (2026-08-23, a pedido: "está confuso... ele já tem motorista").
+   *
+   * Ele levava a viagem para `confirmed`, e esse estado morreu na prática quando o portal passou a
+   * mandar no ciclo: das 4.500 viagens do banco, ZERO estão em `confirmed`, e as 51 atribuídas vão
+   * de `assigned` direto para `at_origin` quando o motorista chega. O botão empurrava a viagem para
+   * um estado em que nada mais acontece — colado no botão que a pessoa de fato queria.
+   *
+   * A rota e a regra continuam existindo; só não são oferecidas nesta tela.
+   */
   const showUnassign = currentStatus === "assigned";
 
   // The primary save (assign for `received`, reassign for `assigned`/`confirmed`).
@@ -187,24 +194,6 @@ export function AssignmentForm({
     );
   }
 
-  function onConfirm() {
-    setError(null);
-    confirm.mutate(
-      { expectedFromStatus: currentStatus, notes: form.notes.trim() || undefined },
-      {
-        onSuccess: () => onDone?.(),
-        onError: (err: Error) => {
-          if (err instanceof TripsError) {
-            setError(mapError(err.code));
-            if (err.findings) setFindings(err.findings);
-          } else {
-            setError(mapError("REQUEST_FAILED"));
-          }
-        },
-      },
-    );
-  }
-
   function onUnassign() {
     setError(null);
     unassign.mutate(
@@ -226,6 +215,26 @@ export function AssignmentForm({
   // WARN is present without an override reason — mirroring the server's OVERRIDE_REQUIRED guard.
   const saveDisabled =
     savePending || hasBlock || overrideMissing || !form.driverId || !form.vehicleId;
+
+  /**
+   * POR QUE O BOTÃO ESTÁ APAGADO (2026-08-23, a pedido).
+   *
+   * Foi exatamente isto que fez o usuário concluir que "não funciona": a viagem tinha três
+   * alertas, o motivo da exceção estava vazio, e o botão ficava desabilitado SEM DIZER NADA. Um
+   * botão apagado que não se explica é indistinguível de um botão quebrado — e quem clica e não vê
+   * reação conclui, com razão, que a tela está com defeito.
+   *
+   * A frase diz o que falta, na ordem em que resolver: primeiro o impedimento, que nem o servidor
+   * aceita; depois os campos obrigatórios; por último o motivo da exceção.
+   */
+  const porQueApagado =
+    savePending || !saveDisabled
+      ? null
+      : hasBlock
+        ? t("disabledBlock")
+        : !form.driverId || !form.vehicleId
+          ? t("disabledFields")
+          : t("disabledOverride");
 
   return (
     <div className="space-y-4">
@@ -314,20 +323,10 @@ export function AssignmentForm({
           </p>
         ) : null}
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button type="submit" disabled={saveDisabled}>
             {savePending ? t("assigning") : isReassign ? t("reassign") : t("assign")}
           </Button>
-          {showConfirm ? (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={onConfirm}
-              disabled={confirm.isPending}
-            >
-              {confirm.isPending ? t("confirming") : t("confirm")}
-            </Button>
-          ) : null}
           {showUnassign ? (
             <Button
               type="button"
@@ -338,6 +337,7 @@ export function AssignmentForm({
               {t("unassign")}
             </Button>
           ) : null}
+          {porQueApagado ? <p className="text-xs text-muted-foreground">{porQueApagado}</p> : null}
         </div>
       </form>
 
@@ -357,7 +357,12 @@ export function AssignmentForm({
             >
               {tCommon("cancel")}
             </Button>
-            <Button type="button" variant="destructive" onClick={onUnassign} disabled={unassign.isPending}>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={onUnassign}
+              disabled={unassign.isPending}
+            >
               {unassign.isPending ? t("unassigning") : t("unassignConfirmAction")}
             </Button>
           </DialogFooter>

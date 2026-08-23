@@ -1772,7 +1772,10 @@
     "malha": {
       "nossas": "Nossas rotas",
       "geral": "Geral"
-    }
+    },
+    "disabledBlock": "Há um impedimento acima que precisa ser resolvido antes de salvar.",
+    "disabledFields": "Escolha o motorista e o veículo para poder salvar.",
+    "disabledOverride": "Escreva o motivo da exceção acima para prosseguir apesar dos alertas."
   },
   "Fleet": {
     "title": "Rastreamento da frota",
