@@ -167,16 +167,44 @@ function StatusList({
   if (ordenadas.length === 0) {
     return <p className="text-xs text-muted-foreground">{t(emptyKey)}</p>;
   }
+
+  /**
+   * A BARRA DE PROPORÇÃO ATRÁS DE CADA LINHA (2026-08-23, a pedido).
+   *
+   * A linha era `[etiqueta] .......... 39`: o olho viajava o cartão inteiro e ainda tinha de
+   * comparar de cabeça. Num cartão de 39 viagens, "11 canceladas" e "9 em trânsito" pareciam a
+   * mesma coisa até alguém ler os dois números.
+   *
+   * A barra é a FATIA DO TOTAL do cartão, e não a fatia do maior status. Comparar com o maior
+   * encheria uma barra sempre até o fim e diria só quem é o campeão; com o total, a barra responde
+   * a pergunta que a operação faz — quanto do dia está parado nisto.
+   *
+   * Ela não tem cor própria: é uma sombra do texto, e a cor semântica continua onde já estava, na
+   * etiqueta. Duas coisas coloridas na mesma linha competiriam, e a etiqueta já ganhou essa
+   * disputa quando as cores foram escolhidas.
+   *
+   * O denominador é o do CARTÃO, não o do painel: cada cartão é um dia, e comparar a fatia de hoje
+   * com a fatia do mês seria comparar réguas diferentes desenhadas do mesmo jeito.
+   */
+  const total = ordenadas.reduce((n, s) => n + s.count, 0);
+
   return (
     <ul className="space-y-1">
       {ordenadas.map(({ status, count }) => (
         <li key={status}>
           <Link
             href={`/trips?${boardQueryForDisplayStatus(status)}${dateFilter}${extraFilter}&scope=all#${BOARD_ANCHOR}`}
-            className="flex items-center justify-between gap-2 rounded px-1 py-0.5 hover:bg-muted"
+            className="relative flex items-center justify-between gap-2 overflow-hidden rounded px-1 py-0.5 hover:bg-muted"
           >
-            <TripStatusBadge status={status} />
-            <Numero valor={count} className="text-sm font-semibold" />
+            <span
+              aria-hidden
+              className="absolute inset-y-0 left-0 rounded bg-foreground/[0.07]"
+              style={{ width: total === 0 ? 0 : `${(count / total) * 100}%` }}
+            />
+            <span className="relative">
+              <TripStatusBadge status={status} />
+            </span>
+            <Numero valor={count} className="relative text-sm font-semibold" />
           </Link>
         </li>
       ))}
