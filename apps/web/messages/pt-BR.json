@@ -1817,7 +1817,9 @@
       "day": "Ontem",
       "week": "Semana",
       "month": "Mês"
-    }
+    },
+    "minimizar": "Encolher",
+    "expandir": "Mostrar os 20 indicadores"
   },
   "ServerStatus": {
     "title": "Status do Sistema",

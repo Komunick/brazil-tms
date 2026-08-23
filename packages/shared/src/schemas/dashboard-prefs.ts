@@ -36,8 +36,12 @@ export function chaveDaFrente(region: string | null): string {
  * Teto de 60 chaves: o painel inteiro tem menos de 20 cartões hoje, e o dobro disso ainda cabe.
  * Existe para que uma requisição malformada não vire uma linha de banco sem fim.
  */
+const listaDeChaves = z.array(z.string().trim().min(1).max(60)).max(60);
+
 export const dashboardPrefsSchema = z.object({
-  hidden: z.array(z.string().trim().min(1).max(60)).max(60),
+  hidden: listaDeChaves,
+  /** Os cartões encolhidos — o BSC, hoje. Ausente = nenhum, para o cliente antigo não zerar nada. */
+  minimized: listaDeChaves.optional().default([]),
 });
 
 export type DashboardPrefs = z.infer<typeof dashboardPrefsSchema>;
