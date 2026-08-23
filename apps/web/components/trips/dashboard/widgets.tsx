@@ -17,6 +17,7 @@ import type { DashboardSummary, RegionSlice } from "@brazil-tms/db";
 import { useDashboardSummary } from "@/lib/trips/client";
 import { useReconexao } from "@/lib/ui/reconexao";
 import { usePainelDoUsuario } from "@/lib/ui/painel-do-usuario";
+import { useMudou } from "@/lib/ui/mudou";
 import { cn } from "@/lib/utils";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { BOARD_ANCHOR } from "@/components/trips/control-tower-table";
@@ -71,6 +72,21 @@ type MetricCardProps = {
  *   Rótulo e número na MESMA linha. Com o cartão livre para encolher, empilhar os dois em duas linhas
  *   só desperdiçava a largura que sobra ao lado de um número curto.
  */
+/**
+ * UM NÚMERO QUE ACENDE QUANDO MUDA (2026-08-23, a pedido).
+ *
+ * O painel se recarrega sozinho e as contagens trocavam em silêncio — numa TV, a mudança
+ * acontecia enquanto ninguém olhava, e o que mudou não se distinguia do que sempre esteve ali.
+ *
+ * O brilho herda a COR DO PRÓPRIO NÚMERO (ver `.realce-aceso`): a atrasada pisca vermelho, o em
+ * trânsito pisca verde. Nenhuma cor nova entra na tela — a que já existe é que ganha um instante
+ * de ênfase.
+ */
+function Numero({ valor, className }: { valor: number; className?: string }) {
+  const aceso = useMudou(valor);
+  return <span className={cn("tabular-nums", aceso && "realce-aceso", className)}>{valor}</span>;
+}
+
 function MetricCard({ titleKey, value, href, placeholder }: MetricCardProps) {
   const t = useTranslations("Trips.dashboard");
 
@@ -160,7 +176,7 @@ function StatusList({
             className="flex items-center justify-between gap-2 rounded px-1 py-0.5 hover:bg-muted"
           >
             <TripStatusBadge status={status} />
-            <span className="text-sm font-semibold tabular-nums">{count}</span>
+            <Numero valor={count} className="text-sm font-semibold" />
           </Link>
         </li>
       ))}
@@ -198,7 +214,7 @@ function StatusCard({
         <CardTitle className="text-[0.68rem] font-medium uppercase leading-tight tracking-wide text-muted-foreground">
           {t(titleKey)}
         </CardTitle>
-        <span className="text-sm font-semibold tabular-nums">{total}</span>
+        <Numero valor={total} className="text-sm font-semibold" />
       </div>
       <StatusList byStatus={byStatus} emptyKey={emptyKey} dateFilter={dateFilter} />
     </Card>
@@ -289,7 +305,7 @@ function RegionCard({
           className="mb-1.5 flex items-center justify-between gap-2 rounded bg-destructive px-1.5 py-1 text-xs font-bold uppercase tracking-wide text-destructive-foreground shadow-[0_0_10px_2px_hsl(var(--destructive)/0.75)] motion-safe:animate-pulse"
         >
           <span>{t("lateToAssign")}</span>
-          <span className="tabular-nums">{atrasadas}</span>
+          <Numero valor={atrasadas} />
         </Link>
       ) : null}
       {/**
@@ -310,7 +326,7 @@ function RegionCard({
           className="mb-1.5 flex items-center justify-between gap-2 rounded bg-destructive px-1.5 py-1 text-xs font-bold uppercase tracking-wide text-destructive-foreground shadow-[0_0_10px_2px_hsl(var(--destructive)/0.75)] motion-safe:animate-pulse"
         >
           <span>{t("origemAtrasada")}</span>
-          <span className="tabular-nums">{origemAtrasada}</span>
+          <Numero valor={origemAtrasada} />
         </Link>
       ) : null}
       <StatusList

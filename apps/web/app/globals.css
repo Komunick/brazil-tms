@@ -170,3 +170,40 @@
     opacity: 0.3;
   }
 }
+
+/**
+ * O REALCE DO NÚMERO QUE MUDOU (2026-08-23, a pedido).
+ *
+ * O painel se recarrega sozinho e os números trocavam em silêncio — numa TV, a mudança acontecia
+ * enquanto ninguém olhava. Aqui ela ganha um brilho de um segundo e dois décimos e apaga sozinha.
+ *
+ * A ANIMAÇÃO INTEIRA VIVE DENTRO DO `prefers-reduced-motion: no-preference`, e não com um
+ * `motion-safe:` na classe. A diferença importa: com `motion-safe` a transição some mas a cor de
+ * fundo ainda apareceria e sumiria de estalo, que para quem pediu menos movimento é pior do que não
+ * ter nada. Assim, quem desligou animação simplesmente vê o número novo, sem brilho.
+ *
+ * `currentColor` no fundo, com opacidade baixa: o realce herda a cor do próprio número, então o
+ * verde do "em trânsito" pisca verde e o vermelho da atrasada pisca vermelho — sem escolher uma cor
+ * nova que competisse com o significado que a cor já tem nesta tela.
+ */
+@keyframes realce-do-numero {
+  /* 22% da própria cor: forte o bastante para puxar o olho, fraco o bastante para o número
+     continuar legível por cima dele enquanto o brilho dura. */
+  from {
+    background-color: color-mix(in srgb, currentColor 22%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .realce-aceso {
+    animation: realce-do-numero 1.2s ease-out;
+    border-radius: 0.25rem;
+    /* Uma folga para o brilho não encostar nos dígitos — compensada na margem para o número não
+       andar de lugar quando ele acende. */
+    padding: 0 0.25rem;
+    margin: 0 -0.25rem;
+  }
+}
