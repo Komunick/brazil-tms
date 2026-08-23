@@ -1,6 +1,8 @@
-import { sql } from "drizzle-orm";
+import { count, eq, sql } from "drizzle-orm";
 import { regionPosition } from "@brazil-tms/shared";
 import { db } from "../client";
+import { locations, trips } from "../../schema";
+import { origemAtrasadaSql } from "./atrasos";
 
 /**
  * O QUE FALTAVA NO CARTÃO DA REGIÃO: origem atrasada e spot (2026-08-22, a pedido).
@@ -14,7 +16,7 @@ import { db } from "../client";
  *
  * Sobraram os dois blocos que de fato faltavam, e este arquivo é só eles.
  *
- * ── POR QUE PELA REGIÃO DA ORIGEM ──────────────────────────────────────────────────────────────
+ * ── POR QUE PELA REGIÃO DA ORIGEM ───────────────────────────────────────────────────────────────
  *
  * Como o resto do painel: um LH liga duas pontas que podem estar em regiões diferentes, e a planilha
  * do cliente titula a coluna "ESTAÇÃO ORIGEM". Estação sem região vira grupo próprio em vez de
@@ -37,49 +39,22 @@ export interface SpotDaRegiao {
 }
 
 /**
- * A ANTECEDÊNCIA EXIGIDA NA ORIGEM — duas horas, por regra da operação.
+ * Quem tinha motorista escalado e não deu entrada na origem depois da hora.
  *
- * O portal manda a hora exigida por viagem, e ela nem sempre é duas: medido nas ofertas de spot,
- * aparece 1h e 2h. Só que esse campo hoje só é capturado nas ofertas. Enquanto o robô leitor não o
- * trouxer para todas as viagens, a régua é a regra do negócio — e quando vier, troca-se ESTA
- * constante por uma coluna sem mexer em mais nada.
- */
-const HORAS_DE_ANTECEDENCIA = 2;
-
-/**
- * Por quanto tempo uma viagem atrasada continua contando depois da hora da coleta.
- *
- * Um dia. Sem isto ela sairia do cartão no PIOR momento: às 10:00 vira "atrasada", e às 10:01 —
- * quando a hora da coleta também passa — desapareceria se o recorte fosse só "coleta no futuro".
- * Alarme que some sozinho ensina a operação a não olhar o cartão.
- *
- * O corte em 24h existe porque depois disso não é atraso, é viagem morta que ninguém encerrou:
- * problema real, mas outro, e que entupiria este.
- */
-const DIAS_QUE_O_ALARME_DURA = 1;
-
-/**
- * Quem já devia ter caminhão na origem e não tem.
- *
- * O RECORTE É `current_status in (received, assigned)`, e isso quer dizer "ainda não chegou" —
- * verificado, não suposto: nenhuma viagem com marco de chegada continua num desses dois status, e
- * não existe viagem em `at_origin` sem marco. Os dois contam a mesma história, então o status
- * sozinho responde. Sem cruzar a tabela de eventos, sem GPS, sem coordenada de estação — que foi
- * onde eu perdi tempo antes de medir.
+ * A regra inteira — o STA que já vem pronto do portal, o "não chegou" tirado do status e a exigência
+ * de haver alguém escalado — mora em `origemAtrasadaSql`, porque o quadro precisa LISTAR exatamente
+ * o que este número conta.
  */
 export async function readOrigemAtrasadaPorRegiao(): Promise<OrigemAtrasadaDaRegiao[]> {
-  const linhas = await db.execute<{ region: string | null; count: string }>(sql`
-    select lo.region::text as region, count(*) as count
-    from trips t
-    left join locations lo on lo.id = t.origin_location_id
-    where t.current_status in ('received', 'assigned')
-      and now() > t.planned_pickup_window_start - make_interval(hours => ${HORAS_DE_ANTECEDENCIA})
-      and t.planned_pickup_window_start > now() - make_interval(days => ${DIAS_QUE_O_ALARME_DURA})
-    group by 1
-  `);
+  const linhas = await db
+    .select({ region: locations.region, value: count() })
+    .from(trips)
+    .leftJoin(locations, eq(locations.id, trips.originLocationId))
+    .where(origemAtrasadaSql())
+    .groupBy(locations.region);
 
   return linhas
-    .map((r) => ({ region: r.region ?? null, count: Number(r.count) }))
+    .map((r) => ({ region: r.region ?? null, count: r.value }))
     .sort((a, b) => regionPosition(a.region) - regionPosition(b.region));
 }
 
@@ -96,7 +71,11 @@ export async function readOrigemAtrasadaPorRegiao(): Promise<OrigemAtrasadaDaReg
  * poderia preencher de outro jeito amanhã.
  */
 export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
-  const linhas = await db.execute<{ region: string | null; aceito: string; nao_aceito: string }>(sql`
+  const linhas = await db.execute<{
+    region: string | null;
+    aceito: string;
+    nao_aceito: string;
+  }>(sql`
     with oferta as (
       select
         s.portal_trip_id,
