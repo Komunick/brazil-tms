@@ -37,6 +37,15 @@ export const NAV_GRUPOS = [
  */
 export const NAV_ITEMS: readonly NavItem[] = [
   { key: "home", href: "/", icon: "LayoutDashboard", grupo: "operacao" },
+  // Minha Programação (2026-08-23): a lista pessoal de viagens acompanhadas. Logo abaixo do
+  // Início porque é a segunda coisa que se abre — o painel diz como está o dia, esta diz o que é meu.
+  {
+    key: "minhaProgramacao",
+    href: "/minha-programacao",
+    icon: "Star",
+    permission: "view_all_trips",
+    grupo: "operacao",
+  },
   // 005 — Control Tower board (view_all_trips: all 7 internal roles).
   { key: "trips", href: "/trips", icon: "Truck", permission: "view_all_trips", grupo: "operacao" },
   // 006 — Dispatch Board (assign_resources: Admin, Ops Manager, Dispatcher, Fleet Coordinator).

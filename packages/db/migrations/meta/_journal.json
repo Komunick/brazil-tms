@@ -281,6 +281,13 @@
       "when": 1787200000011,
       "tag": "0039_lanes_in_network",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1787200000012,
+      "tag": "0040_user_watched_trips",
+      "breakpoints": true
     }
   ]
 }
