@@ -1,4 +1,4 @@
-import { count, eq, sql } from "drizzle-orm";
+import { count, eq, sql, type SQL } from "drizzle-orm";
 import { regionPosition } from "@brazil-tms/shared";
 import { db } from "../client";
 import { locations, trips } from "../../schema";
@@ -59,6 +59,36 @@ export async function readOrigemAtrasadaPorRegiao(): Promise<OrigemAtrasadaDaReg
 }
 
 /**
+ * O NOME DA ESTAÇÃO COMPARADO SEM O QUE NÃO IDENTIFICA (2026-08-24, a pedido).
+ *
+ * A oferta de spot traz a rota como TEXTO, e o fornecedor escreve o mesmo lugar de dois jeitos:
+ *
+ *     oferta    SoC_GO_Goiânia_02
+ *     cadastro  SOC_GO_GOIANIA_02 (AEROPORTO)
+ *
+ * A comparação era literal, então acento, caixa e o sufixo entre parênteses derrubavam o casamento —
+ * e a oferta sumia de TODOS os cartões, em silêncio. Quatro ofertas reais de Goiânia (frente SULCO)
+ * estavam sendo contadas como nada.
+ *
+ * O parêntese sai porque descreve o lugar sem identificá-lo: "(AEROPORTO)" e "(HIDROLÂNDIA)"
+ * distinguem duas estações de Goiânia, mas o que as separa de verdade é o `_02` no nome — e esse
+ * fica. Medido: o dobramento não colapsa nenhum par de estações DIFERENTES.
+ *
+ * O que ele NÃO conserta, e é deliberado: `FM Hub_PR_Umuarama_02` continua sem casar com
+ * `LM Hub_PR_Umuarama`. Ali muda o PREFIXO, que é o tipo da estação, e tratar FM e LM como o mesmo
+ * lugar seria inventar uma equivalência que ninguém confirmou. Sobram 6 ofertas assim, e o caminho
+ * para elas é cadastro ou apelido — não regra de texto.
+ */
+const chaveDaEstacao = (col: SQL) => sql`
+  upper(btrim(regexp_replace(
+    regexp_replace(
+      translate(${col},
+        'ÁÀÃÂÄÉÈÊËÍÌÎÏÓÒÕÔÖÚÙÛÜÇÑáàãâäéèêëíìîïóòõôöúùûüçñ',
+        'AAAAAEEEEIIIIOOOOOUUUUCNAAAAAEEEEIIIIOOOOOUUUUCN'),
+      '\\([^)]*\\)', '', 'g'),
+    '\\s+', ' ', 'g')))`;
+
+/**
  * O leilão de spot da frente nas últimas 24 horas.
  *
  * A oferta guarda a rota como texto (`SoC_BA_Simoes Filho  ->  LM Hub_BA_Simões Filho`), então a
@@ -76,19 +106,32 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
     aceito: string;
     nao_aceito: string;
   }>(sql`
-    with oferta as (
+    with estacao as (
+      -- UM local por NOME DOBRADO, e o distinct on não é enfeite: o cadastro tem TRÊS pares de
+      -- estações com o nome repetido (LM HUB_MG_BELO HORIZONTE_02, FM HUB_PR_UMUARAMA_PQ_INDUST_II,
+      -- LM Hub_RJ_Cabo Frio_Jd Flamb). Sem ele a oferta dessas casaria com DUAS linhas e o cartão
+      -- contaria em dobro — erro que apareceria como "o spot de Minas dobrou", sem nada explicando.
+      select distinct on (chave) chave, region
+      from (
+        select ${chaveDaEstacao(sql`name`)} as chave, region, id
+        from locations
+        where archived_at is null
+      ) l
+      order by chave, id
+    ),
+    oferta as (
       select
         s.portal_trip_id,
-        lower(trim(split_part(s.route, '->', 1))) as origem
+        ${chaveDaEstacao(sql`trim(split_part(s.route, '->', 1))`)} as chave
       from spot_offers s
       where s.received_at > now() - interval '24 hours'
     )
     select
-      lo.region::text as region,
+      e.region::text as region,
       count(*) filter (where t.id is not null) as aceito,
       count(*) filter (where t.id is null) as nao_aceito
     from oferta o
-    join locations lo on lower(lo.name) = o.origem
+    join estacao e on e.chave = o.chave
     left join trips t on (t.customer_fields ->> 'ID (portal)') = o.portal_trip_id
     group by 1
   `);
