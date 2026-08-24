@@ -45,9 +45,11 @@ import { AvisosProvider, avisar } from "@/lib/ui/avisos";
  */
 const mutationCache = new MutationCache({
   onSuccess: (_dados, _variaveis, _contexto, mutation) => {
+    if (ehSilenciosa(mutation.meta)) return;
     avisar({ tipo: "ok", texto: textoDaMutacao(mutation.meta) });
   },
   onError: (erro, _variaveis, _contexto, mutation) => {
+    if (ehSilenciosa(mutation.meta)) return;
     avisar({
       tipo: "erro",
       texto: textoDaMutacao(mutation.meta),
@@ -55,6 +57,23 @@ const mutationCache = new MutationCache({
     });
   },
 });
+
+/**
+ * NEM TODA MUTAÇÃO GRAVA ALGUMA COISA — e a primeira versão disto avisava as duas.
+ *
+ * `useAssignmentCheck` é um POST que só CONFERE: pergunta ao servidor se aquele motorista e aquele
+ * caminhão podem pegar a viagem, e não escreve nada. Ele roda com atraso curto a cada troca de
+ * recurso no formulário — então escolher um motorista fazia pipocar "Concluído" no canto sem nada
+ * ter sido atribuído, e o aviso passava a mentir sobre a única coisa que ele existe para dizer.
+ *
+ * Quem só lê declara `meta: { silencioso: true }`. É opt-out e não opt-in de propósito: o padrão
+ * tem de ser avisar, senão a tela nova nasce muda de novo — e "esqueci de silenciar uma conferência"
+ * é um incômodo visível, enquanto "esqueci de avisar numa gravação" é o defeito calado que este
+ * mecanismo veio consertar.
+ */
+function ehSilenciosa(meta: Record<string, unknown> | undefined): boolean {
+  return meta?.silencioso === true;
+}
 
 function textoDaMutacao(meta: Record<string, unknown> | undefined): string | undefined {
   const aviso = meta?.aviso;

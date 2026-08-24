@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import {
   Toast,
   ToastClose,
@@ -89,7 +90,21 @@ export function AvisosProvider({ children }: { children: React.ReactNode }) {
             if (!aberto) fechar(aviso.id);
           }}
         >
-          <div className="min-w-0 space-y-0.5">
+          {/*
+            O SINAL VEM ANTES DA PALAVRA (2026-08-24, a pedido).
+            Quem passa o olho no canto da tela lê a forma e a cor antes de ler o texto — e a
+            pergunta "deu certo?" se responde nesse instante. O ícone NÃO substitui a frase: cor
+            sozinha exclui quem não distingue verde de vermelho, e um V sem legenda vira adivinhação.
+          */}
+          {aviso.tipo === "ok" ? (
+            <CheckCircle2
+              className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600 dark:text-emerald-500"
+              aria-hidden
+            />
+          ) : (
+            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" aria-hidden />
+          )}
+          <div className="min-w-0 flex-1 space-y-0.5">
             <ToastTitle>
               {aviso.texto ?? (aviso.tipo === "ok" ? t("concluido") : t("naoConcluido"))}
             </ToastTitle>
