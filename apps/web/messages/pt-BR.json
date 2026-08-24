@@ -1985,10 +1985,13 @@
     "editarAtribuicao": "Editar atribuição",
     "fecharAtribuicao": "Fechar",
     "abrirTelaCompleta": "Abrir a viagem",
-    "dias": "Dias",
-    "diasFiltrados": "{n} dia(s) fora",
+    "dias": "Filtros",
     "quaisDias": "Quais dias você quer ver?",
-    "verTodosOsDias": "Ver todos os dias"
+    "verTodosOsDias": "Ver todos os dias",
+    "naoDaParaEditar": "Esta viagem já saiu — a atribuição não pode mais ser alterada.",
+    "quaisStatus": "Quais status?",
+    "verTodosOsStatus": "Ver todos os status",
+    "filtrosAtivos": "{n} filtro(s)"
   },
   "HistoricoMotorista": {
     "titulo": "Histórico do motorista",
