@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do eTorre
 // @namespace    braziltransports.com.br
-// @version      0.2.5
+// @version      0.3.0
 // @description  Escuta o que a tela de Veículos Logísticos do eTorre já busca e entrega ao TMS. Somente leitura.
 // @match        https://torre.logae.com.br/*
 // @connect      tmsdev.braziltransports.com.br
 // @connect      tms.braziltransports.com.br
 // @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @run-at       document-start
 // Sem estas duas linhas o Tampermonkey nunca procura versão nova, e toda correção vira "abra a URL e
 // clique em Reinstalar" — com o agravante de que os três robôs desta VM têm nome parecido.
@@ -22,25 +24,29 @@
  * a grade mostra: posição, ignição, percentual percorrido, quilometragem e a previsão de entrega
  * calculada pelo rastreador. São 380 campos por veículo, 98 veículos na conta.
  *
- * Este script não pede nada ao servidor. Ele ESCUTA a chamada que o próprio app faz e lê a resposta
- * de passagem. É a diferença entre um leitor e um segundo cliente: nenhuma requisição a mais chega
- * ao fornecedor por nossa causa.
+ * ── ELE APRENDE A CHAMADA E DEPOIS A REPETE (0.3.0, 2026-08-24) ───────────────────────────────
+ *
+ * A primeira versão só ESCUTAVA: cutucava o botão "Atualizar" e lia a resposta de passagem. Isso
+ * amarrou o robô ao desenho da página, e com a aba atrás as entregas saíram a cada 5, 20, 40 e 83
+ * minutos em vez de 5 em 5.
+ *
+ * Agora ele aprende a receita da chamada — corpo e cabeçalhos de autenticação — da primeira vez que
+ * o app a faz, e passa a fazê-la sozinho. Detalhe e medições em `receita`, mais abaixo.
+ *
+ * A conta com o fornecedor não muda: era uma chamada a cada cinco minutos (a do app, provocada pelo
+ * empurrão) e continua sendo uma a cada cinco minutos (a nossa). O que mudou é quem a origina — e
+ * vale dizer com todas as letras, porque a versão anterior se vendia como "nenhuma requisição a
+ * mais por nossa causa" e isso deixou de ser literalmente verdade.
  *
  * ── POR QUE `document-start` ───────────────────────────────────────────────────────────────────
  *
  * Medido: um hook instalado com a página já carregada FUNCIONA neste app, mas isso é sorte de
  * implementação — basta o bundle passar a guardar `XMLHttpRequest.prototype.open` numa variável de
  * módulo para o hook tardio virar decoração. Entrando antes de qualquer script da página, a
- * referência que o app guardar já é a nossa.
- *
- * ── O QUE ESTA VERSÃO NÃO FAZ ──────────────────────────────────────────────────────────────────
- *
- * Não envia ao TMS. Prova de conceito prova UMA coisa: que o dado chega, íntegro e com os campos
- * certos, sem tocar no fornecedor. O envio exige rota e tabela no TMS, e essas se desenham melhor
- * depois de ver o dado real correndo por algumas horas.
+ * referência que o app guardar já é a nossa. Continua valendo: é do gancho que sai a receita.
  */
 
-/* global GM_xmlhttpRequest, GM_info */
+/* global GM_xmlhttpRequest, GM_getValue, GM_setValue, GM_info */
 (function () {
   "use strict";
 
@@ -158,6 +164,31 @@
     atrasoViagem: "GRJ_ALERTAATRASO",
     /** Quantos minutos de silêncio o rastreador considera demais nesta conta (hoje 60). */
     limiteSemPosicaoMin: "CMM_TEMPOALERTASEMPOSICAO",
+
+    /**
+     * SEIS QUE JÁ VINHAM NA MESMA RESPOSTA (2026-08-24, a pedido).
+     *
+     * Escolhidos com a resposta na mão, não pelo nome. Dois candidatos óbvios caíram na medição:
+     * `OBSERVACOES_COLETA_ENTREGA` tem DOIS valores distintos em 67 registros (um deles é " / "),
+     * e `SMK_DATAHORACHEGADADESTINO` vem preenchido em 78 de 78 — inclusive para veículo sem
+     * viagem, o que faz dele sentinela e não chegada. O par honesto da saída da origem é a versão
+     * `...FORMATADA`, preenchida exatamente nos mesmos 67.
+     */
+    /**
+     * O TELEFONE DO MOTORISTA, por uma porta sem cota.
+     *
+     * O portal do cliente raciona dado pessoal — a primeira carga do cadastro parou em "suas
+     * visitas para dados confidenciais atingiram o limite máximo". O rastreador entrega telefone e
+     * nome do mesmo motorista sem racionar nada, em 70 dos 78 veículos.
+     */
+    telefoneMotorista: "GVL_TELEFONES_MOTORISTA",
+    cidadeMotorista: "CIDADE_UF_MOTORISTA01",
+    kmNoDia: "GVL_KMSRODADODIA",
+    /** O que de fato aconteceu, contra a janela do cliente e a previsão da estrada. */
+    saidaDaOrigem: "SMK_DATAHORASAIDAORIGEM",
+    chegadaNoDestino: "SMK_DATAHORACHEGADADESTINOFORMATADA",
+    /** Parado no geral — o `minutosParado` acima é parado DENTRO do alvo. */
+    minutosParadoTotal: "TEMPO_MINUTOS_PARADO",
   };
 
   function extrair(registro) {
@@ -237,7 +268,28 @@
      * substituir-tudo do literal inteiro encosta nesta linha.
      */
     const TOKEN_DE_EXEMPLO = "COLE_AQUI" + "_O_TOKEN";
-    if (!CONFIG.token || CONFIG.token === TOKEN_DE_EXEMPLO) {
+    /**
+     * E ELE SOBREVIVE À ATUALIZAÇÃO DO ROBÔ (2026-08-24).
+     *
+     * O token mora no código, e o código é substituído inteiro a cada atualização: toda correção
+     * devolvia esta linha ao exemplo e o robô parava calado até alguém colar de novo. Numa noite só
+     * isso aconteceu duas vezes com o robô de motoristas.
+     *
+     * Agora o valor colado é copiado para o armazenamento do Tampermonkey na primeira execução e
+     * lido de lá depois. Cola-se uma vez. O código VENCE o guardado quando traz valor de verdade —
+     * é assim que se troca o token quando ele muda no servidor.
+     */
+    let token = CONFIG.token && CONFIG.token !== TOKEN_DE_EXEMPLO ? CONFIG.token : "";
+    try {
+      if (token) {
+        if (GM_getValue("token", "") !== token) GM_setValue("token", token);
+      } else {
+        token = GM_getValue("token", "") || "";
+      }
+    } catch {
+      // Sem armazenamento o robô continua funcionando com o que está no código.
+    }
+    if (!token) {
       erro("token não configurado — o retrato foi lido e NÃO foi entregue");
       return;
     }
@@ -246,7 +298,7 @@
       url: `${CONFIG.tms}/api/imports/fleet-feed`,
       headers: { "Content-Type": "application/json" },
       data: JSON.stringify({
-        token: CONFIG.token,
+        token,
         positions: frota.map(paraTms),
         ...ultimoCiclo,
       }),
@@ -302,13 +354,90 @@
       releaseLabel: v.liberacao,
       tripDelayFlag: v.atrasoViagem,
       noPositionLimitMinutes: v.limiteSemPosicaoMin,
+      driverPhone: v.telefoneMotorista,
+      driverCity: v.cidadeMotorista,
+      kmToday: typeof v.kmNoDia === "number" ? v.kmNoDia : null,
+      departedOriginAt: v.saidaDaOrigem,
+      arrivedDestinationAt: v.chegadaNoDestino,
+      stoppedMinutesTotal: v.minutosParadoTotal,
     };
   }
 
+  /**
+   * A RECEITA DA CHAMADA — o que permite o robô parar de depender da tela.
+   *
+   * ── O PROBLEMA ────────────────────────────────────────────────────────────────────────────────
+   *
+   * Este robô nasceu escutando: cutucava o botão "Atualizar" e lia a resposta de passagem. Isso
+   * amarrou o ciclo ao DESENHO da página — com a aba atrás, medido em 2026-08-22, as entregas
+   * saíram a cada 5, 20, 40 e 83 minutos, contra 5 em 5 com a aba na frente. As três travas de
+   * estrangulamento do Chromium já estavam desligadas no `iniciar.sh`; o atraso mora no app, que
+   * enfileira o refresh da grade atrás de quadros que aba de fundo não recebe.
+   *
+   * ── A SAÍDA ───────────────────────────────────────────────────────────────────────────────────
+   *
+   * Fazer a chamada nós mesmos. O corpo é minúsculo e a autenticação vem em dois cabeçalhos — tudo
+   * medido em 2026-08-24:
+   *
+   *     POST /apilog/veiculos-logisticos    {"userData":{"empresas":[NNNNNN],"grupos":[0],"aba":0}}
+   *     Authorization: Bearer <JWT>   ·   X-XSRF-TOKEN: <uuid>
+   *
+   * O número da empresa NÃO é cravado aqui: ele não está em localStorage nem em cookie, vive dentro
+   * do app. O robô APRENDE a receita da primeira chamada que a tela faz ao abrir, e repete. Se a
+   * empresa mudar, a chamada seguinte do app reescreve a receita sozinha.
+   *
+   * ── QUANTO ISSO CUSTA AO FORNECEDOR: NADA A MAIS ──────────────────────────────────────────────
+   *
+   * O cabeçalho deste arquivo prometia "nenhuma requisição a mais chega ao fornecedor por nossa
+   * causa". A promessa muda de FORMA e não de tamanho: antes o robô cutucava a tela a cada cinco
+   * minutos e o app fazia uma chamada; agora o robô faz uma chamada a cada cinco minutos. Uma por
+   * ciclo, como sempre. O que mudou é quem a origina.
+   *
+   * ── O QUE AINDA PRECISA DA TELA, E COM QUE FREQUÊNCIA ─────────────────────────────────────────
+   *
+   * O token dura ~12 horas (medido: 42.857 s). Quando expirar, a chamada volta 401, a receita é
+   * descartada e o robô cutuca o botão UMA vez para o app emitir uma chamada nova e autenticada —
+   * que a receita reaprende. Ou seja: a dependência do desenho deixa de ser a cada cinco minutos e
+   * passa a ser a cada meio dia. Não é zero, e dizer que é seria mentira; recarregar a página não
+   * serve porque o app não reabre a tela de Veículos Logísticos sozinho.
+   */
+  let receita = null;
+
+  const eOAlvo = (endereco) =>
+    typeof endereco === "string" &&
+    endereco.includes(CONFIG.alvo) &&
+    !endereco.includes(CONFIG.ignorar);
+
   const original = XMLHttpRequest.prototype.open;
+  const cabecalhoOriginal = XMLHttpRequest.prototype.setRequestHeader;
+  const enviarOriginal = XMLHttpRequest.prototype.send;
+
+  XMLHttpRequest.prototype.setRequestHeader = function (nome, valor) {
+    if (this.__cabecalhos) this.__cabecalhos[nome] = valor;
+    return cabecalhoOriginal.call(this, nome, valor);
+  };
+
+  XMLHttpRequest.prototype.send = function (corpo) {
+    if (eOAlvo(this.__endereco) && typeof corpo === "string") {
+      const c = this.__cabecalhos || {};
+      if (c["Authorization"]) {
+        receita = {
+          url: this.__endereco,
+          corpo,
+          autorizacao: c["Authorization"],
+          xsrf: c["X-XSRF-TOKEN"] || null,
+        };
+        log("receita da chamada aprendida — a partir daqui eu peço sozinho");
+      }
+    }
+    return enviarOriginal.call(this, corpo);
+  };
+
   XMLHttpRequest.prototype.open = function (metodo, url, ...resto) {
     const endereco = String(url);
-    if (endereco.includes(CONFIG.alvo) && !endereco.includes(CONFIG.ignorar)) {
+    this.__endereco = endereco;
+    this.__cabecalhos = {};
+    if (eOAlvo(endereco)) {
       this.addEventListener("loadend", function () {
         if (this.status !== 200) {
           erro(`o app recebeu ${this.status} — sessão do eTorre pode ter caído`);
@@ -374,12 +503,54 @@
     cutucar(botao);
   }
 
-  // O primeiro ciclo espera a tela assentar; os seguintes são agendados a partir do FIM do anterior,
+  /**
+   * A chamada feita por nós, com a receita aprendida. Devolve `true` quando o retrato saiu daqui.
+   *
+   * `fetch` e não `XMLHttpRequest` de propósito: o gancho acima intercepta XHR, e refazer a chamada
+   * por XHR faria o robô escutar a si mesmo — sobrescrevendo a receita com a própria cópia e
+   * processando o mesmo retrato duas vezes.
+   */
+  async function pedirSozinho() {
+    if (!receita) return false;
+    const cabecalhos = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      Authorization: receita.autorizacao,
+    };
+    if (receita.xsrf) cabecalhos["X-XSRF-TOKEN"] = receita.xsrf;
+
+    const r = await fetch(receita.url, {
+      method: "POST",
+      credentials: "include",
+      headers: cabecalhos,
+      body: receita.corpo,
+    });
+    if (r.status === 401 || r.status === 403) {
+      // Token vencido. Descartar a receita é o que faz o próximo ciclo cutucar a tela e reaprender.
+      receita = null;
+      erro(`o eTorre recusou (${r.status}) — token vencido; vou pedir à tela que se atualize`);
+      return false;
+    }
+    if (!r.ok) throw new Error(`eTorre respondeu HTTP ${r.status}`);
+    const corpo = await r.json();
+    const registros = corpo?.records;
+    if (!Array.isArray(registros)) {
+      erro("resposta sem `records` — o formato mudou", corpo && Object.keys(corpo));
+      return true;
+    }
+    resumir(registros);
+    return true;
+  }
+
+  // O primeiro ciclo espera a tela assentar — é nele que a receita costuma ser aprendida, da chamada
+  // que o próprio app faz ao abrir a grade. Os seguintes são agendados a partir do FIM do anterior,
   // então um ciclo lento nunca empilha em cima do próximo.
-  setTimeout(function ciclo() {
+  setTimeout(async function ciclo() {
     const t0 = Date.now();
     try {
-      atualizarTela();
+      // Sem receita (primeiro ciclo, ou token vencido), cai para o empurrão na tela — que além de
+      // trazer o retrato faz o app emitir uma chamada autenticada, e é dela que a receita nasce.
+      if (!(await pedirSozinho())) atualizarTela();
     } catch (e) {
       erro("ciclo falhou:", String(e?.message ?? e).slice(0, 160));
     } finally {
@@ -389,5 +560,5 @@
     }
   }, 15_000);
 
-  log("ativo. Somente leitura: escuta a tela e pede que ela se atualize a cada 5 min.");
+  log("ativo. Somente leitura. Aprende a chamada da tela e depois a repete sozinho, a cada 5 min.");
 })();

@@ -163,6 +163,13 @@ export async function recordFleetPositions(
     releaseLabel: texto(e.releaseLabel),
     tripDelayFlag: texto(e.tripDelayFlag),
     noPositionLimitMinutes: paraInteiro(e.noPositionLimitMinutes),
+    driverPhone: texto(e.driverPhone),
+    driverCity: texto(e.driverCity),
+    kmToday: semSentinela(e.kmToday),
+    // Sem fuso, como os outros instantes deste fornecedor — `paraUtc` aplica o fuso da empresa.
+    departedOriginAt: paraUtc(e.departedOriginAt),
+    arrivedDestinationAt: paraUtc(e.arrivedDestinationAt),
+    stoppedMinutesTotal: paraInteiro(e.stoppedMinutesTotal),
     receivedAt: new Date(),
   }));
 
@@ -198,6 +205,12 @@ export async function recordFleetPositions(
         releaseLabel: sql`excluded.release_label`,
         tripDelayFlag: sql`excluded.trip_delay_flag`,
         noPositionLimitMinutes: sql`excluded.no_position_limit_minutes`,
+        driverPhone: sql`excluded.driver_phone`,
+        driverCity: sql`excluded.driver_city`,
+        kmToday: sql`excluded.km_today`,
+        departedOriginAt: sql`excluded.departed_origin_at`,
+        arrivedDestinationAt: sql`excluded.arrived_destination_at`,
+        stoppedMinutesTotal: sql`excluded.stopped_minutes_total`,
         receivedAt: sql`excluded.received_at`,
       },
     });
