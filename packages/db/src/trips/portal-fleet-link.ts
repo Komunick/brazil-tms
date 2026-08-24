@@ -95,7 +95,8 @@ export function foldName(value: string): string {
 }
 
 /** O mesmo dobramento, feito pelo Postgres, para a comparação acontecer dentro da consulta. */
-const foldNameSql = (col: SQL | ReturnType<typeof sql.raw>): SQL =>
+/** Exportado para o preenchimento de telefone da frota usar EXATAMENTE o mesmo dobramento. */
+export const foldNameSql = (col: SQL | ReturnType<typeof sql.raw>): SQL =>
   sql`upper(btrim(regexp_replace(translate(${col}, ${ACENTOS}, ${SEM_ACENTO}), '\\s+', ' ', 'g')))`;
 
 /** The two plates the portal packs into one field: tractor first, trailer second. */

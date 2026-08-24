@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do eTorre
 // @namespace    braziltransports.com.br
-// @version      0.3.1
+// @version      0.3.2
 // @description  Escuta o que a tela de Veículos Logísticos do eTorre já busca e entrega ao TMS. Somente leitura.
 // @match        https://torre.logae.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -360,7 +360,12 @@
           const corpo = JSON.parse(res.responseText || "{}");
           log(
             `entregue: ${corpo.recebidas} posições, ${corpo.vinculadas} casadas com a frota` +
-              (corpo.semCadastro ? `, ${corpo.semCadastro} sem cadastro` : ""),
+              (corpo.semCadastro ? `, ${corpo.semCadastro} sem cadastro` : "") +
+              // Só aparece quando de fato aconteceu: em regime é zero, e um "0 telefones" a cada
+              // cinco minutos vira ruído que ensina a não ler a linha.
+              (corpo.telefonesPreenchidos
+                ? `, ${corpo.telefonesPreenchidos} motorista(s) ganharam telefone`
+                : ""),
           );
         } else {
           erro(`TMS respondeu ${res.status}: ${String(res.responseText).slice(0, 200)}`);
