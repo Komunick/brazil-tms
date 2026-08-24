@@ -47,11 +47,26 @@ export interface FaltaRevelar {
 }
 
 /**
- * O portal chama de ativo o status 1. O resto é alguma forma de inativo, e a tradução mora aqui em
- * vez de espalhada: se ele criar um código novo, muda uma função.
+ * O `status` NUMÉRICO DO PORTAL NÃO É TRADUZIDO, e essa é a correção (2026-08-24).
+ *
+ * Estava escrito `status === 1 ? "active" : "inactive"`, por parecer óbvio. O dado real diz o
+ * contrário, e com folga:
+ *
+ *     status=0 · sub_status=1        341 motoristas — 19 DIRIGINDO agora
+ *     status=1 · sub_status=10001    138 motoristas —  0 dirigindo
+ *
+ * Quem o portal escala é justamente o `status=0`. Seja lá o que esse campo signifique — aprovação,
+ * etapa de cadastro, KYC —, não é "está ativo".
+ *
+ * E a saída não é inverter: seria trocar um palpite por outro sobre um campo cuja semântica ninguém
+ * aqui conhece, e o preço do erro é alto — motorista marcado inativo NÃO recebe viagem, porque o
+ * espelho do portal exige `status = 'active'`. Foi assim que 16 viagens ficaram com motorista no
+ * portal e ninguém no TMS.
+ *
+ * Então o cadastro nasce com o padrão da coluna (`active`) e a situação passa a ser um campo do TMS,
+ * mantido por quem opera. O retrato bruto do portal continua guardado em `portal_fields` — se um dia
+ * alguém decifrar o vocabulário dele, o dado está lá, sem migração.
  */
-const situacao = (status: number | null): "active" | "inactive" =>
-  status === 1 ? "active" : "inactive";
 
 export async function applyPortalDrivers(entrada: PortalDriver[]): Promise<{
   resumo: ResumoDoCadastro;
@@ -113,7 +128,6 @@ export async function applyPortalDrivers(entrada: PortalDriver[]): Promise<{
         ownershipType: "owned",
         portalFields: p.bruto,
         portalSyncedAt: new Date(),
-        status: situacao(p.status),
         notes: "Cadastro espelhado do portal do cliente.",
       });
       resumo.criados += 1;
