@@ -43,6 +43,25 @@ import { Skeleton } from "@/components/ui/skeleton";
  * dirigir. Documento, cobrança, exceção e nota continuam na tela própria, a um clique daqui — uma
  * janela que tenta ser a página inteira vira uma página pior, dentro de um retângulo menor.
  */
+
+/**
+ * SÓ SE AINDA DÁ PARA MUDAR QUEM DIRIGE (2026-08-24, a pedido).
+ *
+ * A janela oferecia "editar atribuição" em QUALQUER viagem, inclusive nas que estão em trânsito,
+ * no destino ou encerradas. Nessas o formulário abria e o servidor recusava a gravação — o pior dos
+ * dois mundos: a tela promete uma ação que a regra não permite, e a pessoa só descobre depois de
+ * preencher.
+ *
+ * A régua é a MESMA da tela de detalhe (`assignment-panel.tsx`), e vem de lá copiada de propósito:
+ * são três valores, e uma constante compartilhada obrigaria a importar um módulo de tela dentro de
+ * outro. Se um dia virar quatro, vale extrair.
+ *
+ * `received` é a viagem a atribuir; `assigned` e `confirmed` já têm alguém e ainda dá para trocar.
+ * Do momento em que o caminhão chega à origem em diante, quem manda é o que ACONTECEU, e trocar o
+ * motorista no papel não muda quem está dirigindo.
+ */
+const PODE_ATRIBUIR = new Set(["received", "assigned", "confirmed"]);
+
 export function ProgramacaoDetalhe({
   tripId,
   aberto,
@@ -65,6 +84,7 @@ export function ProgramacaoDetalhe({
   const [historico, setHistorico] = useState<{ id: string; nome: string } | null>(null);
 
   const viagem = consulta.data?.item;
+  const podeAtribuir = viagem ? PODE_ATRIBUIR.has(viagem.currentStatus) : false;
 
   return (
     <Dialog
@@ -103,13 +123,19 @@ export function ProgramacaoDetalhe({
               por padrão, empurraria a linha do tempo para fora da primeira tela toda vez.
             */}
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" size="sm" onClick={() => setAtribuindo((v) => !v)}>
-                {atribuindo
-                  ? t("fecharAtribuicao")
-                  : viagem.currentAssignment
-                    ? t("editarAtribuicao")
-                    : t("atribuir")}
-              </Button>
+              {podeAtribuir ? (
+                <Button type="button" size="sm" onClick={() => setAtribuindo((v) => !v)}>
+                  {atribuindo
+                    ? t("fecharAtribuicao")
+                    : viagem.currentAssignment
+                      ? t("editarAtribuicao")
+                      : t("atribuir")}
+                </Button>
+              ) : (
+                // Dizer POR QUE o botão não está aqui, em vez de simplesmente não mostrá-lo: um
+                // botão que some sem explicação faz a pessoa procurar o defeito na tela.
+                <p className="text-xs text-muted-foreground">{t("naoDaParaEditar")}</p>
+              )}
               <Button asChild type="button" size="sm" variant="ghost">
                 <Link href={`/trips/${viagem.id}`}>
                   <ExternalLink className="mr-1 h-3.5 w-3.5" aria-hidden />
@@ -125,7 +151,7 @@ export function ProgramacaoDetalhe({
               e um painel que só aparece rolando é um painel que ninguém lê na hora de decidir.
               Em tela estreita ele desce para baixo, porque duas colunas de 20rem não cabem.
             */}
-            {atribuindo ? (
+            {atribuindo && podeAtribuir ? (
               <div className="grid gap-3 rounded-md border p-3 lg:grid-cols-[1fr_16rem]">
                 <AssignmentForm
                   tripId={viagem.id}
