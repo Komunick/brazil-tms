@@ -91,8 +91,28 @@ export const FILTER_OPTIONS_POLL_MS = 60_000;
  * um painel apagado: a sala toma decisão em cima de um retrato velho sem saber.
  */
 export const WALLBOARD_POLL_MS = 30_000;
-/** O aviso de oferta dura 30s na tela; buscar mais devagar que isso seria avisar tarde. */
-export const SPOT_OFFERS_POLL_MS = 30_000;
+/**
+ * CINCO SEGUNDOS, e o porquê é uma conta de onde o tempo se perde (2026-08-24, a pedido).
+ *
+ * O pedido foi "chegou no portal, chega no TMS". Isso tem um PISO que não está neste repositório: o
+ * portal não empurra nada, ele é consultado — e quem consulta é o detector de ofertas, numa VM
+ * Windows, de 30 em 30 segundos. Nenhuma mudança aqui torna a oferta mais rápida que a detecção.
+ *
+ * Medido nas 63 ofertas com hora do portal: do leilão até o TMS gravar, mediana de 36 s e mínimo de
+ * 4 s. Ou seja, o trecho detector→servidor já está no limite do que o ciclo dele permite.
+ *
+ * O que sobrava era ESTA linha. A 30 s, a tela somava até mais meio minuto a um caminho que já
+ * custava meio minuto — dobrando o pior caso por conta própria. A 5 s, a contribuição da tela vira
+ * ruído perto do piso.
+ *
+ * E CUSTA POUCO: a consulta são as ofertas de HOJE, teto de 30 linhas, sobre um índice em
+ * `received_at desc`. São doze requisições por minuto numa aba aberta, contra um painel que já lê a
+ * torre inteira a cada minuto. O caro aqui nunca foi a leitura.
+ *
+ * O que NÃO se resolve encurtando: alcançar quem não está diante da tela. Para isso existem o som e
+ * o aviso do sistema, e é neles que mora a sensação de "na hora" — não nos segundos.
+ */
+export const SPOT_OFFERS_POLL_MS = 5_000;
 /** Synchronous CSV export row cap (R13); single source in @brazil-tms/shared, re-exported for UI copy. */
 export { EXPORT_ROW_CAP };
 
