@@ -12,6 +12,7 @@ import {
   saudeDoCiclo,
 } from "@/lib/status/saude";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
+import { TesteDoTelegram } from "@/components/status/teste-do-telegram";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
@@ -294,6 +295,10 @@ export function ServerStatusClient() {
           </ul>
         )}
       </Card>
+
+      {/* O teste do aviso fica junto das fontes e do ritmo: são as três perguntas do mesmo tipo,
+          "isto ainda está funcionando?", e quem desconfia de uma desconfia das outras. */}
+      <TesteDoTelegram />
 
       <p className="text-xs text-muted-foreground">
         {t("measuredAt", {

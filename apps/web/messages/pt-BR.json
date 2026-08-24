@@ -150,7 +150,16 @@
   "Status": {
     "pending": "Pendente",
     "active": "Ativo",
-    "disabled": "Desativado"
+    "disabled": "Desativado",
+    "telegram": {
+      "titulo": "Aviso de spot no Telegram",
+      "dica": "Ofertas são raras — teste antes de precisar. A mensagem vai para o grupo marcada como teste.",
+      "testar": "Enviar teste",
+      "enviando": "Enviando…",
+      "ok": "Enviado. Confira o grupo.",
+      "semConfig": "Telegram não configurado no servidor (TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID).",
+      "falhou": "Não foi possível enviar. Veja o log do servidor."
+    }
   },
   "AdminUsers": {
     "title": "Usuários e Perfis",
