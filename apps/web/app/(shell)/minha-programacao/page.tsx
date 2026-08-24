@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { can } from "@brazil-tms/shared";
 import { verifySession } from "@/lib/auth/session";
+import { getTripFilterOptions } from "@/lib/trips/trips-read";
 import { MinhaProgramacaoClient } from "@/components/trips/minha-programacao-client";
 
 /**
@@ -17,6 +18,9 @@ export default async function MinhaProgramacaoPage() {
   if (!can(session.user.role, "view_all_trips")) redirect("/");
 
   const t = await getTranslations("Programacao");
+  // As listas de recurso vêm do servidor como SEMENTE, igual à tela de detalhe: a janela de
+  // atribuição precisa delas prontas no primeiro desenho, senão o formulário abre sem opções.
+  const resourceOptions = await getTripFilterOptions();
 
   return (
     <div className="space-y-4">
@@ -24,7 +28,7 @@ export default async function MinhaProgramacaoPage() {
         <h1 className="text-2xl font-semibold">{t("title")}</h1>
         <p className="text-muted-foreground">{t("subtitle")}</p>
       </header>
-      <MinhaProgramacaoClient />
+      <MinhaProgramacaoClient resourceOptions={resourceOptions} />
     </div>
   );
 }

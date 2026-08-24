@@ -1953,7 +1953,7 @@
   },
   "Programacao": {
     "title": "Programação",
-    "subtitle": "A programação por dia, de ontem em diante. Pinte o que precisa de atenção; a cor é sua.",
+    "subtitle": "A programação por dia, de anteontem em diante. Pinte o que precisa de atenção; a cor é sua.",
     "lh": "LH",
     "rota": "Rota",
     "etaOrigem": "ETA origem",
@@ -1978,6 +1978,11 @@
     "esconder": "Esconder esta LH da minha tela",
     "mostrar": "Voltar a mostrar",
     "verOcultas": "Ver {n} escondidas",
-    "esconderOcultas": "Ocultar as escondidas"
+    "esconderOcultas": "Ocultar as escondidas",
+    "anteontem": "ANTEONTEM",
+    "atribuir": "Atribuir motorista",
+    "editarAtribuicao": "Editar atribuição",
+    "fecharAtribuicao": "Fechar",
+    "abrirTelaCompleta": "Abrir a viagem"
   }
 }

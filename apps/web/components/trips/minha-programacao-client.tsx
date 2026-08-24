@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Eye, EyeOff, Palette } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, EyeOff, Palette } from "lucide-react";
+import type { TripFilterOptions } from "@brazil-tms/db";
 import { useMarcarViagem, useProgramacao } from "@/lib/trips/client";
+import { ProgramacaoDetalhe } from "@/components/trips/programacao-detalhe";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { REGION_ORDER, type TripDisplayStatus } from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
@@ -56,13 +57,22 @@ import {
  * uma coluna, não de outra cor.
  */
 const CORES = [
-  { chave: "vermelho", classe: "bg-red-500/15 hover:bg-red-500/25", ponto: "bg-red-500" },
-  { chave: "ambar", classe: "bg-amber-500/15 hover:bg-amber-500/25", ponto: "bg-amber-500" },
-  { chave: "verde", classe: "bg-emerald-500/15 hover:bg-emerald-500/25", ponto: "bg-emerald-500" },
-  { chave: "azul", classe: "bg-sky-500/15 hover:bg-sky-500/25", ponto: "bg-sky-500" },
-  { chave: "roxo", classe: "bg-violet-500/15 hover:bg-violet-500/25", ponto: "bg-violet-500" },
-  { chave: "cinza", classe: "bg-slate-500/15 hover:bg-slate-500/25", ponto: "bg-slate-500" },
+  { chave: "vermelho", classe: "bg-red-500/40 hover:bg-red-500/50", ponto: "bg-red-500" },
+  { chave: "ambar", classe: "bg-amber-500/40 hover:bg-amber-500/50", ponto: "bg-amber-500" },
+  { chave: "verde", classe: "bg-emerald-500/40 hover:bg-emerald-500/50", ponto: "bg-emerald-500" },
+  { chave: "azul", classe: "bg-sky-500/40 hover:bg-sky-500/50", ponto: "bg-sky-500" },
+  { chave: "roxo", classe: "bg-violet-500/40 hover:bg-violet-500/50", ponto: "bg-violet-500" },
+  { chave: "cinza", classe: "bg-slate-500/40 hover:bg-slate-500/50", ponto: "bg-slate-500" },
 ] as const;
+
+/**
+ * QUARENTA POR CENTO, e não cem (2026-08-24, a pedido: "cores mais fortes").
+ *
+ * A primeira versão usava 15% e a marca sumia num relance — que é o oposto do que ela serve. Mas
+ * cor cheia traria outro problema: o texto da linha é `foreground`, pensado para o fundo do tema, e
+ * sobre vermelho sólido ele fica ilegível no claro e no escuro. Em 40% a linha salta de longe e as
+ * letras continuam com contraste — testado nos dois temas.
+ */
 
 const classeDaCor = (cor: string | null): string =>
   CORES.find((c) => c.chave === cor)?.classe ?? "";
@@ -79,14 +89,16 @@ function rotuloDoDia(dia: string, hoje: string, t: (k: string) => string): strin
   return `${d.toLocaleDateString("pt-BR", { weekday: "short" })} · ${data}`;
 }
 
-export function MinhaProgramacaoClient() {
+export function MinhaProgramacaoClient({ resourceOptions }: { resourceOptions: TripFilterOptions }) {
   const t = useTranslations("Programacao");
   const [frente, setFrente] = useState("");
   const [mostrarOcultas, setMostrarOcultas] = useState(false);
   const [busca, setBusca] = useState("");
   const [paletaAberta, setPaletaAberta] = useState<string | null>(null);
+  const [recolhidos, setRecolhidos] = useState<Set<string>>(new Set());
+  const [viagemAberta, setViagemAberta] = useState<string | null>(null);
 
-  const consulta = useProgramacao(frente, { atras: 1, adiante: 7 });
+  const consulta = useProgramacao(frente, { atras: 2, adiante: 7 });
   const marcar = useMarcarViagem();
 
   const hoje = useMemo(() => {
@@ -192,16 +204,41 @@ export function MinhaProgramacaoClient() {
       {porDia.map(([dia, doDia]) => (
         <Card key={dia}>
           <CardContent className="overflow-x-auto pt-6">
-            <div className="mb-2 flex items-baseline gap-2">
+            {/*
+              O DIA INTEIRO RECOLHE (2026-08-24, a pedido).
+              Com anteontem, ontem, hoje e mais sete dias, a página passa de quinhentas linhas — e
+              quem está tocando a operação de hoje não quer rolar por cima de sexta-feira. O botão é
+              o cabeçalho todo, não uma setinha: alvo grande para uma ação que se repete o dia
+              inteiro. A contagem CONTINUA visível recolhida, senão fechar o dia esconderia também a
+              informação de que ele existe e tem trabalho dentro.
+            */}
+            <button
+              type="button"
+              aria-expanded={!recolhidos.has(dia)}
+              onClick={() =>
+                setRecolhidos((atuais) => {
+                  const novo = new Set(atuais);
+                  if (novo.has(dia)) novo.delete(dia);
+                  else novo.add(dia);
+                  return novo;
+                })
+              }
+              className="mb-2 flex w-full items-baseline gap-2 rounded px-1 py-0.5 text-left hover:bg-muted/50"
+            >
+              {recolhidos.has(dia) ? (
+                <ChevronRight className="h-4 w-4 self-center text-muted-foreground" aria-hidden />
+              ) : (
+                <ChevronDown className="h-4 w-4 self-center text-muted-foreground" aria-hidden />
+              )}
               <h2 className="text-sm font-semibold uppercase tracking-wide">
                 {rotuloDoDia(dia, hoje, t)}
               </h2>
               <span className="text-xs text-muted-foreground">
                 {t("lhsNoDia", { n: doDia.length })}
               </span>
-            </div>
+            </button>
 
-            <Table>
+            <Table className={cn(recolhidos.has(dia) && "hidden")}>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8" />
@@ -266,11 +303,20 @@ export function MinhaProgramacaoClient() {
                     </TableCell>
 
                     <TableCell className="font-mono text-xs">
-                      {/* Clicar na LH abre a viagem: os dados completos já têm tela própria, e um
-                          segundo lugar para a mesma coisa é um segundo lugar para envelhecer. */}
-                      <Link href={`/trips/${l.tripId}`} className="underline underline-offset-2">
+                      {/*
+                        Clicar na LH abre uma JANELA, não outra página (2026-08-24, a pedido).
+                        Numa programação de centenas de linhas, sair da tela é perder o lugar na
+                        lista — e o lugar é o fio de quem está trabalhando. A janela traz o que se
+                        decide daqui: onde a viagem está, o que já aconteceu e quem vai dirigir; o
+                        resto continua na tela própria, a um clique de dentro dela.
+                      */}
+                      <button
+                        type="button"
+                        onClick={() => setViagemAberta(l.tripId)}
+                        className="underline underline-offset-2 hover:text-primary"
+                      >
                         {l.externalTripId ?? "—"}
-                      </Link>
+                      </button>
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs">
                       {l.origem ?? "—"}
@@ -330,6 +376,13 @@ export function MinhaProgramacaoClient() {
           </CardContent>
         </Card>
       ))}
+
+      <ProgramacaoDetalhe
+        tripId={viagemAberta}
+        aberto={viagemAberta !== null}
+        aoFechar={() => setViagemAberta(null)}
+        resourceOptions={resourceOptions}
+      />
     </div>
   );
 }
