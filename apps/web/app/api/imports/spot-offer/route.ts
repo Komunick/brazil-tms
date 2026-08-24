@@ -4,16 +4,25 @@ import { spotOfferBodySchema } from "@brazil-tms/shared";
 import { recordSpotOffer } from "@brazil-tms/db";
 import { Conflict, handleRouteError } from "@/lib/api/respond";
 import { Unauthorized } from "@/lib/auth/require-auth";
+import { avisarSpotNoTelegram } from "@/lib/spot/telegram";
 
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/imports/spot-offer — a oferta de leilão que o monitor já manda ao Telegram (2026-08-18).
+ * POST /api/imports/spot-offer — a oferta de leilão do portal (2026-08-18).
  *
- * O detector não é este serviço: é um userscript numa VM Windows que vive na aba "During Spot
- * Bidding" do portal, captura a consulta do próprio portal, filtra `bid_status = 10` e compara a
- * rota contra a lista de rotas de interesse. Ele está validado em produção (58 de 58 ofertas). Esta
- * rota é só o SEGUNDO destino do mesmo aviso — o que vai para o celular passa a aparecer na TV.
+ * QUEM DETECTA MUDOU EM 2026-08-24, e o contrato desta rota NÃO. Era um userscript numa VM Windows,
+ * na aba "During Spot Bidding", a cada 30 segundos; a VM travava sozinha e o script era o único robô
+ * sem sinal de vida, então o silêncio dele — legítimo por horas, porque ofertas são raras — não se
+ * distinguia de máquina morta.
+ *
+ * Hoje quem detecta é o robô do PORTAL, na VM Linux, de cinco em cinco segundos: os campos do leilão
+ * já vinham na listagem que ele lê há meses. Esta rota não mudou uma linha do formato de propósito —
+ * a tela, o som, o aviso do sistema e o cartão do dia já o consomem em produção, e trocar formato
+ * junto com origem seria mudar duas coisas ao mesmo tempo e não saber qual quebrou.
+ *
+ * E o Telegram passou a sair DAQUI: era o script da VM que avisava, e desligar a VM levaria o aviso
+ * junto. Ver `lib/spot/telegram.ts`.
  *
  * Autenticada pelo MESMO token do robô do portal (`PORTAL_FEED_TOKEN`), comparado em tempo
  * constante, e recusando-se a funcionar se ele não estiver definido: segredo vazio nunca pode
@@ -45,6 +54,24 @@ export async function POST(request: Request): Promise<NextResponse> {
     assertToken(request, body.token);
 
     const { nova } = await recordSpotOffer(body.offer);
+
+    /**
+     * O TELEGRAM SAI DAQUI DESDE 2026-08-24, e três detalhes o mantêm inofensivo.
+     *
+     * SÓ QUANDO É NOVA. `nova: false` é o robô recontando uma oferta que continua em leilão — ele
+     * relê a listagem de cinco em cinco segundos. Avisar de novo encheria o grupo com a mesma
+     * oferta doze vezes por minuto enquanto ela estivesse aberta.
+     *
+     * SEM `await`. Quem chama é o ciclo de spot, e segurar a resposta esperando o Telegram faria
+     * uma rede lenta do lado de lá atrasar o ciclo seguinte — que é justamente o que este ciclo
+     * existe para evitar.
+     *
+     * E O ERRO NUNCA SOBE. A oferta já está no banco, e é ela que sustenta a tela, o som e o cartão
+     * do dia. O Telegram é um destino a mais: se falhar, o aviso não chega no celular — a oferta
+     * não some do sistema.
+     */
+    if (nova) void avisarSpotNoTelegram(body.offer).catch(() => {});
+
     // `nova: false` não é erro: é o monitor recontando o que ainda está em leilão depois de um
     // reinício. Responder 200 evita que ele trate isso como falha e fique reenviando.
     return comCors(NextResponse.json({ nova }));
