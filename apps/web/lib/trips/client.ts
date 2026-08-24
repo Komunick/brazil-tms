@@ -42,7 +42,6 @@ import type {
   TripFilterOptions,
   DashboardSummary,
   RotaDaMalha,
-  ViagemAcompanhada,
   DesempenhoDoMotorista,
   DesempenhoNaRota,
   BscSnapshotView,
