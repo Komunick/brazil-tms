@@ -1988,7 +1988,8 @@
     "dias": "Dias",
     "diasFiltrados": "{n} dia(s) fora",
     "quaisDias": "Quais dias você quer ver?",
-    "verTodosOsDias": "Ver todos os dias"
+    "verTodosOsDias": "Ver todos os dias",
+    "naoDaParaEditar": "Esta viagem já saiu — a atribuição não pode mais ser alterada."
   },
   "HistoricoMotorista": {
     "titulo": "Histórico do motorista",
