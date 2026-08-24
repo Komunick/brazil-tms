@@ -13,30 +13,28 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { formatDateTime, TRANSITIONS, TRIP_STATUSES, type TripStatus } from "@brazil-tms/shared";
-import { useAddTripNote, useRecordMilestone, TripsError } from "@/lib/trips/client";
+import { formatDateTime, TRIP_STATUSES, type TripStatus } from "@brazil-tms/shared";
+import { useAddTripNote, TripsError } from "@/lib/trips/client";
 import type { TripDetailView } from "@/lib/trips/trips-read";
 import { montarLinhaDoTempo } from "@/lib/trips/timeline";
 
 /**
- * Interactive execution timeline (007, US1). Upgrades the read-only 005 timeline: a milestone
- * recorder (the next legal statuses, driven through the 003 machine via `useRecordMilestone`), a
- * free-form note entry (`useAddTripNote`), and a chronological event list with planned-vs-actual
- * deltas (planned pickup/delivery windows vs the recorded `eventTimestamp`). SLA is recomputed
- * server-side on every milestone; the UI never computes it. pt-BR labels + error mapping.
+ * A LINHA DO TEMPO PASSA A SER DE LEITURA (2026-08-24, a pedido).
+ *
+ * Ela nasceu com um gravador de marcos — botões que avançavam a viagem pela máquina de status. Isso
+ * fazia sentido quando o TMS era a fonte da execução, e deixou de fazer quando o robô do portal
+ * passou a trazer cada marco de minuto em minuto.
+ *
+ * O QUE ACONTECIA. Marcar à mão criava divergência entre os dois sistemas. Em 24/08 alguém marcou a
+ * LT0Q8M02E4IU1 como no destino às 16:47 enquanto o portal dizia Departed; todos os outros marcos
+ * daquela viagem vieram do robô, e o único errado foi o manual. O erro não se anuncia — a viagem
+ * simplesmente passa a mentir, nas duas telas, até alguém reparar.
+ *
+ * O QUE FICA. A lista cronológica com os desvios de planejado contra realizado, e a NOTA livre:
+ * escrever observação é do TMS e não do portal, e é o que permite explicar o que a máquina não sabe.
+ *
+ * A rota e a máquina de status continuam intactas — o que saiu foi a OFERTA na tela.
  */
-
-/** The execution milestone vocabulary — the statuses a dispatcher advances a trip through (FR-003). */
-const MILESTONE_STATUSES = new Set<TripStatus>([
-  "at_origin",
-  "loading",
-  "loaded",
-  "in_transit",
-  "at_destination",
-  "unloading",
-  "unloaded",
-  "completed",
-]);
 
 const MINUTE = 60_000;
 
@@ -44,7 +42,6 @@ export function TimelineSection({ trip }: { trip: TripDetailView }) {
   const t = useTranslations("Trips.detail");
   const tStatus = useTranslations("Trips.status");
   const tEvent = useTranslations("Trips.detail.eventType");
-  const recordMilestone = useRecordMilestone(trip.id);
   const addNote = useAddTripNote(trip.id);
 
   const [note, setNote] = useState("");
@@ -75,24 +72,6 @@ export function TimelineSection({ trip }: { trip: TripDetailView }) {
     } catch {
       return t("errorREQUEST_FAILED");
     }
-  };
-
-  // Next legal milestone statuses from the single shared transition table (machine NOT redefined).
-  const nextStatuses = (TRANSITIONS[trip.currentStatus] ?? []).filter((s) =>
-    MILESTONE_STATUSES.has(s),
-  );
-
-  const onRecord = (toStatus: TripStatus) => {
-    setError(null);
-    recordMilestone.mutate(
-      {
-        expectedFromStatus: trip.currentStatus,
-        toStatus,
-        source: "operator_manual",
-        eventTimestamp: new Date(),
-      },
-      { onError: (e) => setError(mapError(e)) },
-    );
   };
 
   const onAddNote = () => {
@@ -129,23 +108,16 @@ export function TimelineSection({ trip }: { trip: TripDetailView }) {
         <CardTitle>{t("sectionTimeline")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {/* Milestone recorder — next legal statuses through the 003 machine. */}
-        {nextStatuses.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm text-muted-foreground">{t("nextMilestone")}:</span>
-            {nextStatuses.map((s) => (
-              <Button
-                key={s}
-                size="sm"
-                variant="outline"
-                disabled={recordMilestone.isPending}
-                onClick={() => onRecord(s)}
-              >
-                {recordMilestone.isPending ? t("recording") : statusLabel(s)}
-              </Button>
-            ))}
-          </div>
-        ) : null}
+        {/*
+          OS BOTÕES DE MARCO SAÍRAM (2026-08-24, a pedido).
+          Quem sabe onde o caminhão está é o PORTAL, e o robô traz isso de minuto em minuto. Marcar
+          o marco à mão aqui só criava divergência: em 24/08 uma pessoa marcou a LT0Q8M02E4IU1 como
+          "no destino" às 16:47 enquanto o portal dizia "Departed", e a viagem passou a mentir nas
+          duas telas. Todos os outros marcos dela vieram do robô — o manual foi o único errado.
+
+          A rota e a máquina de status continuam existindo, intactas: o que saiu é a OFERTA na tela.
+          Registrar milestone segue possível para quem tiver motivo, por outro caminho.
+        */}
 
         {/* Free-form note entry. */}
         <div className="space-y-2">
