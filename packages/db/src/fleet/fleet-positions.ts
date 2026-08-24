@@ -2,7 +2,8 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { DateTime } from "luxon";
 import { ACTIVE_TRIP_STATUSES, APP_TIME_ZONE, type FleetPositionInput } from "@brazil-tms/shared";
 import { db } from "../client";
-import { fleetPositions, tripAssignments, trips, vehicles } from "../../schema";
+import { drivers, fleetPositions, tripAssignments, trips, vehicles } from "../../schema";
+import { foldNameSql } from "../trips/portal-fleet-link";
 
 /**
  * O retrato da frota que o rastreador entrega, gravado (2026-08-20).
@@ -55,6 +56,8 @@ export interface FleetFeedResult {
   vinculadas: number;
   /** As placas que o rastreador vê e o TMS não tem cadastradas. */
   semCadastro: string[];
+  /** Quantos motoristas ganharam telefone nesta leitura — ver `preencherTelefonesDaFrota`. */
+  telefonesPreenchidos: number;
 }
 
 /**
@@ -128,7 +131,8 @@ export async function recordFleetPositions(
   const linhas = entradas
     .map((e) => ({ ...e, plate: normalizePlate(e.plate) }))
     .filter((e) => e.plate !== "");
-  if (linhas.length === 0) return { recebidas: 0, vinculadas: 0, semCadastro: [] };
+  if (linhas.length === 0)
+    return { recebidas: 0, vinculadas: 0, semCadastro: [], telefonesPreenchidos: 0 };
 
   // Um SELECT para a frota inteira, não um por placa: 98 consultas por ciclo seriam 98 idas ao banco
   // a cada cinco minutos para responder a mesma pergunta.
@@ -219,7 +223,73 @@ export async function recordFleetPositions(
     recebidas: valores.length,
     vinculadas: valores.filter((v) => v.vehicleId !== null).length,
     semCadastro: valores.filter((v) => v.vehicleId === null).map((v) => v.plate),
+    telefonesPreenchidos: await preencherTelefonesDaFrota(),
   };
+}
+
+/**
+ * O TELEFONE DO MOTORISTA QUE O RASTREADOR SABE E O CADASTRO NÃO (2026-08-24, a pedido).
+ *
+ * ── POR QUE UMA SEGUNDA FONTE ─────────────────────────────────────────────────────────────────
+ *
+ * O portal do cliente é a fonte natural do cadastro, e ele foi perguntado: dos 858 motoristas sem
+ * telefone, respondeu VAZIO para todos — não é cota, é ausência, e o robô do cadastro já registrou
+ * isso para não repetir a pergunta. O rastreador, que não raciona nada, traz telefone E nome de 70
+ * motoristas a cada cinco minutos.
+ *
+ * O ganho parece pequeno visto como cadastro — 12 dos 858. Visto como OPERAÇÃO, é outro número: dos
+ * 90 motoristas em viagem agora, 13 não têm contato no TMS e este preenchimento resolve 8. É a
+ * diferença entre "o cadastro está 40% completo" e "não dá para ligar para o caminhão que está na
+ * estrada". E se renova sozinho: quem entra em viagem amanhã chega com telefone.
+ *
+ * ── SÓ PREENCHE VAZIO ─────────────────────────────────────────────────────────────────────────
+ *
+ * Nunca sobrescreve. Se alguém digitou um número à mão, ou se o portal já entregou o dele, essa
+ * versão fica — a mesma regra que o espelho do cadastro segue, e pela mesma razão: correção humana
+ * vale mais que dado de robô.
+ *
+ * ── O CASAMENTO É POR NOME, ENTÃO A AMBIGUIDADE É RECUSADA ────────────────────────────────────
+ *
+ * Nome é chave frágil, e aqui o erro tem cara feia: telefone da pessoa errada no cadastro de outra,
+ * silenciosamente. Duas guardas, e as duas recusam em vez de escolher:
+ *
+ *   1. o nome tem de casar com UM único motorista não arquivado — homônimo é pulado;
+ *   2. o rastreador tem de dizer UM único telefone para aquele nome — se dois veículos discordam
+ *      sobre o número da mesma pessoa, ninguém decide por eles.
+ *
+ * O dobramento é o MESMO de `portal-fleet-link` (sem acento, espaço colapsado, maiúsculo), e vem de
+ * lá importado em vez de recopiado: duas cópias divergem no dia em que alguém corrigir uma.
+ *
+ * ── TEXTO, NÃO NÚMERO ─────────────────────────────────────────────────────────────────────────
+ *
+ * Seis dos setenta trazem dois números colados sem separador. Normalizar aqui escolheria um e
+ * jogaria o outro fora; quem liga prefere ver os dois.
+ */
+export async function preencherTelefonesDaFrota(): Promise<number> {
+  const atualizados = await db.execute<{ id: string }>(sql`
+    WITH doRastreador AS (
+      SELECT ${foldNameSql(sql`${fleetPositions.driverLabel}`)} AS nome,
+             min(btrim(${fleetPositions.driverPhone})) AS telefone
+        FROM ${fleetPositions}
+       WHERE btrim(coalesce(${fleetPositions.driverPhone}, '')) <> ''
+         AND btrim(coalesce(${fleetPositions.driverLabel}, '')) <> ''
+       GROUP BY 1
+      HAVING count(DISTINCT btrim(${fleetPositions.driverPhone})) = 1
+    )
+    UPDATE ${drivers} d
+       SET phone = r.telefone, updated_at = now()
+      FROM doRastreador r
+     WHERE ${foldNameSql(sql`d.name`)} = r.nome
+       AND d.archived_at IS NULL
+       AND btrim(coalesce(d.phone, '')) = ''
+       AND (SELECT count(*) FROM ${drivers} d2
+             WHERE ${foldNameSql(sql`d2.name`)} = r.nome AND d2.archived_at IS NULL) = 1
+    RETURNING d.id
+  `);
+  const linhas = Array.isArray(atualizados)
+    ? atualizados
+    : ((atualizados as { rows?: unknown[] }).rows ?? []);
+  return linhas.length;
 }
 
 /**

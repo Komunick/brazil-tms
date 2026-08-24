@@ -77,6 +77,15 @@ export async function POST(request: Request): Promise<NextResponse> {
         vinculadas: resultado.vinculadas,
         semCadastro: resultado.semCadastro.length,
         placasSemCadastro: resultado.semCadastro.slice(0, 10),
+        /**
+         * Quantos motoristas ganharam telefone nesta leitura.
+         *
+         * Em regime é zero — só aparece quando alguém novo entra em viagem sem contato no cadastro.
+         * Vai na resposta pelo mesmo motivo das placas sem cadastro: o console da VM é onde alguém
+         * olha quando desconfia, e um preenchimento silencioso de dado pessoal é o tipo de coisa que
+         * não pode acontecer sem deixar rastro.
+         */
+        telefonesPreenchidos: resultado.telefonesPreenchidos,
       }),
     );
   } catch (error) {
