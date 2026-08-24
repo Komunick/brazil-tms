@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — cadastro de motoristas
 // @namespace    braziltransports.com.br
-// @version      1.0.0
+// @version      1.0.1
 // @description  Lê o cadastro de motoristas do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tms.braziltransports.com.br
@@ -85,12 +85,25 @@
     return id;
   }
 
+  /**
+   * A LISTAGEM É POST, e isso custou o primeiro ciclo inteiro em branco.
+   *
+   * Nasceu escrita como GET com os parâmetros na URL — que é como a revelação, logo abaixo, de fato
+   * funciona — e o portal devolveu `HTTP 405` a cada rodada: o robô subia, dizia "no ar" e não trazia
+   * motorista nenhum. As duas rotas do MESMO serviço não seguem a mesma convenção. Medido nas duas
+   * (2026-08-23), não deduzido de uma: listar é POST com corpo JSON, revelar é GET com query.
+   */
   async function buscarPagina(pagina) {
-    const u = new URL("/api/driverservice/agency/br/driver/list", location.origin);
-    u.searchParams.set("pageno", String(pagina));
-    u.searchParams.set("count", String(CONFIG.porPagina));
-    u.searchParams.set("agency_current_station_id", estacao());
-    const r = await fetch(u.toString(), { credentials: "include" });
+    const r = await fetch("/api/driverservice/agency/br/driver/list", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pageno: pagina,
+        count: CONFIG.porPagina,
+        agency_current_station_id: estacao(),
+      }),
+    });
     if (!r.ok) throw new Error("portal respondeu HTTP " + r.status);
     return r.json();
   }
