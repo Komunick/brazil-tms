@@ -1,12 +1,14 @@
 // ==UserScript==
 // @name         Brazil TMS — cadastro de motoristas
 // @namespace    braziltransports.com.br
-// @version      1.0.1
+// @version      1.1.0
 // @description  Lê o cadastro de motoristas do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tms.braziltransports.com.br
 // @connect      tmsdev.braziltransports.com.br
 // @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @run-at       document-idle
 // @updateURL    http://127.0.0.1:8899/portal-drivers.user.js
 // @downloadURL  http://127.0.0.1:8899/portal-drivers.user.js
@@ -39,10 +41,12 @@
  *
  * ── SOMENTE LEITURA ───────────────────────────────────────────────────────────────────────────
  *
- * Este script não escreve nada no portal: GET na listagem, GET na revelação, e POST só para o TMS.
+ * Este script não escreve nada no portal. A listagem é POST — mas POST de CONSULTA, escolha do
+ * fornecedor: devolve a página do cadastro e não altera nada. A revelação é GET. O único POST que
+ * grava alguma coisa vai para o nosso próprio TMS.
  */
 
-/* global GM_xmlhttpRequest */
+/* global GM_xmlhttpRequest, GM_getValue, GM_setValue */
 (function () {
   "use strict";
 
@@ -53,30 +57,92 @@
      * dev não dá sinal nenhum de erro.
      */
     tms: "https://tms.braziltransports.com.br",
-    /** O mesmo valor de PORTAL_FEED_TOKEN no servidor. Trocar aqui e lá ao mesmo tempo. */
+    /**
+     * O mesmo valor de PORTAL_FEED_TOKEN no servidor. Trocar aqui e lá ao mesmo tempo.
+     *
+     * Cola-se UMA vez: na primeira execução ele é copiado para o armazenamento do Tampermonkey, e é
+     * de lá que as execuções seguintes leem. Antes disso, toda atualização do robô devolvia esta
+     * linha ao valor de exemplo e o robô parava até alguém colar de novo — o que já aconteceu duas
+     * vezes numa noite só.
+     */
     token: "COLE_AQUI_O_TOKEN",
     /**
-     * De quinze em quinze minutos. O cadastro muda devagar — entram alguns motoristas por semana — e
-     * o que justifica um ciclo curto é só a primeira carga, que precisa drenar as revelações.
+     * DOIS RITMOS, E QUEM ESCOLHE É A FILA.
+     *
+     * Em regime, de quinze em quinze minutos: o cadastro muda devagar — entram alguns motoristas por
+     * semana — e varrer mais que isso é bater no portal para ouvir "nada mudou".
+     *
+     * Com fila, de minuto em minuto. O que justifica pressa é só a primeira carga (~3.400 revelações
+     * entre nomes, telefones e CPFs), e ela precisa fechar no mesmo dia para o cadastro servir para
+     * alguma coisa. Cravar o ritmo curto para sempre seria pagar 15× mais varredura pelo resto da
+     * vida por causa de uma tarde.
      */
     intervaloMs: 15 * 60 * 1000,
+    intervaloComFilaMs: 60 * 1000,
     /** Registros por página da listagem. */
     porPagina: 100,
     /**
      * TETO DE REVELAÇÕES POR CICLO, e ele é o freio deste robô.
      *
-     * Revelar é pedir dado pessoal, e fica no log do fornecedor. Duzentas por ciclo drenam a primeira
-     * carga (~3.000) em uma tarde, sem nenhum momento em que o portal veja uma rajada. Depois disso o
-     * número cai para o que de fato faltou.
+     * Revelar é pedir dado pessoal, e fica no log do fornecedor. O teto existe para que o portal
+     * nunca veja uma rajada — não para que a carga demore. Quinhentas, com um quarto de segundo
+     * entre elas, são pouco mais de dois pedidos por segundo: o ritmo de uma pessoa navegando
+     * depressa, sustentado. Em regime o teto nem chega a ser tocado, porque a fila é de dezenas.
      */
-    revelacoesPorCiclo: 200,
+    revelacoesPorCiclo: 500,
     /** Uma pausa entre revelações: o portal responde rápido, e não há pressa nenhuma aqui. */
     pausaEntreRevelacoesMs: 250,
+    /**
+     * A PARTIR DE QUANTOS PENDENTES A FILA CONTA COMO GRANDE.
+     *
+     * Não é "maior que zero", e a diferença importa: sempre vão sobrar alguns motoristas que o portal
+     * nunca completa — um sem telefone cadastrado lá continua sem telefone toda vez que se pergunta.
+     * Com o limiar em zero, essa meia dúzia de casos insolúveis prenderia o robô no ritmo de um
+     * minuto para sempre, batendo no portal a cada minuto pelo resto da vida para reconfirmar que
+     * não há nada. Cinquenta separa "primeira carga" de "o cadastro tem buracos".
+     */
+    filaGrandeAPartirDe: 50,
   };
 
-  const registro = (...args) => console.log("[TMS motoristas 1.0.0]", ...args);
-  const erro = (...args) => console.error("[TMS motoristas 1.0.0]", ...args);
+  const registro = (...args) => console.log("[TMS motoristas 1.1.0]", ...args);
+  const erro = (...args) => console.error("[TMS motoristas 1.1.0]", ...args);
   const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  const TOKEN_DE_EXEMPLO = "COLE_AQUI" + "_O_TOKEN";
+
+  /**
+   * O TOKEN PRECISA SOBREVIVER À ATUALIZAÇÃO DO ROBÔ.
+   *
+   * Ele mora no código, e o código é substituído inteiro a cada atualização — então toda correção
+   * devolvia esta linha ao valor de exemplo e o robô parava calado até alguém colar de novo. Numa
+   * noite só isso aconteceu duas vezes.
+   *
+   * Agora o valor colado é copiado para o armazenamento do Tampermonkey na primeira execução, e é de
+   * lá que as seguintes leem. Cola-se uma vez; as atualizações seguintes chegam com o exemplo no
+   * código e continuam funcionando.
+   *
+   * O código VENCE o armazenamento quando traz um valor de verdade: é assim que se troca o token
+   * quando ele muda no servidor — cola o novo, e ele vira o guardado.
+   */
+  let tokenEmUso = "";
+  function tokenAtual() {
+    const noCodigo = CONFIG.token && CONFIG.token !== TOKEN_DE_EXEMPLO ? CONFIG.token : "";
+    let guardado = "";
+    try {
+      guardado = GM_getValue("token", "") || "";
+    } catch {
+      guardado = "";
+    }
+    if (!noCodigo) return guardado;
+    if (noCodigo !== guardado) {
+      try {
+        GM_setValue("token", noCodigo);
+      } catch {
+        // Sem armazenamento o robô ainda funciona — só volta a perder o token na próxima atualização.
+      }
+    }
+    return noCodigo;
+  }
 
   /** A estação sob a qual a aba está logada — o portal exige em toda listagem. */
   function estacao() {
@@ -123,7 +189,7 @@
       GM_xmlhttpRequest({
         method: "POST",
         url: CONFIG.tms + "/api/imports/driver-feed",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + CONFIG.token },
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + tokenEmUso },
         data: JSON.stringify(corpo),
         timeout: 120000,
         onload: (res) => {
@@ -143,11 +209,12 @@
     });
   }
 
+  /** Devolve `true` enquanto ainda há fila grande — é o que decide o ritmo do próximo ciclo. */
   async function ciclo() {
-    const TOKEN_DE_EXEMPLO = "COLE_AQUI" + "_O_TOKEN";
-    if (!CONFIG.token || CONFIG.token === TOKEN_DE_EXEMPLO) {
-      erro("token não configurado — li " + String(CONFIG.token || "").length + " caractere(s)");
-      return;
+    tokenEmUso = tokenAtual();
+    if (!tokenEmUso) {
+      erro("token não configurado: cole-o na linha `token:` do CONFIG — basta uma vez, ele fica guardado");
+      return false;
     }
 
     let pagina = 1;
@@ -164,7 +231,7 @@
       if (lista.length === 0) break;
       lidos += lista.length;
 
-      const resposta = await entregar({ token: CONFIG.token, page: payload });
+      const resposta = await entregar({ token: tokenEmUso, page: payload });
       for (const f of (resposta && resposta.falta) || []) pendentes.push(f);
 
       const total = (payload && payload.data && payload.data.total) || 0;
@@ -174,18 +241,20 @@
 
     registro("listagem: " + lidos + " motoristas · faltam dados de " + pendentes.length);
 
+    const filaGrande = pendentes.length >= CONFIG.filaGrandeAPartirDe;
+
     let feitas = 0;
     for (const p of pendentes) {
       for (const campo of p.campos) {
         if (feitas >= CONFIG.revelacoesPorCiclo) {
           registro("teto do ciclo atingido (" + feitas + "); o resto sai no próximo");
-          return;
+          return true;
         }
         try {
           const payload = await revelar(p.portalDriverId, campo);
           if (payload) {
             await entregar({
-              token: CONFIG.token,
+              token: tokenEmUso,
               reveal: { portalDriverId: p.portalDriverId, field: campo, payload },
             });
           }
@@ -197,15 +266,24 @@
       }
     }
     registro("revelações no ciclo: " + feitas);
+    return filaGrande;
   }
 
   async function repetir() {
+    /**
+     * O ciclo que FALHA volta no ritmo lento, de propósito.
+     *
+     * Quando o TMS está fora do ar ou a sessão do portal caiu, insistir de minuto em minuto não
+     * conserta nada e só enche o console de erro igual — foi o que aconteceu no deploy desta noite,
+     * com três robôs registrando 502 em rajada. Quinze minutos é tempo de o problema ser resolvido.
+     */
+    let comFila = false;
     try {
-      await ciclo();
+      comFila = await ciclo();
     } catch (e) {
       erro("ciclo falhou:", String(e));
     }
-    setTimeout(repetir, CONFIG.intervaloMs);
+    setTimeout(repetir, comFila ? CONFIG.intervaloComFilaMs : CONFIG.intervaloMs);
   }
 
   registro("no ar");
