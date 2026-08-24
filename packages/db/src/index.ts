@@ -233,3 +233,9 @@ export {
   contarSemTelefone,
 } from "./fleet/portal-drivers-apply";
 export type { ResumoDoCadastro, FaltaRevelar } from "./fleet/portal-drivers-apply";
+export {
+  readRotasDoMotorista,
+  readRegistrosDoMotorista,
+  registrarNoMotorista,
+} from "./fleet/driver-records";
+export type { RotaDoMotorista, RegistroDoMotorista } from "./fleet/driver-records";

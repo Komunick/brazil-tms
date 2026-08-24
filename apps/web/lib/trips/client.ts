@@ -61,6 +61,8 @@ import type {
   ExportBatchRow,
   MotoristaDoPortal,
   LinhaDaProgramacao,
+  RotaDoMotorista,
+  RegistroDoMotorista,
 } from "@brazil-tms/db";
 
 /**
@@ -1442,5 +1444,44 @@ export function usePortalDrivers() {
       return asJson<{ items: MotoristaDoPortal[] }>(res);
     },
     staleTime: 10 * 60_000,
+  });
+}
+
+/**
+ * O HISTÓRICO DE UM MOTORISTA (2026-08-24, a pedido).
+ *
+ * Uma consulta só para as duas metades — rotas e registros —, porque a tela mostra as duas juntas.
+ * `enabled` amarra ao painel aberto: ele fica montado atrás do formulário de atribuição, e sem isso
+ * buscaria o histórico de todo motorista que a pessoa cogitar.
+ */
+export function useHistoricoDoMotorista(
+  driverId: string,
+  enabled: boolean,
+): UseQueryResult<{ rotas: RotaDoMotorista[]; registros: RegistroDoMotorista[] }> {
+  return useQuery({
+    queryKey: ["driver-historico", driverId],
+    queryFn: async () =>
+      asJson<{ rotas: RotaDoMotorista[]; registros: RegistroDoMotorista[] }>(
+        await fetch(`/api/drivers/${driverId}/historico`),
+      ),
+    enabled: enabled && Boolean(driverId),
+  });
+}
+
+/** Registrar uma ocorrência. Reescreve a lista com a resposta — a rota já devolve a nova. */
+export function useRegistrarNoMotorista(driverId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: { aviso: "Registro adicionado ao histórico" },
+    mutationFn: async (entrada: { tipo: string; texto: string; tripId?: string | null }) =>
+      asJson<{ registros: RegistroDoMotorista[] }>(
+        await fetch(`/api/drivers/${driverId}/historico`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(entrada),
+        }),
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["driver-historico", driverId] }),
   });
 }

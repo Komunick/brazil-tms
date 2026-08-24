@@ -47,3 +47,4 @@ export * from "./portal-commands";
 export * from "./user-dashboard-prefs";
 // A lista pessoal de viagens acompanhadas — "Minha Programação".
 export * from "./user-watched-trips";
+export * from "./driver-records";
