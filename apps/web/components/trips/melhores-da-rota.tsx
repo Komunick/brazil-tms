@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { History } from "lucide-react";
 import { useMelhoresMotoristas } from "@/lib/trips/client";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -33,6 +34,8 @@ export function MelhoresDaRota({
   aberto,
   opcoes,
   onEscolher,
+  quantos,
+  onVerHistorico,
 }: {
   tripId: string;
   /** Só consulta com o diálogo aberto: ele fica montado atrás da lista da Expedição. */
@@ -40,8 +43,21 @@ export function MelhoresDaRota({
   /** Os motoristas que o portal aceita — para casar o nome do ranking com o id do campo. */
   opcoes: { id: string; label: string }[];
   onEscolher: (driverId: string) => void;
+  /**
+   * Quantos nomes mostrar. Dez na Programação, a pedido; seis onde o diálogo é estreito.
+   *
+   * O corte existe porque a lista é SUGESTÃO: vinte nomes deixam de sugerir e passam a exigir
+   * leitura, e uma pessoa que precisa ler vinte linhas para escalar um motorista ignora o painel.
+   */
+  quantos?: number;
+  /**
+   * Abre o histórico daquele motorista. Sem isto, o botão nem aparece — o diálogo do portal, por
+   * exemplo, não tem para onde abrir uma segunda janela por cima.
+   */
+  onVerHistorico?: (driverId: string, nome: string) => void;
 }) {
   const t = useTranslations("Trips.melhoresDaRota");
+  const corte = quantos ?? 6;
   const query = useMelhoresMotoristas(tripId, aberto);
 
   /** O nome do ranking vem do portal, e a lista do campo também — casar por nome é o que existe. */
@@ -62,7 +78,7 @@ export function MelhoresDaRota({
 
       {lista.length > 0 ? (
         <ul className="space-y-1.5">
-          {lista.slice(0, 6).map((d) => {
+          {lista.slice(0, corte).map((d) => {
             const id = idPorNome.get(d.motorista.trim().toLowerCase());
             const conteudo = (
               <>
@@ -88,19 +104,41 @@ export function MelhoresDaRota({
               </>
             );
             return (
-              <li key={d.motorista}>
+              <li key={d.motorista} className="flex items-start gap-1">
                 {id ? (
                   <button
                     type="button"
                     onClick={() => onEscolher(id)}
-                    className="block w-full rounded px-1.5 py-1 text-left transition-colors hover:bg-muted"
+                    className="block min-w-0 flex-1 rounded px-1.5 py-1 text-left transition-colors hover:bg-muted"
                     title={t("usarEste")}
                   >
                     {conteudo}
                   </button>
                 ) : (
-                  <span className="block px-1.5 py-1 opacity-70">{conteudo}</span>
+                  <span className="block min-w-0 flex-1 px-1.5 py-1 opacity-70">{conteudo}</span>
                 )}
+                {/*
+                  O HISTÓRICO AO LADO DO NOME (2026-08-24, a pedido).
+                  A nota mede entrega no prazo e nada mais; quem escala precisa saber também o que
+                  aconteceu com a pessoa — reclamação, advertência, elogio. Fica AQUI e não numa tela
+                  de cadastro porque é aqui que se decide, e uma informação que exige sair da tela
+                  para ser consultada não é consultada.
+
+                  Só aparece para quem tem id: sem ele não há motorista do TMS a abrir. E é um botão
+                  separado do nome de propósito — clicar no nome ESCOLHE, clicar aqui INVESTIGA, e
+                  juntar as duas coisas num alvo só faria uma virar acidente da outra.
+                */}
+                {id && onVerHistorico ? (
+                  <button
+                    type="button"
+                    aria-label={t("verHistorico")}
+                    title={t("verHistorico")}
+                    onClick={() => onVerHistorico(id, d.motorista)}
+                    className="mt-1 shrink-0 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <History className="h-3.5 w-3.5" aria-hidden />
+                  </button>
+                ) : null}
               </li>
             );
           })}

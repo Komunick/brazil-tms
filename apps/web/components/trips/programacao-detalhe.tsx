@@ -8,6 +8,8 @@ import type { TripStatus } from "@brazil-tms/shared";
 import type { TripFilterOptions } from "@brazil-tms/db";
 import { useFilterOptions, useTripDetail } from "@/lib/trips/client";
 import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
+import { MelhoresDaRota } from "@/components/trips/melhores-da-rota";
+import { HistoricoDoMotorista } from "@/components/trips/historico-do-motorista";
 import { TimelineSection } from "@/components/trips/trip-detail/timeline";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { Button } from "@/components/ui/button";
@@ -57,6 +59,10 @@ export function ProgramacaoDetalhe({
   const consulta = useTripDetail(tripId ?? "");
   const opcoes = useFilterOptions(resourceOptions);
   const [atribuindo, setAtribuindo] = useState(false);
+  // O nome escolhido no ranking, empurrado para o formulário. Ver `driverIdSugerido`.
+  const [sugerido, setSugerido] = useState<string | undefined>(undefined);
+  // O motorista cujo histórico está aberto, vindo do botão ao lado do nome no ranking.
+  const [historico, setHistorico] = useState<{ id: string; nome: string } | null>(null);
 
   const viagem = consulta.data?.item;
 
@@ -112,14 +118,30 @@ export function ProgramacaoDetalhe({
               </Button>
             </div>
 
+            {/*
+              O RANKING FICA AO LADO, NÃO EM CIMA (2026-08-24, a pedido: "um top 10 ao lado").
+              Quem escala olha os dois ao mesmo tempo: o campo que vai preencher e quem já entregou
+              bem naquela rota. Empilhado, o ranking sairia da tela assim que o formulário abrisse —
+              e um painel que só aparece rolando é um painel que ninguém lê na hora de decidir.
+              Em tela estreita ele desce para baixo, porque duas colunas de 20rem não cabem.
+            */}
             {atribuindo ? (
-              <div className="rounded-md border p-3">
+              <div className="grid gap-3 rounded-md border p-3 lg:grid-cols-[1fr_16rem]">
                 <AssignmentForm
                   tripId={viagem.id}
                   currentStatus={viagem.currentStatus as TripStatus}
                   currentAssignment={viagem.currentAssignment ?? null}
                   resourceOptions={opcoes}
                   onDone={() => setAtribuindo(false)}
+                  driverIdSugerido={sugerido}
+                />
+                <MelhoresDaRota
+                  tripId={viagem.id}
+                  aberto={aberto}
+                  opcoes={opcoes.drivers}
+                  onEscolher={setSugerido}
+                  quantos={10}
+                  onVerHistorico={(id, nome) => setHistorico({ id, nome })}
                 />
               </div>
             ) : null}
@@ -130,6 +152,19 @@ export function ProgramacaoDetalhe({
           </div>
         ) : null}
       </DialogContent>
+
+      {/*
+        O histórico abre POR CIMA desta janela, e não no lugar dela: quem investiga um motorista
+        está no meio de uma atribuição, e perder o formulário para consultar seria pagar a consulta
+        com o trabalho já feito.
+      */}
+      <HistoricoDoMotorista
+        driverId={historico?.id ?? null}
+        nome={historico?.nome ?? null}
+        aberto={historico !== null}
+        aoFechar={() => setHistorico(null)}
+        tripId={viagem?.id}
+      />
     </Dialog>
   );
 }

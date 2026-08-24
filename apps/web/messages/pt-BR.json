@@ -1467,7 +1467,8 @@
       "emViagem": "em viagem",
       "usarEste": "Usar este motorista",
       "semHistorico": "Ninguém entregou nesta rota ainda. Sem histórico, sem ranking — a escolha é sua.",
-      "comoCalcula": "Baseado nas entregas concluídas no destino dentro do horário do cliente. A nota é esse percentual com um crédito de 5 entregas na média da empresa, para quem rodou pouco não aparecer com 100%."
+      "comoCalcula": "Baseado nas entregas concluídas no destino dentro do horário do cliente. A nota é esse percentual com um crédito de 5 entregas na média da empresa, para quem rodou pouco não aparecer com 100%.",
+      "verHistorico": "Ver histórico deste motorista"
     }
   },
   "Sla": {
@@ -1983,6 +1984,29 @@
     "atribuir": "Atribuir motorista",
     "editarAtribuicao": "Editar atribuição",
     "fecharAtribuicao": "Fechar",
-    "abrirTelaCompleta": "Abrir a viagem"
+    "abrirTelaCompleta": "Abrir a viagem",
+    "dias": "Dias",
+    "diasFiltrados": "{n} dia(s) fora",
+    "quaisDias": "Quais dias você quer ver?",
+    "verTodosOsDias": "Ver todos os dias"
+  },
+  "HistoricoMotorista": {
+    "titulo": "Histórico do motorista",
+    "subtitulo": "O que ele já rodou e o que foi registrado sobre ele.",
+    "rotas": "Rotas que já fez",
+    "semRotas": "Nenhuma viagem atribuída a ele ainda.",
+    "vezes": "{n}x",
+    "ocorrencias": "Ocorrências",
+    "semOcorrencias": "Nada registrado sobre este motorista.",
+    "registrar": "Registrar",
+    "placeholder": "O que aconteceu? Seja específico — quem ler depois não estava lá.",
+    "escrevaOQueHouve": "Escreva o que aconteceu.",
+    "naoDeuParaRegistrar": "Não foi possível registrar. Tente de novo.",
+    "tipo": {
+      "reclamacao": "Reclamação",
+      "atraso": "Atraso",
+      "elogio": "Elogio",
+      "advertencia": "Advertência"
+    }
   }
 }

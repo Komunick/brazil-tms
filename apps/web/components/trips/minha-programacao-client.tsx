@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronDown, ChevronRight, Eye, EyeOff, Palette } from "lucide-react";
+import { CalendarDays, ChevronDown, ChevronRight, Eye, EyeOff, Palette } from "lucide-react";
 import type { TripFilterOptions } from "@brazil-tms/db";
 import { useMarcarViagem, useProgramacao } from "@/lib/trips/client";
 import { ProgramacaoDetalhe } from "@/components/trips/programacao-detalhe";
@@ -97,6 +97,8 @@ export function MinhaProgramacaoClient({ resourceOptions }: { resourceOptions: T
   const [paletaAberta, setPaletaAberta] = useState<string | null>(null);
   const [recolhidos, setRecolhidos] = useState<Set<string>>(new Set());
   const [viagemAberta, setViagemAberta] = useState<string | null>(null);
+  const [painelDeDias, setPainelDeDias] = useState(false);
+  const [diasEscondidos, setDiasEscondidos] = useState<Set<string>>(new Set());
 
   const consulta = useProgramacao(frente, { atras: 2, adiante: 7 });
   const marcar = useMarcarViagem();
@@ -125,10 +127,23 @@ export function MinhaProgramacaoClient({ resourceOptions }: { resourceOptions: T
   const porDia = useMemo(() => {
     const mapa = new Map<string, typeof visiveis>();
     for (const l of visiveis) {
+      if (diasEscondidos.has(l.dia)) continue;
       const atual = mapa.get(l.dia);
       if (atual) atual.push(l);
       else mapa.set(l.dia, [l]);
     }
+    return [...mapa.entries()];
+  }, [visiveis, diasEscondidos]);
+
+  /**
+   * Os dias que a consulta trouxe, com a contagem de cada um.
+   *
+   * Calculado sobre a lista ANTES do filtro de dias, e não depois: senão, esconder um dia
+   * o apagaria da própria lista de escolha, e não haveria como trazê-lo de volta.
+   */
+  const diasDaConsulta = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const l of visiveis) mapa.set(l.dia, (mapa.get(l.dia) ?? 0) + 1);
     return [...mapa.entries()];
   }, [visiveis]);
 
@@ -185,9 +200,72 @@ export function MinhaProgramacaoClient({ resourceOptions }: { resourceOptions: T
             </Button>
           ) : null}
 
+          {/*
+            O FILTRO DE DIAS ABRE NUM SUBCARD (2026-08-24, a pedido).
+            A janela tem dez dias, e quase ninguém trabalha os dez ao mesmo tempo — mas dez botões
+            fixos na barra empurrariam a frente e a busca para a segunda linha, todo dia, por causa
+            de uma escolha que se faz uma vez. Fechado, ocupa um botão; aberto, mostra os dias que
+            EXISTEM na consulta, com a contagem de cada um.
+          */}
+          <Button
+            type="button"
+            size="sm"
+            variant={diasEscondidos.size > 0 ? "default" : "ghost"}
+            onClick={() => setPainelDeDias((v) => !v)}
+          >
+            <CalendarDays className="mr-1 h-3.5 w-3.5" aria-hidden />
+            {diasEscondidos.size > 0 ? t("diasFiltrados", { n: diasEscondidos.size }) : t("dias")}
+          </Button>
+
           <span className="ml-auto text-xs text-muted-foreground">
             {t("totalLinhas", { n: visiveis.length })}
           </span>
+
+          {painelDeDias ? (
+            <div className="w-full space-y-2 rounded-md border bg-muted/30 p-3">
+              <p className="text-xs text-muted-foreground">{t("quaisDias")}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {diasDaConsulta.map(([dia, quantos]) => {
+                  const escondido = diasEscondidos.has(dia);
+                  return (
+                    <button
+                      key={dia}
+                      type="button"
+                      aria-pressed={!escondido}
+                      onClick={() =>
+                        setDiasEscondidos((atuais) => {
+                          const novo = new Set(atuais);
+                          if (novo.has(dia)) novo.delete(dia);
+                          else novo.add(dia);
+                          return novo;
+                        })
+                      }
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs transition-colors",
+                        escondido
+                          ? "text-muted-foreground line-through opacity-60"
+                          : "border-primary bg-primary text-primary-foreground",
+                      )}
+                    >
+                      {rotuloDoDia(dia, hoje, t)} · {quantos}
+                    </button>
+                  );
+                })}
+              </div>
+              {/* Um caminho de volta explícito: desmarcar oito dias um a um para voltar ao normal
+                  seria pagar pelo filtro duas vezes. */}
+              {diasEscondidos.size > 0 ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setDiasEscondidos(new Set())}
+                >
+                  {t("verTodosOsDias")}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

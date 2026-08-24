@@ -80,6 +80,16 @@ export interface AssignmentFormProps {
   resourceOptions: TripFilterOptions;
   /** Called after any successful assign/reassign/confirm/unassign (e.g. to close a dialog). */
   onDone?: () => void;
+  /**
+   * UM MOTORISTA SUGERIDO DE FORA, para o ranking ao lado poder preencher o campo (2026-08-24).
+   *
+   * Não é um campo controlado: o formulário continua dono do próprio estado, e isto só EMPURRA um
+   * valor quando muda. A diferença importa — controlado, o painel de sugestão passaria a mandar no
+   * formulário e um clique acidental apagaria o que a pessoa já tinha escolhido nos outros campos.
+   *
+   * Vazio ou repetido não faz nada, então clicar duas vezes no mesmo nome é inofensivo.
+   */
+  driverIdSugerido?: string;
 }
 
 export function AssignmentForm({
@@ -88,6 +98,7 @@ export function AssignmentForm({
   currentAssignment,
   resourceOptions,
   onDone,
+  driverIdSugerido,
 }: AssignmentFormProps) {
   const t = useTranslations("Dispatch");
   const tCommon = useTranslations("Common");
@@ -97,6 +108,12 @@ export function AssignmentForm({
   const [findings, setFindings] = useState<Finding[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [confirmUnassignOpen, setConfirmUnassignOpen] = useState(false);
+
+  // O empurrão do painel de sugestão: só age quando o valor MUDA, e nunca zera o resto do formulário.
+  useEffect(() => {
+    if (!driverIdSugerido) return;
+    setForm((f) => (f.driverId === driverIdSugerido ? f : { ...f, driverId: driverIdSugerido }));
+  }, [driverIdSugerido]);
 
   const assign = useAssignTrip(tripId);
   const reassign = useReassignTrip(tripId);
