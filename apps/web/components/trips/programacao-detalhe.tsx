@@ -1,0 +1,135 @@
+"use client";
+
+import { useState } from "react";
+import Link from "next/link";
+import { useTranslations } from "next-intl";
+import { ExternalLink } from "lucide-react";
+import type { TripStatus } from "@brazil-tms/shared";
+import type { TripFilterOptions } from "@brazil-tms/db";
+import { useFilterOptions, useTripDetail } from "@/lib/trips/client";
+import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
+import { TimelineSection } from "@/components/trips/trip-detail/timeline";
+import { TripStatusBadge } from "@/components/trips/trip-status-badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+
+/**
+ * A VIAGEM SEM SAIR DA PROGRAMAÇÃO (2026-08-24, a pedido).
+ *
+ * O quadro substituiu a planilha, mas ainda mandava a pessoa embora: clicar na LH abria outra tela e
+ * o lugar na lista se perdia — e numa programação de 400 linhas, perder o lugar é perder o fio. A
+ * janela resolve isso: os dados, a linha do tempo e a atribuição no mesmo lugar, e o quadro
+ * continua atrás.
+ *
+ * ── NADA AQUI É NOVO, E ESSE É O PONTO ────────────────────────────────────────────────────────
+ *
+ * A linha do tempo é a `TimelineSection` da tela de detalhe; a atribuição é a MESMA `AssignmentForm`
+ * do despacho — o caminho único de escrita, com as verificações de elegibilidade, o motivo de
+ * exceção e o servidor mandando. Reescrever qualquer um dos dois aqui criaria uma segunda regra de
+ * atribuição, e duas regras divergem no mês seguinte.
+ *
+ * ── A JANELA NÃO É A TELA DE DETALHE ──────────────────────────────────────────────────────────
+ *
+ * Cabe o que se decide olhando a programação: onde a viagem está, o que já aconteceu e quem vai
+ * dirigir. Documento, cobrança, exceção e nota continuam na tela própria, a um clique daqui — uma
+ * janela que tenta ser a página inteira vira uma página pior, dentro de um retângulo menor.
+ */
+export function ProgramacaoDetalhe({
+  tripId,
+  aberto,
+  aoFechar,
+  resourceOptions,
+}: {
+  tripId: string | null;
+  aberto: boolean;
+  aoFechar: () => void;
+  resourceOptions: TripFilterOptions;
+}) {
+  const t = useTranslations("Programacao");
+  const tDetalhe = useTranslations("Trips.detail");
+  const consulta = useTripDetail(tripId ?? "");
+  const opcoes = useFilterOptions(resourceOptions);
+  const [atribuindo, setAtribuindo] = useState(false);
+
+  const viagem = consulta.data?.item;
+
+  return (
+    <Dialog
+      open={aberto}
+      onOpenChange={(v) => {
+        if (!v) {
+          setAtribuindo(false);
+          aoFechar();
+        }
+      }}
+    >
+      <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 font-mono">
+            {viagem?.externalTripId ?? "—"}
+            {viagem ? (
+              <TripStatusBadge
+                status={viagem.currentStatus as TripStatus}
+                portalAcceptance={viagem.customerFields?.["Aceitação (portal)"] ?? null}
+                portalStatus={viagem.customerFields?.["Status (portal)"] ?? null}
+              />
+            ) : null}
+          </DialogTitle>
+          <DialogDescription>
+            {viagem ? `${viagem.originName ?? "—"} → ${viagem.destinationName ?? "—"}` : ""}
+          </DialogDescription>
+        </DialogHeader>
+
+        {consulta.isPending ? <Skeleton className="h-64 w-full" /> : null}
+
+        {viagem ? (
+          <div className="space-y-4">
+            {/*
+              A ATRIBUIÇÃO ABRE FECHADA, e é decisão de tela: o motivo mais comum de abrir a janela é
+              olhar, não mexer. O formulário tem sete campos e as verificações do servidor — aberto
+              por padrão, empurraria a linha do tempo para fora da primeira tela toda vez.
+            */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button type="button" size="sm" onClick={() => setAtribuindo((v) => !v)}>
+                {atribuindo
+                  ? t("fecharAtribuicao")
+                  : viagem.currentAssignment
+                    ? t("editarAtribuicao")
+                    : t("atribuir")}
+              </Button>
+              <Button asChild type="button" size="sm" variant="ghost">
+                <Link href={`/trips/${viagem.id}`}>
+                  <ExternalLink className="mr-1 h-3.5 w-3.5" aria-hidden />
+                  {t("abrirTelaCompleta")}
+                </Link>
+              </Button>
+            </div>
+
+            {atribuindo ? (
+              <div className="rounded-md border p-3">
+                <AssignmentForm
+                  tripId={viagem.id}
+                  currentStatus={viagem.currentStatus as TripStatus}
+                  currentAssignment={viagem.currentAssignment ?? null}
+                  resourceOptions={opcoes}
+                  onDone={() => setAtribuindo(false)}
+                />
+              </div>
+            ) : null}
+
+            <section aria-label={tDetalhe("timeline")}>
+              <TimelineSection trip={viagem} />
+            </section>
+          </div>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
