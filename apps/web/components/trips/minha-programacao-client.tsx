@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { CalendarDays, ChevronDown, ChevronRight, Eye, EyeOff, Palette } from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, EyeOff, Palette, SlidersHorizontal } from "lucide-react";
 import type { TripFilterOptions } from "@brazil-tms/db";
 import { useMarcarViagem, useProgramacao } from "@/lib/trips/client";
 import { ProgramacaoDetalhe } from "@/components/trips/programacao-detalhe";
@@ -57,21 +57,52 @@ import {
  * uma coluna, não de outra cor.
  */
 const CORES = [
-  { chave: "vermelho", classe: "bg-red-500/40 hover:bg-red-500/50", ponto: "bg-red-500" },
-  { chave: "ambar", classe: "bg-amber-500/40 hover:bg-amber-500/50", ponto: "bg-amber-500" },
-  { chave: "verde", classe: "bg-emerald-500/40 hover:bg-emerald-500/50", ponto: "bg-emerald-500" },
-  { chave: "azul", classe: "bg-sky-500/40 hover:bg-sky-500/50", ponto: "bg-sky-500" },
-  { chave: "roxo", classe: "bg-violet-500/40 hover:bg-violet-500/50", ponto: "bg-violet-500" },
-  { chave: "cinza", classe: "bg-slate-500/40 hover:bg-slate-500/50", ponto: "bg-slate-500" },
+  {
+    chave: "vermelho",
+    classe: "bg-red-500 hover:bg-red-600 text-white [&_a]:text-white [&_button]:text-white",
+    ponto: "bg-red-500",
+  },
+  {
+    chave: "ambar",
+    classe: "bg-amber-400 hover:bg-amber-500 text-amber-950 [&_a]:text-amber-950 [&_button]:text-amber-950",
+    ponto: "bg-amber-400",
+  },
+  {
+    chave: "verde",
+    classe: "bg-emerald-600 hover:bg-emerald-700 text-white [&_a]:text-white [&_button]:text-white",
+    ponto: "bg-emerald-600",
+  },
+  {
+    chave: "azul",
+    classe: "bg-sky-600 hover:bg-sky-700 text-white [&_a]:text-white [&_button]:text-white",
+    ponto: "bg-sky-600",
+  },
+  {
+    chave: "roxo",
+    classe: "bg-violet-600 hover:bg-violet-700 text-white [&_a]:text-white [&_button]:text-white",
+    ponto: "bg-violet-600",
+  },
+  {
+    chave: "cinza",
+    classe: "bg-slate-600 hover:bg-slate-700 text-white [&_a]:text-white [&_button]:text-white",
+    ponto: "bg-slate-600",
+  },
 ] as const;
 
 /**
- * QUARENTA POR CENTO, e não cem (2026-08-24, a pedido: "cores mais fortes").
+ * COR CHEIA, E O TEXTO VAI JUNTO (2026-08-24, a pedido: "deixe mais forte também").
  *
- * A primeira versão usava 15% e a marca sumia num relance — que é o oposto do que ela serve. Mas
- * cor cheia traria outro problema: o texto da linha é `foreground`, pensado para o fundo do tema, e
- * sobre vermelho sólido ele fica ilegível no claro e no escuro. Em 40% a linha salta de longe e as
- * letras continuam com contraste — testado nos dois temas.
+ * Foram três tentativas até acertar, e as duas primeiras erraram pelo mesmo motivo. A 15% a marca
+ * sumia num relance; a 40% dava para ver, mas ainda competia com o fundo da tabela. O pedido é que
+ * a linha SALTE — e para saltar de verdade a cor tem de ser sólida.
+ *
+ * O que impedia a cor sólida era o texto: ele é `foreground`, escolhido para o fundo do tema, e
+ * sobre vermelho cheio fica ilegível. Por isso cada cor traz o SEU par de texto, e os seletores
+ * `[&_a]` e `[&_button]` alcançam o número da LH e o telefone, que têm cor própria de link e
+ * ficariam azuis sobre azul.
+ *
+ * O âmbar é o único com texto escuro: amarelo claro com letra branca não se lê em tela nenhuma. É
+ * a exceção que prova que a regra aqui é contraste, não uniformidade.
  */
 
 const classeDaCor = (cor: string | null): string =>
@@ -99,6 +130,7 @@ export function MinhaProgramacaoClient({ resourceOptions }: { resourceOptions: T
   const [viagemAberta, setViagemAberta] = useState<string | null>(null);
   const [painelDeDias, setPainelDeDias] = useState(false);
   const [diasEscondidos, setDiasEscondidos] = useState<Set<string>>(new Set());
+  const [statusEscondidos, setStatusEscondidos] = useState<Set<string>>(new Set());
 
   const consulta = useProgramacao(frente, { atras: 2, adiante: 7 });
   const marcar = useMarcarViagem();
@@ -128,12 +160,13 @@ export function MinhaProgramacaoClient({ resourceOptions }: { resourceOptions: T
     const mapa = new Map<string, typeof visiveis>();
     for (const l of visiveis) {
       if (diasEscondidos.has(l.dia)) continue;
+      if (statusEscondidos.has(l.status)) continue;
       const atual = mapa.get(l.dia);
       if (atual) atual.push(l);
       else mapa.set(l.dia, [l]);
     }
     return [...mapa.entries()];
-  }, [visiveis, diasEscondidos]);
+  }, [visiveis, diasEscondidos, statusEscondidos]);
 
   /**
    * Os dias que a consulta trouxe, com a contagem de cada um.
@@ -146,6 +179,22 @@ export function MinhaProgramacaoClient({ resourceOptions }: { resourceOptions: T
     for (const l of visiveis) mapa.set(l.dia, (mapa.get(l.dia) ?? 0) + 1);
     return [...mapa.entries()];
   }, [visiveis]);
+
+  /**
+   * Os status presentes na consulta, do mais numeroso para o menos.
+   *
+   * Mesma razão da lista de dias: calculada ANTES do filtro de status, senão esconder um status o
+   * apagaria da lista de escolha e não haveria como trazê-lo de volta. Ordenada por volume porque
+   * o status com trinta viagens é o que a pessoa vem filtrar; o de duas ela nem procura.
+   */
+  const statusDaConsulta = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const l of visiveis) {
+      if (diasEscondidos.has(l.dia)) continue;
+      mapa.set(l.status, (mapa.get(l.status) ?? 0) + 1);
+    }
+    return [...mapa.entries()].sort((a, b) => b[1] - a[1]);
+  }, [visiveis, diasEscondidos]);
 
   const ocultas = linhas.filter((l) => l.oculta).length;
 
@@ -210,11 +259,13 @@ export function MinhaProgramacaoClient({ resourceOptions }: { resourceOptions: T
           <Button
             type="button"
             size="sm"
-            variant={diasEscondidos.size > 0 ? "default" : "ghost"}
+            variant={diasEscondidos.size + statusEscondidos.size > 0 ? "default" : "ghost"}
             onClick={() => setPainelDeDias((v) => !v)}
           >
-            <CalendarDays className="mr-1 h-3.5 w-3.5" aria-hidden />
-            {diasEscondidos.size > 0 ? t("diasFiltrados", { n: diasEscondidos.size }) : t("dias")}
+            <SlidersHorizontal className="mr-1 h-3.5 w-3.5" aria-hidden />
+            {diasEscondidos.size + statusEscondidos.size > 0
+              ? t("filtrosAtivos", { n: diasEscondidos.size + statusEscondidos.size })
+              : t("dias")}
           </Button>
 
           <span className="ml-auto text-xs text-muted-foreground">
@@ -264,6 +315,54 @@ export function MinhaProgramacaoClient({ resourceOptions }: { resourceOptions: T
                   {t("verTodosOsDias")}
                 </Button>
               ) : null}
+
+              {/*
+                O STATUS MORA NO MESMO PAINEL QUE OS DIAS (2026-08-24, a pedido).
+                São a mesma pergunta feita de dois jeitos — "o que eu quero ver agora" —, e um botão
+                próprio para cada uma faria a barra crescer de novo, que é justamente o que o subcard
+                veio evitar. O selo é o MESMO `TripStatusBadge` do resto do sistema: um filtro que
+                pinta o status de um jeito e a tabela de outro obriga a traduzir entre as duas.
+              */}
+              <div className="space-y-2 border-t pt-3">
+                <p className="text-xs text-muted-foreground">{t("quaisStatus")}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {statusDaConsulta.map(([status, quantos]) => {
+                    const escondido = statusEscondidos.has(status);
+                    return (
+                      <button
+                        key={status}
+                        type="button"
+                        aria-pressed={!escondido}
+                        onClick={() =>
+                          setStatusEscondidos((atuais) => {
+                            const novo = new Set(atuais);
+                            if (novo.has(status)) novo.delete(status);
+                            else novo.add(status);
+                            return novo;
+                          })
+                        }
+                        className={cn(
+                          "flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs transition-opacity",
+                          escondido ? "opacity-40" : "",
+                        )}
+                      >
+                        <TripStatusBadge status={status as TripDisplayStatus} />
+                        <span className="tabular-nums text-muted-foreground">{quantos}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {statusEscondidos.size > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setStatusEscondidos(new Set())}
+                  >
+                    {t("verTodosOsStatus")}
+                  </Button>
+                ) : null}
+              </div>
             </div>
           ) : null}
         </CardContent>
