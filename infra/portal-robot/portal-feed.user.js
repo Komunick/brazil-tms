@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.13.0
+// @version      1.14.0
 // @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -120,6 +120,29 @@
      * ter a folga é alguém procurando na tela uma viagem que existe no portal.
      */
     planoNovoJanelaSegundos: 60,
+    /**
+     * O LEILÃO DE SPOT, DE CINCO EM CINCO SEGUNDOS (2026-08-24, a pedido).
+     *
+     * A oferta fica aberta DEZ MINUTOS e é disputada — quem vê primeiro dá o lance. Até hoje quem
+     * avisava era um monitor numa VM Windows, a cada 30 segundos, e essa VM travava sozinha sem que
+     * ninguém percebesse: ela era o único robô que não mandava sinal de vida.
+     *
+     * MEDIDO ANTES DE ESCREVER, e é o que torna cinco segundos barato: os campos do leilão
+     * (`bid_status`, `bid_price`, `price_bidding_ddl`) já vêm nesta MESMA listagem que o robô lê há
+     * meses, e eram simplesmente ignorados. Com o filtro incremental, a pergunta "mudou algo nos
+     * últimos 15 segundos?" volta em 70 ms quando nada mudou — que é quase sempre. A consulta cheia
+     * levava 1.533 ms. Cinco segundos aqui pesa MENOS no portal do cliente do que os 30 segundos do
+     * monitor antigo.
+     *
+     * A janela de DATAS é curta de propósito: oferta de spot é para viagem próxima, e -0/+3 dias
+     * cobre 209 viagens em vez de 442. Menos página, menos tempo, mesma cobertura.
+     */
+    intervaloSpotMs: 5 * 1000,
+    /** Três vezes o intervalo, pela mesma razão do incremental do plano: um ciclo que falhe não custa uma oferta. */
+    spotJanelaSegundos: 15,
+    spotDiasAdiante: 3,
+    /** `bid_status = 10` é "em leilão". Medido: 10 aparece em 17 de 442; 0 é sem leilão e 40 é encerrado. */
+    spotBidStatusAberto: 10,
     intervaloExecucaoMs: 5 * 60 * 1000,
     /** Viagens por página. O portal aceita 100; o TMS aplica uma página por vez. */
     porPagina: 100,
@@ -408,6 +431,134 @@
     };
     setTimeout(passo, 5000); // deixa a página assentar antes do primeiro ciclo
   }
+
+  /**
+   * O LEILÃO DE SPOT — a oferta que dura dez minutos (2026-08-24, a pedido).
+   *
+   * ── POR QUE ISTO MORA AQUI, E NÃO NUM ROBÔ PRÓPRIO ────────────────────────────────────────────
+   *
+   * Havia um monitor separado, numa VM Windows, lendo a mesma listagem a cada 30 segundos. A VM
+   * travava sozinha — e como ele era o ÚNICO robô sem sinal de vida, ninguém sabia dizer se o
+   * silêncio era falta de oferta ou máquina morta. Aqui ele herda tudo o que já funciona: a sessão,
+   * o token, o pulso, e uma VM que está de pé há dezessete semanas.
+   *
+   * E não custa chamada nenhuma a mais ao cliente do que custaria um robô próprio: é a mesma
+   * listagem do plano, com a mesma pergunta incremental.
+   *
+   * ── O QUE ELE MANDA, E O QUE NÃO INVENTA ──────────────────────────────────────────────────────
+   *
+   * A rota `/api/imports/spot-offer` foi desenhada para o monitor antigo, e o contrato dela é
+   * mantido INTEIRO — mesmos campos, mesmos nomes. Isso é de propósito: a tela, o som, o aviso do
+   * sistema e o cartão do dia já leem esse formato e estão validados em produção. Trocar o formato
+   * junto com a origem seria mudar duas coisas ao mesmo tempo e não saber qual quebrou.
+   *
+   * O preço vai como TEXTO, como o portal manda. Converter para número aqui obrigaria a decidir o
+   * que fazer com centavo, moeda e vazio — decisões que pertencem a quem exibe, não a quem lê.
+   */
+  const spotJaVistos = new Set();
+
+  function paraOferta(v) {
+    const paradas = Array.isArray(v.trip_station) ? v.trip_station : [];
+    const nomes = paradas.map((p) => p.station_name).filter(Boolean);
+    const primeira = paradas[0];
+    /** O STA da PRIMEIRA parada: a hora de comparecer na origem, que é o que a sala precisa ler. */
+    const staOrigem = primeira?.sta ? new Date(primeira.sta * 1000).toISOString() : undefined;
+    return {
+      portalTripId: String(v.trip_id ?? v.id ?? v.trip_number ?? ""),
+      tripNumber: v.trip_number ? String(v.trip_number) : undefined,
+      // "ORIGEM  ->  DESTINO", o texto que a sala lê de longe. Com mais de duas paradas, mostra as
+      // pontas: o caminho do meio não cabe num cartão que se lê em três segundos.
+      route: nomes.length > 1 ? `${nomes[0]}  ->  ${nomes[nomes.length - 1]}` : (nomes[0] ?? "—"),
+      vehicle: v.vehicle_type_name ? String(v.vehicle_type_name) : undefined,
+      price: v.bid_price != null ? String(v.bid_price) : undefined,
+      originArrival: staOrigem,
+      operator: v.operator ? String(v.operator) : undefined,
+      createdAtPortal: v.ctime ? new Date(v.ctime * 1000).toISOString() : undefined,
+    };
+  }
+
+  function entregarOferta(oferta) {
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        method: "POST",
+        url: `${CONFIG.tms}/api/imports/spot-offer`,
+        headers: { "Content-Type": "application/json" },
+        // O token vai no CORPO, como o monitor antigo fazia: `Authorization` obrigaria a um
+        // preflight que a origem do portal do cliente teria de negociar.
+        data: JSON.stringify({ token: CONFIG.token, offer: oferta }),
+        timeout: 30000,
+        onload: (res) =>
+          res.status >= 200 && res.status < 300
+            ? resolve()
+            : reject(new Error(`TMS respondeu ${res.status}`)),
+        onerror: () => reject(new Error("falha de rede")),
+        ontimeout: () => reject(new Error("TMS não respondeu a tempo")),
+      });
+    });
+  }
+
+  async function cicloSpot() {
+    const payload = await buscarPagina(
+      "/api/line_haul/agency/trip/list",
+      {
+        query_type: 1,
+        sta: `${agora()},${agora() + CONFIG.spotDiasAdiante * DIA}`,
+        mtime: `${agora() - CONFIG.spotJanelaSegundos},${agora()}`,
+      },
+      1,
+    );
+    const lista = payload?.data?.list ?? [];
+    const emLeilao = lista.filter((v) => v.bid_status === CONFIG.spotBidStatusAberto);
+
+    let novas = 0;
+    for (const v of emLeilao) {
+      const oferta = paraOferta(v);
+      if (!oferta.portalTripId) continue;
+      // O TMS também ignora repetido (a chave é o id do portal), mas mandar de novo a cada cinco
+      // segundos encheria o log do servidor com o mesmo aviso enquanto o leilão estiver aberto.
+      if (spotJaVistos.has(oferta.portalTripId)) continue;
+      spotJaVistos.add(oferta.portalTripId);
+      try {
+        await entregarOferta(oferta);
+        novas += 1;
+        log(`SPOT: ${oferta.tripNumber ?? oferta.portalTripId} · ${oferta.route}`);
+      } catch (e) {
+        // Solta da memória para o próximo ciclo tentar de novo: perder uma oferta por uma falha de
+        // rede é o oposto do que este ciclo existe para fazer.
+        spotJaVistos.delete(oferta.portalTripId);
+        erro("SPOT: não consegui entregar", String(e?.message ?? e));
+      }
+    }
+    return novas;
+  }
+
+  /**
+   * O LAÇO DO SPOT É PRÓPRIO, e não o `repetir` dos outros ciclos — por duas razões.
+   *
+   * SILÊNCIO. O `repetir` registra uma linha por ciclo, o que serve num ciclo de cinco minutos e
+   * afogaria o console num de cinco segundos: seriam doze linhas por minuto, dezessete mil por dia,
+   * e a linha que importa — "SPOT: chegou uma oferta" — se perderia no meio. Aqui só se escreve
+   * quando há o que dizer.
+   *
+   * E NÃO ESCREVE PULSO PRÓPRIO. O pulso existe para dizer se um PROCESSO está vivo, e este ciclo
+   * não é um processo: ele roda dentro do robô do portal, que já pulsa a cada cinco minutos pelo
+   * ciclo do plano. Se aquele pulso está fresco, este laço está de pé — eram duas máquinas antes,
+   * e é uma agora. Um pulso separado aqui diria a mesma coisa duas vezes, e um pulso que só se
+   * escreve quando há oferta (elas são raras: de 3 a 21 por dia) nasceria velho e acusaria morte
+   * onde há sossego.
+   */
+  (async function lacoDoSpot() {
+    for (;;) {
+      try {
+        await cicloSpot();
+      } catch (e) {
+        // Sem barulho a cada falha: num laço de cinco segundos, uma oscilação de rede viraria
+        // dezenas de linhas iguais. O ciclo seguinte tenta de novo, e a janela de 15 s cobre o furo.
+        erro("spot falhou (tenta de novo):", String(e?.message ?? e).slice(0, 120));
+      }
+      await new Promise((r) => setTimeout(r, CONFIG.intervaloSpotMs));
+    }
+  })();
 
   log("ativo. Somente leitura: duas listagens, nenhum clique.");
 
