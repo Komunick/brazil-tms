@@ -42,7 +42,6 @@ import type {
   TripFilterOptions,
   DashboardSummary,
   RotaDaMalha,
-  ViagemAcompanhada,
   DesempenhoDoMotorista,
   DesempenhoNaRota,
   BscSnapshotView,
@@ -61,6 +60,7 @@ import type {
   BillingListRow,
   ExportBatchRow,
   MotoristaDoPortal,
+  LinhaDaProgramacao,
 } from "@brazil-tms/db";
 
 /**
@@ -376,38 +376,51 @@ export function useMelhoresMotoristas(
  */
 const PROGRAMACAO = [...TRIPS_ROOT, "minha-programacao"] as const;
 
-export function useMinhaProgramacao(): UseQueryResult<{ viagens: ViagemAcompanhada[] }> {
+/**
+ * A PROGRAMAÇÃO — o quadro por dia que substitui a planilha (2026-08-24, a pedido).
+ *
+ * A consulta leva a frente e a janela na CHAVE, e não só na URL: trocar de frente tem de trazer
+ * outra lista, não reaproveitar a anterior enquanto a nova chega. Sem isso a tela pisca o conteúdo
+ * errado por um instante — e num quadro de programação, ver a frente errada por um segundo é pior
+ * do que esperar.
+ */
+export function useProgramacao(
+  regiao: string,
+  dias: { atras: number; adiante: number },
+): UseQueryResult<{ linhas: LinhaDaProgramacao[] }> {
+  const busca = new URLSearchParams({
+    diasAtras: String(dias.atras),
+    diasAdiante: String(dias.adiante),
+    ...(regiao ? { regiao } : {}),
+  }).toString();
   return useQuery({
-    queryKey: PROGRAMACAO,
+    queryKey: [...PROGRAMACAO, busca],
     queryFn: async () =>
-      asJson<{ viagens: ViagemAcompanhada[] }>(await fetch(`/api/me/programacao`)),
+      asJson<{ linhas: LinhaDaProgramacao[] }>(await fetch(`/api/me/programacao?${busca}`)),
     refetchInterval: DASHBOARD_POLL_MS,
   });
 }
 
-export function useAcompanharViagem() {
+/**
+ * A marca pessoal: cor, esconder, ou os dois.
+ *
+ * Invalida em vez de reescrever o cache com a resposta: a rota devolve só um reconhecimento, e a
+ * lista pode ter mudado por outro motivo entre o clique e a resposta. Silenciosa no aviso do canto
+ * porque marcar uma linha é gesto de tela — um "Concluído" a cada cor escolhida viraria ruído.
+ */
+export function useMarcarViagem() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (tripId: string) =>
-      asJson<{ viagens: ViagemAcompanhada[] }>(
+    meta: { silencioso: true },
+    mutationFn: async (marca: { tripId: string; cor?: string | null; oculta?: boolean }) =>
+      asJson<{ ok: true }>(
         await fetch(`/api/me/programacao`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tripId }),
+          body: JSON.stringify(marca),
         }),
       ),
-    onSuccess: (resposta) => queryClient.setQueryData(PROGRAMACAO, resposta),
-  });
-}
-
-export function usePararDeAcompanhar() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: async (tripId: string) =>
-      asJson<{ viagens: ViagemAcompanhada[] }>(
-        await fetch(`/api/me/programacao?tripId=${tripId}`, { method: "DELETE" }),
-      ),
-    onSuccess: (resposta) => queryClient.setQueryData(PROGRAMACAO, resposta),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: PROGRAMACAO }),
   });
 }
 

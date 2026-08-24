@@ -1,4 +1,5 @@
-import { pgTable, primaryKey, timestamp, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { boolean, check, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { trips } from "./trips";
 import { users } from "./users";
 
@@ -33,6 +34,30 @@ export const userWatchedTrips = pgTable(
       .references(() => trips.id, { onDelete: "cascade" }),
     /** Quando entrou na lista — a ordem em que a pessoa as juntou é a ordem que ela espera ver. */
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * A COR QUE ESTA PESSOA PÔS NESTA LINHA (2026-08-24, a pedido).
+     *
+     * Texto e não enum: a planilha que isto substitui usa a paleta inteira do Google e ninguém
+     * combinou o que cada cor significa — é sinal particular de quem marca. Um enum obrigaria a
+     * decidir hoje uma lista que a operação ainda não tem, e a primeira cor que faltasse viraria
+     * migração. A paleta de fato oferecida mora na tela; aqui só existe o limite de tamanho.
+     *
+     * `null` = sem marca, que é o normal da esmagadora maioria das linhas.
+     */
+    cor: text("cor"),
+    /**
+     * ESCONDIDA PARA ESTA PESSOA, e só para ela.
+     *
+     * O quadro mostra a programação inteira; quem não quer ver uma LH a esconde. Nasce `false`
+     * porque o contrário — nascer escondido e a pessoa ir revelando — faria a tela abrir vazia no
+     * primeiro uso e parecer quebrada.
+     *
+     * Não apaga nada: a viagem continua no quadro de todo mundo, e some só desta tela.
+     */
+    oculta: boolean("oculta").notNull().default(false),
   },
-  (table) => [primaryKey({ columns: [table.userId, table.tripId] })],
+  (table) => [
+    primaryKey({ columns: [table.userId, table.tripId] }),
+    check("user_watched_trips_cor_ck", sql`${table.cor} IS NULL OR length(${table.cor}) <= 24`),
+  ],
 );
