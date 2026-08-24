@@ -106,6 +106,56 @@ export const fleetPositions = pgTable(
     /** Minutos de silêncio que o rastreador considera demais nesta conta (hoje 60). */
     noPositionLimitMinutes: integer("no_position_limit_minutes"),
 
+    /**
+     * SEIS CAMPOS QUE JÁ VINHAM NA MESMA RESPOSTA (2026-08-24, a pedido).
+     *
+     * Escolhidos com a resposta real na mão, não pelo nome. Dos 380 campos, 159 vêm sempre nulos
+     * para a frota inteira e a maior parte do resto é cadastro interno do rastreador — códigos,
+     * apelidos de tela, flags de módulos não contratados. Guardar os 380 crus custaria ~250 MB por
+     * dia de reescrita para carregar esse lixo junto.
+     *
+     * Dois candidatos foram DESCARTADOS na medição, e vale registrar por quê:
+     * `OBSERVACOES_COLETA_ENTREGA` tem dois valores distintos em 67 registros (um deles é " / "),
+     * ou seja, está vazio na prática; e `SMK_DATAHORACHEGADADESTINO` vem preenchido em 78 de 78,
+     * inclusive para veículo SEM viagem — é sentinela, não chegada. O par honesto é a versão
+     * `...FORMATADA`, preenchida exatamente nos mesmos 67 que têm saída da origem.
+     */
+    /**
+     * O TELEFONE DO MOTORISTA, e ele chega por uma porta sem cota.
+     *
+     * O portal do cliente racionou dado pessoal na primeira carga do cadastro ("suas visitas para
+     * dados confidenciais atingiram o limite máximo") — e o rastreador entrega telefone e nome do
+     * mesmo motorista sem racionar nada, para 70 dos 78 veículos. São dois cadastros da mesma
+     * pessoa, e este é o que a operação alcança quando precisa ligar AGORA.
+     *
+     * Texto, não número: 64 vêm como um celular e o resto traz dois números colados sem separador.
+     * Normalizar aqui escolheria um deles e jogaria o outro fora; quem exibe decide.
+     */
+    driverPhone: text("driver_phone"),
+    /** Cidade/UF do motorista, como o rastreador escreve ("ABAETE/MG"). */
+    driverCity: text("driver_city"),
+    /** Quilômetros rodados no dia, pelo hodômetro do rastreador. */
+    kmToday: doublePrecision("km_today"),
+    /**
+     * Saída REAL da origem e chegada REAL no destino, medidas pelo rastreador.
+     *
+     * O TMS já tem a janela do cliente e a previsão calculada pela estrada; faltava o que de fato
+     * aconteceu. É a diferença entre "devia sair às 8" e "saiu às 9h40" — e é dela que sai um atraso
+     * de origem que não depende de ninguém apontar.
+     *
+     * Chegam sem fuso ("2026-08-24 09:40:12"), como todos os instantes deste fornecedor, e a
+     * conversão mora na gravação pelo mesmo motivo dos outros: o relógio da VM do robô é a última
+     * coisa em que confiar para alimentar cálculo de atraso.
+     */
+    departedOriginAt: timestamp("departed_origin_at", { withTimezone: true }),
+    arrivedDestinationAt: timestamp("arrived_destination_at", { withTimezone: true }),
+    /**
+     * Minutos parado, contagem geral — diferente de `stopped_minutes`, que é parado DENTRO do alvo
+     * (`MINUTOS_PARADO_ALVO_VIAGEM`). Os dois convivem porque respondem a perguntas diferentes:
+     * "está parado há quanto tempo?" e "está parado no ponto de entrega há quanto tempo?".
+     */
+    stoppedMinutesTotal: integer("stopped_minutes_total"),
+
     /** Quando o TMS gravou esta leitura. É o relógio de "o robô ainda está vivo?". */
     receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
   },
