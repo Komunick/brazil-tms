@@ -606,6 +606,14 @@ export function useConfirmAssignment(id: string) {
  */
 export function useAssignmentCheck(id: string) {
   return useMutation({
+    /**
+     * SEM AVISO NO CANTO: isto confere, não grava.
+     *
+     * Roda a cada troca de recurso no formulário de atribuição. Com o aviso ligado, escolher um
+     * motorista fazia aparecer "Concluído" sem nada ter sido atribuído — o aviso mentindo sobre a
+     * única coisa que ele existe para dizer. Ver `lib/query-client.tsx`.
+     */
+    meta: { silencioso: true },
     mutationFn: async (input: CheckAssignmentInput) => {
       const res = await fetch(`/api/trips/${id}/assignment/check`, {
         method: "POST",
