@@ -1983,6 +1983,10 @@
     "atribuir": "Atribuir motorista",
     "editarAtribuicao": "Editar atribuição",
     "fecharAtribuicao": "Fechar",
-    "abrirTelaCompleta": "Abrir a viagem"
+    "abrirTelaCompleta": "Abrir a viagem",
+    "dias": "Dias",
+    "diasFiltrados": "{n} dia(s) fora",
+    "quaisDias": "Quais dias você quer ver?",
+    "verTodosOsDias": "Ver todos os dias"
   }
 }

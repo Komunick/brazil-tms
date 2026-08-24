@@ -33,6 +33,7 @@ export function MelhoresDaRota({
   aberto,
   opcoes,
   onEscolher,
+  quantos,
 }: {
   tripId: string;
   /** Só consulta com o diálogo aberto: ele fica montado atrás da lista da Expedição. */
@@ -40,8 +41,16 @@ export function MelhoresDaRota({
   /** Os motoristas que o portal aceita — para casar o nome do ranking com o id do campo. */
   opcoes: { id: string; label: string }[];
   onEscolher: (driverId: string) => void;
+  /**
+   * Quantos nomes mostrar. Dez na Programação, a pedido; seis onde o diálogo é estreito.
+   *
+   * O corte existe porque a lista é SUGESTÃO: vinte nomes deixam de sugerir e passam a exigir
+   * leitura, e uma pessoa que precisa ler vinte linhas para escalar um motorista ignora o painel.
+   */
+  quantos?: number;
 }) {
   const t = useTranslations("Trips.melhoresDaRota");
+  const corte = quantos ?? 6;
   const query = useMelhoresMotoristas(tripId, aberto);
 
   /** O nome do ranking vem do portal, e a lista do campo também — casar por nome é o que existe. */
@@ -62,7 +71,7 @@ export function MelhoresDaRota({
 
       {lista.length > 0 ? (
         <ul className="space-y-1.5">
-          {lista.slice(0, 6).map((d) => {
+          {lista.slice(0, corte).map((d) => {
             const id = idPorNome.get(d.motorista.trim().toLowerCase());
             const conteudo = (
               <>
