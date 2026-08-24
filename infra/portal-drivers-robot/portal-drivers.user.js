@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — cadastro de motoristas
 // @namespace    braziltransports.com.br
-// @version      1.1.0
+// @version      1.3.1
 // @description  Lê o cadastro de motoristas do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tms.braziltransports.com.br
@@ -102,10 +102,44 @@
      * não há nada. Cinquenta separa "primeira carga" de "o cadastro tem buracos".
      */
     filaGrandeAPartirDe: 50,
+    /**
+     * POR QUANTO TEMPO SE ACREDITA NUM "O PORTAL NÃO TEM ESSE DADO".
+     *
+     * Uma semana. O portal responde vazio para quem simplesmente não tem telefone cadastrado lá, e
+     * perguntar de novo no minuto seguinte devolve o mesmo vazio — só que consumindo a cota e o log
+     * do fornecedor. Mas o dado PODE ser preenchido lá depois: alguém cadastra o telefone do
+     * motorista na terça. Sete dias é o meio-termo entre não martelar e não ficar cego.
+     */
+    validadeDoVazioMs: 7 * 24 * 60 * 60 * 1000,
+    /**
+     * QUANTO ESPERAR DEPOIS DE ESTOURAR A COTA DE DADOS PESSOAIS DO PORTAL.
+     *
+     * Uma hora. Não se sabe quando a cota vira — o portal não diz —, então em vez de adivinhar
+     * "meia-noite" o robô sonda de hora em hora: um ciclo custa uma listagem e meia dúzia de
+     * revelações recusadas, e ele volta a trabalhar sozinho no momento em que a cota abrir. Adivinhar
+     * o horário seria ficar parado até o dia seguinte se a virada fosse às 6h.
+     */
+    esperaAposCotaMs: 60 * 60 * 1000,
   };
 
-  const registro = (...args) => console.log("[TMS motoristas 1.1.0]", ...args);
-  const erro = (...args) => console.error("[TMS motoristas 1.1.0]", ...args);
+  /**
+   * A COTA SE RECONHECE PELA MENSAGEM, não pelo número.
+   *
+   * Medidos dois códigos diferentes para a MESMA recusa em minutos de intervalo — `271601017` e o
+   * que se leu como `271681017` numa captura de tela. Prender a lógica a um número é apostar em ter
+   * lido certo e em o fornecedor não variar; a frase é estável e é o que ele mostra ao operador.
+   *
+   * O `includes` é sobre o trecho invariável: "limite máximo" resiste a reticências, prefixo e
+   * pontuação diferentes.
+   */
+  const FRASE_DA_COTA = "limite máximo";
+  function ehCota(payload) {
+    const m = payload && typeof payload.message === "string" ? payload.message.toLowerCase() : "";
+    return m.includes(FRASE_DA_COTA);
+  }
+
+  const registro = (...args) => console.log("[TMS motoristas 1.3.1]", ...args);
+  const erro = (...args) => console.error("[TMS motoristas 1.3.1]", ...args);
   const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const TOKEN_DE_EXEMPLO = "COLE_AQUI" + "_O_TOKEN";
@@ -144,6 +178,34 @@
     return noCodigo;
   }
 
+  /**
+   * O QUE O PORTAL JÁ RESPONDEU VAZIO, E QUANDO.
+   *
+   * O TMS pede de volta tudo o que ainda falta, e ele tem razão em pedir: do lado dele, um telefone
+   * vazio é um telefone vazio. Só o robô sabe que aquele campo JÁ foi perguntado e voltou nada — e
+   * sem essa memória a fila nunca encolhe.
+   *
+   * Foi o que travou a carga em 481 vinculados: os 178 telefones e 339 CPFs que o portal não tem
+   * somam 517 pedidos, o teto do ciclo é 500, e as revelações andam na ordem da listagem. Os 517
+   * consumiam a cota inteira toda vez, sempre voltando vazios, e os 909 nomes que vinham depois
+   * nunca eram alcançados. Travamento permanente, sem erro nenhum no console.
+   */
+  const CHAVE_DOS_VAZIOS = "revelacoesVazias";
+  function lerVazios() {
+    try {
+      return JSON.parse(GM_getValue(CHAVE_DOS_VAZIOS, "{}")) || {};
+    } catch {
+      return {};
+    }
+  }
+  function gravarVazios(mapa) {
+    try {
+      GM_setValue(CHAVE_DOS_VAZIOS, JSON.stringify(mapa));
+    } catch {
+      // Sem armazenamento o robô continua correto, só volta a repetir perguntas inúteis.
+    }
+  }
+
   /** A estação sob a qual a aba está logada — o portal exige em toda listagem. */
   function estacao() {
     const id = localStorage.getItem("stationId");
@@ -180,8 +242,32 @@
     u.searchParams.set("driver_id", String(driverId));
     u.searchParams.set("data_field", campo);
     const r = await fetch(u.toString(), { credentials: "include" });
-    if (!r.ok) return null;
-    return r.json();
+    /**
+     * A RECUSA PRECISA FALAR. Este `return null` calado custou uma noite: a carga parou em 481 e o
+     * console não tinha uma linha sequer explicando por quê — nem erro, nem aviso. Um 403 do portal
+     * (cota de dados pessoais dele, que é dele mesmo impor) era indistinguível de "não perguntei".
+     * Diagnóstico só é possível sobre o que o robô conta.
+     */
+    if (!r.ok) throw new Error("portal recusou a revelação: HTTP " + r.status);
+    const payload = await r.json();
+    // `retcode` diferente de zero é recusa de aplicação: o HTTP vem 200 e a mensagem, dentro.
+    if (payload && payload.retcode !== 0) {
+      const e = new Error("portal recusou a revelação: " + JSON.stringify(payload).slice(0, 200));
+      /**
+       * "Suas visitas para dados confidenciais atingiram o limite máximo" (retcode 271681017).
+       *
+       * O PORTAL LIMITA QUANTO DADO PESSOAL PODE SER VISTO POR PERÍODO, e é o limite dele — não um
+       * defeito nosso para contornar. Medido em 2026-08-23: a carga inicial esbarrou nele depois de
+       * algumas centenas de revelações, e a partir daí TODA revelação volta recusada.
+       *
+       * Marcar este caso à parte importa porque a resposta certa é diferente das outras: não é
+       * tentar de novo em um minuto nem em quinze, é esperar a cota virar. Insistir só gasta o log
+       * do fornecedor com recusa.
+       */
+      e.cota = ehCota(payload);
+      throw e;
+    }
+    return payload;
   }
 
   function entregar(corpo) {
@@ -209,12 +295,16 @@
     });
   }
 
-  /** Devolve `true` enquanto ainda há fila grande — é o que decide o ritmo do próximo ciclo. */
+  /**
+   * Devolve o ESTADO do ciclo, que é o que decide o ritmo do próximo: `"fila"` (há muito a pedir,
+   * volta em um minuto), `"cota"` (o portal fechou a torneira de dados pessoais, volta em uma hora)
+   * ou `"quieto"` (nada urgente, volta em quinze minutos).
+   */
   async function ciclo() {
     tokenEmUso = tokenAtual();
     if (!tokenEmUso) {
       erro("token não configurado: cole-o na linha `token:` do CONFIG — basta uma vez, ele fica guardado");
-      return false;
+      return "quieto";
     }
 
     let pagina = 1;
@@ -241,32 +331,91 @@
 
     registro("listagem: " + lidos + " motoristas · faltam dados de " + pendentes.length);
 
-    const filaGrande = pendentes.length >= CONFIG.filaGrandeAPartirDe;
+    const vazios = lerVazios();
+    const agora = Date.now();
 
-    let feitas = 0;
+    /**
+     * O NOME NA FRENTE DE TUDO, e não é preferência: é o que desata o nó.
+     *
+     * Enquanto o motorista não tem nome revelado, ele não existe no nosso cadastro — nem para
+     * receber telefone depois. Um nome revelado vale mais que um telefone revelado, sempre. Com a
+     * ordem da listagem pura, os campos dos primeiros motoristas comiam a cota e os nomes dos
+     * últimos nunca chegavam a ser pedidos.
+     *
+     * `sort` é estável em todos os motores modernos, então dentro de cada grupo a ordem da listagem
+     * se mantém — o que importa para a carga avançar sempre do mesmo ponto.
+     */
+    const fila = [];
     for (const p of pendentes) {
       for (const campo of p.campos) {
-        if (feitas >= CONFIG.revelacoesPorCiclo) {
-          registro("teto do ciclo atingido (" + feitas + "); o resto sai no próximo");
-          return true;
-        }
-        try {
-          const payload = await revelar(p.portalDriverId, campo);
-          if (payload) {
-            await entregar({
-              token: tokenEmUso,
-              reveal: { portalDriverId: p.portalDriverId, field: campo, payload },
-            });
-          }
-        } catch (e) {
-          erro("revelação falhou", campo, String(e));
-        }
-        feitas += 1;
-        await dormir(CONFIG.pausaEntreRevelacoesMs);
+        const chave = p.portalDriverId + "|" + campo;
+        const quando = vazios[chave];
+        if (quando && agora - quando < CONFIG.validadeDoVazioMs) continue;
+        fila.push({ id: p.portalDriverId, campo, chave });
       }
     }
+    fila.sort((a, b) => (a.campo === "driver_name" ? 0 : 1) - (b.campo === "driver_name" ? 0 : 1));
+
+    const filaGrande = fila.length >= CONFIG.filaGrandeAPartirDe;
+    registro("a perguntar: " + fila.length + " (de " + pendentes.length + " motoristas na lista)");
+
+    let feitas = 0;
+    let novosVazios = 0;
+    /**
+     * RECUSA EM SÉRIE É PARA DESISTIR DO CICLO, não para insistir 500 vezes.
+     *
+     * Se o portal está barrando as revelações, as próximas 499 serão barradas igual: o único efeito
+     * de continuar é 500 linhas idênticas no console — que é ruído, e ruído esconde justamente a
+     * linha que explica. Cinco seguidas bastam para saber que não é caso isolado.
+     */
+    let seguidasQueFalharam = 0;
+    let barrado = "";
+    for (const item of fila) {
+      if (feitas >= CONFIG.revelacoesPorCiclo) {
+        registro("teto do ciclo atingido (" + feitas + "); o resto sai no próximo");
+        break;
+      }
+      try {
+        const payload = await revelar(item.id, item.campo);
+        seguidasQueFalharam = 0;
+        if (payload) {
+          const resposta = await entregar({
+            token: tokenEmUso,
+            reveal: { portalDriverId: item.id, field: item.campo, payload },
+          });
+          if (resposta && resposta.gravado === false && resposta.motivo === "vazio") {
+            vazios[item.chave] = agora;
+            novosVazios += 1;
+          }
+        }
+      } catch (e) {
+        seguidasQueFalharam += 1;
+        if (seguidasQueFalharam <= 2) erro("revelação falhou", item.campo, String(e));
+        if (seguidasQueFalharam >= 5) {
+          barrado = e && e.cota ? "cota" : "quieto";
+          erro(
+            barrado === "cota"
+              ? "cota de dados pessoais do portal esgotada — volto a sondar daqui a uma hora"
+              : "cinco recusas seguidas — paro o ciclo aqui e volto no ritmo lento",
+          );
+          break;
+        }
+      }
+      feitas += 1;
+      await dormir(CONFIG.pausaEntreRevelacoesMs);
+    }
+    // Barrado não é fila drenada: voltar de minuto em minuto só repetiria a recusa mais depressa.
+    if (barrado) {
+      if (novosVazios > 0) gravarVazios(vazios);
+      return barrado;
+    }
+
+    if (novosVazios > 0) {
+      gravarVazios(vazios);
+      registro("o portal não tem " + novosVazios + " destes campos; não pergunto de novo esta semana");
+    }
     registro("revelações no ciclo: " + feitas);
-    return filaGrande;
+    return filaGrande ? "fila" : "quieto";
   }
 
   async function repetir() {
@@ -277,13 +426,19 @@
      * conserta nada e só enche o console de erro igual — foi o que aconteceu no deploy desta noite,
      * com três robôs registrando 502 em rajada. Quinze minutos é tempo de o problema ser resolvido.
      */
-    let comFila = false;
+    let estado = "quieto";
     try {
-      comFila = await ciclo();
+      estado = await ciclo();
     } catch (e) {
       erro("ciclo falhou:", String(e));
     }
-    setTimeout(repetir, comFila ? CONFIG.intervaloComFilaMs : CONFIG.intervaloMs);
+    const espera =
+      estado === "fila"
+        ? CONFIG.intervaloComFilaMs
+        : estado === "cota"
+          ? CONFIG.esperaAposCotaMs
+          : CONFIG.intervaloMs;
+    setTimeout(repetir, espera);
   }
 
   registro("no ar");
