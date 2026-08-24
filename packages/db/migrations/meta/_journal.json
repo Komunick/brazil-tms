@@ -309,6 +309,13 @@
       "when": 1787200000015,
       "tag": "0043_fleet_positions_mais_campos",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1787200000016,
+      "tag": "0044_marca_pessoal_na_programacao",
+      "breakpoints": true
     }
   ]
 }
