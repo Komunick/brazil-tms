@@ -50,6 +50,9 @@ export function DriverDetailClient({ driverId, canArchive }: Props) {
   }
 
   const saveMutation = useMutation({
+    // O aviso do canto sai para TODA gravação sem ninguém pedir; `meta` só troca o texto genérico
+    // pelo nome da ação. Ver `lib/query-client.tsx`.
+    meta: { aviso: isNew ? "Motorista cadastrado" : "Motorista atualizado" },
     mutationFn: (values: CreateDriverInput) =>
       isNew ? createEntity("drivers", values) : updateEntity("drivers", driverId, values),
     onSuccess: () => {
