@@ -302,6 +302,13 @@
       "when": 1787200000014,
       "tag": "0042_drivers_portal_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1787200000015,
+      "tag": "0043_fleet_positions_mais_campos",
+      "breakpoints": true
     }
   ]
 }

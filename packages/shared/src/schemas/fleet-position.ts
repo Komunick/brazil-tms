@@ -9,8 +9,13 @@ import { z } from "zod";
  *
  * Isso é uma diferença deliberada em relação ao robô do portal, que entrega o payload CRU. Lá o
  * volume é pequeno e o TMS precisa aprender o vocabulário do cliente; aqui mandar tudo seria
- * empurrar 380 colunas por veículo a cada cinco minutos para descartar 365 delas do outro lado. O
+ * empurrar 380 colunas por veículo a cada cinco minutos para descartar a maioria do outro lado. O
  * recorte não é regra de negócio — é a mesma lista de campos que a tela já mostra.
+ *
+ * MEDIDO EM 2026-08-24, quando se cogitou mandar tudo cru: a frota inteira dá 857 KB por leitura, e
+ * a cada cinco minutos isso são ~250 MB por dia de reescrita. Cento e cinquenta e nove dos 380
+ * campos vêm SEMPRE nulos para a frota toda, e boa parte do resto é cadastro interno do rastreador.
+ * O recorte não é economia de preguiça: é não pagar 250 MB diários para guardar lixo.
  *
  * OS NOMES ORIGINAIS FICAM NO ROBÔ, não aqui: `GRA_PLACA`, `POD_LAT`, `GRJ_DATAHORAPREVISAOENTREGA`.
  * Se o fornecedor renomear um campo, quem quebra é o robô — e ele avisa no console quando um campo
@@ -102,6 +107,31 @@ export const fleetPositionSchema = z.object({
    * seria pior do que não ter o alerta.
    */
   noPositionLimitMinutes: z.union([z.number(), z.string()]).nullish(),
+
+  /**
+   * SEIS CAMPOS QUE JÁ VINHAM NA MESMA RESPOSTA (2026-08-24, a pedido).
+   *
+   * Todos OPCIONAIS, pela mesma razão dos faróis: um robô que ainda não foi atualizado continua
+   * entregando o retrato inteiro. Exigir campo novo transformaria uma coluna a mais numa
+   * interrupção de alimentação.
+   *
+   * A escolha foi feita com a resposta real na mão. Ficou registrado no schema da tabela por que
+   * dois candidatos óbvios pelo nome foram descartados na medição.
+   */
+  /**
+   * O telefone do motorista — TEXTO, e de propósito.
+   *
+   * Sessenta e quatro chegam como um celular; o restante traz dois números colados sem separador.
+   * Normalizar aqui escolheria um e descartaria o outro, e quem liga prefere ver os dois.
+   */
+  driverPhone: z.string().trim().max(120).nullish(),
+  driverCity: z.string().trim().max(120).nullish(),
+  kmToday: z.number().min(-1).nullish(),
+  /** Sem fuso, como todos os instantes deste fornecedor: `"2026-08-24 09:40:12"`. */
+  departedOriginAt: z.string().trim().max(40).nullish(),
+  arrivedDestinationAt: z.string().trim().max(40).nullish(),
+  /** Parado no geral — o `stoppedMinutes` acima é parado DENTRO do alvo. */
+  stoppedMinutesTotal: z.union([z.number(), z.string()]).nullish(),
 });
 
 export type FleetPositionInput = z.infer<typeof fleetPositionSchema>;

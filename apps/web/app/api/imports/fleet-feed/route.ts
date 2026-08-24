@@ -10,9 +10,12 @@ export const dynamic = "force-dynamic";
 /**
  * POST /api/imports/fleet-feed — onde a frota está agora, segundo o rastreador (2026-08-20).
  *
- * Quem lê é um userscript na VM, dentro da tela "Veículos Logísticos" do eTorre. Ele NÃO consulta o
- * fornecedor: escuta a chamada que a própria tela já faz e entrega o recorte ao TMS. Nenhuma
- * requisição a mais chega à Raster por nossa causa.
+ * Quem lê é um userscript na VM, na tela "Veículos Logísticos" do eTorre. Ele consulta o
+ * fornecedor uma vez por ciclo — a MESMA chamada que a tela faria — e entrega o recorte ao TMS.
+ * Nenhuma requisição a mais que antes: o empurrão na tela provocava exatamente uma.
+ *
+ * Desde 2026-08-24 o robô APRENDE a chamada e a repete sozinho, em vez de cutucar a tela para que
+ * ela a fizesse — porque o empurrão dependia de a aba estar VISÍVEL na VM.
  *
  * A rota não sabe disso e não deveria saber. Se um dia sair a credencial de integração, quem chama
  * passa a ser o worker, com o mesmo corpo — o contrato aqui é o retrato da frota, não o caminho por
