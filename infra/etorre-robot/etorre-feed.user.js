@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do eTorre
 // @namespace    braziltransports.com.br
-// @version      0.3.0
+// @version      0.3.1
 // @description  Escuta o que a tela de Veículos Logísticos do eTorre já busca e entrega ao TMS. Somente leitura.
 // @match        https://torre.logae.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -126,8 +126,22 @@
     percentual: "GRJ_PERCENTUALPERCORRIDO",
     kmPercorrido: "GRJ_KMPERCORRIDO",
     minutosParado: "MINUTOS_PARADO_ALVO_VIAGEM",
-    /** A referência textual da última posição — é o que a operação lê para saber "onde é isso". */
-    referencia: "GRA_REFERENCIA_LOCALIZADOR",
+    /**
+     * A referência textual da última posição — o que a operação lê para saber "onde é isso".
+     *
+     * ERA `GRA_REFERENCIA_LOCALIZADOR`, e estava errado desde que este robô nasceu: aquele campo é
+     * do LOCALIZADOR, um segundo equipamento, e devolve a string literal "Sem Referência" para a
+     * frota inteira. A coluna da tela mostrou "Sem Referência" em 147 de 147 veículos por três dias.
+     *
+     * O certo é `POD_REFERENCIA` — mesma família de `POD_LAT`/`POD_LON`/`POD_DATAHORAP`, que este
+     * robô já usa, e exatamente o texto que a grade do eTorre exibe ("0.46 km de VIP ESTACIONAMENTO
+     * DE CAMINHÕES - SIMOES FILHO/BA").
+     *
+     * Medido lado a lado em 2026-08-24, e é o tipo de erro que só a contagem de DISTINTOS denuncia:
+     * os dois vinham "preenchidos" em 78 de 78, e é aí que uma verificação de "campo secou?" passa
+     * batido. O que os separa é que um tem 76 valores diferentes e o outro tem UM.
+     */
+    referencia: "POD_REFERENCIA",
     /** Faróis do rastreador: alertas de execução que o TMS não tem como derivar sozinho. */
     foraDeRota: "GRJ_FAROLFORADEROTA",
     semPosicao: "GRJ_FAROLSEMPOSICAO",
@@ -231,6 +245,44 @@
         erro(`nomes disponíveis no registro: ${Object.keys(registros[0]).sort().join(", ")}`);
       }
     }
+    /**
+     * CAMPO CONSTANTE É TÃO SUSPEITO QUANTO CAMPO VAZIO — e o aviso acima não pegava esse caso.
+     *
+     * `GRA_REFERENCIA_LOCALIZADOR` devolveu a string "Sem Referência" para os 147 veículos durante
+     * três dias. Não estava vazio, então passou pela verificação de "campo secou"; e "Sem
+     * Referência" é um texto plausível numa coluna de localização, então passou pelo olho também. Só
+     * a contagem de valores DISTINTOS separa "o rastreador está dizendo a mesma coisa de todo mundo"
+     * de "este campo tem conteúdo".
+     *
+     * Fora da lista os campos que legitimamente são iguais para a frota inteira: são configuração da
+     * conta ou farol ligado/desligado, e avisar sobre eles todo ciclo ensinaria a ignorar o aviso.
+     */
+    const CONSTANTES_POR_NATUREZA = new Set([
+      "limiteSemPosicaoMin",
+      "semPosicao",
+      "bloqueado",
+      "sirene",
+      "ignicao",
+      "parado",
+      "foraDeRota",
+      "tempoDirecao",
+      "inicioAtrasado",
+      "atrasoViagem",
+      "liberacao",
+    ]);
+    if (frota.length >= 10) {
+      const constantes = Object.keys(CAMPOS).filter((k) => {
+        if (CONSTANTES_POR_NATUREZA.has(k) || vazios.includes(k)) return false;
+        const valores = new Set(frota.map((v) => JSON.stringify(v[k])));
+        return valores.size === 1;
+      });
+      if (constantes.length > 0) {
+        erro(
+          `campos com UM único valor em toda a frota — provavelmente o nome errado: ${constantes.join(", ")}`,
+        );
+      }
+    }
+
     if (emViagem[0]) log("exemplo com viagem:", emViagem[0]);
     entregar(frota);
   }
