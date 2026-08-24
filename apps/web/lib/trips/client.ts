@@ -525,6 +525,7 @@ interface AssignmentResult {
 export function useAssignTrip(id: string) {
   const queryClient = useQueryClient();
   return useMutation({
+    meta: { aviso: "Motorista atribuído à viagem" },
     mutationFn: async (input: AssignTripInput) => {
       const res = await fetch(`/api/trips/${id}/assignment`, {
         method: "POST",

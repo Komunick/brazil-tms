@@ -19,6 +19,12 @@
     "tryAgain": "Tente novamente.",
     "none": "—"
   },
+  "Avisos": {
+    "concluido": "Concluído",
+    "naoConcluido": "Não foi possível concluir",
+    "tenteDeNovo": "Tente de novo. Se continuar, avise o suporte.",
+    "fechar": "Fechar aviso"
+  },
   "Auth": {
     "loginTitle": "Entrar",
     "loginSubtitle": "Acesse o painel da Brazil Transports.",
