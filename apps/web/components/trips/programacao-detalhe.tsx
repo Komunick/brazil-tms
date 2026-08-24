@@ -9,6 +9,7 @@ import type { TripFilterOptions } from "@brazil-tms/db";
 import { useFilterOptions, useTripDetail } from "@/lib/trips/client";
 import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
 import { MelhoresDaRota } from "@/components/trips/melhores-da-rota";
+import { HistoricoDoMotorista } from "@/components/trips/historico-do-motorista";
 import { TimelineSection } from "@/components/trips/trip-detail/timeline";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,8 @@ export function ProgramacaoDetalhe({
   const [atribuindo, setAtribuindo] = useState(false);
   // O nome escolhido no ranking, empurrado para o formulário. Ver `driverIdSugerido`.
   const [sugerido, setSugerido] = useState<string | undefined>(undefined);
+  // O motorista cujo histórico está aberto, vindo do botão ao lado do nome no ranking.
+  const [historico, setHistorico] = useState<{ id: string; nome: string } | null>(null);
 
   const viagem = consulta.data?.item;
 
@@ -138,6 +141,7 @@ export function ProgramacaoDetalhe({
                   opcoes={opcoes.drivers}
                   onEscolher={setSugerido}
                   quantos={10}
+                  onVerHistorico={(id, nome) => setHistorico({ id, nome })}
                 />
               </div>
             ) : null}
@@ -148,6 +152,19 @@ export function ProgramacaoDetalhe({
           </div>
         ) : null}
       </DialogContent>
+
+      {/*
+        O histórico abre POR CIMA desta janela, e não no lugar dela: quem investiga um motorista
+        está no meio de uma atribuição, e perder o formulário para consultar seria pagar a consulta
+        com o trabalho já feito.
+      */}
+      <HistoricoDoMotorista
+        driverId={historico?.id ?? null}
+        nome={historico?.nome ?? null}
+        aberto={historico !== null}
+        aoFechar={() => setHistorico(null)}
+        tripId={viagem?.id}
+      />
     </Dialog>
   );
 }
