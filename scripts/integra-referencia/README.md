@@ -3,8 +3,8 @@
 Gera `docs/INTEGRA-14.2-REFERENCIA.md` a partir do PDF do manual convertido para HTML.
 
 ```bash
-node scripts/integra-referencia/1-extrair-linhas.js /tmp/linhas.json
-node scripts/integra-referencia/2-montar-referencia.js /tmp/linhas.json docs/INTEGRA-14.2-REFERENCIA.md
+node scripts/integra-referencia/1-extrair-linhas.mjs /tmp/linhas.json
+node scripts/integra-referencia/2-montar-referencia.mjs /tmp/linhas.json docs/INTEGRA-14.2-REFERENCIA.md
 ```
 
 O caminho do manual está escrito dentro do primeiro script. Ele espera o HTML gerado pelo

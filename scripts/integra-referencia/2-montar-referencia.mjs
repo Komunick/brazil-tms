@@ -1,4 +1,4 @@
-const fs = require("fs");
+import fs from "node:fs";
 const linhas = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 
 const txt = (l) => l.cols.map((c) => c.t).join(" ").trim();

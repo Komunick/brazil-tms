@@ -1,4 +1,4 @@
-const fs = require("fs");
+import fs from "node:fs";
 const html = fs.readFileSync("C:/Users/Victor/Downloads/Integra_14.2.html", "utf8");
 
 const left = {}, bottom = {};
