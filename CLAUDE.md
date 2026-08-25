@@ -20,6 +20,9 @@ docs + GitHub Spec Kit scaffolding. Build work happens feature-by-feature via Sp
   segredos, o que o deploy NÃO faz, os jobs do worker e o diagnóstico de "parou de chegar dado".
   Leia antes de tocar em produção — `devops/` não é versionado, então essa história só existe ali.
 - `docs/SPEC-SLICING.md` — how the PRD is sliced into 9 Spec Kit features (+ ownership matrix).
+- `docs/PROPOSTA-PRE-SM.md` — **proposta, nada implementado**: criar a Pré-SM na Logae ao atribuir,
+  via `setPreSMdeModelo`. Traz os números medidos e as três decisões de negócio pendentes — a
+  primeira delas (o vínculo A/F/T, que não existe no cadastro) bloqueia a implementação.
 - `.specify/memory/constitution.md` — governing rules; prevails on technical/process conflict.
 
 On conflict: constitution + STACK govern HOW; PRD governs product scope.
