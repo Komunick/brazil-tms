@@ -80,12 +80,18 @@ export function OfertasDoDia() {
     </>
   );
 
-  // Sem oferta nenhuma não há o que conferir, e um cartão clicável que abre uma janela vazia é uma
-  // promessa quebrada. Nesse caso ele volta a ser o cartão de antes.
-  if (ofertas.length === 0) {
-    return <Card className="p-2.5">{conteudo}</Card>;
-  }
-
+  /**
+   * O CARTÃO ABRE A JANELA SEMPRE, inclusive sem oferta nenhuma (2026-08-24).
+   *
+   * Aqui havia o contrário: sem oferta o cartão deixava de ser clicável, porque "um cartão clicável
+   * que abre uma janela vazia é uma promessa quebrada". Era verdade quando a janela só listava
+   * ofertas.
+   *
+   * Deixou de ser quando os botões de teste entraram nela. A janela sem ofertas não é mais vazia —
+   * tem o que liga o aviso da área de trabalho e o que ensaia o cartão na tela. E a guarda escondia
+   * justamente o dia em que testar importa: numa manhã sem oferta nenhuma, que é o caso que o
+   * ensaio existe para cobrir, não havia como alcançá-lo.
+   */
   return (
     <>
       <Card className="p-0 transition-colors hover:bg-muted/60">
@@ -124,11 +130,17 @@ export function OfertasDoDia() {
             <AvisosDoSistema />
           </div>
 
-          <ul className="flex flex-col gap-2">
-            {ofertas.map((o) => (
-              <OfertaDetalhada key={o.id} oferta={o} />
-            ))}
-          </ul>
+          {/* Sem oferta, a janela diz por que está assim. Uma lista vazia e sem legenda faria a
+              pessoa achar que a busca falhou — quando o silêncio é o estado normal do leilão. */}
+          {ofertas.length === 0 ? (
+            <p className="py-2 text-center text-xs text-muted-foreground">{t("todayEmpty")}</p>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {ofertas.map((o) => (
+                <OfertaDetalhada key={o.id} oferta={o} />
+              ))}
+            </ul>
+          )}
         </DialogContent>
       </Dialog>
     </>
