@@ -246,3 +246,11 @@ export {
   type VinculoEscolhido,
   type VinculosDaAtribuicao,
 } from "./trips/pre-sm-vinculos";
+// A ponte rota → modelo de Pré-SM: a carga propõe, uma pessoa confirma (026).
+export {
+  gravarPropostasDeModelo,
+  listarCorrespondencias,
+  definirConfirmacaoDaCorrespondencia,
+  modeloConfirmadoDaRota,
+  type CorrespondenciaDaRota,
+} from "./trips/pre-sm-modelos";
