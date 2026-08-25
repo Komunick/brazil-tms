@@ -1,4 +1,5 @@
 import { ACEITACAO_ACEITA } from "./portal-acceptance";
+import { documentExpiryState } from "../formatting";
 import type { VehicleType } from "../schemas/master-data";
 
 /**
@@ -113,6 +114,41 @@ export function impedimentoDaAtribuicao(v: AtribuicaoNoPortal): ImpedimentoDaAtr
   // Placa brasileira, nos dois formatos que convivem: ABC1234 e o Mercosul ABC1D23.
   if (placas.some((p) => !/^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(p))) return "placa_invalida";
   if (new Set(placas).size !== placas.length) return "placas_repetidas";
+  return null;
+}
+
+export type AlertaDoMotorista = "cnh_vencida" | "cnh_vencendo" | "cnh_sem_data";
+
+/**
+ * O QUE HÁ DE ERRADO COM A CNH de quem vai dirigir — ou `null` quando está em dia (2026-08-25).
+ *
+ * ── POR QUE ISTO NÃO É UM IMPEDIMENTO ─────────────────────────────────────────────────────────
+ *
+ * `impedimentoDaAtribuicao` recusa o que o PORTAL recusaria: campo vazio, placa mal formada. Isto
+ * é outra coisa — é regra nossa, sobre um dado nosso, e por isso avisa em vez de barrar.
+ *
+ * Barrar seria pior por dois motivos. Dezesseis motoristas ativos não têm data nenhuma no cadastro,
+ * e uma trava os trataria como irregulares sem prova. E a viagem tem hora para sair: uma recusa
+ * baseada em dado nosso possivelmente velho pararia a operação sem ninguém saber por quê.
+ *
+ * O aviso resolve o que faltava, que não era a informação — era alguém olhar para ela na hora de
+ * escalar. Medido em 2026-08-25: três motoristas ativos com CNH vencida, e os TRÊS rodaram na
+ * semana. Não porque alguém decidiu correr o risco; porque a tela nunca disse.
+ *
+ * ── "SEM DATA" NÃO É "EM DIA" ─────────────────────────────────────────────────────────────────
+ *
+ * Um terceiro estado, e não silêncio: quem não tem data no cadastro é desconhecido, não aprovado.
+ * Tratar ausência como "ok" é o mesmo erro que trata "não medi" como "está bom".
+ */
+export function alertaDoMotorista(
+  validadeCnh: string | null | undefined,
+  agora: string | Date,
+  janelaDeDias?: number,
+): AlertaDoMotorista | null {
+  if (validadeCnh == null || validadeCnh === "") return "cnh_sem_data";
+  const estado = documentExpiryState(validadeCnh, agora, janelaDeDias);
+  if (estado === "expired") return "cnh_vencida";
+  if (estado === "expiring") return "cnh_vencendo";
   return null;
 }
 
