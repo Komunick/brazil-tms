@@ -19,6 +19,7 @@ import {
   PackageCheck,
   Route,
   ScrollText,
+  Sparkles,
   Star,
   Table2,
   TowerControl,
@@ -53,6 +54,7 @@ const ICONS: Record<string, LucideIcon> = {
   Upload,
   History,
   Activity,
+  Sparkles,
 };
 
 /**

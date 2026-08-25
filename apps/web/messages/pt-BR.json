@@ -96,7 +96,8 @@
       "cadastros": "Cadastros",
       "sistema": "Sistema"
     },
-    "minhaProgramacao": "Minha Programação"
+    "minhaProgramacao": "Minha Programação",
+    "novidades": "Novidades"
   },
   "FreightRates": {
     "screenTitle": "Tabela de Fretes",
@@ -2022,5 +2023,14 @@
       "elogio": "Elogio",
       "advertencia": "Advertência"
     }
+  },
+  "Novidades": {
+    "title": "Novidades",
+    "subtitle": "O que mudou no TMS, do mais recente para o mais antigo.",
+    "desdeSuaVisita": "{count, plural, one {# novidade desde a sua última visita.} other {# novidades desde a sua última visita.}}",
+    "selo": "Novo",
+    "tipoNovidade": "Novidade",
+    "tipoCorrecao": "Correção",
+    "onde": "Onde:"
   }
 }
