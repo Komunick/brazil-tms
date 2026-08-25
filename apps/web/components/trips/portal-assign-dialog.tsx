@@ -50,6 +50,8 @@ export function PortalAssignDialog({
   driverAtual,
   placaAtual,
   onSent,
+  quantosMelhores,
+  onVerHistorico,
   open,
   onOpenChange,
 }: {
@@ -68,6 +70,15 @@ export function PortalAssignDialog({
   placaAtual?: string | null;
   /** Chamado quando a ordem entrou na fila — quem desenha usa para acompanhar o resultado. */
   onSent?: () => void;
+  /**
+   * Quantos nomes o ranking mostra, e o que fazer no botão de histórico ao lado de cada um.
+   *
+   * Existem porque a Minha Programação abre este mesmo diálogo numa janela larga, onde cabem dez
+   * nomes e onde o histórico do motorista foi pedido (2026-08-24). Na Expedição o diálogo é
+   * estreito e nenhum dos dois vem — o padrão do ranking continua valendo.
+   */
+  quantosMelhores?: number;
+  onVerHistorico?: (driverId: string, nome: string) => void;
   open: boolean;
   onOpenChange: (aberto: boolean) => void;
 }) {
@@ -223,7 +234,14 @@ export function PortalAssignDialog({
             <p className="text-xs text-muted-foreground">{t("hint")}</p>
           </div>
 
-          <MelhoresDaRota tripId={tripId} aberto={open} opcoes={opcoes} onEscolher={setDriverId} />
+          <MelhoresDaRota
+            tripId={tripId}
+            aberto={open}
+            opcoes={opcoes}
+            onEscolher={setDriverId}
+            quantos={quantosMelhores}
+            onVerHistorico={onVerHistorico}
+          />
         </div>
 
         <DialogFooter>
