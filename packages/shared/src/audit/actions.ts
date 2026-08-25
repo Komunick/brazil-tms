@@ -41,6 +41,10 @@ export type AuditAction =
   | "trip.portal_accept"
   | "trip.portal_reject"
   | "trip.portal_assign"
+  // 026 — a ponte rota → modelo de Pré-SM. Confirmar AUTORIZA GASTO: a gerenciadora cobra por
+  // solicitação, e uma rota confirmada passa a gerar Pré-SM sozinha. Quem confirmou fica registrado.
+  | "pre_sm.modelo.confirmar"
+  | "pre_sm.modelo.desconfirmar"
   | "trip.create" // newValue = original_plan summary + initial status
   | "trip.plan_update" // accepted customer update to live planned_* fields (per-field prev/new)
   | "trip.fields_update" // the operation's own annotations (solicitação, checklist, SM Raster, CT-e, doca)
@@ -190,6 +194,8 @@ export const ALL_AUDIT_ACTIONS = [
   "trip.portal_accept",
   "trip.portal_reject",
   "trip.portal_assign",
+  "pre_sm.modelo.confirmar",
+  "pre_sm.modelo.desconfirmar",
 ] as const satisfies readonly AuditAction[];
 
 /**

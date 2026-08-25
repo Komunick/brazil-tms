@@ -436,7 +436,9 @@
     "vehicle_document_upload": "Documento do veículo enviado",
     "trip_portal_accept": "Aceite enviado ao portal",
     "trip_portal_reject": "Recusa enviada ao portal",
-    "trip_portal_assign": "Atribuição enviada ao portal"
+    "trip_portal_assign": "Atribuição enviada ao portal",
+    "pre_sm_modelo_confirmar": "Correspondência de rota confirmada",
+    "pre_sm_modelo_desconfirmar": "Correspondência de rota desfeita"
   },
   "Documents": {
     "title": "Documentos",

@@ -66,7 +66,7 @@ de novo e conferir que o valor volta sem perguntar.
 
 - [X] T012 [P] [US2] Escrever em `packages/shared/src/domain/pre-sm.ts` a tradução `ownership_type` → vínculo da gerenciadora (`owned`→`F`, `agregado`→`A`, `terceiro`→`T`, `subcontracted`→**nada**), com teste em `pre-sm.test.ts`
 - [X] T013 [P] [US2] Escrever em `packages/shared/src/domain/pre-sm.ts` a regra que deriva o vínculo sugerido a partir do `CNPJProprietario`: CNPJ de raiz `03571231` → frota própria; valor com zeros à esquerda (CPF) → nunca frota própria; outro CNPJ → sem sugestão. Com teste
-- [ ] T014 [US2] **ADIADA PARA A FASE 4** — acrescentar `getVeiculo` e `getCarreta` ao cliente em `workers/lib/integra/cliente.ts`
+- [X] T014 [US2] Acrescentar `getVeiculo` e `getCarreta` ao cliente em `workers/lib/integra/cliente.ts` — feito na Fase 4, junto do resto do cliente
 - [ ] T015 [US2] **ADIADA PARA A FASE 4, e o desenho mudou.** O plano pedia o BFF expondo a sugestão do dono, o que exigiria a credencial de produção da Logae dentro do app web — furando a regra de segredos, que manda ela viver só no worker. A sugestão passa a ser um trabalho do worker, que grava o resultado; a tela lê o nosso banco. Na Fase 3 o pré-preenchimento vem de `GET /api/fleet/vinculos`, **sem nenhuma chamada externa**
 - [X] T016 [US2] Acrescentar o campo de vínculo ao `apps/web/components/trips/portal-assign-dialog.tsx`, um por recurso (veículo, cada carreta, cada motorista), pré-selecionado pela sugestão e **em branco para motorista** — a gerenciadora não informa vínculo de motorista, e um palpite ali seria invenção
 - [X] T017 [US2] Gravar o vínculo escolhido no recurso ao confirmar a atribuição, em `packages/db/src/trips/pre-sm.ts`, registrando de onde veio a sugestão (FR-011) — sem a evidência, a próxima pessoa não tem como conferir por que aquele valor está lá
@@ -82,12 +82,12 @@ gerenciadora** — pode ser promovido sozinho.
 
 **Purpose**: sem isto, não há como saber qual modelo usar. Serve US1 e US3.
 
-- [ ] T020 [P] Escrever em `packages/shared/src/domain/pre-sm-modelos.ts` o casamento por nome normalizado, com as **quatro** tolerâncias: acento, conteúdo entre parênteses, sigla colada a número, e **zero à esquerda**. Sem a última, 4 rotas e 233 viagens/mês caem como "sem modelo" — medido
-- [ ] T021 [P] Teste em `pre-sm-modelos.test.ts` cobrindo as quatro tolerâncias, cada uma com um caso real do levantamento
-- [ ] T022 Acrescentar `getModelosPreSM` ao cliente em `workers/lib/integra/cliente.ts`
+- [X] T020 [P] Escrever em `packages/shared/src/domain/pre-sm-modelos.ts` o casamento por nome normalizado, com as **quatro** tolerâncias: acento, conteúdo entre parênteses, sigla colada a número, e **zero à esquerda**. Sem a última, 4 rotas e 233 viagens/mês caem como "sem modelo" — medido
+- [X] T021 [P] Teste em `pre-sm-modelos.test.ts` cobrindo as quatro tolerâncias, cada uma com um caso real do levantamento
+- [X] T022 Acrescentar `getModelosPreSM` ao cliente em `workers/lib/integra/cliente.ts`
 - [ ] T023 Escrever a carga que consulta os modelos, propõe as correspondências e grava com `confirmado_em` **nulo** em `packages/db/src/trips/pre-sm-modelos.ts`
-- [ ] T024 Expor a lista para conferência humana, com a ação de confirmar, em `apps/web/app/api/admin/pre-sm-modelos/route.ts` e a tela correspondente
-- [ ] T025 Garantir em `packages/db/src/trips/pre-sm-modelos.ts` que **só linha confirmada** vale para criar Pré-SM — um casamento errado do normalizador viraria escolta contratada para a rota errada, e o normalizador já errou uma vez
+- [ ] T024 **PELA METADE**: a rota `apps/web/app/api/admin/pre-sm-modelos/route.ts` existe (GET lista, PATCH confirma/desfaz, auditado na mesma transação). Falta **a tela** — sem ela ninguém confirma, e sem confirmação nenhuma Pré-SM nasce. É o que destrava a Fase 6
+- [X] T025 Garantir em `packages/db/src/trips/pre-sm-modelos.ts` que **só linha confirmada** vale para criar Pré-SM — um casamento errado do normalizador viraria escolta contratada para a rota errada, e o normalizador já errou uma vez
 
 **Checkpoint**: a lista existe, foi conferida por gente, e já responde "quais rotas ficariam de fora".
 
