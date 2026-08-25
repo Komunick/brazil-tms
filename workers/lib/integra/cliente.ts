@@ -148,3 +148,54 @@ export async function getCarreta(
     throw e;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Escrita — atrás do interruptor. Ver R1 em `specs/026-pre-sm-logae/research.md`.
+// ---------------------------------------------------------------------------
+
+/**
+ * CRIA A PRÉ-SM a partir de um modelo.
+ *
+ * ⚠️ **Isto CUSTA DINHEIRO.** A gerenciadora cobra por solicitação, e não existe ambiente de
+ * homologação para nós (`CodErro 100`, medido). Quem chama tem de ter passado pelo interruptor e
+ * pelo teto diário — ver `workers/jobs/pre-sm/index.ts`.
+ *
+ * Devolve o código da Pré-SM criada. Sem ele não há como consultar, alterar ou cancelar depois, e
+ * a solicitação vira órfã do nosso lado — paga e invisível.
+ */
+export async function setPreSMdeModelo(
+  cred: Credenciais,
+  corpo: Record<string, unknown>,
+): Promise<{ codigo: number | null }> {
+  const r = await chamar<{ PreSM?: { Codigo?: number }; Codigo?: number }>("setPreSMdeModelo", {
+    ...cred,
+    Modelo: corpo,
+  });
+  // A documentação mostra o código sob `PreSM`, mas a resposta real de outros métodos às vezes o
+  // traz na raiz. Aceitar os dois evita perder o código por uma diferença de formato — e perder o
+  // código é perder o controle sobre algo já cobrado.
+  const codigo = r.PreSM?.Codigo ?? r.Codigo ?? null;
+  return { codigo: typeof codigo === "number" ? codigo : null };
+}
+
+/** O estado atual de uma Pré-SM (FR-016). */
+export async function getStatusPreSM(
+  cred: Credenciais,
+  codigo: number,
+): Promise<{ status: string | null }> {
+  const r = await chamar<{ Status?: string; StatusPreSM?: string }>("getStatusPreSM", {
+    ...cred,
+    CodPreSolicitacao: codigo,
+  });
+  return { status: r.Status ?? r.StatusPreSM ?? null };
+}
+
+/**
+ * CANCELA uma Pré-SM ainda não efetivada (FR-017).
+ *
+ * Sem ambiente de teste, este método é a **única forma de desfazer** uma criação errada. É por isso
+ * que ele entra na mesma fatia da criação, e não numa seguinte.
+ */
+export async function setCancelaPreSM(cred: Credenciais, codigo: number): Promise<void> {
+  await chamar("setCancelaPreSM", { ...cred, CodPreSolicitacao: codigo });
+}

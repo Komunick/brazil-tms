@@ -254,3 +254,14 @@ export {
   modeloConfirmadoDaRota,
   type CorrespondenciaDaRota,
 } from "./trips/pre-sm-modelos";
+// O estado da Pré-SM por viagem (026).
+export {
+  abrirTentativaDePreSm,
+  encerrarTentativaDePreSm,
+  contarTentativa,
+  preSmDaViagem,
+  preSmDeVariasViagens,
+  criadasHoje,
+  type PreSmDaViagem,
+  type PreSmStatus,
+} from "./trips/pre-sm";
