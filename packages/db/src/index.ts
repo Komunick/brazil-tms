@@ -252,6 +252,7 @@ export {
   listarCorrespondencias,
   definirConfirmacaoDaCorrespondencia,
   modeloConfirmadoDaRota,
+  rotasParaCorrespondencia,
   type CorrespondenciaDaRota,
 } from "./trips/pre-sm-modelos";
 // O estado da Pré-SM por viagem (026).

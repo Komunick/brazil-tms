@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { definirConfirmacaoDaCorrespondencia, listarCorrespondencias } from "@brazil-tms/db";
+import { PRE_SM_JOBS, type PreSmCarregarModelosPayload } from "@brazil-tms/shared";
+import { getBffBoss } from "@/lib/queue/boss";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
 import { Conflict, handleRouteError } from "@/lib/api/respond";
 
@@ -59,6 +61,39 @@ export async function PATCH(request: Request): Promise<NextResponse> {
     if (!mudou) throw new Conflict("SEM_MUDANCA", "A correspondência já estava nesse estado.");
 
     return NextResponse.json({ ok: true });
+  } catch (error) {
+    return handleRouteError(error);
+  }
+}
+
+/**
+ * PEDIR A CARGA — buscar os modelos na gerenciadora e propor as correspondências.
+ *
+ * ── POR QUE ENFILEIRA EM VEZ DE CHAMAR ────────────────────────────────────────────────────────
+ *
+ * A credencial da Logae vive **só no worker**. Uma rota do app web que chamasse a Integra exigiria
+ * a senha de produção dentro do Next, e a constituição não permite. Mesma regra da criação e do
+ * cancelamento.
+ *
+ * ── E POR QUE ISTO NÃO PRECISA DE CONFIRMAÇÃO ─────────────────────────────────────────────────
+ *
+ * A carga é LEITURA: consulta os modelos cadastrados e grava propostas, todas por conferir. Não
+ * cria Pré-SM, não gasta nada, e `DO NOTHING` em conflito significa que repetir não desfaz a
+ * conferência de ninguém. O ato que custa dinheiro é confirmar uma linha — e esse já é o PATCH,
+ * que é auditado.
+ *
+ * Devolve 202: o trabalho acontece no worker, e as linhas aparecem quando ele terminar.
+ */
+export async function POST(): Promise<NextResponse> {
+  try {
+    const ctx = await requireAuth();
+    requirePermission(ctx, "manage_commercial_data");
+
+    const boss = await getBffBoss();
+    const payload: PreSmCarregarModelosPayload = { pedidoPor: ctx.userId };
+    await boss.send(PRE_SM_JOBS.preSmCarregarModelos, payload as object);
+
+    return NextResponse.json({ ok: true }, { status: 202 });
   } catch (error) {
     return handleRouteError(error);
   }

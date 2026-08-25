@@ -154,3 +154,37 @@ export async function modeloConfirmadoDaRota(
     .limit(1);
   return linha?.cod ?? null;
 }
+
+/**
+ * AS ROTAS QUE A CARGA VAI TENTAR CASAR — os pares distintos que as viagens realmente têm.
+ *
+ * ── POR QUE DAQUI, E NÃO DA TABELA `lanes` ────────────────────────────────────────────────────
+ *
+ * `lanes` é a malha comercial; a criação da Pré-SM lê `locations.name` pelo `origin_location_id` da
+ * VIAGEM (ver `pre-sm-dados.ts`). Propor a partir da malha e buscar a partir da viagem faria a
+ * carga gravar com uma chave e a busca procurar por outra — e nenhuma rota casaria, **sem nenhum
+ * erro aparecer**. A mesma fonte dos dois lados é o que impede isso.
+ *
+ * ── A JANELA SÓ LIMITA ESTA RODADA, NÃO A TABELA ──────────────────────────────────────────────
+ *
+ * Rota que não rodou no período não é proposta agora. Como a gravação é `DO NOTHING` e a carga é
+ * repetível, uma rota sazonal entra na rodada seguinte em que ela aparecer — as linhas se acumulam.
+ * O ganho é a lista de conferência ficar do tamanho do trabalho real, e não do histórico inteiro.
+ */
+export async function rotasParaCorrespondencia(
+  diasParaTras = 90,
+): Promise<{ origem: string; destino: string; viagens: number }[]> {
+  const linhas = await db.execute<{ origem: string; destino: string; viagens: number }>(sql`
+    select o.name as origem, d.name as destino, count(*)::int as viagens
+    from trips t
+    join locations o on o.id = t.origin_location_id
+    join locations d on d.id = t.destination_location_id
+    where t.created_at >= now() - make_interval(days => ${diasParaTras})
+    group by o.name, d.name
+    -- As de maior volume primeiro: se a conferência for feita pela metade, que a metade feita seja
+    -- a que carrega mais viagem.
+    order by viagens desc
+  `);
+
+  return [...linhas];
+}

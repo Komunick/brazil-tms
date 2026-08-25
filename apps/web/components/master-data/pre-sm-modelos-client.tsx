@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { CorrespondenciaDaRota } from "@brazil-tms/db";
@@ -44,6 +44,17 @@ export function PreSmModelosClient() {
   const t = useTranslations("PreSmModelos");
   const qc = useQueryClient();
   const [busca, setBusca] = useState("");
+  /**
+   * A ESPERA PELA CARGA — o trabalho acontece no worker, e a tela não é avisada.
+   *
+   * Sem polling temporário, quem clicasse veria a lista igual e concluiria que a carga não fez nada.
+   * Ele é LIGADO pelo clique e desligado sozinho: assim que a contagem muda, ou no teto de tempo.
+   *
+   * O teto existe porque a carga pode legitimamente não gravar nada — quando tudo já foi proposto
+   * numa rodada anterior. Sem ele, esse caso giraria para sempre.
+   */
+  const [esperandoCarga, setEsperandoCarga] = useState(false);
+  const contagemAoPedir = useRef<number | null>(null);
 
   const consulta = useQuery({
     queryKey: ["pre-sm-modelos"],
@@ -52,6 +63,30 @@ export function PreSmModelosClient() {
       if (!res.ok) throw new Error(String(res.status));
       return (await res.json()) as { items: CorrespondenciaDaRota[] };
     },
+    refetchInterval: esperandoCarga ? 3_000 : false,
+  });
+
+  /**
+   * PEDIR A CARGA — é o que enche esta tela.
+   *
+   * Consulta os modelos na gerenciadora e propõe as correspondências, todas por conferir. Leitura
+   * pura: não cria Pré-SM e não custa nada, e repetir não desfaz conferência de ninguém.
+   *
+   * O trabalho acontece no worker (a credencial vive só lá), então o botão PEDE — as linhas
+   * aparecem quando ele terminar, e é por isso que a lista passa a ser recarregada por um tempo em
+   * vez de uma vez só.
+   */
+  const carregar = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/admin/pre-sm-modelos", { method: "POST" });
+      if (!res.ok) throw new Error(String(res.status));
+    },
+    onSuccess: () => {
+      contagemAoPedir.current = consulta.data?.items.length ?? 0;
+      setEsperandoCarga(true);
+      avisar({ tipo: "ok", texto: t("cargaPedida") });
+    },
+    onError: () => avisar({ tipo: "erro", texto: t("cargaFalhou") }),
   });
 
   const definir = useMutation({
@@ -82,6 +117,27 @@ export function PreSmModelosClient() {
     );
   }, [itens, busca]);
 
+  /**
+   * DESLIGA A ESPERA quando a carga deu sinal — ou quando o tempo acabou.
+   *
+   * "Deu sinal" é a contagem mudar. Quando ela NÃO muda, o desfecho honesto é diferente e o texto
+   * diz isso: a carga rodou e não achou nada de novo, que é o esperado numa segunda rodada — não é
+   * falha, e chamar de falha faria alguém procurar defeito onde não há.
+   */
+  useEffect(() => {
+    if (!esperandoCarga) return;
+    if (contagemAoPedir.current != null && itens.length !== contagemAoPedir.current) {
+      setEsperandoCarga(false);
+      avisar({ tipo: "ok", texto: t("cargaChegou", { n: itens.length - contagemAoPedir.current }) });
+      return;
+    }
+    const teto = setTimeout(() => {
+      setEsperandoCarga(false);
+      avisar({ tipo: "ok", texto: t("cargaSemNovidade") });
+    }, 60_000);
+    return () => clearTimeout(teto);
+  }, [esperandoCarga, itens.length, t]);
+
   const pendentes = itens.filter((i) => i.confirmadoEm == null).length;
 
   if (consulta.isPending) return <Skeleton className="h-64 w-full" />;
@@ -100,6 +156,18 @@ export function PreSmModelosClient() {
           <span className="text-sm text-muted-foreground">
             {t("pendentes", { n: pendentes })} · {t("total", { n: itens.length })}
           </span>
+          {/* A CARGA fica aqui, no topo, porque é o que faz a tela existir: sem ela não há linha
+              nenhuma para conferir. É leitura pura na gerenciadora — não cria Pré-SM e não custa
+              nada —, e por isso não pede confirmação. */}
+          <Button
+            type="button"
+            variant="outline"
+            className="ml-auto"
+            disabled={carregar.isPending || esperandoCarga}
+            onClick={() => carregar.mutate()}
+          >
+            {esperandoCarga ? t("carregando") : t("carregar")}
+          </Button>
         </CardContent>
       </Card>
 
