@@ -1469,7 +1469,10 @@
       "action": "Atribuir no portal",
       "actionEdit": "Editar no portal",
       "assignedTo": "Escalado",
-      "titleEdit": "Editar atribuição"
+      "titleEdit": "Editar atribuição",
+      "cnhVencida": "CNH VENCIDA em {data}. Confira antes de escalar.",
+      "cnhVencendo": "CNH vence em {data}.",
+      "cnhSemData": "Sem data de CNH no cadastro — não dá para conferir."
     },
     "melhoresDaRota": {
       "titulo": "Nesta rota",
