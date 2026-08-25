@@ -28,6 +28,7 @@ export interface PortalJobPayloads {
  */
 export const PRE_SM_JOBS = {
   preSmCriar: "pre_sm.criar",
+  preSmCancelar: "pre_sm.cancelar",
 } as const;
 
 export type PreSmJobName = (typeof PRE_SM_JOBS)[keyof typeof PRE_SM_JOBS];
@@ -40,4 +41,21 @@ export interface PreSmCriarPayload {
 
 export interface PreSmJobPayloads {
   "pre_sm.criar": PreSmCriarPayload;
+  "pre_sm.cancelar": PreSmCancelarPayload;
+}
+
+/**
+ * O CANCELAMENTO da Pré-SM (2026-08-25, fatia 026).
+ *
+ * Job separado, e não uma chamada direta do BFF, pela mesma regra que vale para a criação: a
+ * credencial da gerenciadora vive **só no worker**. Uma rota do app web que chamasse a Integra
+ * exigiria a senha de produção dentro do Next, e a constituição não permite.
+ *
+ * O efeito prático para quem clica: o botão pede, e o estado vira `cancelada` quando o worker
+ * confirma — não no instante do clique. É honesto, porque quem cancela de verdade é ela.
+ */
+export interface PreSmCancelarPayload {
+  tripPreSmId: string;
+  /** Quem pediu — vai para a auditoria do lado de cá. */
+  actorUserId: string;
 }

@@ -7,6 +7,7 @@ import { ExternalLink } from "lucide-react";
 import type { TripStatus, VehicleType } from "@brazil-tms/shared";
 import { useTripDetail } from "@/lib/trips/client";
 import { PortalAssignDialog } from "@/components/trips/portal-assign-dialog";
+import { PreSmStatus } from "@/components/trips/pre-sm-status";
 import { HistoricoDoMotorista } from "@/components/trips/historico-do-motorista";
 import { TimelineSection } from "@/components/trips/trip-detail/timeline";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
@@ -169,6 +170,11 @@ export function ProgramacaoDetalhe({
                 onOpenChange={setAtribuindo}
               />
             ) : null}
+
+            {/* A Pré-SM fica ACIMA da linha do tempo: ela é sobre o que vai acontecer (a escolta
+                da viagem que está sendo escalada), e a linha do tempo é sobre o que já aconteceu.
+                E quando ela NÃO foi criada, o motivo é acionável agora — não daqui a três dias. */}
+            <PreSmStatus tripId={viagem.id} />
 
             <section aria-label={tDetalhe("timeline")}>
               <TimelineSection trip={viagem} />
