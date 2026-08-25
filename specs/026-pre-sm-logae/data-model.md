@@ -88,6 +88,28 @@ CREATE UNIQUE INDEX trip_pre_sm_viva_uk ON trip_pre_sm (trip_id)
 sempre — e cancelar é justamente o que se faz quando ela nasceu errada. Recusada e cancelada não
 impedem uma nova tentativa; pendente e criada impedem.
 
+### Nova tentativa INSERE linha nova — nunca atualiza a antiga
+
+Uma viagem pode ter **várias linhas** em `trip_pre_sm` ao longo do tempo: a que foi cancelada, a que
+foi recusada, e a que valeu. Só uma delas está viva por vez, e é isso que o índice parcial garante.
+
+**Não é detalhe de implementação; são duas regras que dependem disso.**
+
+A primeira é a constituição, princípio III: história operacional é **imutável**, e operação
+destrutiva usa arquivamento, nunca sobrescrita. Um `UPDATE` sobre a linha cancelada apagaria o
+registro de que houve uma Pré-SM antes, quem a cancelou e por quê — exatamente o rastro que alguém
+vai procurar quando a gerenciadora cobrar por uma solicitação que ninguém lembra de ter feito.
+
+A segunda é o próprio índice: ele **só funciona com `INSERT`**. Num `UPDATE` a linha muda de estado
+sem passar pela verificação de unicidade, e a garantia de "no máximo uma viva" evapora sem erro
+nenhum aparecer.
+
+O que **é** atualização na mesma linha: as transições dela própria — `pendente` → `criada`,
+`pendente` → `recusada`, `criada` → `cancelada`. O que nunca é: ressuscitar uma linha morta.
+
+Ler o estado atual de uma viagem, portanto, é ler a linha **viva** (ou a mais recente, quando não há
+viva) — não "a linha" no singular.
+
 `payload_enviado` guarda o corpo **sem credencial**. Sem ele, uma recusa da gerenciadora é
 indepurável: não há como saber o que foi mandado.
 

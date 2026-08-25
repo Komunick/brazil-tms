@@ -146,13 +146,14 @@ uma criação errada — por isso entra na mesma fatia da criação, não numa s
 
 **Independent Test**: criar uma Pré-SM, ver o estado na viagem, cancelar, e conferir que o estado muda.
 
-- [ ] T045 [US4] Acrescentar `getStatusPreSM` e `setCancelaPreSM` ao cliente em `workers/lib/integra/cliente.ts`
-- [ ] T046 [US4] Criar a rota `apps/web/app/api/trips/[id]/pre-sm/route.ts` para ler o estado e pedir o cancelamento, com a mesma permissão de atribuir
-- [ ] T047 [US4] Mostrar número, estado e momento da criação em `apps/web/components/trips/pre-sm-status.tsx` (FR-016)
-- [ ] T048 [US4] Botão de cancelar para Pré-SM ainda não efetivada (FR-017), com confirmação, em `apps/web/components/trips/pre-sm-status.tsx`
-- [ ] T049 [US4] Avisar em `apps/web/components/trips/pre-sm-status.tsx` quando a atribuição mudar depois da Pré-SM criada (FR-018) — nesta fatia só avisa, alterar fica para depois
-- [ ] T050 [US4] Registrar o cancelamento no histórico da viagem, com o ator (FR-019), em `apps/web/app/api/trips/[id]/pre-sm/route.ts`
-- [ ] T051 [P] [US4] Textos em `apps/web/messages/pt-BR.json`
+- [ ] T045 [US4] Acrescentar `getStatusPreSM` e `setCancelaPreSM` ao cliente em `workers/lib/integra/cliente.ts` — e **NÃO** acrescentar `setEfetivaPreSM` (FR-004): o que não existe no cliente não pode ser chamado por engano
+- [ ] T046 [P] [US4] Teste em `workers/lib/integra/cliente.test.ts` que falha se `setEfetivaPreSM` (ou qualquer chamada a esse método) aparecer no cliente — FR-004 é requisito **negativo**, e requisito negativo sem guarda é só intenção: daqui a três meses ninguém lembra por que a efetivação ficou de fora, e ela entra "para completar a integração"
+- [ ] T047 [US4] Criar a rota `apps/web/app/api/trips/[id]/pre-sm/route.ts` para ler o estado e pedir o cancelamento, com a mesma permissão de atribuir
+- [ ] T048 [US4] Mostrar número, estado e momento da criação em `apps/web/components/trips/pre-sm-status.tsx` (FR-016)
+- [ ] T049 [US4] Botão de cancelar para Pré-SM ainda não efetivada (FR-017), com confirmação, em `apps/web/components/trips/pre-sm-status.tsx`
+- [ ] T050 [US4] Avisar em `apps/web/components/trips/pre-sm-status.tsx` quando a atribuição mudar depois da Pré-SM criada (FR-018) — nesta fatia só avisa, alterar fica para depois
+- [ ] T051 [US4] Registrar o cancelamento no histórico da viagem, com o ator (FR-019), em `apps/web/app/api/trips/[id]/pre-sm/route.ts`
+- [ ] T052 [P] [US4] Textos em `apps/web/messages/pt-BR.json`
 
 **Checkpoint**: dá para desfazer. Só agora a virada é segura.
 
@@ -160,12 +161,12 @@ uma criação errada — por isso entra na mesma fatia da criação, não numa s
 
 ## Phase 8: A virada e o fechamento
 
-- [ ] T052 Rodar `tsc`, `eslint`, `build` e `vitest` no monorepo inteiro; abrir o PR para `dev`
-- [ ] T053 Após o merge, **reiniciar o worker** — job novo não vale sem restart, e worker velho mascara o conserto
-- [ ] T054 Com o interruptor ainda desligado, conferir em produção por pelo menos um dia: quantas viagens gerariam Pré-SM, quantas cairiam em `sem_dados` e por quê. É a validação que substitui a homologação que não temos
-- [ ] T055 **Com o usuário presente**, ligar o interruptor com teto `1`, atribuir **uma** viagem escolhida, e conferir a Pré-SM no sistema da gerenciadora — com o cancelamento à mão
-- [ ] T056 Subir o teto conforme a confiança, e registrar em `docs/OPERACAO.md` o que fazer quando a integração falhar
-- [ ] T057 [P] Acrescentar a entrada em `apps/web/lib/novidades/entradas.ts` — a operação precisa saber que isso passou a acontecer sozinho
+- [ ] T053 Rodar `tsc`, `eslint`, `build` e `vitest` no monorepo inteiro; abrir o PR para `dev`
+- [ ] T054 Após o merge, **reiniciar o worker** — job novo não vale sem restart, e worker velho mascara o conserto
+- [ ] T055 Com o interruptor ainda desligado, conferir em produção por pelo menos um dia: quantas viagens gerariam Pré-SM, quantas cairiam em `sem_dados` e por quê. É a validação que substitui a homologação que não temos
+- [ ] T056 **Com o usuário presente**, ligar o interruptor com teto `1`, atribuir **uma** viagem escolhida, e conferir a Pré-SM no sistema da gerenciadora — com o cancelamento à mão
+- [ ] T057 Subir o teto conforme a confiança, e registrar em `docs/OPERACAO.md` o que fazer quando a integração falhar
+- [ ] T058 [P] Acrescentar a entrada em `apps/web/lib/novidades/entradas.ts` — a operação precisa saber que isso passou a acontecer sozinho
 
 ---
 
@@ -191,6 +192,7 @@ Phase 1 (Setup)
 - **Phase 4**: T020 e T021 juntas
 - **Phase 5**: T026, T027, T028 e T031 juntas
 - **Phase 6**: T033 e T043 junto do resto
+- **Phase 7**: T046 e T052 juntas
 
 ## MVP
 
@@ -203,6 +205,6 @@ ambiente de teste.
 
 ## O que estas tasks NÃO cobrem
 
-Nenhuma prova que a gerenciadora **aceita** o nosso corpo. Só a T055 responde isso, e ela é manual,
+Nenhuma prova que a gerenciadora **aceita** o nosso corpo. Só a T056 responde isso, e ela é manual,
 com o usuário, em produção. Está assim de propósito: fingir cobertura seria pior do que admitir a
 falta.
