@@ -4,11 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { ExternalLink } from "lucide-react";
-import type { TripStatus } from "@brazil-tms/shared";
-import type { TripFilterOptions } from "@brazil-tms/db";
-import { useFilterOptions, useTripDetail } from "@/lib/trips/client";
-import { AssignmentForm } from "@/components/trips/dispatch/assignment-form";
-import { MelhoresDaRota } from "@/components/trips/melhores-da-rota";
+import type { TripStatus, VehicleType } from "@brazil-tms/shared";
+import { useTripDetail } from "@/lib/trips/client";
+import { PortalAssignDialog } from "@/components/trips/portal-assign-dialog";
 import { HistoricoDoMotorista } from "@/components/trips/historico-do-motorista";
 import { TimelineSection } from "@/components/trips/trip-detail/timeline";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
@@ -32,10 +30,10 @@ import { Skeleton } from "@/components/ui/skeleton";
  *
  * ── NADA AQUI É NOVO, E ESSE É O PONTO ────────────────────────────────────────────────────────
  *
- * A linha do tempo é a `TimelineSection` da tela de detalhe; a atribuição é a MESMA `AssignmentForm`
- * do despacho — o caminho único de escrita, com as verificações de elegibilidade, o motivo de
- * exceção e o servidor mandando. Reescrever qualquer um dos dois aqui criaria uma segunda regra de
- * atribuição, e duas regras divergem no mês seguinte.
+ * A linha do tempo é a `TimelineSection` da tela de detalhe; a atribuição é o MESMO
+ * `PortalAssignDialog` da Expedição — o caminho único, que enfileira a ordem para o robô executar no
+ * portal. Reescrever qualquer um dos dois aqui criaria uma segunda regra de atribuição, e duas
+ * regras divergem no mês seguinte.
  *
  * ── A JANELA NÃO É A TELA DE DETALHE ──────────────────────────────────────────────────────────
  *
@@ -66,20 +64,15 @@ export function ProgramacaoDetalhe({
   tripId,
   aberto,
   aoFechar,
-  resourceOptions,
 }: {
   tripId: string | null;
   aberto: boolean;
   aoFechar: () => void;
-  resourceOptions: TripFilterOptions;
 }) {
   const t = useTranslations("Programacao");
   const tDetalhe = useTranslations("Trips.detail");
   const consulta = useTripDetail(tripId ?? "");
-  const opcoes = useFilterOptions(resourceOptions);
   const [atribuindo, setAtribuindo] = useState(false);
-  // O nome escolhido no ranking, empurrado para o formulário. Ver `driverIdSugerido`.
-  const [sugerido, setSugerido] = useState<string | undefined>(undefined);
   // O motorista cujo histórico está aberto, vindo do botão ao lado do nome no ranking.
   const [historico, setHistorico] = useState<{ id: string; nome: string } | null>(null);
 
@@ -118,9 +111,10 @@ export function ProgramacaoDetalhe({
         {viagem ? (
           <div className="space-y-4">
             {/*
-              A ATRIBUIÇÃO ABRE FECHADA, e é decisão de tela: o motivo mais comum de abrir a janela é
-              olhar, não mexer. O formulário tem sete campos e as verificações do servidor — aberto
-              por padrão, empurraria a linha do tempo para fora da primeira tela toda vez.
+              A ATRIBUIÇÃO ABRE NUM DIÁLOGO, e não embutida: o motivo mais comum de abrir esta janela
+              é olhar, não mexer. Embutido, o formulário empurraria a linha do tempo para fora da
+              primeira tela toda vez — e este é o mesmo diálogo que a Expedição abre, com as mesmas
+              verificações e o mesmo aviso de resultado.
             */}
             <div className="flex flex-wrap items-center gap-2">
               {podeAtribuir ? (
@@ -144,32 +138,36 @@ export function ProgramacaoDetalhe({
               </Button>
             </div>
 
-            {/*
-              O RANKING FICA AO LADO, NÃO EM CIMA (2026-08-24, a pedido: "um top 10 ao lado").
-              Quem escala olha os dois ao mesmo tempo: o campo que vai preencher e quem já entregou
-              bem naquela rota. Empilhado, o ranking sairia da tela assim que o formulário abrisse —
-              e um painel que só aparece rolando é um painel que ninguém lê na hora de decidir.
-              Em tela estreita ele desce para baixo, porque duas colunas de 20rem não cabem.
-            */}
-            {atribuindo && podeAtribuir ? (
-              <div className="grid gap-3 rounded-md border p-3 lg:grid-cols-[1fr_16rem]">
-                <AssignmentForm
-                  tripId={viagem.id}
-                  currentStatus={viagem.currentStatus as TripStatus}
-                  currentAssignment={viagem.currentAssignment ?? null}
-                  resourceOptions={opcoes}
-                  onDone={() => setAtribuindo(false)}
-                  driverIdSugerido={sugerido}
-                />
-                <MelhoresDaRota
-                  tripId={viagem.id}
-                  aberto={aberto}
-                  opcoes={opcoes.drivers}
-                  onEscolher={setSugerido}
-                  quantos={10}
-                  onVerHistorico={(id, nome) => setHistorico({ id, nome })}
-                />
-              </div>
+            {/**
+             * QUEM ESCALA É O PORTAL, e por isso este é o diálogo do portal (2026-08-25).
+             *
+             * Aqui havia a `AssignmentForm` — a escala interna do TMS, que grava aqui e NÃO vai ao
+             * portal. O usuário substituía a atribuição, ia conferir no portal e não achava nada:
+             * a ordem nunca tinha sido pedida.
+             *
+             * É o mesmo defeito que a Expedição teve e resolveu em 2026-08-22, e pela mesma razão:
+             * dois botões escritos "Atribuir", um que sai e outro que fica. Lá a escala interna foi
+             * removida, com o número que decide a questão — das atribuições vigentes, TODAS vieram
+             * do robô leitor e NENHUMA de uma pessoa. Ela não serve a ninguém; só confunde.
+             *
+             * O ranking do rodapé sumiu daqui porque o diálogo do portal já traz o seu, ligado à
+             * lista CERTA: o que estava aqui casava o nome com o cadastro do TMS, e o campo que
+             * precisa ser preenchido é o do portal.
+             */}
+            {podeAtribuir ? (
+              <PortalAssignDialog
+                tripId={viagem.id}
+                externalTripId={viagem.externalTripId}
+                vehicleType={(viagem.plannedVehicleType as VehicleType | null) ?? null}
+                /* O que o PORTAL tem escalado hoje, para a edição abrir preenchida. As chaves são as
+                   que `portal-trip-facts.ts` grava — as mesmas que o quadro da Expedição lê. */
+                driverAtual={viagem.customerFields?.["ID do motorista (portal)"] ?? null}
+                placaAtual={viagem.customerFields?.["Placa (portal)"] ?? null}
+                quantosMelhores={10}
+                onVerHistorico={(id, nome) => setHistorico({ id, nome })}
+                open={atribuindo}
+                onOpenChange={setAtribuindo}
+              />
             ) : null}
 
             <section aria-label={tDetalhe("timeline")}>
