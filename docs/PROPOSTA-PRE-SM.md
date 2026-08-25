@@ -81,7 +81,7 @@ como "sem modelo" por causa de um zero — foi assim que eu errei a primeira con
 
 ## As três decisões que não são de programação
 
-### 1. O vínculo A/F/T — o único bloqueio real
+### 1. O vínculo A/F/T — era o bloqueio, virou um campo na tela
 
 `VincVeiculo` e `VincMotorista1` são **obrigatórios**: `A` (agregado), `F` (frota/funcionário) ou
 `T` (terceiro/autônomo). **Esse campo não existe no nosso cadastro**, e sem ele a chamada é recusada.
@@ -92,14 +92,55 @@ viagem real**. O nome sugere semente de instalação, mas o uso diz que não é 
 padrão, não por classificação. A outra, `Agregados`, com 162 veículos, essa sim casa com `A`. E 17
 veículos rodaram sem transportadora nenhuma.
 
-Então há três caminhos, e a escolha é do negócio:
+**Confirmado com o negócio em 2026-08-25: a frota tem os três tipos** — próprios, agregados e
+autônomos avulsos. Então não há atalho de "manda `A` para todos".
 
-- **(a)** Um campo novo `vinculo` em `vehicles` e `drivers`, preenchido uma vez. É o certo a longo
-  prazo, e custa uma passada no cadastro.
-- **(b)** Arrumar as transportadoras primeiro (a "(Demo)" deixa de ser lixo de semente e vira a
-  classificação real) e derivar dela. Menos campo novo, mais limpeza.
-- **(c)** Assumir `A` para todo mundo no começo. **Não recomendo**: um vínculo errado na SM é
-  informação errada para quem faz escolta, e o erro fica silencioso.
+#### Mas a Logae já sabe, e dá para importar
+
+`getVeiculo` devolve **`CNPJProprietario`** por placa. Consultei 40 das placas que mais rodaram nos
+últimos 30 dias, e o retorno resolve boa parte da classificação sozinho:
+
+| o que veio | o que significa | quantos dos 40 |
+|---|---|---|
+| CNPJ `03571231000143` | **é o nosso** — a raiz bate com o login `3571231001` → `F` | 3 |
+| CNPJ de outra empresa | agregado ou terceiro pessoa jurídica | ~20 |
+| valor começando em `0000` | **CPF preenchido com zeros** — pessoa física, nunca `F` | 9 donos |
+
+São **32 donos distintos em 40 veículos**: frota pulverizada, como se espera de agregados.
+
+Isso muda o tamanho do trabalho. Em vez de classificar 1.266 veículos e 469 motoristas à mão,
+classifica-se o **dono** — e duas das três respostas saem automáticas:
+
+- CNPJ igual ao nosso → **F**, sem ninguém decidir
+- CPF (pessoa física) → nunca `F`; resta separar `A` de `T`
+- CNPJ de outra empresa → resta separar `A` de `T`
+
+#### Mas quem escolhe é quem atribui (levantado pelo usuário, 2026-08-25)
+
+A primeira versão desta proposta ia inventar uma régua — "a partir de quantas viagens um dono deixa
+de ser terceiro e vira agregado". Régua inventada erra em silêncio, e ninguém descobre.
+
+O certo é o campo estar **no diálogo de atribuição**, escolhido pela pessoa que sabe. O que a
+derivação acima faz não é decidir: é **pré-selecionar**, para que o caso comum não custe clique
+nenhum e o caso errado seja corrigível na hora.
+
+Três medições que fecham o desenho:
+
+**O motorista não é derivável.** `getMotorista` devolve CNH, MOPP, toxicológico e endereço, mas
+**nem vínculo nem empregador**. Para ele não há palpite possível — a pessoa escolhe, e ponto.
+
+**A carreta nem sempre tem o dono do cavalo.** Medido: em `MDS6J45` + `CBS1E49` o dono é o mesmo; em
+`OPE2A84` + `SKA6A65` são dois CPFs diferentes. Então carreta não herda o vínculo do cavalo, e
+precisa do seu — mas o `getCarreta` também devolve `CNPJProprietario`, então também pré-seleciona.
+
+**A escolha vale para a próxima vez.** Guardada em `vehicles`, `trailers` e `drivers`, ela deixa de
+ser pergunta a partir da segunda viagem daquele veículo ou motorista. Na prática a pessoa preenche
+uma vez por recurso novo, não uma vez por viagem — e o cadastro se completa sozinho pelo uso, que é
+o mesmo caminho que o telefone do motorista já seguiu.
+
+Recomendação: campo `vinculo` em `vehicles`, `trailers` e `drivers`; o diálogo de atribuição mostra
+o valor guardado (ou o derivado do dono, ou vazio) e permite trocar. Sem valor, a Pré-SM não é criada
+e a tela diz por quê — igual ao caso do CPF.
 
 ### 2. Os 19% sem CPF
 
@@ -158,7 +199,27 @@ status, alterar ou cancelar depois.
 Documentos na Pré-SM, o segundo ajudante, faixa de temperatura, `setPreSM` completo, efetivação
 automática, e qualquer coisa sobre SM já em andamento (`setCancelaSM`, `setFinalizaSM`).
 
+## Achado de brinde, fora de escopo
+
+`getMotorista` devolve `DataVencCNH`, `PossuiMOPP` e `PossuiToxicologico`. Temos um problema conhecido
+de CNH vencida que hoje só se descobre olhando; essa consulta resolveria. Não entra aqui — fica
+anotado como candidato a slice própria.
+
 ## Próximo passo
 
-Decidir o item 1 (o vínculo). Os outros dois têm sugestão e podem seguir com ela. Com o vínculo
-resolvido, isto vira uma feature do Spec Kit — `/speckit-specify`, referenciando este documento.
+As três decisões têm caminho:
+
+1. **Vínculo** — resolvido: campo no diálogo de atribuição, pré-selecionado pelo dono, guardado por
+   recurso. Não precisa de régua nem de mutirão de cadastro.
+2. **CPF faltando** — não criar e avisar na tela.
+3. **Rotas sem modelo** — cadastrar os doze de cima na Logae.
+
+Isto pode virar uma feature do Spec Kit — `/speckit-specify`, referenciando este documento. A ordem
+natural da implementação:
+
+1. Campo `vinculo` em `vehicles`, `trailers` e `drivers` (migração), nulo por padrão
+2. O campo no diálogo de atribuição, pré-selecionado a partir do `CNPJProprietario` quando o recurso
+   é novo — gravando o CNPJ junto, porque ele é a evidência de por que aquele vínculo foi sugerido,
+   e sem guardá-lo a próxima pessoa não tem como conferir
+3. O gatilho no worker, no `done` da ordem de `assign`
+4. A Pré-SM guardada na viagem, sem efetivar
