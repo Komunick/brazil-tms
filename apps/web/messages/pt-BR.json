@@ -97,7 +97,8 @@
       "sistema": "Sistema"
     },
     "minhaProgramacao": "Minha Programação",
-    "novidades": "Novidades"
+    "novidades": "Novidades",
+    "preSmModelos": "Modelos de Pré-SM"
   },
   "FreightRates": {
     "screenTitle": "Tabela de Fretes",
@@ -2042,5 +2043,24 @@
     "tipoNovidade": "Novidade",
     "tipoCorrecao": "Correção",
     "onde": "Onde:"
+  },
+  "PreSmModelos": {
+    "title": "Modelos de Pré-SM por rota",
+    "subtitle": "A correspondência entre as nossas rotas e os modelos da gerenciadora. Só rota confirmada gera Pré-SM sozinha.",
+    "buscar": "Buscar por estação ou modelo",
+    "pendentes": "{n} aguardando conferência",
+    "total": "{n} no total",
+    "vazio": "Nenhuma correspondência ainda. Elas aparecem depois que a carga consulta os modelos da gerenciadora.",
+    "origem": "Origem",
+    "destino": "Destino",
+    "modelo": "Modelo na gerenciadora",
+    "estado": "Estado",
+    "aguardando": "Aguardando conferência",
+    "confirmadaEm": "Confirmada em {data}",
+    "confirmar": "Confirmar",
+    "desfazer": "Desfazer",
+    "confirmada": "Correspondência confirmada.",
+    "desfeita": "Confirmação desfeita.",
+    "falhou": "Não deu para salvar. Tente de novo."
   }
 }

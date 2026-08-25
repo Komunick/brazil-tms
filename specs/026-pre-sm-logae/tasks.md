@@ -86,7 +86,7 @@ gerenciadora** — pode ser promovido sozinho.
 - [X] T021 [P] Teste em `pre-sm-modelos.test.ts` cobrindo as quatro tolerâncias, cada uma com um caso real do levantamento
 - [X] T022 Acrescentar `getModelosPreSM` ao cliente em `workers/lib/integra/cliente.ts`
 - [ ] T023 Escrever a carga que consulta os modelos, propõe as correspondências e grava com `confirmado_em` **nulo** em `packages/db/src/trips/pre-sm-modelos.ts`
-- [ ] T024 **PELA METADE**: a rota `apps/web/app/api/admin/pre-sm-modelos/route.ts` existe (GET lista, PATCH confirma/desfaz, auditado na mesma transação). Falta **a tela** — sem ela ninguém confirma, e sem confirmação nenhuma Pré-SM nasce. É o que destrava a Fase 6
+- [X] T024 Expor a lista para conferência humana em `apps/web/app/api/admin/pre-sm-modelos/route.ts` (GET lista, PATCH confirma/desfaz, auditado na mesma transação) e a tela em `apps/web/app/(shell)/admin/pre-sm-modelos/`, com item no menu sob Cadastros
 - [X] T025 Garantir em `packages/db/src/trips/pre-sm-modelos.ts` que **só linha confirmada** vale para criar Pré-SM — um casamento errado do normalizador viraria escolta contratada para a rota errada, e o normalizador já errou uma vez
 
 **Checkpoint**: a lista existe, foi conferida por gente, e já responde "quais rotas ficariam de fora".
