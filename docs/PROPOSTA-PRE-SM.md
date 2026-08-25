@@ -81,7 +81,7 @@ como "sem modelo" por causa de um zero — foi assim que eu errei a primeira con
 
 ## As três decisões que não são de programação
 
-### 1. O vínculo A/F/T — era o bloqueio, virou uma régua
+### 1. O vínculo A/F/T — era o bloqueio, virou um campo na tela
 
 `VincVeiculo` e `VincMotorista1` são **obrigatórios**: `A` (agregado), `F` (frota/funcionário) ou
 `T` (terceiro/autônomo). **Esse campo não existe no nosso cadastro**, e sem ele a chamada é recusada.
@@ -115,13 +115,32 @@ classifica-se o **dono** — e duas das três respostas saem automáticas:
 - CPF (pessoa física) → nunca `F`; resta separar `A` de `T`
 - CNPJ de outra empresa → resta separar `A` de `T`
 
-O que sobra para uma pessoa decidir é a régua entre **agregado e terceiro**: quem roda fixo para nós
-contra quem pega viagem eventual. Isso o TMS pode responder com o próprio histórico — quantas viagens
-aquele dono fez no período — mas o corte é do negócio, não meu.
+#### Mas quem escolhe é quem atribui (levantado pelo usuário, 2026-08-25)
 
-Recomendação: campo `vinculo` em `vehicles` e `drivers`, preenchido por uma carga a partir do
-`getVeiculo`, com a regra acima. O que a carga não conseguir decidir fica nulo, e a Pré-SM daquela
-viagem não é criada — com aviso na tela, igual ao caso do CPF.
+A primeira versão desta proposta ia inventar uma régua — "a partir de quantas viagens um dono deixa
+de ser terceiro e vira agregado". Régua inventada erra em silêncio, e ninguém descobre.
+
+O certo é o campo estar **no diálogo de atribuição**, escolhido pela pessoa que sabe. O que a
+derivação acima faz não é decidir: é **pré-selecionar**, para que o caso comum não custe clique
+nenhum e o caso errado seja corrigível na hora.
+
+Três medições que fecham o desenho:
+
+**O motorista não é derivável.** `getMotorista` devolve CNH, MOPP, toxicológico e endereço, mas
+**nem vínculo nem empregador**. Para ele não há palpite possível — a pessoa escolhe, e ponto.
+
+**A carreta nem sempre tem o dono do cavalo.** Medido: em `MDS6J45` + `CBS1E49` o dono é o mesmo; em
+`OPE2A84` + `SKA6A65` são dois CPFs diferentes. Então carreta não herda o vínculo do cavalo, e
+precisa do seu — mas o `getCarreta` também devolve `CNPJProprietario`, então também pré-seleciona.
+
+**A escolha vale para a próxima vez.** Guardada em `vehicles`, `trailers` e `drivers`, ela deixa de
+ser pergunta a partir da segunda viagem daquele veículo ou motorista. Na prática a pessoa preenche
+uma vez por recurso novo, não uma vez por viagem — e o cadastro se completa sozinho pelo uso, que é
+o mesmo caminho que o telefone do motorista já seguiu.
+
+Recomendação: campo `vinculo` em `vehicles`, `trailers` e `drivers`; o diálogo de atribuição mostra
+o valor guardado (ou o derivado do dono, ou vazio) e permite trocar. Sem valor, a Pré-SM não é criada
+e a tela diz por quê — igual ao caso do CPF.
 
 ### 2. Os 19% sem CPF
 
@@ -180,19 +199,27 @@ status, alterar ou cancelar depois.
 Documentos na Pré-SM, o segundo ajudante, faixa de temperatura, `setPreSM` completo, efetivação
 automática, e qualquer coisa sobre SM já em andamento (`setCancelaSM`, `setFinalizaSM`).
 
+## Achado de brinde, fora de escopo
+
+`getMotorista` devolve `DataVencCNH`, `PossuiMOPP` e `PossuiToxicologico`. Temos um problema conhecido
+de CNH vencida que hoje só se descobre olhando; essa consulta resolveria. Não entra aqui — fica
+anotado como candidato a slice própria.
+
 ## Próximo passo
 
-O item 1 deixou de ser um bloqueio aberto e virou uma régua a definir: **a partir de quantas viagens
-no período um dono deixa de ser terceiro eventual e passa a agregado?** Com esse número, a carga a
-partir do `getVeiculo` classifica o resto sozinha.
+As três decisões têm caminho:
 
-Os itens 2 e 3 têm sugestão e podem seguir com ela.
+1. **Vínculo** — resolvido: campo no diálogo de atribuição, pré-selecionado pelo dono, guardado por
+   recurso. Não precisa de régua nem de mutirão de cadastro.
+2. **CPF faltando** — não criar e avisar na tela.
+3. **Rotas sem modelo** — cadastrar os doze de cima na Logae.
 
-Com a régua definida, isto vira uma feature do Spec Kit — `/speckit-specify`, referenciando este
-documento. A ordem natural da implementação:
+Isto pode virar uma feature do Spec Kit — `/speckit-specify`, referenciando este documento. A ordem
+natural da implementação:
 
-1. Campo `vinculo` em `vehicles` e `drivers` (migração), nulo por padrão
-2. Carga a partir do `getVeiculo`, gravando o `CNPJProprietario` junto — ele é a evidência de por que
-   aquele vínculo foi atribuído, e sem guardá-lo a próxima pessoa não tem como conferir
+1. Campo `vinculo` em `vehicles`, `trailers` e `drivers` (migração), nulo por padrão
+2. O campo no diálogo de atribuição, pré-selecionado a partir do `CNPJProprietario` quando o recurso
+   é novo — gravando o CNPJ junto, porque ele é a evidência de por que aquele vínculo foi sugerido,
+   e sem guardá-lo a próxima pessoa não tem como conferir
 3. O gatilho no worker, no `done` da ordem de `assign`
 4. A Pré-SM guardada na viagem, sem efetivar
