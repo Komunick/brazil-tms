@@ -84,7 +84,21 @@ como "sem modelo" por causa de um zero — foi assim que eu errei a primeira con
 ### 1. O vínculo A/F/T — era o bloqueio, virou um campo na tela
 
 `VincVeiculo` e `VincMotorista1` são **obrigatórios**: `A` (agregado), `F` (frota/funcionário) ou
-`T` (terceiro/autônomo). **Esse campo não existe no nosso cadastro**, e sem ele a chamada é recusada.
+`T` (terceiro/autônomo). Sem eles a chamada é recusada.
+
+> **Correção de 2026-08-25.** A primeira versão deste documento afirmava que "esse campo não existe
+> no nosso cadastro". **Existe, e está preenchido.** `vehicles`, `trailers` e `drivers` têm
+> `ownership_type`, obrigatório, com dois valores — e um CHECK que amarra ao `carrier_id`:
+> `owned` exige transportadora nula, `subcontracted` exige transportadora preenchida.
+>
+> | | veículos | motoristas (ativos) |
+> |---|---:|---:|
+> | `owned` | 20 | 64 |
+> | `subcontracted` | 1.246 | 405 |
+>
+> Isso **resolve o `F` inteiro, hoje, sem trabalho nenhum**: `owned` → `F`. O que fica em aberto é
+> só separar `A` de `T` dentro de `subcontracted` — meia decisão, não uma inteira. Toda a análise
+> abaixo sobre derivar do dono continua valendo, mas para uma pergunta menor do que eu disse.
 
 A tentação é derivar da transportadora. Medi, e **não funciona**: temos duas transportadoras, e a
 que mais rodou nos últimos 30 dias chama-se `Transportes Parceiros (Demo)`, com **179 veículos em
@@ -138,9 +152,15 @@ ser pergunta a partir da segunda viagem daquele veículo ou motorista. Na práti
 uma vez por recurso novo, não uma vez por viagem — e o cadastro se completa sozinho pelo uso, que é
 o mesmo caminho que o telefone do motorista já seguiu.
 
-Recomendação: campo `vinculo` em `vehicles`, `trailers` e `drivers`; o diálogo de atribuição mostra
-o valor guardado (ou o derivado do dono, ou vazio) e permite trocar. Sem valor, a Pré-SM não é criada
-e a tela diz por quê — igual ao caso do CPF.
+Recomendação, já com a correção acima: **não é campo novo, é um terceiro valor**. O `ownership_type`
+passa de `owned` | `subcontracted` para `owned` | `agregado` | `terceiro`, e os 1.246 veículos e 405
+motoristas que hoje são `subcontracted` precisam ser repartidos entre os dois últimos — com o dono
+que a Logae devolve pré-selecionando, e o diálogo de atribuição permitindo trocar.
+
+Atenção ao CHECK que já existe: `owned` exige `carrier_id` nulo e `subcontracted` exige preenchido.
+Abrir o valor em dois obriga a reescrever essa regra, ou a migração é recusada pelo banco.
+
+Sem valor decidido, a Pré-SM não é criada e a tela diz por quê — igual ao caso do CPF.
 
 ### 2. Os 19% sem CPF
 
@@ -199,11 +219,41 @@ status, alterar ou cancelar depois.
 Documentos na Pré-SM, o segundo ajudante, faixa de temperatura, `setPreSM` completo, efetivação
 automática, e qualquer coisa sobre SM já em andamento (`setCancelaSM`, `setFinalizaSM`).
 
-## Achado de brinde, fora de escopo
+## A Logae como segunda fonte do cadastro (medido em 2026-08-25)
 
-`getMotorista` devolve `DataVencCNH`, `PossuiMOPP` e `PossuiToxicologico`. Temos um problema conhecido
-de CNH vencida que hoje só se descobre olhando; essa consulta resolveria. Não entra aqui — fica
-anotado como candidato a slice própria.
+Pergunta levantada pelo usuário: se a Logae já tem os dados do motorista, isso facilita. **Tem, e
+concorda com os nossos.**
+
+`getMotorista` devolve, por CPF: número, categoria e **validade da CNH**, RG, telefone, celular,
+endereço, nome da mãe, escolaridade, estado civil, `PossuiMOPP` e `PossuiToxicologico`.
+
+Duas amostras contra o nosso cadastro:
+
+| | |
+|---|---|
+| encontrados na Logae | 24 de 25, e 60 de 60 |
+| têm número, categoria, validade e telefone | 24 de 24 |
+| número da CNH bate com o nosso | 23 de 24 |
+| categoria bate | 24 de 24 |
+| **validade bate** | **83 de 84**, com 1 divergência |
+
+A única divergência tem dia e mês trocados (`2035-07-10` contra `2035-10-07`), o que parece leitura
+de data no formato errado. Chequei se era padrão numa amostra de 60 sorteadas: **60 de 60 batem
+exatamente**. Não é defeito sistemático; é um registro só, que vale olhar à mão.
+
+O que a Logae acrescenta e nós não temos: `PossuiMOPP` e `PossuiToxicologico`. Na amostra vieram
+todos `N`, então ou ninguém tem, ou o campo não é alimentado lá — não dá para distinguir daqui.
+
+`getVeiculo` e `getCarreta` devolvem Renavam, chassi, marca, modelo, ano, cidade e UF de
+emplacamento, proprietário, e — na carreta — tipo, número ANTT, capacidade, eixos e se possui
+rastreador. Boa parte disso o nosso cadastro tem em branco.
+
+**Consequência para esta proposta:** a Pré-SM não precisa de digitação nova de cadastro. O que falta
+(19% de CPF, campos de veículo em branco) pode ser preenchido pela própria Logae, e a consulta é
+barata — uma chamada por CPF ou placa.
+
+**Candidato a slice própria:** usar a `DataVencCNH` para resolver o problema conhecido de CNH
+vencida, que hoje só se descobre olhando. Fica anotado, fora deste escopo.
 
 ## Próximo passo
 
@@ -217,7 +267,8 @@ As três decisões têm caminho:
 Isto pode virar uma feature do Spec Kit — `/speckit-specify`, referenciando este documento. A ordem
 natural da implementação:
 
-1. Campo `vinculo` em `vehicles`, `trailers` e `drivers` (migração), nulo por padrão
+1. Abrir `ownership_type` em três valores (migração), repartindo o `subcontracted` atual — e
+   revendo junto o CHECK que hoje amarra `subcontracted` a ter `carrier_id`
 2. O campo no diálogo de atribuição, pré-selecionado a partir do `CNPJProprietario` quando o recurso
    é novo — gravando o CNPJ junto, porque ele é a evidência de por que aquele vínculo foi sugerido,
    e sem guardá-lo a próxima pessoa não tem como conferir
