@@ -6,7 +6,12 @@ import { ChevronDown, ChevronRight, Eye, EyeOff, Palette, SlidersHorizontal } fr
 import { useMarcarViagem, useProgramacao } from "@/lib/trips/client";
 import { ProgramacaoDetalhe } from "@/components/trips/programacao-detalhe";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
-import { REGION_ORDER, type TripDisplayStatus } from "@brazil-tms/shared";
+import {
+  REGION_ORDER,
+  displayStatusOf,
+  type TripDisplayStatus,
+  type TripStatus,
+} from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -107,6 +112,24 @@ const CORES = [
 const classeDaCor = (cor: string | null): string =>
   CORES.find((c) => c.chave === cor)?.classe ?? "";
 
+/**
+ * O STATUS COMO A LINHA MOSTRA, não como o banco guarda (2026-08-25, a pedido).
+ *
+ * O filtro nascia do `status` cru, e por isso não tinha "Em análise": `received` se desdobra na tela
+ * em três — **Em análise** (o cliente ainda não aceitou), **P/Atribuir** (aceitou, falta escalar) e
+ * **Na origem** (o portal já diz atribuída). Os três caíam num chip só, e não havia como esconder um
+ * sem esconder os outros dois.
+ *
+ * O selo da linha já usava o desdobramento; o filtro, não. Um filtro que pinta o status de um jeito
+ * e a tabela de outro obriga quem olha a traduzir entre os dois — que é exatamente o que o subcard
+ * veio evitar.
+ */
+const statusDaLinha = (l: {
+  status: string;
+  acceptanceStatus: string | null;
+  portalStatus: string | null;
+}): TripDisplayStatus => displayStatusOf(l.status as TripStatus, l.acceptanceStatus, l.portalStatus);
+
 /** ONTEM/HOJE/AMANHÃ por extenso; do terceiro dia em diante a data já diz mais que a palavra. */
 function rotuloDoDia(dia: string, hoje: string, t: (k: string) => string): string {
   const d = new Date(`${dia}T12:00:00`);
@@ -159,7 +182,7 @@ export function MinhaProgramacaoClient() {
     const mapa = new Map<string, typeof visiveis>();
     for (const l of visiveis) {
       if (diasEscondidos.has(l.dia)) continue;
-      if (statusEscondidos.has(l.status)) continue;
+      if (statusEscondidos.has(statusDaLinha(l))) continue;
       const atual = mapa.get(l.dia);
       if (atual) atual.push(l);
       else mapa.set(l.dia, [l]);
@@ -190,7 +213,8 @@ export function MinhaProgramacaoClient() {
     const mapa = new Map<string, number>();
     for (const l of visiveis) {
       if (diasEscondidos.has(l.dia)) continue;
-      mapa.set(l.status, (mapa.get(l.status) ?? 0) + 1);
+      const s = statusDaLinha(l);
+      mapa.set(s, (mapa.get(s) ?? 0) + 1);
     }
     return [...mapa.entries()].sort((a, b) => b[1] - a[1]);
   }, [visiveis, diasEscondidos]);
