@@ -41,6 +41,7 @@ export const JOB = {
   ...BILLING_JOBS,
   ...DOCUMENT_JOBS,
   ...PORTAL_JOBS,
+  ...PRE_SM_JOBS,
 } as const;
 
 export type JobName =

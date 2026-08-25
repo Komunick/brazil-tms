@@ -85,7 +85,7 @@ gerenciadora** — pode ser promovido sozinho.
 - [X] T020 [P] Escrever em `packages/shared/src/domain/pre-sm-modelos.ts` o casamento por nome normalizado, com as **quatro** tolerâncias: acento, conteúdo entre parênteses, sigla colada a número, e **zero à esquerda**. Sem a última, 4 rotas e 233 viagens/mês caem como "sem modelo" — medido
 - [X] T021 [P] Teste em `pre-sm-modelos.test.ts` cobrindo as quatro tolerâncias, cada uma com um caso real do levantamento
 - [X] T022 Acrescentar `getModelosPreSM` ao cliente em `workers/lib/integra/cliente.ts`
-- [ ] T023 Escrever a carga que consulta os modelos, propõe as correspondências e grava com `confirmado_em` **nulo** em `packages/db/src/trips/pre-sm-modelos.ts`
+- [X] T023 Escrever a carga que consulta os modelos, propõe as correspondências e grava com `confirmado_em` **nulo** em `packages/db/src/trips/pre-sm-modelos.ts`
 - [X] T024 Expor a lista para conferência humana em `apps/web/app/api/admin/pre-sm-modelos/route.ts` (GET lista, PATCH confirma/desfaz, auditado na mesma transação) e a tela em `apps/web/app/(shell)/admin/pre-sm-modelos/`, com item no menu sob Cadastros
 - [X] T025 Garantir em `packages/db/src/trips/pre-sm-modelos.ts` que **só linha confirmada** vale para criar Pré-SM — um casamento errado do normalizador viraria escolta contratada para a rota errada, e o normalizador já errou uma vez
 
@@ -118,18 +118,18 @@ que faltou, com caminho para resolver.
 **Independent Test**: atribuir uma viagem completa e conferir, na gerenciadora, que a Pré-SM existe
 com motorista, placas e horário certos — e que o TMS mostra o número.
 
-- [ ] T032 [US1] Escrever `workers/lib/integra/cliente.ts` com `setPreSMdeModelo`, tratando `CodErro`/`MsgErro` e o formato de URL com o nome do método **entre aspas** (`%22`)
-- [ ] T033 [P] [US1] Teste do cliente em `cliente.test.ts` — só o formato da chamada e a leitura da resposta, **sem rede**
-- [ ] T034 [US1] Ler as credenciais do ambiente em `workers/lib/integra/cliente.ts`, **só no worker**, nunca em `NEXT_PUBLIC_*` nem em resposta de rota
-- [ ] T035 [US1] Implementar o interruptor em `workers/jobs/pre-sm/index.ts`: com `INTEGRA_PRE_SM_ATIVO` desligado, o trabalho roda inteiro, grava em `payload_enviado` o que **teria** mandado, e **não chama** a gerenciadora (R1)
-- [ ] T036 [US1] Implementar o teto diário em `workers/jobs/pre-sm/index.ts` (`INTEGRA_PRE_SM_TETO_DIARIO`, começando em zero) — torna a criação um ato deliberado enquanto ninguém confia no comportamento
-- [ ] T037 [US1] Criar o job em `workers/jobs/pre-sm/index.ts`: monta, decide, chama, grava o estado
-- [ ] T038 [US1] Registrar o job em `workers/jobs/index.ts`
-- [ ] T039 [US1] Enfileirar o trabalho em `apps/web/app/api/imports/portal-commands/route.ts` **apenas quando `encerrarOrdemDoPortal` devolver `true`** e a ação for `assign` — ele já é idempotente (`WHERE status = 'sent'`), então isso elimina o caso comum de duplicata
-- [ ] T040 [US1] Tratar a colisão do índice único parcial em `workers/jobs/pre-sm/index.ts` como garantia final: `insert` que colidir significa "já existe", e o trabalho registra isso em vez de estourar (FR-002)
-- [ ] T041 [US1] Guardar código, momento e origem em `trip_pre_sm`, via `packages/db/src/trips/pre-sm.ts` (FR-003)
-- [ ] T042 [US1] Repetir em falha de comunicação, distinguindo "ainda tentando" de "desistiu" (FR-015), em `workers/jobs/pre-sm/index.ts`
-- [ ] T043 [P] [US1] Teste do job em `workers/jobs/pre-sm/pre-sm.test.ts`, com o cliente dublado
+- [X] T032 [US1] Escrever `workers/lib/integra/cliente.ts` com `setPreSMdeModelo`, tratando `CodErro`/`MsgErro` e o formato de URL com o nome do método **entre aspas** (`%22`)
+- [X] T033 [P] [US1] Teste do cliente em `cliente.test.ts` — só o formato da chamada e a leitura da resposta, **sem rede**
+- [X] T034 [US1] Ler as credenciais do ambiente em `workers/lib/integra/cliente.ts`, **só no worker**, nunca em `NEXT_PUBLIC_*` nem em resposta de rota
+- [X] T035 [US1] Implementar o interruptor em `workers/jobs/pre-sm/index.ts`: com `INTEGRA_PRE_SM_ATIVO` desligado, o trabalho roda inteiro, grava em `payload_enviado` o que **teria** mandado, e **não chama** a gerenciadora (R1)
+- [X] T036 [US1] Implementar o teto diário em `workers/jobs/pre-sm/index.ts` (`INTEGRA_PRE_SM_TETO_DIARIO`, começando em zero) — torna a criação um ato deliberado enquanto ninguém confia no comportamento
+- [X] T037 [US1] Criar o job em `workers/jobs/pre-sm/index.ts`: monta, decide, chama, grava o estado
+- [X] T038 [US1] Registrar o job em `workers/jobs/index.ts`
+- [X] T039 [US1] Enfileirar o trabalho em `apps/web/app/api/imports/portal-commands/route.ts` **apenas quando `encerrarOrdemDoPortal` devolver `true`** e a ação for `assign` — ele já é idempotente (`WHERE status = 'sent'`), então isso elimina o caso comum de duplicata
+- [X] T040 [US1] Tratar a colisão do índice único parcial em `workers/jobs/pre-sm/index.ts` como garantia final: `insert` que colidir significa "já existe", e o trabalho registra isso em vez de estourar (FR-002)
+- [X] T041 [US1] Guardar código, momento e origem em `trip_pre_sm`, via `packages/db/src/trips/pre-sm.ts` (FR-003)
+- [X] T042 [US1] Repetir em falha de comunicação, distinguindo "ainda tentando" de "desistiu" (FR-015), em `workers/jobs/pre-sm/index.ts`
+- [X] T043 [P] [US1] Teste do job em `workers/jobs/pre-sm/pre-sm.test.ts`, com o cliente dublado
 - [ ] T044 [US1] Registrar criação e recusa no histórico da viagem (FR-019), em `workers/jobs/pre-sm/index.ts`
 
 **Checkpoint**: com o interruptor desligado, atribuir uma viagem grava o corpo que seria mandado —

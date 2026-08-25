@@ -265,3 +265,5 @@ export {
   type PreSmDaViagem,
   type PreSmStatus,
 } from "./trips/pre-sm";
+export { dadosDaPreSm, type DadosDaPreSm } from "./trips/pre-sm-dados";
+export { ordemDeAtribuicaoConcluida } from "./trips/pre-sm-dados";

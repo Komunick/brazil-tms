@@ -2,3 +2,19 @@ packages:
   - "apps/*"
   - "packages/*"
   - "workers"
+
+# ── OVERRIDES ────────────────────────────────────────────────────────────────────────────────────
+#
+# Ficam AQUI e não em `package.json` (2026-08-25). O pnpm 10.23 deixou de ler o campo `pnpm` do
+# `package.json` e avisa a cada comando: "The following keys were ignored: pnpm.overrides".
+#
+# A correção de segurança do `brace-expansion` foi escrita lá primeiro. Ela funcionou — o lock
+# gravou a resolução e produção está com a 2.1.4 —, mas só porque o lock a congelou: numa
+# regeneração ela seria ignorada e a versão vulnerável voltaria, sem ninguém perceber.
+#
+# `brace-expansion@2` QUALIFICADO por faixa: sem o `@2`, a override alcançaria também a 1.1.15 que
+# o eslint usa via `minimatch@3`, cuja API é outra — trocaria um aviso de segurança por um build
+# vermelho. Duas falhas altas de negação de serviço, corrigidas na 2.1.4; a cadeia é
+# `exceljs → archiver → readdir-glob → minimatch@5 → brace-expansion`.
+overrides:
+  brace-expansion@2: ^2.1.4

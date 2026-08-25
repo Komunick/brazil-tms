@@ -8,6 +8,7 @@ import { registerSlaSweep } from "./sla-sweep";
 import { registerDocumentChecks } from "./document-checks";
 import { registerBillingExport } from "./billing-export";
 import { registerPortalWithdrawn } from "./portal-withdrawn";
+import { registerPreSmCriar } from "./pre-sm";
 
 /**
  * Registry of import job handlers (feature 004, research R3). The bootstrap (`workers/index.ts`)
@@ -37,4 +38,15 @@ export async function registerJobHandlers(boss: PgBoss): Promise<void> {
   await registerBillingExport(boss);
   // 2026-08-18: o TERCEIRO job agendado — a varredura das viagens que o cliente retirou do portal.
   await registerPortalWithdrawn(boss);
+  /**
+   * 2026-08-25 (026): a Pré-SM na gerenciadora Logae.
+   *
+   * ENFILEIRADO POR EVENTO, não agendado — ao contrário dos três acima. A ordem de atribuição
+   * voltando confirmada do portal é o único momento em que a atribuição existe dos dois lados e
+   * todos os campos estão disponíveis.
+   *
+   * Nasce DESLIGADO por variável de ambiente, com teto diário em zero: a gerenciadora cobra por
+   * solicitação e não tem homologação para nós. Ver `pre-sm/index.ts`.
+   */
+  await registerPreSmCriar(boss);
 }

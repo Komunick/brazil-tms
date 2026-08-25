@@ -6,6 +6,7 @@ import {
   rotuloDoMotivo,
 } from "@brazil-tms/shared";
 import { encerrarOrdemDoPortal, pegarOrdensPendentes } from "@brazil-tms/db";
+import { enfileirarPreSmSePrecisar } from "@/lib/pre-sm/queue";
 import { Conflict, handleRouteError } from "@/lib/api/respond";
 import { Unauthorized } from "@/lib/auth/require-auth";
 
@@ -54,6 +55,27 @@ export async function POST(request: Request): Promise<NextResponse> {
         response: body.response,
         error: body.error ?? null,
       });
+      /**
+       * A PRÉ-SM É PEDIDA AQUI, e só quando `encerrada` é `true` (2026-08-25, fatia 026).
+       *
+       * Este é o único momento em que a atribuição existe dos DOIS lados: o portal confirmou. Antes
+       * disso ele ainda pode recusar, e uma Pré-SM de atribuição recusada é escolta contratada para
+       * viagem que ninguém vai fazer — paga, porque a gerenciadora cobra por solicitação.
+       *
+       * O `true` é a primeira barreira contra duplicata, e sai de graça: `encerrarOrdemDoPortal`
+       * faz o `update` com `WHERE status = 'sent'`, então só UM relato do robô consegue encerrar a
+       * ordem. Os repetidos devolvem `false` e não enfileiram nada.
+       *
+       * A segunda barreira é o índice único parcial em `trip_pre_sm`, que cobre o que sobra:
+       * reinício do worker, reenfileiramento à mão, uma segunda ordem de `assign` na mesma viagem.
+       *
+       * `void` e `catch` vazio: a fila não pode derrubar o relato do robô. Se ele receber erro,
+       * repete o relato — e aí é a ordem do portal que fica em risco, não a Pré-SM.
+       */
+      if (encerrada && body.ok) {
+        void enfileirarPreSmSePrecisar(body.id).catch(() => {});
+      }
+
       // `false` não é erro: é um relato de ordem que já havia sido encerrada. Dizer isso em vez de
       // fingir sucesso é o que permite ao robô parar de repetir.
       return comCors(NextResponse.json({ encerrada }));
