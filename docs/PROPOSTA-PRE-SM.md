@@ -81,7 +81,7 @@ como "sem modelo" por causa de um zero — foi assim que eu errei a primeira con
 
 ## As três decisões que não são de programação
 
-### 1. O vínculo A/F/T — o único bloqueio real
+### 1. O vínculo A/F/T — era o bloqueio, virou uma régua
 
 `VincVeiculo` e `VincMotorista1` são **obrigatórios**: `A` (agregado), `F` (frota/funcionário) ou
 `T` (terceiro/autônomo). **Esse campo não existe no nosso cadastro**, e sem ele a chamada é recusada.
@@ -92,14 +92,36 @@ viagem real**. O nome sugere semente de instalação, mas o uso diz que não é 
 padrão, não por classificação. A outra, `Agregados`, com 162 veículos, essa sim casa com `A`. E 17
 veículos rodaram sem transportadora nenhuma.
 
-Então há três caminhos, e a escolha é do negócio:
+**Confirmado com o negócio em 2026-08-25: a frota tem os três tipos** — próprios, agregados e
+autônomos avulsos. Então não há atalho de "manda `A` para todos".
 
-- **(a)** Um campo novo `vinculo` em `vehicles` e `drivers`, preenchido uma vez. É o certo a longo
-  prazo, e custa uma passada no cadastro.
-- **(b)** Arrumar as transportadoras primeiro (a "(Demo)" deixa de ser lixo de semente e vira a
-  classificação real) e derivar dela. Menos campo novo, mais limpeza.
-- **(c)** Assumir `A` para todo mundo no começo. **Não recomendo**: um vínculo errado na SM é
-  informação errada para quem faz escolta, e o erro fica silencioso.
+#### Mas a Logae já sabe, e dá para importar
+
+`getVeiculo` devolve **`CNPJProprietario`** por placa. Consultei 40 das placas que mais rodaram nos
+últimos 30 dias, e o retorno resolve boa parte da classificação sozinho:
+
+| o que veio | o que significa | quantos dos 40 |
+|---|---|---|
+| CNPJ `03571231000143` | **é o nosso** — a raiz bate com o login `3571231001` → `F` | 3 |
+| CNPJ de outra empresa | agregado ou terceiro pessoa jurídica | ~20 |
+| valor começando em `0000` | **CPF preenchido com zeros** — pessoa física, nunca `F` | 9 donos |
+
+São **32 donos distintos em 40 veículos**: frota pulverizada, como se espera de agregados.
+
+Isso muda o tamanho do trabalho. Em vez de classificar 1.266 veículos e 469 motoristas à mão,
+classifica-se o **dono** — e duas das três respostas saem automáticas:
+
+- CNPJ igual ao nosso → **F**, sem ninguém decidir
+- CPF (pessoa física) → nunca `F`; resta separar `A` de `T`
+- CNPJ de outra empresa → resta separar `A` de `T`
+
+O que sobra para uma pessoa decidir é a régua entre **agregado e terceiro**: quem roda fixo para nós
+contra quem pega viagem eventual. Isso o TMS pode responder com o próprio histórico — quantas viagens
+aquele dono fez no período — mas o corte é do negócio, não meu.
+
+Recomendação: campo `vinculo` em `vehicles` e `drivers`, preenchido por uma carga a partir do
+`getVeiculo`, com a regra acima. O que a carga não conseguir decidir fica nulo, e a Pré-SM daquela
+viagem não é criada — com aviso na tela, igual ao caso do CPF.
 
 ### 2. Os 19% sem CPF
 
@@ -160,5 +182,17 @@ automática, e qualquer coisa sobre SM já em andamento (`setCancelaSM`, `setFin
 
 ## Próximo passo
 
-Decidir o item 1 (o vínculo). Os outros dois têm sugestão e podem seguir com ela. Com o vínculo
-resolvido, isto vira uma feature do Spec Kit — `/speckit-specify`, referenciando este documento.
+O item 1 deixou de ser um bloqueio aberto e virou uma régua a definir: **a partir de quantas viagens
+no período um dono deixa de ser terceiro eventual e passa a agregado?** Com esse número, a carga a
+partir do `getVeiculo` classifica o resto sozinha.
+
+Os itens 2 e 3 têm sugestão e podem seguir com ela.
+
+Com a régua definida, isto vira uma feature do Spec Kit — `/speckit-specify`, referenciando este
+documento. A ordem natural da implementação:
+
+1. Campo `vinculo` em `vehicles` e `drivers` (migração), nulo por padrão
+2. Carga a partir do `getVeiculo`, gravando o `CNPJProprietario` junto — ele é a evidência de por que
+   aquele vínculo foi atribuído, e sem guardá-lo a próxima pessoa não tem como conferir
+3. O gatilho no worker, no `done` da ordem de `assign`
+4. A Pré-SM guardada na viagem, sem efetivar
