@@ -167,6 +167,11 @@ uma criação errada — por isso entra na mesma fatia da criação, não numa s
 - [ ] T054 Após o merge, **reiniciar o worker** — job novo não vale sem restart, e worker velho mascara o conserto
 - [ ] T055 Com o interruptor ainda desligado, conferir em produção por pelo menos um dia: quantas viagens gerariam Pré-SM, quantas cairiam em `sem_dados` e por quê. É a validação que substitui a homologação que não temos
 - [ ] T056 **Com o usuário presente**, ligar o interruptor com teto `1`, atribuir **uma** viagem escolhida, e conferir a Pré-SM no sistema da gerenciadora — com o cancelamento à mão
+  - **REESCRITA em 25/08 depois de ver a tela da Logae.** O roteiro passo a passo está em
+    `quickstart.md`, na seção "Roteiro do primeiro teste real". A pergunta do teste deixou de ser
+    "funciona?" e passou a ser **"a Pré-SM criada pela API se amarra à programação que já está no
+    eTorre?"** — porque nenhum método da API tem campo para dizer de qual programação ela é
+    (conferido no manual `Integra_14.2`). Se nascer solta, a fatia não resolve o problema como está.
 - [ ] T057 Subir o teto conforme a confiança, e registrar em `docs/OPERACAO.md` o que fazer quando a integração falhar
 - [ ] T058 [P] Acrescentar a entrada em `apps/web/lib/novidades/entradas.ts` — a operação precisa saber que isso passou a acontecer sozinho
 
