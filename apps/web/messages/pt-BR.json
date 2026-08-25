@@ -2077,7 +2077,8 @@
       "criada": "Criada na gerenciadora",
       "recusada": "Recusada pela gerenciadora",
       "sem_dados": "Não criada — falta dado",
-      "cancelada": "Cancelada"
+      "cancelada": "Cancelada",
+      "nao_tentada": "Pronta — integração desligada"
     },
     "motivo": {
       "sem_modelo": "A rota desta viagem ainda não tem modelo confirmado na gerenciadora.",
@@ -2085,7 +2086,9 @@
       "sem_placa": "A atribuição não tem placa.",
       "sem_vinculo_veiculo": "Falta classificar o veículo como frota, agregado ou terceiro.",
       "sem_vinculo_motorista": "Falta classificar o motorista como frota, agregado ou terceiro.",
-      "sem_janela_coleta": "A viagem está sem a janela de coleta."
+      "sem_janela_coleta": "A viagem está sem a janela de coleta.",
+      "desligado": "Estava tudo pronto. A criação automática de Pré-SM está desligada — nada foi enviado à gerenciadora.",
+      "teto_atingido": "Estava tudo pronto. O teto de Pré-SM do dia foi atingido — nada foi enviado à gerenciadora."
     },
     "em": "Em {data}",
     "pedidaEm": "Pedida em {data}",

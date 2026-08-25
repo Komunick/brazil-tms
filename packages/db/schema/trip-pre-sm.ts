@@ -46,6 +46,14 @@ export const preSmStatus = pgEnum("pre_sm_status", [
   "recusada",
   "sem_dados",
   "cancelada",
+  /**
+   * Estava tudo pronto e a integração não estava ligada (ou o teto do dia acabou).
+   *
+   * NÃO é `sem_dados`: aquele quer dizer "falta coisa nossa". Este quer dizer "não falta nada".
+   * E fica FORA do índice de linha viva de propósito — se contasse como viva, a viagem ficaria
+   * bloqueada para sempre, já que ninguém volta para buscar essas linhas.
+   */
+  "nao_tentada",
 ]);
 
 export const tripPreSm = pgTable(

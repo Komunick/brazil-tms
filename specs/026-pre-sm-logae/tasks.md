@@ -124,6 +124,7 @@ com motorista, placas e horário certos — e que o TMS mostra o número.
 - [X] T034 [US1] Ler as credenciais do ambiente em `workers/lib/integra/cliente.ts`, **só no worker**, nunca em `NEXT_PUBLIC_*` nem em resposta de rota
 - [X] T035 [US1] Implementar o interruptor em `workers/jobs/pre-sm/index.ts`: com `INTEGRA_PRE_SM_ATIVO` desligado, o trabalho roda inteiro, grava em `payload_enviado` o que **teria** mandado, e **não chama** a gerenciadora (R1)
 - [X] T036 [US1] Implementar o teto diário em `workers/jobs/pre-sm/index.ts` (`INTEGRA_PRE_SM_TETO_DIARIO`, começando em zero) — torna a criação um ato deliberado enquanto ninguém confia no comportamento
+- [X] T036b [US1] **CONSERTO (25/08)** — com o interruptor desligado a linha ficava `pendente`, e `pendente` conta como VIVA no índice único parcial: nada voltava para buscá-la e ela BLOQUEAVA novas tentativas daquela viagem. Estado novo `nao_tentada` (migração 0047), fora do índice. Teste em `packages/db/src/trips/pre-sm-vivas.test.ts` compara `VIVAS` com o `WHERE` do índice lido do próprio SQL — as duas declarações da mesma regra não podem divergir em silêncio
 - [X] T037 [US1] Criar o job em `workers/jobs/pre-sm/index.ts`: monta, decide, chama, grava o estado
 - [X] T038 [US1] Registrar o job em `workers/jobs/index.ts`
 - [X] T039 [US1] Enfileirar o trabalho em `apps/web/app/api/imports/portal-commands/route.ts` **apenas quando `encerrarOrdemDoPortal` devolver `true`** e a ação for `assign` — ele já é idempotente (`WHERE status = 'sent'`), então isso elimina o caso comum de duplicata

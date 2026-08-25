@@ -15,7 +15,13 @@ import { drivers, tripPreSm, trips } from "../../schema";
  * **Ler o estado é ler a linha VIVA** (pendente ou criada) ou, quando não há, a mais recente.
  */
 
-export type PreSmStatus = "pendente" | "criada" | "recusada" | "sem_dados" | "cancelada";
+export type PreSmStatus =
+  | "pendente"
+  | "criada"
+  | "recusada"
+  | "sem_dados"
+  | "cancelada"
+  | "nao_tentada";
 
 export interface PreSmDaViagem {
   id: string;
@@ -29,7 +35,19 @@ export interface PreSmDaViagem {
   tentativas: number;
 }
 
-const VIVAS: PreSmStatus[] = ["pendente", "criada"];
+/**
+ * OS ESTADOS QUE CONTAM COMO LINHA VIVA — e este array TEM de bater com o índice único parcial
+ * `trip_pre_sm_viva_uk` (migração 0046). Há um teste que compara os dois contra o SQL.
+ *
+ * Divergir sai caro nos dois sentidos. Um estado a mais aqui do que no índice deixa duas Pré-SM
+ * nascerem para a mesma viagem — escolta cobrada em dobro. Um estado a mais no ÍNDICE do que aqui
+ * trava a viagem para sempre, porque nada volta para buscar aquela linha.
+ *
+ * Foi o segundo caso que aconteceu de verdade: `pendente` ficava para as viagens processadas com a
+ * integração desligada e nenhuma delas conseguia tentar de novo. Daí o estado `nao_tentada`, que
+ * fica de fora dos dois.
+ */
+export const VIVAS: PreSmStatus[] = ["pendente", "criada"];
 
 /**
  * Abre uma tentativa — e devolve `null` quando já existe uma viva.
