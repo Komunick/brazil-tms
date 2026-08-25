@@ -1,7 +1,7 @@
 import { and, count, eq, gte, inArray, sql } from "drizzle-orm";
 import { db } from "../client";
 import { writeAudit } from "../audit/write-audit";
-import { tripPreSm } from "../../schema";
+import { drivers, tripPreSm, trips } from "../../schema";
 
 /**
  * O ESTADO DA PRÉ-SM DE UMA VIAGEM (2026-08-25, fatia 026).
@@ -180,4 +180,56 @@ export async function registrarPedidoDeCancelamento(entrada: {
     previousValue: { preSm: entrada.preSmId, status: "criada" },
     newValue: { preSm: entrada.preSmId, status: "cancelamento_pedido" },
   });
+}
+
+/**
+ * O ESTADO DA PRÉ-SM **com o que a viagem tem agora** — para a tela apontar divergência (FR-018).
+ *
+ * Devolve o corpo que foi enviado e a atribuição atual lida do portal. A comparação em si é pura e
+ * vive em `packages/shared` (`divergenciasDaPreSm`), porque comparar é regra e regra se testa.
+ *
+ * A atribuição atual sai de `customer_fields` — o que o robô leu por último, que é o que o CLIENTE
+ * enxerga hoje. É o lado certo da comparação: a pergunta é "a Pré-SM ainda descreve quem vai
+ * dirigir?", e quem responde isso é o portal, não a nossa última ordem.
+ */
+export async function preSmComAtribuicaoAtual(tripId: string): Promise<{
+  preSm: PreSmDaViagem | null;
+  payloadEnviado: Record<string, unknown> | null;
+  atual: { cpfMotorista: string | null; placas: string[] } | null;
+}> {
+  const preSm = await preSmDaViagem(tripId);
+  if (!preSm) return { preSm: null, payloadEnviado: null, atual: null };
+
+  const [linha] = await db
+    .select({
+      payload: tripPreSm.payloadEnviado,
+      placas: sql<string | null>`(${trips.customerFields} ->> 'Placa (portal)')`,
+      portalDriverId: sql<string | null>`(${trips.customerFields} ->> 'ID do motorista (portal)')`,
+    })
+    .from(tripPreSm)
+    .innerJoin(trips, eq(trips.id, tripPreSm.tripId))
+    .where(eq(tripPreSm.id, preSm.id))
+    .limit(1);
+
+  if (!linha) return { preSm, payloadEnviado: null, atual: null };
+
+  const [motorista] = linha.portalDriverId
+    ? await db
+        .select({ cpf: drivers.cpf })
+        .from(drivers)
+        .where(eq(drivers.portalDriverId, linha.portalDriverId))
+        .limit(1)
+    : [];
+
+  return {
+    preSm,
+    payloadEnviado: (linha.payload as Record<string, unknown> | null) ?? null,
+    atual: {
+      cpfMotorista: motorista?.cpf ?? null,
+      placas: (linha.placas ?? "")
+        .split(/[,;]/)
+        .map((p) => p.trim())
+        .filter(Boolean),
+    },
+  };
 }

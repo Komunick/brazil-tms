@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
-import { PRE_SM_JOBS, type PreSmCancelarPayload } from "@brazil-tms/shared";
-import { preSmDaViagem, registrarPedidoDeCancelamento } from "@brazil-tms/db";
+import {
+  divergenciasDaPreSm,
+  PRE_SM_JOBS,
+  type PreSmCancelarPayload,
+} from "@brazil-tms/shared";
+import {
+  preSmComAtribuicaoAtual,
+  preSmDaViagem,
+  registrarPedidoDeCancelamento,
+} from "@brazil-tms/db";
 import { getBffBoss } from "@/lib/queue/boss";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
 import { Conflict, NotFound, handleRouteError } from "@/lib/api/respond";
@@ -31,7 +39,19 @@ export async function GET(
     const ctx = await requireAuth();
     requirePermission(ctx, "assign_resources");
     const { id } = await params;
-    return NextResponse.json({ preSm: await preSmDaViagem(id) });
+    const { preSm, payloadEnviado, atual } = await preSmComAtribuicaoAtual(id);
+    /**
+     * A DIVERGÊNCIA É CALCULADA AQUI, não guardada (FR-018).
+     *
+     * Ela muda toda vez que alguém reatribui a viagem, e uma coluna com "está divergente" ficaria
+     * velha no instante seguinte — precisaria de alguém para recalculá-la, e esse alguém não existe.
+     *
+     * Só interessa quando a Pré-SM EXISTE de verdade lá: uma `sem_dados` não descreve ninguém, e
+     * dizer que ela diverge seria um aviso sobre nada.
+     */
+    const divergencias =
+      preSm?.status === "criada" ? divergenciasDaPreSm(payloadEnviado, atual) : [];
+    return NextResponse.json({ preSm, divergencias });
   } catch (error) {
     return handleRouteError(error);
   }

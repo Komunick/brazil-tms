@@ -2089,6 +2089,11 @@
     "cancelarConfirmar": "Cancelar a Pré-SM",
     "voltar": "Voltar",
     "cancelamentoPedido": "Cancelamento pedido. O estado muda quando a gerenciadora confirmar.",
-    "cancelamentoFalhou": "Não deu para pedir o cancelamento."
+    "cancelamentoFalhou": "Não deu para pedir o cancelamento.",
+    "divergencia": "A atribuição mudou depois da Pré-SM: {o}. A escolta foi contratada com os dados antigos.",
+    "divergencias": {
+      "motorista": "o motorista",
+      "placas": "as placas"
+    }
   }
 }
