@@ -28,9 +28,9 @@ hoje ninguém sabe. US1 depende dela.
 **Purpose**: o que precisa existir antes de qualquer código, e o interruptor que mantém a feature
 inofensiva enquanto ela não estiver provada.
 
-- [ ] T001 Registrar `INTEGRA_LOGIN`, `INTEGRA_SENHA`, `INTEGRA_PRE_SM_ATIVO` (padrão desligado) e `INTEGRA_PRE_SM_TETO_DIARIO` (padrão `0`) em `apps/web/.env.example` e no bloco do worker, documentando cada uma
+- [X] T001 Registrar `INTEGRA_LOGIN`, `INTEGRA_SENHA`, `INTEGRA_PRE_SM_ATIVO` (padrão desligado) e `INTEGRA_PRE_SM_TETO_DIARIO` (padrão `0`) em `apps/web/.env.example` e no bloco do worker, documentando cada uma
 - [ ] T002 Acrescentar as mesmas quatro variáveis ao `devops/config.env` e ao bloco correspondente do `devops/gen-env.sh` na VM — **não versionado**; ver `docs/OPERACAO.md`. Pôr só no `.env.local` NÃO segura: o próximo deploy o regenera a partir do `config.env`
-- [ ] T003 [P] Registrar em `docs/OPERACAO.md` a nova integração: o que é, onde as credenciais moram, e que a feature nasce desligada
+- [X] T003 [P] Registrar em `docs/OPERACAO.md` a nova integração: o que é, onde as credenciais moram, e que a feature nasce desligada
 
 **Checkpoint**: as variáveis existem nos dois ambientes e sobrevivem a um deploy.
 
@@ -42,14 +42,14 @@ inofensiva enquanto ela não estiver provada.
 
 **⚠️ É a etapa de maior risco desta fatia.** Ler [data-model.md](./data-model.md) inteiro antes.
 
-- [ ] T004 Acrescentar `agregado` e `terceiro` ao `ownershipType` em `packages/db/schema/enums.ts`, mantendo `subcontracted` no enum como **valor dormente** — Postgres não remove valor de enum, e 1.246 veículos + 405 motoristas o carregam hoje
-- [ ] T005 Criar o tipo TypeScript restrito (`owned` | `agregado` | `terceiro`) em `packages/shared/src/schemas/master-data.ts`, **sem** `subcontracted`, e fixar as colunas de `vehicles`, `trailers` e `drivers` com `.$type<>()` — mesma técnica do `trip_status` na 015
-- [ ] T006 Reescrever os três CHECKs em `packages/db/schema/{vehicles,trailers,drivers}.ts` para `(ownership_type = 'owned' AND carrier_id IS NULL) OR (ownership_type <> 'owned' AND carrier_id IS NOT NULL)` — **sem isto a feature quebra no primeiro update**: `agregado` não satisfaz nenhum braço da regra atual e o banco recusa a linha
-- [ ] T007 [P] Criar `packages/db/schema/trip-pre-sm.ts` com o enum `pre_sm_status` (`pendente`, `criada`, `recusada`, `sem_dados`, `cancelada`) e as colunas de `data-model.md` §3
-- [ ] T008 [P] Criar `packages/db/schema/pre-sm-route-models.ts` com `confirmado_em` anulável e único em `(origem_norm, destino_norm)`
-- [ ] T009 Gerar a migração `--custom` (**0046** hoje) com: `ADD VALUE` dos dois valores, os três `DROP`/`ADD CONSTRAINT`, as duas tabelas, e o índice único **PARCIAL** `WHERE status IN ('pendente','criada')`. Parcial de propósito: cobrindo todos os estados, uma Pré-SM cancelada travaria a viagem para sempre
-- [ ] T010 Rodar a migração no banco de **dev** e conferir que um `update` para `agregado` passa — o teste que prova o T006. Medido em 25/08: no PG 16 o `ADD VALUE` e a reescrita do CHECK cabem na mesma transação, porque o CHECK novo só cita `'owned'`
-- [ ] T011 Varrer `packages/`, `apps/web/` e `workers/` confirmando que nada trata `subcontracted` como erro: ele significa **"ainda não classificado"**. Sem mutirão de cadastro — a classificação acontece pelo uso (FR-010)
+- [X] T004 Acrescentar `agregado` e `terceiro` ao `ownershipType` em `packages/db/schema/enums.ts`, mantendo `subcontracted` no enum como **valor dormente** — Postgres não remove valor de enum, e 1.246 veículos + 405 motoristas o carregam hoje
+- [X] T005 Criar o tipo TypeScript restrito (`owned` | `agregado` | `terceiro`) em `packages/shared/src/schemas/master-data.ts`, **sem** `subcontracted`, e fixar as colunas de `vehicles`, `trailers` e `drivers` com `.$type<>()` — mesma técnica do `trip_status` na 015
+- [X] T006 Reescrever os três CHECKs em `packages/db/schema/{vehicles,trailers,drivers}.ts` para `(ownership_type = 'owned' AND carrier_id IS NULL) OR (ownership_type <> 'owned' AND carrier_id IS NOT NULL)` — **sem isto a feature quebra no primeiro update**: `agregado` não satisfaz nenhum braço da regra atual e o banco recusa a linha
+- [X] T007 [P] Criar `packages/db/schema/trip-pre-sm.ts` com o enum `pre_sm_status` (`pendente`, `criada`, `recusada`, `sem_dados`, `cancelada`) e as colunas de `data-model.md` §3
+- [X] T008 [P] Criar `packages/db/schema/pre-sm-route-models.ts` com `confirmado_em` anulável e único em `(origem_norm, destino_norm)`
+- [X] T009 Gerar a migração `--custom` (**0046** hoje) com: `ADD VALUE` dos dois valores, os três `DROP`/`ADD CONSTRAINT`, as duas tabelas, e o índice único **PARCIAL** `WHERE status IN ('pendente','criada')`. Parcial de propósito: cobrindo todos os estados, uma Pré-SM cancelada travaria a viagem para sempre
+- [X] T010 Rodar a migração no banco de **dev** e conferir que um `update` para `agregado` passa — o teste que prova o T006. Medido em 25/08: no PG 16 o `ADD VALUE` e a reescrita do CHECK cabem na mesma transação, porque o CHECK novo só cita `'owned'`
+- [X] T011 Varrer `packages/`, `apps/web/` e `workers/` confirmando que nada trata `subcontracted` como erro: ele significa **"ainda não classificado"**. Sem mutirão de cadastro — a classificação acontece pelo uso (FR-010)
 
 **Checkpoint**: migração aplicada no dev, os três valores gravam, o cadastro existente intacto.
 

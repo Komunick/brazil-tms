@@ -62,9 +62,11 @@ export const drivers = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    // Frota própria sem transportadora; todo o resto com — ver o comentário longo em `vehicles.ts`.
+    // Enumerar os valores (a forma antiga) faria `agregado` e `terceiro` serem recusados pelo banco.
     check(
       "drivers_ownership_carrier_ck",
-      sql`(${table.ownershipType} = 'subcontracted' AND ${table.carrierId} IS NOT NULL) OR (${table.ownershipType} = 'owned' AND ${table.carrierId} IS NULL)`,
+      sql`(${table.ownershipType} = 'owned' AND ${table.carrierId} IS NULL) OR (${table.ownershipType} <> 'owned' AND ${table.carrierId} IS NOT NULL)`,
     ),
     index("drivers_carrier_idx").on(table.carrierId),
     index("drivers_status_idx").on(table.status),
