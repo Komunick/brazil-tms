@@ -1862,7 +1862,9 @@
     "systemDenied": "O navegador está bloqueando. Libere nas permissões do site e recarregue.",
     "systemUnavailable": "Este navegador não tem avisos do sistema.",
     "systemTestTitle": "Teste — Brazil Transports TMS",
-    "systemTestBody": "Se você está lendo isto, os avisos de spot vão chegar aqui."
+    "systemTestBody": "Se você está lendo isto, os avisos de spot vão chegar aqui.",
+    "ensaio": "Ensaiar aviso",
+    "ensaioDica": "Mostra o cartão, toca o som e dispara a notificação — sem gravar oferta nenhuma."
   },
   "Wallboard": {
     "title": "Brazil Transports · Torre",

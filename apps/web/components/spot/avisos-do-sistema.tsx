@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Bell, BellOff, BellRing } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ensaiarAviso } from "@/lib/spot/ensaio";
 import {
   avisarNoSistema,
   estadoDoAviso,
@@ -87,6 +88,23 @@ export function AvisosDoSistema() {
             {t("systemTest")}
           </Button>
         ) : null}
+
+        {/**
+         * O ENSAIO fica FORA do `estado === "concedida"`, ao contrário do teste acima.
+         *
+         * São duas perguntas diferentes: o teste pergunta "o aviso do Windows chega aqui?" e só faz
+         * sentido com permissão; o ensaio pergunta "como é o aviso de oferta?" — e o cartão na tela
+         * e o som funcionam mesmo com a permissão negada, que é quando ver o cartão mais importa.
+         */}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={ensaiarAviso}
+          title={t("ensaioDica")}
+        >
+          {t("ensaio")}
+        </Button>
       </div>
 
       {/**
