@@ -73,46 +73,51 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/026-pre-sm-logae/plan.md` (Pré-SM criada sozinha ao atribuir — a
-integração com a gerenciadora Logae). Levantamento medido e decisões de negócio em
-`docs/PROPOSTA-PRE-SM.md`; as três decisões difíceis em `specs/026-pre-sm-logae/research.md`.
+Active feature plan: `specs/027-aba-gr/plan.md` (a aba GR — a Pré-SM feita por uma pessoa, depois da
+atribuição). O desenho e as decisões de uso em `docs/PROPOSTA-ABA-GR.md`; as sete decisões difíceis
+em `specs/027-aba-gr/research.md`; a API inteira em `docs/INTEGRA-14.2-REFERENCIA.md`.
 
-**O que a fatia faz**: quando a ordem de atribuição volta confirmada do portal, o worker cria a
-pré-solicitação de monitoramento na Logae via `setPreSMdeModelo` (NÃO o `setPreSM` completo, que
-exigiria espelhar cidades com IBGE, cliente e filial). Fica em Pré-SM, sem efetivar.
+**A 026 está no `dev` e NÃO deve ser promovida como está.** Ela cria a Pré-SM sozinha via
+`setPreSMdeModelo`, e a gerenciadora respondeu por escrito em 25/08: **"Tem que ser pelo setPreSM"**.
+A 027 substitui esse miolo. O resto da 026 sobrevive inteiro e **não se reescreve**.
+
+**O que a fatia faz**: a LH atribuída cai numa aba **GR**. A linha mostra o que será enviado (placas,
+motorista, vínculos, janela de coleta) e o que falta, com o botão travado enquanto faltar. Envio
+**uma por uma**, sem lote. Depois de enviada a viagem **fica** na aba, em seção separada, com o
+código e o cancelamento.
+
+**O QUE NÃO SE REESCREVE** (tudo já no `dev`): o vínculo A/F/T e as migrações `0046`/`0047` · a
+tabela `trip_pre_sm` e seus estados, incluindo `nao_tentada` · o índice único parcial · o
+cancelamento (`setCancelaPreSM`, job + botão) · o aviso de divergência · a tela de conferência de
+correspondências · o cliente da Integra em `workers/lib/integra/cliente.ts`.
+
+**O que SOME**: `setPreSMdeModelo` e `getModelosPreSM` no cliente · o job `pre_sm.carregar_modelos` ·
+a coluna `cod_modelo`.
 
 **ARMADILHAS desta fatia** — as cinco que quebram de verdade:
 
-1. **O CHECK recusa.** `ownership_type` ganha `agregado` e `terceiro`, mas `vehicles`, `trailers` e
-   `drivers` têm cada um um CHECK que amarra `subcontracted` a ter `carrier_id` e `owned` a não ter.
-   Sem reescrever os três na MESMA migração, a migração passa e o primeiro `update` é recusado. A
-   forma nova não enumera valores: `owned` sem transportadora, todo o resto com.
-2. **`subcontracted` fica dormente e significa "ainda não classificado"**, nunca erro — Postgres não
-   remove valor de enum, e 1.246 veículos + 405 motoristas estão assim. Sem mutirão de cadastro: a
-   classificação acontece pelo uso, no diálogo de atribuição. Mesma técnica do `trip_status` na 015
-   (valor fora do tipo TS, coluna fixada com `.$type<>()`).
-3. **Duplicata custa dinheiro** — a gerenciadora cobra por solicitação. Índice único **parcial**
-   (`WHERE status IN ('pendente','criada')`), e o enfileiramento só quando `encerrarOrdemDoPortal`
-   devolver `true` (ele já é idempotente: `WHERE status = 'sent'`). Parcial de propósito: se
-   cobrisse tudo, uma Pré-SM cancelada travaria a viagem para sempre.
-4. **Não há ambiente de teste.** Homologação responde `CodErro 100 — USUARIO INVALIDO` (medido
-   25/08). A feature nasce DESLIGADA por `INTEGRA_PRE_SM_ATIVO`, com teto diário começando em zero,
-   e o cancelamento (`setCancelaPreSM`) entra na MESMA fatia da criação — é a única forma de
-   desfazer.
-5. **A credencial some no próximo deploy** se for só para o `.env.local`: vai no `devops/config.env`,
-   que é a fonte do `gen-env.sh`. Ler `docs/OPERACAO.md` antes.
+1. **Não reescrever a 026.** A tabela do plano diz o que sobrevive. Refazer é retrabalho e risco.
+2. **`drizzle-kit generate` NÃO serve aqui.** O journal tem 49 entradas e 27 snapshots: ele diffa
+   contra o `0024` e **recria tabelas de produção**. Migração escrita à mão, sempre.
+3. **Reusar `tokensDaEstacao`, nunca escrever um segundo normalizador.** A função nova
+   (`ufECidadeDaEstacao`) devolve o que aquela descarta. Dois normalizadores divergem **em
+   silêncio** — a estação não casa e nenhum erro aparece.
+4. **Hora de São Paulo, nunca UTC.** A gerenciadora agenda escolta em hora local; mandar UTC desloca
+   toda coleta em três horas, **passa em teste**, e só aparece na estrada.
+5. **`subcontracted` não tem letra A/F/T.** Significa "ainda não classificado" — 1.246 veículos e
+   405 motoristas estão assim. Vira motivo de bloqueio, nunca um chute.
 
-**Vínculo A/F/T**: `owned`→F, `agregado`→A, `terceiro`→T. Pré-selecionado pelo `CNPJProprietario` que
-`getVeiculo`/`getCarreta` devolvem (CNPJ raiz `03571231` = nosso → F; valor com zeros à esquerda =
-CPF, pessoa física, nunca F). Motorista NÃO é derivável — `getMotorista` não devolve vínculo nem
-empregador, então nasce em branco.
+**A PENDÊNCIA, com dono**: não se sabe como o `setPreSM` amarra a Pré-SM à programação que a Logae já
+tem do portal — **não há campo de código de programação em nenhum método de criação**, conferido na
+referência. Pergunta em aberto com a gerenciadora. Isso **não bloqueia as etapas 1 a 4**; o formato
+do corpo fica isolado em `packages/shared/src/domain/pre-sm-corpo.ts`, e é o único lugar que muda
+quando a resposta chegar.
 
-**Rota → modelo**: tabela `pre_sm_route_models` com `confirmado_em`; a carga PROPÕE, uma pessoa
-CONFIRMA, e só linha confirmada cria Pré-SM. O casamento por nome precisa das quatro tolerâncias
-(acento, parênteses, sigla colada a número, zero à esquerda) — sem a última, 4 rotas e 233
-viagens/mês caem como "sem modelo".
+**Validar sem gastar**: não há homologação (`CodErro 100`, medido) e a gerenciadora **cobra por
+solicitação**. `getCidades`, `getRotas`, `getCliente` e `getTabela` são leitura e não custam — dá
+para carregar tudo e olhar a aba com dados reais antes de existir botão que gaste.
 
-**Fora de escopo**: efetivar (`setEfetivaPreSM`), alterar Pré-SM quando a atribuição muda (só avisa),
-cancelamento automático ao cancelar a viagem, documentos/ajudante/temperatura, `setPreSM` completo, e
-usar o `DataVencCNH` para o problema de CNH vencida (fatia própria).
+**Fora de escopo**: efetivar (`setEfetivaPreSM`) · envio em lote · alterar Pré-SM quando a atribuição
+muda (só avisa) · cancelamento automático ao cancelar a viagem · documentos, ajudante e temperatura ·
+criar programação na Logae · ligar a criação automática.
 <!-- SPECKIT END -->
