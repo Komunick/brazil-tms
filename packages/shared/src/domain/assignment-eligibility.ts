@@ -47,7 +47,19 @@ export interface EligibilityContext {
     windowStart: Date | null;
     windowEnd: Date | null;
   };
-  driver?: { id: string; status: ResourceStatus; licenseExpiry: string | null; archived?: boolean };
+  driver?: {
+    id: string;
+    status: ResourceStatus;
+    licenseExpiry: string | null;
+    archived?: boolean;
+    /**
+     * Bloqueado POR NÓS (2026-08-25, a pedido) — campo próprio, não o `status`.
+     *
+     * `status === "blocked"` significa outra coisa: o portal do CLIENTE desativou a pessoa.
+     * Separar os dois é o que permite desbloquear o nosso sem desfazer a decisão dele.
+     */
+    blocked?: boolean;
+  };
   vehicle?: {
     id: string;
     status: ResourceStatus;
@@ -81,6 +93,9 @@ export const DEFAULT_ASSIGNMENT_POLICY: AssignmentPolicy = {
   severity: {
     driver_inactive: "block",
     driver_blocked: "block",
+    // Bloqueio NOSSO. Separado de `driver_blocked` para a mensagem poder dizer coisas diferentes:
+    // um se resolve desbloqueando aqui, o outro com o cliente.
+    driver_blocked_here: "block",
     driver_unavailable: "warn",
     driver_archived: "block",
     vehicle_inactive: "block",
@@ -187,6 +202,11 @@ export function evaluateAssignmentEligibility(
   //    `status` (an archived resource can still be status `active`), so it fires independently — this
   //    keeps the server-authoritative surface in step with the UI pickers, which hide archived
   //    resources (`isNull(archived_at)`). Mirrors the carrier's archived handling below.
+  // O bloqueio nosso vem ANTES do status: quem foi bloqueado aqui precisa ver o motivo daqui,
+  // mesmo que por acaso também esteja inativo por outra razão.
+  if (ctx.driver?.blocked) {
+    push("resource_status", "driver", ctx.driver.id, "driver_blocked_here");
+  }
   if (ctx.driver && ctx.driver.status !== "active") {
     push("resource_status", "driver", ctx.driver.id, statusCode("driver", ctx.driver.status));
   }

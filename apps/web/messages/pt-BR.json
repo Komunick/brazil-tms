@@ -440,7 +440,9 @@
     "trip_portal_assign": "Atribuição enviada ao portal",
     "pre_sm_modelo_confirmar": "Correspondência de rota confirmada",
     "pre_sm_modelo_desconfirmar": "Correspondência de rota desfeita",
-    "pre_sm_cancelar": "Pré-SM cancelada"
+    "pre_sm_cancelar": "Pré-SM cancelada",
+    "driver_block": "Motorista bloqueado",
+    "driver_unblock": "Motorista desbloqueado"
   },
   "Documents": {
     "title": "Documentos",
@@ -992,7 +994,27 @@
       "employer": "Empregador",
       "created": "Motorista criado.",
       "updated": "Motorista atualizado.",
-      "archivedMsg": "Motorista arquivado."
+      "archivedMsg": "Motorista arquivado.",
+      "block": {
+        "titulo": "Bloqueio",
+        "tituloBloqueado": "Motorista bloqueado",
+        "badge": "Bloqueado",
+        "explicacao": "Bloquear tira este motorista de circulação: ele não poderá ser escalado em nenhuma viagem enquanto estiver bloqueado.",
+        "bloquear": "Bloquear motorista",
+        "desbloquear": "Desbloquear",
+        "desde": "Bloqueado em {data}",
+        "dialogoTitulo": "Bloquear este motorista?",
+        "dialogoAviso": "Enquanto bloqueado, ele não poderá ser escalado em nenhuma viagem. Escreva o motivo — é o que vai permitir desbloquear com consciência depois.",
+        "motivo": "Motivo do bloqueio",
+        "motivoPlaceholder": "Por que este motorista está sendo bloqueado?",
+        "confirmar": "Bloquear",
+        "voltar": "Voltar",
+        "bloqueado": "Motorista bloqueado.",
+        "desbloqueado": "Motorista desbloqueado.",
+        "falhou": "Não deu para salvar. Tente de novo.",
+        "abaTodos": "Todos",
+        "abaBloqueados": "Bloqueados ({n})"
+      }
     },
     "vehicles": {
       "title": "Veículos",
@@ -1476,7 +1498,8 @@
       "titleEdit": "Editar atribuição",
       "cnhVencida": "CNH VENCIDA em {data}. Confira antes de escalar.",
       "cnhVencendo": "CNH vence em {data}.",
-      "cnhSemData": "Sem data de CNH no cadastro — não dá para conferir."
+      "cnhSemData": "Sem data de CNH no cadastro — não dá para conferir.",
+      "driverBlocked": "bloqueado"
     },
     "melhoresDaRota": {
       "titulo": "Nesta rota",
@@ -1781,7 +1804,8 @@
       "carrier_contract_expired": "Contrato da transportadora expirado.",
       "carrier_doc_expired": "Documentação da transportadora vencida.",
       "carrier_doc_pending": "Documentação da transportadora pendente.",
-      "unknown": "Alerta de elegibilidade."
+      "unknown": "Alerta de elegibilidade.",
+      "driver_blocked_here": "Motorista bloqueado no cadastro. Desbloqueie em Motoristas para poder escalá-lo."
     },
     "errors": {
       "INCOMPLETE_ASSIGNMENT": "Atribuição incompleta: informe ao menos motorista e veículo (e transportadora quando subcontratado).",

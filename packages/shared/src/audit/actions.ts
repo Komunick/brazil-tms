@@ -106,6 +106,11 @@ export type AuditAction =
   | "freight_rate.replace"
   // slice 025 — driver/vehicle registry attachments ("Documentos" tab, issue #32). Append-only:
   // one audit row per upload; there is no update/delete surface to audit.
+  // Tirar um motorista de circulação (2026-08-25, a pedido). NÃO é `driver.status_change`: aquele
+  // é o status operacional, e o bloqueio tem campo próprio para não se confundir com o
+  // `status = 'blocked'` que a carga do portal escreve quando o CLIENTE desativa alguém.
+  | "driver.block"
+  | "driver.unblock"
   | "driver.document_upload"
   | "vehicle.document_upload"
   // Removal of a user who never acted (no auditable history — see `deleteUser`). The row is gone,
@@ -191,6 +196,8 @@ export const ALL_AUDIT_ACTIONS = [
   "billing_item.update",
   "billing.export",
   "freight_rate.replace",
+  "driver.block",
+  "driver.unblock",
   "driver.document_upload",
   "vehicle.document_upload",
   "trip.portal_accept",

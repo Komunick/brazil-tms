@@ -136,6 +136,18 @@ export function PortalAssignDialog({
       (motoristas.data?.items ?? []).map((m) => ({
         id: String(m.portalDriverId),
         label: m.name,
+        /**
+         * BLOQUEADO: aparece riscado e não dá para escolher (2026-08-25, a pedido).
+         *
+         * Some da lista seria pior — quem procura o nome e não o acha conclui que o cadastro se
+         * perdeu, e vai procurar o defeito errado.
+         *
+         * Isto é conveniência, não garantia. Quem estiver com esta página aberta desde antes do
+         * bloqueio ainda tem o nome selecionável; quem recusa de verdade é o servidor, dentro da
+         * transação que trava a viagem (`enfileirarOrdemDoPortal`).
+         */
+        disabled: m.bloqueio != null,
+        hint: m.bloqueio ? t("driverBlocked") : undefined,
       })),
     [motoristas.data],
   );

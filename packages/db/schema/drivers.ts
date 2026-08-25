@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import { check, date, index, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { carriers } from "./carriers";
+import { users } from "./users";
 import { ownershipType, resourceStatus } from "./enums";
 
 /**
@@ -57,6 +58,23 @@ export const drivers = pgTable(
     employer: text("employer"),
     status: resourceStatus("status").notNull().default("active"),
     notes: text("notes"),
+    /**
+     * BLOQUEADO POR NÓS — e os três campos andam juntos (2026-08-25, a pedido).
+     *
+     * NÃO confundir com `status = 'blocked'`, que significa "o portal do CLIENTE desativou ou
+     * suspendeu esta pessoa" e é escrito pela carga do cadastro (`seed/portal-fleet.ts`). São
+     * decisões de donos diferentes: desfazer a do cliente não é escolha nossa.
+     *
+     * Um campo próprio também sobrevive ao `status` mudar por outro motivo — desbloquear não
+     * precisa adivinhar qual era o estado anterior, porque nunca o tocou.
+     *
+     * O CHECK `drivers_blocked_ck` amarra os três: ou tudo preenchido, ou tudo nulo. O motivo é
+     * obrigatório porque um bloqueio mudo vira, semanas depois, um nome parado que ninguém sabe
+     * por que está parado — e aí ou alguém desbloqueia no escuro, ou ele fica parado para sempre.
+     */
+    blockedAt: timestamp("blocked_at", { withTimezone: true }),
+    blockedByUserId: uuid("blocked_by_user_id").references(() => users.id),
+    blockedReason: text("blocked_reason"),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -70,5 +88,10 @@ export const drivers = pgTable(
     ),
     index("drivers_carrier_idx").on(table.carrierId),
     index("drivers_status_idx").on(table.status),
+    // Os três campos do bloqueio são um conjunto — ver o comentário deles acima.
+    check(
+      "drivers_blocked_ck",
+      sql`(${table.blockedAt} IS NULL AND ${table.blockedByUserId} IS NULL AND ${table.blockedReason} IS NULL) OR (${table.blockedAt} IS NOT NULL AND ${table.blockedByUserId} IS NOT NULL AND btrim(coalesce(${table.blockedReason}, '')) <> '')`,
+    ),
   ],
 );

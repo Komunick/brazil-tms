@@ -102,6 +102,13 @@ function traduzir(error: unknown): unknown {
   switch (error.motivo) {
     case "viagem_inexistente":
       return new NotFound("NOT_FOUND", "Viagem não encontrada.");
+    case "motorista_bloqueado":
+      // O nome e o motivo vêm no `detalhe`: numa atribuição com dois motoristas, "um deles está
+      // bloqueado" faria a pessoa adivinhar qual — e a adivinhação erra metade das vezes.
+      return new Conflict(
+        "DRIVER_BLOCKED",
+        `Motorista bloqueado: ${error.detalhe ?? ""}. Desbloqueie no cadastro para poder escalá-lo.`,
+      );
     case "nao_esta_pendente":
       return new Conflict(
         "NOT_PENDING",

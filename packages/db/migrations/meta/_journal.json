@@ -337,6 +337,13 @@
       "when": 1787666400001,
       "tag": "0047_pre_sm_nao_tentada",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1787666400002,
+      "tag": "0048_bloquear_motorista",
+      "breakpoints": true
     }
   ]
 }
