@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DriverForm } from "@/components/master-data/driver-form";
 import { ResourceDocumentsTab } from "@/components/master-data/resource-documents-tab";
+import { DriverBlockCard } from "@/components/master-data/driver-block-card";
 import {
   archiveEntity,
   createEntity,
@@ -161,7 +162,19 @@ export function DriverDetailClient({ driverId, canArchive }: Props) {
             <TabsTrigger value="data">{tDocs("dataTab")}</TabsTrigger>
             <TabsTrigger value="documents">{tDocs("tabTitle")}</TabsTrigger>
           </TabsList>
-          <TabsContent value="data">{formCard}</TabsContent>
+          <TabsContent value="data" className="space-y-4">
+            {formCard}
+            {/* O bloqueio fica FORA do formulário de propósito: ele não é um campo do cadastro
+                que se salva junto com o resto, é uma decisão com efeito imediato na escala. Dentro
+                do formulário, bloquear alguém dependeria de a pessoa lembrar de apertar Salvar. */}
+            {current ? (
+              <DriverBlockCard
+                driverId={current.id}
+                blockedAt={current.blockedAt}
+                blockedReason={current.blockedReason}
+              />
+            ) : null}
+          </TabsContent>
           <TabsContent value="documents">
             <Card>
               <CardContent className="pt-6">

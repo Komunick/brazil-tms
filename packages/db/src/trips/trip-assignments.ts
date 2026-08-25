@@ -176,6 +176,7 @@ export async function gatherEligibilityContext(
         licenseExpiry: drivers.licenseExpiry,
         ownershipType: drivers.ownershipType,
         archivedAt: drivers.archivedAt,
+        blockedAt: drivers.blockedAt,
       })
       .from(drivers)
       .where(eq(drivers.id, candidate.driverId))
@@ -187,6 +188,8 @@ export async function gatherEligibilityContext(
         status: d.status as ResourceStatus,
         licenseExpiry: d.licenseExpiry,
         archived: d.archivedAt != null,
+        // Bloqueio NOSSO — campo próprio, não o `status`. Ver `fleet/driver-block.ts`.
+        blocked: d.blockedAt != null,
       };
       ownership.driver = d.ownershipType as OwnershipType;
     }

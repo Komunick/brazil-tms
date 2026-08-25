@@ -35,6 +35,14 @@ export interface DriverDto {
   employer: string | null;
   status: ResourceStatus;
   notes: string | null;
+  /**
+   * BLOQUEADO POR NÓS — `null` quando não está (2026-08-25, a pedido).
+   *
+   * Diferente de `status === "blocked"`, que significa "o portal do CLIENTE desativou esta
+   * pessoa". Só este aqui tem botão de desfazer. Ver `schema/drivers.ts`.
+   */
+  blockedAt: string | null;
+  blockedReason: string | null;
   /** Derived (R9), never stored — recomputed on read so it can never drift. */
   documentExpiryState: DocumentExpiryState;
   archived: boolean;
@@ -56,6 +64,8 @@ interface DriverRow {
   employer: string | null;
   status: ResourceStatus;
   notes: string | null;
+  blockedAt: Date | null;
+  blockedReason: string | null;
   archivedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -75,6 +85,8 @@ function toDto(row: DriverRow): DriverDto {
     employer: row.employer,
     status: row.status,
     notes: row.notes,
+    blockedAt: row.blockedAt ? row.blockedAt.toISOString() : null,
+    blockedReason: row.blockedReason,
     documentExpiryState: documentExpiryState(row.licenseExpiry, new Date()),
     archived: row.archivedAt !== null,
     archivedAt: row.archivedAt ? row.archivedAt.toISOString() : null,

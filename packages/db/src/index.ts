@@ -271,3 +271,13 @@ export { ordemDeAtribuicaoConcluida } from "./trips/pre-sm-dados";
 export { preSmPorId } from "./trips/pre-sm";
 export { registrarPedidoDeCancelamento } from "./trips/pre-sm";
 export { preSmComAtribuicaoAtual } from "./trips/pre-sm";
+// Bloquear um motorista — tirar alguém de circulação (2026-08-25, a pedido). NÃO é o
+// `status = 'blocked'`, que é o portal do CLIENTE tendo desativado a pessoa.
+export {
+  bloquearMotorista,
+  desbloquearMotorista,
+  listarMotoristasBloqueados,
+  bloqueiosPorIdDoPortal,
+  motoristasBloqueadosEntre,
+  type MotoristaBloqueado,
+} from "./fleet/driver-block";
