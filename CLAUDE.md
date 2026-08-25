@@ -73,53 +73,46 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/025-resource-documents/plan.md` (Documents Tab for Drivers and Vehicles — issue #32 [0009]).
-**Slice novo domínio enxuto**: aba "Documentos" nas páginas de EDIÇÃO de motorista/veículo — histórico append-only de
-anexos (CNH digital, photocheck, CRLV…) sobre a tubulação de storage da 008. Tabela nova `resource_documents`
-(metadata; entity_type CHECK driver|vehicle extensível; binário SÓ no bucket privado `documents`, prefixo
-`resources/<tipo>/<id>/<docId>.<ext>` via `resourceDocumentStorageKey`). TRAPS: (1) NÃO tocar a tabela/rotas 008
-(`documents` é trip-scoped com verificação/billing — domínio shipped); (2) validar tipo (PDF/JPG/PNG) + tamanho
-(`DOCUMENT_MAX_BYTES`) e preflight do pai (existe + não arquivado → senão 404/409) ANTES do `putDocument`; rollback do
-binário se o insert falhar; (3) TERCEIRA migração `0009` em voo (PRs #39/#40 têm as suas) — renumerar no merge, nunca
-antes; (4) `driver-detail-client.tsx` também é editado pelo PR #39 — manter a edição das tabs cirúrgica. Permissão:
-`manage_fleet_data` em tudo (upload/list/download; sem chave nova). Tipos de documento = TEXTO LIVRE ≤60 com sugestões
-por entidade na UI (sem config nova — KISS; promover a master se o negócio pedir). Sem delete/replace: histórico é o
-pedido. Dep nova justificada: `@radix-ui/react-tabs` (shadcn tabs — a issue pede "aba"; mesma família Radix). Download
-= rota **302-redirect** para signed URL 60s + `<a target="_blank">` simples (padrão do error-report da 004; NUNCA
-`{url}`+`window.open` pós-await — popup block silencioso). Insert re-checa o pai com `FOR UPDATE` na mesma tx (guarda
-contra corrida com arquivamento; preflight da rota roda antes do upload do binário). Harness local sem Docker:
-mock-gotrue.mjs (fora do repo, .local) ganha endpoints mínimos de Storage p/ e2e completo. Fora de escopo: reboques, verificação, master de tipos, vínculo com
-validade (leitor 021).
+Active feature plan: `specs/026-pre-sm-logae/plan.md` (Pré-SM criada sozinha ao atribuir — a
+integração com a gerenciadora Logae). Levantamento medido e decisões de negócio em
+`docs/PROPOSTA-PRE-SM.md`; as três decisões difíceis em `specs/026-pre-sm-logae/research.md`.
 
-Previous slice (015) context:
-Collapse Validation Statuses into "Recebida".
-For technologies, project structure, BFF/auth patterns, data model, contracts, and setup/test commands,
-read that plan and its `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`.
-This is a **corrective, cross-cutting** change to the trip status machine that **references** shipped slices 003 (status
-machine), 004 (import+validation), 006 (dispatch/assignment), 013 (predefined import template), 014 (auto-validate) — it
-**supersedes 014's born-`validated`** decision and does **not** edit shipped specs; it **amends** `docs/PRD.md`
-(§7, §9.1, §11.2/11.3/11.4, §12, §12.1, §19.1, §30). Constitution is **not** amended. **Scope (narrowed with the user
-2026-06-07)**: collapse ONLY the three validation states — `received` ("Recebida"), `validation_error` ("Erro de
-validação"), `validated` ("Validada") — into a single `received`. Remove `validation_error` + `validated` from the
-**active** machine (18 → **16** values); `received` becomes the first dispatchable status. The `confirmed` step and
-EVERYTHING `assigned`/`confirmed`-onward are **OUT OF SCOPE and UNCHANGED**. **Transitions**: `received → [assigned,
-cancelled]`; `assigned → [confirmed, received, cancelled]` (`received` = unassign, was `validated`); delete the
-`validation_error`/`validated` rows; `confirmed`-onward unchanged. `ACTIVE_TRIP_STATUSES` 12 → 10; `NON_EDITABLE` stays 6
-(partition 10+6=16). **DB enum stays at 18 (2 dormant)** — Postgres has no `DROP VALUE`; keep `validation_error`/`validated`
-in the `trip_status` pgEnum (frozen by 0002 + immutable `trip_events` history), mark them dormant, and **pin the Drizzle
-columns** `trips.current_status` + `trips.disputed_from_status` to the 16-value `TripStatus` via `.$type<TripStatus>()`
-(type-only, no SQL diff). **One durable add**: data-only migration **0008** (`--custom`) backfilling
-`current_status`/`disputed_from_status` ∈ {validated, validation_error} → `received` (FR-006); `trip_events` left intact.
-**Born-received**: REVERT 014 — drop `createTrip`'s `initialStatus` param; the two `confirm-import` create sites born
-`received`; manual-create already `received`. **Dispatch/assign**: `DISPATCH_QUERY` `status=validated` → `status=received`;
-`assignTrip` source guard + event/audit `validated` → `received`; `unassignTrip` target `assigned → received`; BFF assign
-branch key `validated` → `received`; `ASSIGNABLE_STATUSES`/quick-assign gate `received`; `trip-status-badge` + pt-BR drop
-the 2 keys; unassign dialog copy → "Recebida". **CRITICAL TRAPS**: (1) `import_batch_status` is a SEPARATE enum that ALSO
-has `validated`/`confirming` — NEVER blind find-replace `'validated'`; batch `setBatchStatus("validated")` and all
-`importBatches.status` refs STAY. (2) Several tests/e2e assert the OLD design and must **INVERT**, not just re-seed
-(dispatch-board "received excluded" → included; trip-import "Validada" → "Recebida"; delete the born-validated unit test).
-(3) `trip-plan.ts indexOf("confirmed")` stays valid (`confirmed` retained) — the full-collapse landmine does NOT arise here.
-**Restart the pg-boss worker** after editing `confirm-import` (stale worker masks the fix; the `trip.create` audit born
-status is the tell). Out of scope (Future): removing `confirmed`/the confirm step; any new status; SLA redesign; touching
-`import_batch_status`; a manual "Validar" UI.
+**O que a fatia faz**: quando a ordem de atribuição volta confirmada do portal, o worker cria a
+pré-solicitação de monitoramento na Logae via `setPreSMdeModelo` (NÃO o `setPreSM` completo, que
+exigiria espelhar cidades com IBGE, cliente e filial). Fica em Pré-SM, sem efetivar.
+
+**ARMADILHAS desta fatia** — as cinco que quebram de verdade:
+
+1. **O CHECK recusa.** `ownership_type` ganha `agregado` e `terceiro`, mas `vehicles`, `trailers` e
+   `drivers` têm cada um um CHECK que amarra `subcontracted` a ter `carrier_id` e `owned` a não ter.
+   Sem reescrever os três na MESMA migração, a migração passa e o primeiro `update` é recusado. A
+   forma nova não enumera valores: `owned` sem transportadora, todo o resto com.
+2. **`subcontracted` fica dormente e significa "ainda não classificado"**, nunca erro — Postgres não
+   remove valor de enum, e 1.246 veículos + 405 motoristas estão assim. Sem mutirão de cadastro: a
+   classificação acontece pelo uso, no diálogo de atribuição. Mesma técnica do `trip_status` na 015
+   (valor fora do tipo TS, coluna fixada com `.$type<>()`).
+3. **Duplicata custa dinheiro** — a gerenciadora cobra por solicitação. Índice único **parcial**
+   (`WHERE status IN ('pendente','criada')`), e o enfileiramento só quando `encerrarOrdemDoPortal`
+   devolver `true` (ele já é idempotente: `WHERE status = 'sent'`). Parcial de propósito: se
+   cobrisse tudo, uma Pré-SM cancelada travaria a viagem para sempre.
+4. **Não há ambiente de teste.** Homologação responde `CodErro 100 — USUARIO INVALIDO` (medido
+   25/08). A feature nasce DESLIGADA por `INTEGRA_PRE_SM_ATIVO`, com teto diário começando em zero,
+   e o cancelamento (`setCancelaPreSM`) entra na MESMA fatia da criação — é a única forma de
+   desfazer.
+5. **A credencial some no próximo deploy** se for só para o `.env.local`: vai no `devops/config.env`,
+   que é a fonte do `gen-env.sh`. Ler `docs/OPERACAO.md` antes.
+
+**Vínculo A/F/T**: `owned`→F, `agregado`→A, `terceiro`→T. Pré-selecionado pelo `CNPJProprietario` que
+`getVeiculo`/`getCarreta` devolvem (CNPJ raiz `03571231` = nosso → F; valor com zeros à esquerda =
+CPF, pessoa física, nunca F). Motorista NÃO é derivável — `getMotorista` não devolve vínculo nem
+empregador, então nasce em branco.
+
+**Rota → modelo**: tabela `pre_sm_route_models` com `confirmado_em`; a carga PROPÕE, uma pessoa
+CONFIRMA, e só linha confirmada cria Pré-SM. O casamento por nome precisa das quatro tolerâncias
+(acento, parênteses, sigla colada a número, zero à esquerda) — sem a última, 4 rotas e 233
+viagens/mês caem como "sem modelo".
+
+**Fora de escopo**: efetivar (`setEfetivaPreSM`), alterar Pré-SM quando a atribuição muda (só avisa),
+cancelamento automático ao cancelar a viagem, documentos/ajudante/temperatura, `setPreSM` completo, e
+usar o `DataVencCNH` para o problema de CNH vencida (fatia própria).
 <!-- SPECKIT END -->

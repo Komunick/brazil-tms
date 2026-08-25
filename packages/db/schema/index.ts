@@ -48,3 +48,6 @@ export * from "./user-dashboard-prefs";
 // A lista pessoal de viagens acompanhadas — "Minha Programação".
 export * from "./user-watched-trips";
 export * from "./driver-records";
+// A Pré-SM na gerenciadora Logae, e a ponte rota → modelo dela (026).
+export * from "./trip-pre-sm";
+export * from "./pre-sm-route-models";

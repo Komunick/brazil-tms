@@ -98,6 +98,28 @@ Variáveis que os robôs exigem:
 O e-mail precisa **existir como usuário no banco daquele ambiente**. Ele não faz login e não recebe
 e-mail: existe para assinar eventos e auditoria do que os robôs fazem.
 
+### A Integra, da gerenciadora Logae (2026-08-25, fatia 026)
+
+Quatro variáveis, lidas **só no worker**:
+
+| variável | some se faltar | nota |
+|---|---|---|
+| `INTEGRA_LOGIN` / `INTEGRA_SENHA` | a Pré-SM não é criada, e o job registra por quê | login de PRODUÇÃO, com escrita no sistema de um fornecedor |
+| `INTEGRA_PRE_SM_ATIVO` | ausente = **desligado**, que é o padrão querido | ver abaixo |
+| `INTEGRA_PRE_SM_TETO_DIARIO` | ausente = `0` = nenhuma criação automática | ver abaixo |
+
+**Não existe ambiente de homologação para nós.** Medido em 2026-08-25: `Ambiente: "Homologacao"`
+responde `CodErro 100 — USUARIO INVALIDO`. Toda escrita acontece contra o sistema real, **e a
+gerenciadora cobra por solicitação**.
+
+Daí as duas variáveis de contenção. Com `INTEGRA_PRE_SM_ATIVO` diferente de `true`, o job roda
+inteiro, grava em `trip_pre_sm.payload_enviado` o corpo que **teria** mandado, e não chama ninguém —
+é assim que se confere o comportamento sem criar nada. O teto diário limita quantas podem nascer
+sozinhas; começa em zero, e sobe conforme a confiança.
+
+**Desligar a integração NÃO é apagar a credencial**: é pôr `INTEGRA_PRE_SM_ATIVO=false`. Apagar a
+senha faria religar virar uma operação de risco.
+
 ---
 
 ## 4. Deploy

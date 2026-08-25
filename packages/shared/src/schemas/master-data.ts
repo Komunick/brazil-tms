@@ -240,11 +240,45 @@ export const resourceStatusSchema = z.enum(
 export const RESOURCE_STATUS_VALUES = resourceStatusSchema.options;
 export type ResourceStatus = z.infer<typeof resourceStatusSchema>;
 
-export const ownershipTypeSchema = z.enum(["owned", "subcontracted"], {
+/**
+ * O VÍNCULO DO RECURSO — e por que são DOIS tipos, não um (2026-08-25, fatia 026).
+ *
+ * A gerenciadora Logae exige `F` (frota própria), `A` (agregado) ou `T` (terceiro). O TMS
+ * distinguia só `owned` de `subcontracted`, o que dava o `F` e deixava os outros dois juntos.
+ *
+ * ── POR QUE `subcontracted` CONTINUA NO TIPO ──────────────────────────────────────────────────
+ *
+ * O plano desta fatia dizia para deixá-lo FORA, copiando o que a 015 fez com o `trip_status`. Ao
+ * escrever o código ficou claro que não dá: na 015 uma migração de dados esvaziou os valores
+ * dormentes, e aqui **1.246 veículos e 405 motoristas continuam com `subcontracted`** — porque foi
+ * decidido não fazer mutirão de cadastro. Um tipo que não o inclui seria falso: ler um veículo
+ * devolveria um valor que o tipo jura não existir, e o primeiro `switch` exaustivo passaria batido
+ * por ele.
+ *
+ * Então a separação é outra: **o que uma linha PODE SER** ≠ **o que a tela PODE ESCOLHER**.
+ */
+export const ownershipTypeSchema = z.enum(["owned", "subcontracted", "agregado", "terceiro"], {
   errorMap: () => ({ message: "Tipo de propriedade inválido." }),
 });
 export const OWNERSHIP_TYPE_VALUES = ownershipTypeSchema.options;
 export type OwnershipType = z.infer<typeof ownershipTypeSchema>;
+
+/**
+ * O que a tela pode ESCOLHER — sem `subcontracted`.
+ *
+ * Ele é legado: significa "ainda não classificado", e é o estado de quem nunca passou por uma
+ * atribuição depois desta fatia. Uma linha pode estar assim; ninguém pode escolher ficar assim.
+ */
+export const vinculoEscolhivelSchema = z.enum(["owned", "agregado", "terceiro"], {
+  errorMap: () => ({ message: "Vínculo inválido." }),
+});
+export const VINCULO_ESCOLHIVEL_VALUES = vinculoEscolhivelSchema.options;
+export type VinculoEscolhivel = z.infer<typeof vinculoEscolhivelSchema>;
+
+/** `subcontracted` não é erro: é ausência de classificação, e a tela precisa dizer isso. */
+export function precisaClassificarVinculo(v: OwnershipType | null | undefined): boolean {
+  return v == null || v === "subcontracted";
+}
 
 export const vehicleTypeSchema = z.enum(
   [
@@ -288,14 +322,24 @@ export const CARRIER_DOCUMENTATION_STATUS_VALUES = carrierDocumentationStatusSch
 // Ownership/carrier invariant (mirror of the DB CHECK — FR-022/FR-023)
 // ---------------------------------------------------------------------------
 
-/** subcontracted ⇒ carrierId set; owned ⇒ carrierId absent. `undefined` ownership (partial update) passes. */
+/**
+ * Espelha o CHECK do banco: **frota própria não tem transportadora; todo o resto tem.**
+ *
+ * Escrito assim — `owned` de um lado, "o resto" do outro — e não enumerando os valores, que era a
+ * forma antiga (`subcontracted ⇒ tem`). A diferença importa: com a lista explícita, `agregado` e
+ * `terceiro` não satisfaziam nenhum braço e toda gravação era recusada. É o mesmo motivo pelo qual
+ * o CHECK do banco foi reescrito na mesma migração — se um dos dois enumerar e o outro não, a tela
+ * aceita o que o banco recusa.
+ *
+ * `undefined` passa: é atualização parcial, que não está mexendo no vínculo.
+ */
 export function isOwnershipCarrierValid(data: {
   ownershipType?: OwnershipType;
   carrierId?: string | null;
 }): boolean {
   if (data.ownershipType === undefined) return true;
-  if (data.ownershipType === "subcontracted") return Boolean(data.carrierId);
-  return !data.carrierId; // owned ⇒ no carrier
+  if (data.ownershipType === "owned") return !data.carrierId;
+  return Boolean(data.carrierId);
 }
 
 const OWNERSHIP_CARRIER_REFINE = {
