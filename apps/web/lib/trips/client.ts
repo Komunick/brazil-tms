@@ -1485,3 +1485,29 @@ export function useRegistrarNoMotorista(driverId: string) {
       queryClient.invalidateQueries({ queryKey: ["driver-historico", driverId] }),
   });
 }
+
+/**
+ * O VÍNCULO QUE CADA PLACA JÁ TEM no nosso cadastro (2026-08-25, fatia 026).
+ *
+ * Serve para o diálogo de atribuição não perguntar de novo o que alguém já classificou (FR-010).
+ *
+ * `ativo` desliga a busca com o diálogo fechado: ele é montado por viagem e ficaria consultando
+ * placas de uma tela que ninguém está vendo. E a chave carrega as placas, então corrigir uma
+ * digitação busca de novo — que é o certo, porque a placa mudou.
+ *
+ * NÃO chama a gerenciadora. A sugestão pelo dono do veículo, que exige a Integra, fica na fatia
+ * seguinte — aqui só se lê o que o TMS já sabe.
+ */
+export function useVinculosDasPlacas(placas: string[], ativo: boolean) {
+  const chave = placas.filter(Boolean).sort().join(",");
+  const consulta = useQuery({
+    queryKey: ["vinculos-por-placa", chave],
+    enabled: ativo && chave.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const res = await fetch(`/api/fleet/vinculos?placas=${encodeURIComponent(chave)}`);
+      return asJson<{ vinculos: Record<string, "owned" | "agregado" | "terceiro" | null> }>(res);
+    },
+  });
+  return consulta.data?.vinculos ?? {};
+}

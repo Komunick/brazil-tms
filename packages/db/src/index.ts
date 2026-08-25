@@ -239,3 +239,10 @@ export {
   registrarNoMotorista,
 } from "./fleet/driver-records";
 export type { RotaDoMotorista, RegistroDoMotorista } from "./fleet/driver-records";
+// O vínculo do recurso, gravado pelo diálogo de atribuição (026).
+export {
+  gravarVinculosDaAtribuicao,
+  vinculosPorPlaca,
+  type VinculoEscolhido,
+  type VinculosDaAtribuicao,
+} from "./trips/pre-sm-vinculos";
