@@ -34,7 +34,10 @@ import { cn } from "@/lib/utils";
  *
  *   `sem_dados`  problema NOSSO — falta CPF, modelo ou vínculo. O motivo diz onde resolver.
  *   `recusada`   resposta DELA — a mensagem vai inteira, sem tradução nossa (FR-014).
- *   `pendente`   ou está esperando a vez, ou a integração está desligada. Nada a fazer.
+ *   `pendente`   está na fila, esperando a vez. Passageiro: vira outro estado em segundos.
+ *   `nao_tentada` estava tudo PRONTO e a integração não estava ligada (ou o teto do dia acabou).
+ *                A viagem pode tentar de novo — este estado não conta como linha viva, e é por
+ *                isso que ele existe: como `pendente`, ele travaria a viagem para sempre.
  *   `criada`     existe lá, com número. Cancelável.
  *   `cancelada`  desfeita. A viagem pode gerar outra.
  *
@@ -123,7 +126,9 @@ export function PreSmStatus({ tripId }: { tripId: string }) {
           identificar o problema. */}
       {preSm.motivo ? (
         <p className="text-xs text-muted-foreground">
-          {preSm.status === "sem_dados" ? t(`motivo.${preSm.motivo}`) : preSm.motivo}
+          {/* `recusada` guarda a mensagem DELA e vai inteira, sem tradução (FR-014). Os outros dois
+              guardam uma chave nossa — `sem_dados` o que falta, `nao_tentada` qual trava segurou. */}
+          {preSm.status === "recusada" ? preSm.motivo : t(`motivo.${preSm.motivo}`)}
         </p>
       ) : null}
 

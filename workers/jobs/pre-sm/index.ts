@@ -113,12 +113,30 @@ export async function runPreSmCriar(payload: PreSmCriarPayload): Promise<void> {
 
   if (desfecho.tipo === "desligado" || desfecho.tipo === "teto_atingido") {
     /**
-     * Fica `pendente`, e não `sem_dados`.
+     * ENCERRA como `nao_tentada` — e o encerramento é o conserto, não um detalhe.
      *
-     * A diferença importa: `sem_dados` é "falta coisa nossa, alguém precisa agir"; `pendente` é
-     * "está tudo pronto, esperando autorização". A tela conta os dois separado, e é o segundo
-     * número que responde "quantas nasceriam se eu ligasse".
+     * Antes esta linha ficava `pendente`, e `pendente` conta como VIVA no índice único parcial.
+     * Duas coisas quebravam por causa disso:
+     *
+     *   Nada volta para buscar linha `pendente`. Ligar o interruptor não as converte — não existe
+     *   quem as drene —, então "esperando autorização" era uma promessa que ninguém ia cumprir.
+     *
+     *   E elas BLOQUEAVAM a viagem: a atribuição seguinte colidia no índice e o trabalho registrava
+     *   "já existia", sem criar nada. O efeito apareceria no primeiro teste real — escolher uma
+     *   viagem já atribuída durante o dia de observação faria o sistema não fazer NADA, e pareceria
+     *   integração quebrada.
+     *
+     * Drenar as pendentes ao ligar seria pior: dispararia de uma vez tudo o que se acumulou no
+     * período desligado, cobrado, sem ninguém olhando.
+     *
+     * O que se preserva: `payload_enviado` continua guardando o que TERIA sido mandado — é o valor
+     * inteiro do dia de observação, e é o que responde "quantas nasceriam se eu ligasse".
      */
+    await encerrarTentativaDePreSm({
+      id: tentativa.id,
+      status: "nao_tentada",
+      motivo: desfecho.tipo,
+    });
     console.log(
       JSON.stringify({
         job: JOB.preSmCriar,

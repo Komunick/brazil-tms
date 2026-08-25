@@ -330,6 +330,13 @@
       "when": 1787666400000,
       "tag": "0046_pre_sm_na_logae",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1787666400001,
+      "tag": "0047_pre_sm_nao_tentada",
+      "breakpoints": true
     }
   ]
 }
