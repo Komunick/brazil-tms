@@ -130,7 +130,7 @@ com motorista, placas e horário certos — e que o TMS mostra o número.
 - [X] T041 [US1] Guardar código, momento e origem em `trip_pre_sm`, via `packages/db/src/trips/pre-sm.ts` (FR-003)
 - [X] T042 [US1] Repetir em falha de comunicação, distinguindo "ainda tentando" de "desistiu" (FR-015), em `workers/jobs/pre-sm/index.ts`
 - [X] T043 [P] [US1] Teste do job em `workers/jobs/pre-sm/pre-sm.test.ts`, com o cliente dublado
-- [ ] T044 [US1] Registrar criação e recusa no histórico da viagem (FR-019), em `workers/jobs/pre-sm/index.ts`
+- [X] T044 [US1] Registrar criação e recusa no histórico da viagem (FR-019), em `workers/jobs/pre-sm/index.ts`
 
 **Checkpoint**: com o interruptor desligado, atribuir uma viagem grava o corpo que seria mandado —
 dá para conferir tudo sem tocar no sistema deles.
@@ -146,14 +146,14 @@ uma criação errada — por isso entra na mesma fatia da criação, não numa s
 
 **Independent Test**: criar uma Pré-SM, ver o estado na viagem, cancelar, e conferir que o estado muda.
 
-- [ ] T045 [US4] Acrescentar `getStatusPreSM` e `setCancelaPreSM` ao cliente em `workers/lib/integra/cliente.ts` — e **NÃO** acrescentar `setEfetivaPreSM` (FR-004): o que não existe no cliente não pode ser chamado por engano
-- [ ] T046 [P] [US4] Teste em `workers/lib/integra/cliente.test.ts` que falha se `setEfetivaPreSM` (ou qualquer chamada a esse método) aparecer no cliente — FR-004 é requisito **negativo**, e requisito negativo sem guarda é só intenção: daqui a três meses ninguém lembra por que a efetivação ficou de fora, e ela entra "para completar a integração"
-- [ ] T047 [US4] Criar a rota `apps/web/app/api/trips/[id]/pre-sm/route.ts` para ler o estado e pedir o cancelamento, com a mesma permissão de atribuir
-- [ ] T048 [US4] Mostrar número, estado e momento da criação em `apps/web/components/trips/pre-sm-status.tsx` (FR-016)
-- [ ] T049 [US4] Botão de cancelar para Pré-SM ainda não efetivada (FR-017), com confirmação, em `apps/web/components/trips/pre-sm-status.tsx`
+- [X] T045 [US4] Acrescentar `getStatusPreSM` e `setCancelaPreSM` ao cliente em `workers/lib/integra/cliente.ts` — e **NÃO** acrescentar `setEfetivaPreSM` (FR-004): o que não existe no cliente não pode ser chamado por engano
+- [X] T046 [P] [US4] Teste em `workers/lib/integra/cliente.test.ts` que falha se `setEfetivaPreSM` (ou qualquer chamada a esse método) aparecer no cliente — FR-004 é requisito **negativo**, e requisito negativo sem guarda é só intenção: daqui a três meses ninguém lembra por que a efetivação ficou de fora, e ela entra "para completar a integração"
+- [X] T047 [US4] Criar a rota `apps/web/app/api/trips/[id]/pre-sm/route.ts` para ler o estado e pedir o cancelamento, com a mesma permissão de atribuir
+- [X] T048 [US4] Mostrar número, estado e momento da criação em `apps/web/components/trips/pre-sm-status.tsx` (FR-016)
+- [X] T049 [US4] Botão de cancelar para Pré-SM ainda não efetivada (FR-017), com confirmação, em `apps/web/components/trips/pre-sm-status.tsx`
 - [ ] T050 [US4] Avisar em `apps/web/components/trips/pre-sm-status.tsx` quando a atribuição mudar depois da Pré-SM criada (FR-018) — nesta fatia só avisa, alterar fica para depois
-- [ ] T051 [US4] Registrar o cancelamento no histórico da viagem, com o ator (FR-019), em `apps/web/app/api/trips/[id]/pre-sm/route.ts`
-- [ ] T052 [P] [US4] Textos em `apps/web/messages/pt-BR.json`
+- [X] T051 [US4] Registrar o cancelamento no histórico da viagem, com o ator (FR-019), em `apps/web/app/api/trips/[id]/pre-sm/route.ts`
+- [X] T052 [P] [US4] Textos em `apps/web/messages/pt-BR.json`
 
 **Checkpoint**: dá para desfazer. Só agora a virada é segura.
 

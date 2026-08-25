@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TripDetailHeader } from "@/components/trips/trip-detail/header";
 import { PortalDecisionPanel } from "@/components/trips/trip-detail/portal-decision";
+import { PreSmStatus } from "@/components/trips/pre-sm-status";
 import { CustomerPlanSection } from "@/components/trips/trip-detail/customer-plan";
 import { TimelineSection } from "@/components/trips/trip-detail/timeline";
 import { NotesSection } from "@/components/trips/trip-detail/notes";
@@ -79,6 +80,9 @@ export function TripDetailClient({
       <CustomerPlanSection trip={trip} />
       <PlanEditForm trip={trip} />
       <AssignmentPanel trip={trip} resourceOptions={resourceOptions} />
+      {/* Logo abaixo da atribuição, porque é dela que a Pré-SM nasce — e quando ela NÃO
+          nasce, o motivo costuma ser algo da própria atribuição (vínculo, placa, motorista). */}
+      <PreSmStatus tripId={trip.id} />
       <SlaIndicator trip={trip} />
       <TimelineSection trip={trip} />
       <ExceptionPanel trip={trip} />

@@ -45,6 +45,8 @@ export type AuditAction =
   // solicitação, e uma rota confirmada passa a gerar Pré-SM sozinha. Quem confirmou fica registrado.
   | "pre_sm.modelo.confirmar"
   | "pre_sm.modelo.desconfirmar"
+  // O cancelamento de uma Pré-SM já criada — e já cobrada pela gerenciadora.
+  | "pre_sm.cancelar"
   | "trip.create" // newValue = original_plan summary + initial status
   | "trip.plan_update" // accepted customer update to live planned_* fields (per-field prev/new)
   | "trip.fields_update" // the operation's own annotations (solicitação, checklist, SM Raster, CT-e, doca)
@@ -196,6 +198,7 @@ export const ALL_AUDIT_ACTIONS = [
   "trip.portal_assign",
   "pre_sm.modelo.confirmar",
   "pre_sm.modelo.desconfirmar",
+  "pre_sm.cancelar",
 ] as const satisfies readonly AuditAction[];
 
 /**

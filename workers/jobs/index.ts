@@ -9,6 +9,7 @@ import { registerDocumentChecks } from "./document-checks";
 import { registerBillingExport } from "./billing-export";
 import { registerPortalWithdrawn } from "./portal-withdrawn";
 import { registerPreSmCriar } from "./pre-sm";
+import { registerPreSmCancelar } from "./pre-sm/cancelar";
 
 /**
  * Registry of import job handlers (feature 004, research R3). The bootstrap (`workers/index.ts`)
@@ -49,4 +50,11 @@ export async function registerJobHandlers(boss: PgBoss): Promise<void> {
    * solicitação e não tem homologação para nós. Ver `pre-sm/index.ts`.
    */
   await registerPreSmCriar(boss);
+  /**
+   * O cancelamento é job pelo mesmo motivo da criação: a credencial da gerenciadora vive só aqui.
+   *
+   * E ele entra na MESMA fatia da criação, não numa seguinte — sem ambiente de homologação, é a
+   * única forma de desfazer uma Pré-SM criada por engano, e ela já foi cobrada.
+   */
+  await registerPreSmCancelar(boss);
 }

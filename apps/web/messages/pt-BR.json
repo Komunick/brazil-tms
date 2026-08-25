@@ -439,7 +439,8 @@
     "trip_portal_reject": "Recusa enviada ao portal",
     "trip_portal_assign": "Atribuição enviada ao portal",
     "pre_sm_modelo_confirmar": "Correspondência de rota confirmada",
-    "pre_sm_modelo_desconfirmar": "Correspondência de rota desfeita"
+    "pre_sm_modelo_desconfirmar": "Correspondência de rota desfeita",
+    "pre_sm_cancelar": "Pré-SM cancelada"
   },
   "Documents": {
     "title": "Documentos",
@@ -2062,5 +2063,32 @@
     "confirmada": "Correspondência confirmada.",
     "desfeita": "Confirmação desfeita.",
     "falhou": "Não deu para salvar. Tente de novo."
+  },
+  "PreSm": {
+    "titulo": "Pré-SM",
+    "status": {
+      "pendente": "Aguardando",
+      "criada": "Criada na gerenciadora",
+      "recusada": "Recusada pela gerenciadora",
+      "sem_dados": "Não criada — falta dado",
+      "cancelada": "Cancelada"
+    },
+    "motivo": {
+      "sem_modelo": "A rota desta viagem ainda não tem modelo confirmado na gerenciadora.",
+      "sem_cpf": "O motorista está sem CPF no cadastro.",
+      "sem_placa": "A atribuição não tem placa.",
+      "sem_vinculo_veiculo": "Falta classificar o veículo como frota, agregado ou terceiro.",
+      "sem_vinculo_motorista": "Falta classificar o motorista como frota, agregado ou terceiro.",
+      "sem_janela_coleta": "A viagem está sem a janela de coleta."
+    },
+    "em": "Em {data}",
+    "pedidaEm": "Pedida em {data}",
+    "cancelar": "Cancelar",
+    "cancelarTitulo": "Cancelar a Pré-SM?",
+    "cancelarAviso": "Ela já foi criada na gerenciadora e já foi cobrada — cancelar não devolve isso. A viagem poderá gerar outra depois.",
+    "cancelarConfirmar": "Cancelar a Pré-SM",
+    "voltar": "Voltar",
+    "cancelamentoPedido": "Cancelamento pedido. O estado muda quando a gerenciadora confirmar.",
+    "cancelamentoFalhou": "Não deu para pedir o cancelamento."
   }
 }

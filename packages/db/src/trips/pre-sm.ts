@@ -1,5 +1,6 @@
 import { and, count, eq, gte, inArray, sql } from "drizzle-orm";
 import { db } from "../client";
+import { writeAudit } from "../audit/write-audit";
 import { tripPreSm } from "../../schema";
 
 /**
@@ -151,4 +152,32 @@ function paraView(l: typeof tripPreSm.$inferSelect): PreSmDaViagem {
     settledAt: l.settledAt?.toISOString() ?? null,
     tentativas: l.tentativas,
   };
+}
+
+/** Uma linha pelo id — o que o job de cancelamento precisa para saber o que cancelar. */
+export async function preSmPorId(id: string): Promise<PreSmDaViagem | null> {
+  const [l] = await db.select().from(tripPreSm).where(eq(tripPreSm.id, id)).limit(1);
+  return l ? paraView(l) : null;
+}
+
+/**
+ * Registra na auditoria QUEM pediu o cancelamento.
+ *
+ * Fica no pedido e não no worker de propósito: o worker sabe o que aconteceu com a gerenciadora, e
+ * não quem quis que acontecesse. Quando alguém for perguntar "por que essa Pré-SM foi cancelada",
+ * o nome é o que importa.
+ */
+export async function registrarPedidoDeCancelamento(entrada: {
+  tripId: string;
+  preSmId: string;
+  actorUserId: string;
+}): Promise<void> {
+  await writeAudit(db, {
+    actorUserId: entrada.actorUserId,
+    action: "pre_sm.cancelar",
+    entityType: "trip",
+    entityId: entrada.tripId,
+    previousValue: { preSm: entrada.preSmId, status: "criada" },
+    newValue: { preSm: entrada.preSmId, status: "cancelamento_pedido" },
+  });
 }
