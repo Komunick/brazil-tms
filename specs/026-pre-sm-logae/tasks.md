@@ -100,9 +100,9 @@ gerenciadora** — pode ser promovido sozinho.
 **Independent Test**: atribuir uma viagem cujo motorista não tem CPF e conferir que a viagem mostra o
 que faltou, com caminho para resolver.
 
-- [ ] T026 [P] [US3] Escrever em `packages/shared/src/domain/pre-sm.ts` a decisão de **não criar**, devolvendo o motivo específico: sem CPF, sem modelo confirmado, sem vínculo de algum recurso (FR-012)
-- [ ] T027 [P] [US3] Teste da decisão em `pre-sm.test.ts`, um caso por motivo — inclusive o caso em que faltam dois, para o motivo mostrado ser o mais acionável
-- [ ] T028 [P] [US3] Escrever a montagem do corpo da Pré-SM a partir da viagem (campos, formato de data, placas), pura e testada
+- [X] T026 [P] [US3] Escrever em `packages/shared/src/domain/pre-sm.ts` a decisão de **não criar**, devolvendo o motivo específico: sem CPF, sem modelo confirmado, sem vínculo de algum recurso (FR-012)
+- [X] T027 [P] [US3] Teste da decisão em `pre-sm.test.ts`, um caso por motivo — inclusive o caso em que faltam dois, para o motivo mostrado ser o mais acionável
+- [X] T028 [P] [US3] Escrever a montagem do corpo da Pré-SM a partir da viagem (campos, formato de data, placas), pura e testada
 - [ ] T029 [US3] Gravar o estado `sem_dados` com o motivo em `trip_pre_sm`, separado de `recusada` — um é problema nosso e o outro é resposta dela, e mandam a pessoa para lugares diferentes
 - [ ] T030 [US3] Mostrar o motivo na viagem, com o caminho para resolver (FR-013), em `apps/web/components/trips/pre-sm-status.tsx`
 - [ ] T031 [P] [US3] Textos dos motivos em `apps/web/messages/pt-BR.json`
