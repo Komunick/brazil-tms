@@ -200,6 +200,20 @@ export const NAV_ITEMS: readonly NavItem[] = [
     permission: "manage_commercial_data",
     grupo: "cadastros",
   },
+  /**
+   * Modelos de Pré-SM (2026-08-25, fatia 026): a correspondência entre as nossas rotas e os modelos
+   * da gerenciadora Logae.
+   *
+   * Fica logo abaixo de Rotas porque é a mesma pergunta vista de outro lado — qual rota é qual —, e
+   * quem confirma aqui é quem administra a malha lá. Mesma permissão pelo mesmo motivo.
+   */
+  {
+    key: "preSmModelos",
+    href: "/admin/pre-sm-modelos",
+    icon: "ShieldCheck",
+    permission: "manage_commercial_data",
+    grupo: "cadastros",
+  },
   // 008 — per-customer document-requirement checklists + the document-type master.
   {
     key: "documentRequirements",

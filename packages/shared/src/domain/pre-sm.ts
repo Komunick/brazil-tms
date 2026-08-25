@@ -94,3 +94,172 @@ export function donoEhPessoaFisica(cnpjProprietario: string | null | undefined):
 function so_digitos(v: string | null | undefined): string {
   return String(v ?? "").replace(/\D/g, "");
 }
+
+// ---------------------------------------------------------------------------
+// A decisão: criar, ou não criar e dizer por quê (FR-012, FR-013)
+// ---------------------------------------------------------------------------
+
+/**
+ * POR QUE A PRÉ-SM NÃO PODE SER CRIADA.
+ *
+ * Cada motivo manda a pessoa para um lugar diferente, e é por isso que eles são separados em vez de
+ * um "faltam dados" genérico:
+ *
+ *   `sem_cpf`               → cadastro do motorista (19% das viagens medidas)
+ *   `sem_modelo`            → cadastro de modelos na gerenciadora, ou a tela de conferência (16%)
+ *   `sem_vinculo_veiculo`   → o diálogo de atribuição, na próxima escala daquele veículo
+ *   `sem_vinculo_motorista` → idem, para o motorista
+ *   `sem_janela_coleta`     → o plano da viagem
+ */
+export type MotivoDeNaoCriar =
+  | "sem_cpf"
+  | "sem_modelo"
+  | "sem_vinculo_veiculo"
+  | "sem_vinculo_motorista"
+  | "sem_janela_coleta"
+  | "sem_placa";
+
+/** O que o TMS sabe sobre a viagem no momento em que a Pré-SM seria criada. */
+export interface DadosParaPreSM {
+  /** O modelo JÁ CONFIRMADO da rota. `null` quando não há, ou quando ninguém conferiu ainda. */
+  codModelo: number | null;
+  cpfMotorista: string | null | undefined;
+  vinculoMotorista: OwnershipType | null | undefined;
+  cpfSegundoMotorista?: string | null;
+  vinculoSegundoMotorista?: OwnershipType | null;
+  /** Cavalo primeiro, carretas depois — a ordem em que a atribuição as gravou. */
+  placas: readonly { placa: string; vinculo: OwnershipType | null | undefined }[];
+  /** Início e fim da janela de coleta, em ISO. São o "ETA ORIGEM" e o "CPT ORIGEM" da operação. */
+  chegadaNaColeta: string | null | undefined;
+  saidaDaColeta: string | null | undefined;
+}
+
+/**
+ * O QUE FALTA — ou `null` quando não falta nada.
+ *
+ * ── A ORDEM DOS TESTES É A ORDEM DA UTILIDADE ─────────────────────────────────────────────────
+ *
+ * Quando faltam duas coisas, a pessoa vê UMA. Então a que aparece precisa ser a mais acionável, e
+ * não a primeira que o código topou.
+ *
+ * `sem_modelo` vem primeiro porque é o único que não se resolve na viagem: exige cadastro na
+ * gerenciadora ou conferência de uma correspondência. Enquanto ele existir, resolver o CPF não
+ * adianta — a Pré-SM continua não saindo, e a pessoa teria feito trabalho à toa.
+ *
+ * Depois o CPF, que é cadastro nosso e tem caminho direto. Por último os vínculos, que se resolvem
+ * sozinhos na próxima atribuição daquele recurso.
+ */
+export function motivoDeNaoCriar(d: DadosParaPreSM): MotivoDeNaoCriar | null {
+  if (d.codModelo == null) return "sem_modelo";
+
+  if (!temCpf(d.cpfMotorista)) return "sem_cpf";
+  if (
+    d.cpfSegundoMotorista != null &&
+    d.cpfSegundoMotorista !== "" &&
+    !temCpf(d.cpfSegundoMotorista)
+  )
+    return "sem_cpf";
+
+  if (d.placas.length === 0) return "sem_placa";
+
+  if (vinculoParaLogae(d.vinculoMotorista) == null) return "sem_vinculo_motorista";
+  if (d.cpfSegundoMotorista && vinculoParaLogae(d.vinculoSegundoMotorista) == null)
+    return "sem_vinculo_motorista";
+
+  if (d.placas.some((p) => vinculoParaLogae(p.vinculo) == null)) return "sem_vinculo_veiculo";
+
+  if (!d.chegadaNaColeta || !d.saidaDaColeta) return "sem_janela_coleta";
+
+  return null;
+}
+
+function temCpf(v: string | null | undefined): boolean {
+  return String(v ?? "").replace(/\D/g, "").length === 11;
+}
+
+// ---------------------------------------------------------------------------
+// A montagem do corpo (FR-005)
+// ---------------------------------------------------------------------------
+
+/** O corpo do `setPreSMdeModelo`, sem as credenciais — quem chama as acrescenta. */
+export interface CorpoDaPreSM {
+  CodModelo: number;
+  PlacaVeiculo: string;
+  VincVeiculo: VinculoLogae;
+  CPFMotorista1: string;
+  VincMotorista1: VinculoLogae;
+  CPFMotorista2?: string;
+  VincMotorista2?: VinculoLogae;
+  PlacaCarreta1?: string;
+  VincCarreta1?: VinculoLogae;
+  PlacaCarreta2?: string;
+  VincCarreta2?: VinculoLogae;
+  Chegada1aColeta: string;
+  Saida1aColeta: string;
+}
+
+/**
+ * Monta o corpo — e devolve `null` se algo faltar, porque montar meio corpo é pior que não montar.
+ *
+ * Só chame depois de `motivoDeNaoCriar` devolver `null`. O `null` daqui é rede de segurança para o
+ * caso de os dois discordarem, não um segundo caminho de decisão.
+ */
+export function montarCorpoDaPreSM(d: DadosParaPreSM): CorpoDaPreSM | null {
+  if (motivoDeNaoCriar(d) != null) return null;
+
+  const [cavalo, ...carretas] = d.placas;
+  const vinc = (v: OwnershipType | null | undefined) => vinculoParaLogae(v)!;
+
+  const corpo: CorpoDaPreSM = {
+    CodModelo: d.codModelo!,
+    PlacaVeiculo: cavalo!.placa,
+    VincVeiculo: vinc(cavalo!.vinculo),
+    CPFMotorista1: soDigitos(d.cpfMotorista),
+    VincMotorista1: vinc(d.vinculoMotorista),
+    Chegada1aColeta: paraDataHoraDaIntegra(d.chegadaNaColeta!),
+    Saida1aColeta: paraDataHoraDaIntegra(d.saidaDaColeta!),
+  };
+
+  if (d.cpfSegundoMotorista) {
+    corpo.CPFMotorista2 = soDigitos(d.cpfSegundoMotorista);
+    corpo.VincMotorista2 = vinc(d.vinculoSegundoMotorista);
+  }
+  // Duas carretas é o teto do que a nossa operação usa; a API aceita três.
+  if (carretas[0]) {
+    corpo.PlacaCarreta1 = carretas[0].placa;
+    corpo.VincCarreta1 = vinc(carretas[0].vinculo);
+  }
+  if (carretas[1]) {
+    corpo.PlacaCarreta2 = carretas[1].placa;
+    corpo.VincCarreta2 = vinc(carretas[1].vinculo);
+  }
+  return corpo;
+}
+
+/**
+ * `"2015-07-17 16:00"` — o formato do exemplo da própria Integra 14.2.
+ *
+ * Sem `T`, sem segundos, sem fuso. E a conversão é para o horário de **São Paulo**, não UTC: a
+ * gerenciadora agenda escolta em hora local, e mandar UTC deslocaria toda coleta em três horas —
+ * um erro que passaria despercebido no teste e apareceria na estrada.
+ */
+export function paraDataHoraDaIntegra(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const p = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+  // `sv-SE` já entrega `YYYY-MM-DD HH:mm` — é o formato ISO-ish sueco, e usá-lo evita montar a
+  // string à mão a partir de partes, que é onde o fuso costuma se perder.
+  return p.replace(",", "");
+}
+
+function soDigitos(v: string | null | undefined): string {
+  return String(v ?? "").replace(/\D/g, "");
+}
