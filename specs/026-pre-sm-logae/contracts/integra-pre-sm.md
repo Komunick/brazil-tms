@@ -9,6 +9,10 @@ Toda resposta traz `CodErro` (**zero = sem erro**) e `MsgErro`. O corpo real vem
 > **Não há homologação para nós.** Medido em 2026-08-25: `Ambiente: "Homologacao"` responde
 > `CodErro 100 — USUARIO INVALIDO`. Só `"Producao"` funciona. Ver R1 em `research.md`.
 
+
+> **A referência completa da API está em `docs/INTEGRA-14.2-REFERENCIA.md`** (2026-08-25),
+> extraída do manual da Logae. Este contrato descreve o recorte que ESTA fatia usa; a referência
+> tem os 53 métodos com todos os campos, e é onde conferir antes de afirmar que algo não existe.
 ---
 
 ## `setPreSMdeModelo` — cria
