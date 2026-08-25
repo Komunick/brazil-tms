@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   impedimentoDaAtribuicao,
+  alertaDoMotorista,
   normalizarPlaca,
   placasEsperadas,
   impedimentoParaAtribuir,
-  rotaDaAtribuicao,
+  rotaDaAtribuicao,
   placasDoPortal,
 } from "./portal-assignment";
 
@@ -143,5 +144,34 @@ describe("placasDoPortal", () => {
   it("sem campo nenhum, devolve lista vazia — a viagem ainda não foi escalada", () => {
     expect(placasDoPortal(null)).toEqual([]);
     expect(placasDoPortal("")).toEqual([]);
+  });
+});
+
+/**
+ * A regra da CNH. O caso que justifica o teste é o TERCEIRO estado: sem data não é em dia.
+ *
+ * Os outros dois vêm do `documentExpiryState`, que já tem teste próprio; o que se prova aqui é a
+ * tradução para os três avisos e, principalmente, que ausência de dado não devolve `null`.
+ */
+describe("alertaDoMotorista", () => {
+  const HOJE = "2026-08-25T12:00:00Z";
+
+  it("vencida quando a data já passou — e hoje conta como vencida", () => {
+    expect(alertaDoMotorista("2026-08-24", HOJE)).toBe("cnh_vencida");
+    expect(alertaDoMotorista("2026-08-25", HOJE)).toBe("cnh_vencida");
+  });
+
+  it("vencendo dentro da janela de aviso", () => {
+    expect(alertaDoMotorista("2026-09-10", HOJE)).toBe("cnh_vencendo");
+  });
+
+  it("nada a dizer quando está em dia", () => {
+    expect(alertaDoMotorista("2027-01-01", HOJE)).toBeNull();
+  });
+
+  it("SEM DATA não é em dia — é um aviso próprio", () => {
+    expect(alertaDoMotorista(null, HOJE)).toBe("cnh_sem_data");
+    expect(alertaDoMotorista(undefined, HOJE)).toBe("cnh_sem_data");
+    expect(alertaDoMotorista("", HOJE)).toBe("cnh_sem_data");
   });
 });

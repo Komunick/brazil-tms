@@ -32,6 +32,18 @@ export interface MotoristaDoPortal {
   trips: number;
   /** A viagem mais recente em que apareceu, para a tela ordenar por quem está ativo. */
   lastSeenAt: string;
+  /**
+   * A validade da CNH, do NOSSO cadastro (2026-08-25).
+   *
+   * Vem casada pelo `portal_driver_id`, e é `null` em dois casos que a tela precisa distinguir: o
+   * motorista não existe no nosso cadastro, ou existe e ninguém preencheu a data. Quem desenha
+   * trata os dois como "não sei" — que é diferente de "está em dia".
+   *
+   * O portal não tem esse dado, e a Logae tem (`getMotorista.DataVencCNH`): conferido em duas
+   * amostras, o nosso cadastro concorda com ela em 83 de 84. Ou seja, esta coluna é confiável — o
+   * que faltava não era o dado, era alguém olhar para ele na hora de escalar.
+   */
+  licenseExpiry: string | null;
 }
 
 /**
@@ -47,12 +59,16 @@ export async function listarMotoristasDoPortal(limite = 600): Promise<MotoristaD
     name: string;
     trips: string;
     last_seen_at: Date;
+    license_expiry: string | null;
   }>(sql`
     select distinct on (id_portal)
       id_portal   as portal_driver_id,
       nome        as name,
       viagens     as trips,
-      visto       as last_seen_at
+      visto       as last_seen_at,
+      -- LEFT JOIN, e nunca INNER: o motorista que ainda não existe no nosso cadastro precisa
+      -- continuar aparecendo na lista. Some a validade, não o nome.
+      d.license_expiry::text as license_expiry
     from (
       select
         (customer_fields ->> 'ID do motorista (portal)') as id_portal,
@@ -64,7 +80,11 @@ export async function listarMotoristasDoPortal(limite = 600): Promise<MotoristaD
       where customer_fields ? 'ID do motorista (portal)'
         and coalesce(customer_fields ->> 'Motorista (portal)', '') <> ''
     ) t
-    order by id_portal, updated_at desc
+    left join drivers d on d.portal_driver_id = t.id_portal
+    -- t.updated_at QUALIFICADO: a tabela drivers também tem essa coluna, e sem o prefixo o
+    -- Postgres recusa a consulta inteira por ambiguidade. Não é preciosismo: quebrou de verdade ao
+    -- ligar o join, e nenhum teste unitário pegaria, porque quem responde isso é o banco.
+    order by id_portal, t.updated_at desc
   `);
 
   return linhas
@@ -73,6 +93,7 @@ export async function listarMotoristasDoPortal(limite = 600): Promise<MotoristaD
       name: r.name,
       trips: Number(r.trips),
       lastSeenAt: new Date(r.last_seen_at).toISOString(),
+      licenseExpiry: r.license_expiry ?? null,
     }))
     .filter((m) => Number.isFinite(m.portalDriverId) && m.portalDriverId > 0)
     .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt) || b.trips - a.trips)

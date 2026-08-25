@@ -3,12 +3,16 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
+  alertaDoMotorista,
+  formatDate,
   impedimentoDaAtribuicao,
   normalizarPlaca,
   placasDoPortal,
   placasEsperadas,
   type VehicleType,
 } from "@brazil-tms/shared";
+import type { MotoristaDoPortal } from "@brazil-tms/db";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -168,6 +172,7 @@ export function PortalAssignDialog({
                 placeholder={motoristas.isLoading ? t("loadingDrivers") : t("driverPlaceholder")}
                 emptyText={t("noDriver")}
               />
+              <AvisoDaCnh driverId={driverId} motoristas={motoristas.data?.items} />
             </div>
 
             <div className="space-y-1.5">
@@ -182,6 +187,7 @@ export function PortalAssignDialog({
                 clearable
                 clearLabel={t("noSecondDriver")}
               />
+              <AvisoDaCnh driverId={secondDriverId} motoristas={motoristas.data?.items} />
             </div>
 
             {placas.map((placa, i) => (
@@ -272,5 +278,59 @@ export function PortalAssignDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * O QUE HÁ DE ERRADO COM A CNH de quem foi escolhido (2026-08-25, a pedido).
+ *
+ * ── POR QUE ISTO NÃO EXISTIA ──────────────────────────────────────────────────────────────────
+ *
+ * A verificação de documento vencido existe no TMS desde a 006, em `evaluateAssignmentEligibility`
+ * — mas presa ao formulário INTERNO de escala, que é o caminho que ninguém usa: das atribuições
+ * vigentes em produção, uma única foi feita por uma pessoa. Quem escala usa este diálogo, e aqui
+ * não havia verificação nenhuma.
+ *
+ * O resultado, medido em 2026-08-25: três motoristas ativos com CNH vencida, e os TRÊS rodaram na
+ * semana. Não foi decisão de correr o risco — a tela nunca disse.
+ *
+ * ── AVISA, NÃO BARRA ──────────────────────────────────────────────────────────────────────────
+ *
+ * Ver `alertaDoMotorista`. Em resumo: dezesseis motoristas ativos não têm data no cadastro, e uma
+ * trava os trataria como irregulares sem prova — parando a operação com base no que não medimos.
+ *
+ * ── SILENCIOSO QUANDO ESTÁ EM DIA ─────────────────────────────────────────────────────────────
+ *
+ * Nada aparece no caso normal. Um "CNH em dia" verde em toda atribuição vira decoração, e decoração
+ * é o que ensina o olho a pular a linha — inclusive no dia em que ela ficar vermelha.
+ */
+function AvisoDaCnh({
+  driverId,
+  motoristas,
+}: {
+  driverId: string;
+  motoristas: MotoristaDoPortal[] | undefined;
+}) {
+  const t = useTranslations("Trips.portalAssign");
+  if (!driverId || !motoristas) return null;
+
+  const escolhido = motoristas.find((m) => String(m.portalDriverId) === driverId);
+  // Motorista que a lista do portal traz mas o nosso cadastro não conhece: é o mesmo "não sei" do
+  // cadastro sem data, e a função já responde `cnh_sem_data` para `null`.
+  const alerta = alertaDoMotorista(escolhido?.licenseExpiry ?? null, new Date());
+  if (!alerta) return null;
+
+  const vencida = alerta === "cnh_vencida";
+  return (
+    <p
+      role={vencida ? "alert" : undefined}
+      className={cn("text-xs", vencida ? "font-medium text-destructive" : "text-warning")}
+    >
+      {alerta === "cnh_vencida"
+        ? t("cnhVencida", { data: formatDate(escolhido?.licenseExpiry ?? null) })
+        : alerta === "cnh_vencendo"
+          ? t("cnhVencendo", { data: formatDate(escolhido?.licenseExpiry ?? null) })
+          : t("cnhSemData")}
+    </p>
   );
 }
