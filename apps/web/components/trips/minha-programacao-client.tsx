@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ChevronDown, ChevronRight, Eye, EyeOff, Palette, SlidersHorizontal } from "lucide-react";
-import type { TripFilterOptions } from "@brazil-tms/db";
 import { useMarcarViagem, useProgramacao } from "@/lib/trips/client";
 import { ProgramacaoDetalhe } from "@/components/trips/programacao-detalhe";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
@@ -120,7 +119,7 @@ function rotuloDoDia(dia: string, hoje: string, t: (k: string) => string): strin
   return `${d.toLocaleDateString("pt-BR", { weekday: "short" })} · ${data}`;
 }
 
-export function MinhaProgramacaoClient({ resourceOptions }: { resourceOptions: TripFilterOptions }) {
+export function MinhaProgramacaoClient() {
   const t = useTranslations("Programacao");
   const [frente, setFrente] = useState("");
   const [mostrarOcultas, setMostrarOcultas] = useState(false);
@@ -558,7 +557,6 @@ export function MinhaProgramacaoClient({ resourceOptions }: { resourceOptions: T
         tripId={viagemAberta}
         aberto={viagemAberta !== null}
         aoFechar={() => setViagemAberta(null)}
-        resourceOptions={resourceOptions}
       />
     </div>
   );
