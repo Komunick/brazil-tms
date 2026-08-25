@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  divergenciasDaPreSm,
   donoEhPessoaFisica,
   montarCorpoDaPreSM,
   motivoDeNaoCriar,
@@ -205,5 +206,62 @@ describe("paraDataHoraDaIntegra", () => {
 
   it("data inválida vira string vazia em vez de 'Invalid Date'", () => {
     expect(paraDataHoraDaIntegra("nao e data")).toBe("");
+  });
+});
+
+describe("divergenciasDaPreSm", () => {
+  const ENVIADO = {
+    CPFMotorista1: "01932653546",
+    PlacaVeiculo: "MDS6J45",
+    PlacaCarreta1: "CBS1E49",
+  };
+
+  it("sem mudança, não avisa nada", () => {
+    expect(
+      divergenciasDaPreSm(ENVIADO, {
+        cpfMotorista: "019.326.535-46",
+        placas: ["MDS6J45", "CBS1E49"],
+      }),
+    ).toEqual([]);
+  });
+
+  it("motorista trocado é avisado", () => {
+    expect(
+      divergenciasDaPreSm(ENVIADO, { cpfMotorista: "01932653547", placas: ["MDS6J45", "CBS1E49"] }),
+    ).toEqual(["motorista"]);
+  });
+
+  it("placa trocada é avisada", () => {
+    expect(
+      divergenciasDaPreSm(ENVIADO, { cpfMotorista: "01932653546", placas: ["ATG9I07"] }),
+    ).toEqual(["placas"]);
+  });
+
+  /**
+   * Cavalo e carreta trocados de CAMPO não mudam quem está na estrada. Acusar isso seria um aviso
+   * sobre nada — e um aviso sobre nada ensina a ignorar todos.
+   */
+  it("a ordem das placas não é divergência", () => {
+    expect(
+      divergenciasDaPreSm(ENVIADO, {
+        cpfMotorista: "01932653546",
+        placas: ["CBS1E49", "MDS6J45"],
+      }),
+    ).toEqual([]);
+  });
+
+  /**
+   * "Não sei" não é "mudou". Sem o dado de agora, acusar divergência produziria um aviso em toda
+   * viagem cujo cadastro está incompleto — que é justamente onde ninguém pode fazer nada a respeito.
+   */
+  it("dado ausente de um dos lados não vira aviso", () => {
+    expect(divergenciasDaPreSm(ENVIADO, { cpfMotorista: null, placas: [] })).toEqual([]);
+    expect(divergenciasDaPreSm(null, { cpfMotorista: "01932653547" })).toEqual([]);
+  });
+
+  it("acusa os dois quando os dois mudaram", () => {
+    expect(
+      divergenciasDaPreSm(ENVIADO, { cpfMotorista: "01932653547", placas: ["ATG9I07"] }),
+    ).toEqual(["motorista", "placas"]);
   });
 });

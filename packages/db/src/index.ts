@@ -269,3 +269,4 @@ export { dadosDaPreSm, type DadosDaPreSm } from "./trips/pre-sm-dados";
 export { ordemDeAtribuicaoConcluida } from "./trips/pre-sm-dados";
 export { preSmPorId } from "./trips/pre-sm";
 export { registrarPedidoDeCancelamento } from "./trips/pre-sm";
+export { preSmComAtribuicaoAtual } from "./trips/pre-sm";

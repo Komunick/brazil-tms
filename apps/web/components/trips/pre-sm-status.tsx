@@ -51,7 +51,10 @@ export function PreSmStatus({ tripId }: { tripId: string }) {
     queryFn: async () => {
       const res = await fetch(`/api/trips/${tripId}/pre-sm`);
       if (!res.ok) throw new Error(String(res.status));
-      return (await res.json()) as { preSm: PreSmDaViagem | null };
+      return (await res.json()) as {
+        preSm: PreSmDaViagem | null;
+        divergencias: ("motorista" | "placas")[];
+      };
     },
     // O estado muda por fora — o worker é quem cria e quem cancela. Sem polling, a tela ficaria
     // dizendo "pendente" para sempre depois de um cancelamento pedido.
@@ -74,6 +77,7 @@ export function PreSmStatus({ tripId }: { tripId: string }) {
   });
 
   const preSm = consulta.data?.preSm;
+  const divergencias = consulta.data?.divergencias ?? [];
 
   // Sem nenhuma linha, a viagem nunca chegou ao ponto de gerar Pré-SM — o que é o normal para quem
   // ainda não foi atribuída. Um bloco vazio aqui viraria ruído em toda viagem do quadro.
@@ -120,6 +124,20 @@ export function PreSmStatus({ tripId }: { tripId: string }) {
       {preSm.motivo ? (
         <p className="text-xs text-muted-foreground">
           {preSm.status === "sem_dados" ? t(`motivo.${preSm.motivo}`) : preSm.motivo}
+        </p>
+      ) : null}
+
+      {/**
+       * A DIVERGÊNCIA (FR-018): a atribuição mudou depois da Pré-SM criada.
+       *
+       * A escolta está esperando quem constava na criação, e a viagem vai sair com outra pessoa ou
+       * outro veículo. Alterar a Pré-SM existente ficou fora desta fatia, então o que dá para fazer
+       * é dizer — e dizer em vermelho, porque isto é diferente dos outros textos deste bloco: os
+       * outros descrevem um estado, este pede uma ação fora do sistema.
+       */}
+      {divergencias.length > 0 ? (
+        <p role="alert" className="text-xs font-medium text-destructive">
+          {t("divergencia", { o: divergencias.map((d) => t(`divergencias.${d}`)).join(" e ") })}
         </p>
       ) : null}
 

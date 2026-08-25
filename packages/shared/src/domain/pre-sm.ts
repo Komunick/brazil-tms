@@ -263,3 +263,69 @@ export function paraDataHoraDaIntegra(iso: string): string {
 function soDigitos(v: string | null | undefined): string {
   return String(v ?? "").replace(/\D/g, "");
 }
+
+// ---------------------------------------------------------------------------
+// A divergência: a atribuição mudou depois da Pré-SM criada (FR-018)
+// ---------------------------------------------------------------------------
+
+/**
+ * O QUE MUDOU desde que a Pré-SM foi criada.
+ *
+ * ── POR QUE ISTO É UM AVISO E NÃO UMA CORREÇÃO ────────────────────────────────────────────────
+ *
+ * Trocar motorista depois de escalar é rotina — passou mal, o veículo quebrou. A Pré-SM, porém, já
+ * está na gerenciadora com o nome antigo: a escolta espera uma pessoa e vai encontrar outra.
+ *
+ * Alterar a Pré-SM existente ficou FORA desta fatia (spec, Out of Scope), então o que se pode fazer
+ * é dizer. Um aviso que a pessoa vê é melhor que uma divergência que ninguém nota — e é honesto
+ * sobre o que o sistema faz e o que ainda não faz.
+ *
+ * ── COMPARA PLACA E CPF, NÃO O OBJETO INTEIRO ─────────────────────────────────────────────────
+ *
+ * O corpo enviado tem campos que mudam sozinhos (horário reescrito pelo portal, por exemplo) e que
+ * não interessam a quem faz escolta. Só duas coisas mudam quem vai estar no caminhão: **quem
+ * dirige** e **qual veículo**. Comparar o objeto todo produziria avisos que ninguém sabe o que
+ * fazer com — e um aviso desses ensina a ignorar todos.
+ */
+export type Divergencia = "motorista" | "placas";
+
+export function divergenciasDaPreSm(
+  enviado: Record<string, unknown> | null | undefined,
+  atual: { cpfMotorista?: string | null; placas?: readonly string[] } | null | undefined,
+): Divergencia[] {
+  if (!enviado || !atual) return [];
+  const saida: Divergencia[] = [];
+
+  const cpfEnviado = apenasDigitos(enviado.CPFMotorista1);
+  const cpfAtual = apenasDigitos(atual.cpfMotorista);
+  // Só acusa quando os DOIS lados têm o dado. Sem o de agora, não se sabe se mudou — e "não sei"
+  // não é "mudou".
+  if (cpfEnviado && cpfAtual && cpfEnviado !== cpfAtual) saida.push("motorista");
+
+  const placasEnviadas = [enviado.PlacaVeiculo, enviado.PlacaCarreta1, enviado.PlacaCarreta2]
+    .map(normalizar)
+    .filter(Boolean);
+  const placasAtuais = (atual.placas ?? []).map(normalizar).filter(Boolean);
+
+  // Ordenadas antes de comparar: trocar cavalo e carreta de campo no formulário não muda quem está
+  // na estrada, e acusar isso seria um aviso sobre nada.
+  if (
+    placasEnviadas.length > 0 &&
+    placasAtuais.length > 0 &&
+    [...placasEnviadas].sort().join(",") !== [...placasAtuais].sort().join(",")
+  ) {
+    saida.push("placas");
+  }
+
+  return saida;
+}
+
+function apenasDigitos(v: unknown): string {
+  return String(v ?? "").replace(/\D/g, "");
+}
+
+function normalizar(v: unknown): string {
+  return String(v ?? "")
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}

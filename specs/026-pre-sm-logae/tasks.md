@@ -151,7 +151,7 @@ uma criação errada — por isso entra na mesma fatia da criação, não numa s
 - [X] T047 [US4] Criar a rota `apps/web/app/api/trips/[id]/pre-sm/route.ts` para ler o estado e pedir o cancelamento, com a mesma permissão de atribuir
 - [X] T048 [US4] Mostrar número, estado e momento da criação em `apps/web/components/trips/pre-sm-status.tsx` (FR-016)
 - [X] T049 [US4] Botão de cancelar para Pré-SM ainda não efetivada (FR-017), com confirmação, em `apps/web/components/trips/pre-sm-status.tsx`
-- [ ] T050 [US4] Avisar em `apps/web/components/trips/pre-sm-status.tsx` quando a atribuição mudar depois da Pré-SM criada (FR-018) — nesta fatia só avisa, alterar fica para depois
+- [X] T050 [US4] Avisar em `apps/web/components/trips/pre-sm-status.tsx` quando a atribuição mudar depois da Pré-SM criada (FR-018) — nesta fatia só avisa, alterar fica para depois
 - [X] T051 [US4] Registrar o cancelamento no histórico da viagem, com o ator (FR-019), em `apps/web/app/api/trips/[id]/pre-sm/route.ts`
 - [X] T052 [P] [US4] Textos em `apps/web/messages/pt-BR.json`
 
@@ -221,7 +221,7 @@ hoje** — `INTEGRA_PRE_SM_ATIVO` ausente é desligado, e o teto diário é zero
 | | |
 |---|---|
 | **T002** | pôr as credenciais no `devops/config.env` da VM — **é produção**, e a feature fica desligada sem elas de qualquer jeito |
-| **T050** | avisar quando a atribuição mudar depois da Pré-SM criada. **Não foi feito**; é o único pedaço de código que falta |
+| ~~T050~~ | feito em 25/08 — a divergência é calculada na leitura, não guardada |
 | **T054–T057** | reiniciar o worker, observar um dia com o interruptor desligado, e a virada — **com o usuário** |
 | **T058** | a entrada em Novidades, depois que a feature valer de verdade |
 | T015 | cancelada, ver acima |
