@@ -2051,7 +2051,7 @@
     "buscar": "Buscar por estação ou modelo",
     "pendentes": "{n} aguardando conferência",
     "total": "{n} no total",
-    "vazio": "Nenhuma correspondência ainda. Elas aparecem depois que a carga consulta os modelos da gerenciadora.",
+    "vazio": "Nenhuma correspondência ainda. Use “Buscar modelos na gerenciadora” para consultar os modelos cadastrados lá e propor as correspondências com as nossas rotas.",
     "origem": "Origem",
     "destino": "Destino",
     "modelo": "Modelo na gerenciadora",
@@ -2062,7 +2062,13 @@
     "desfazer": "Desfazer",
     "confirmada": "Correspondência confirmada.",
     "desfeita": "Confirmação desfeita.",
-    "falhou": "Não deu para salvar. Tente de novo."
+    "falhou": "Não deu para salvar. Tente de novo.",
+    "carregar": "Buscar modelos na gerenciadora",
+    "carregando": "Buscando…",
+    "cargaPedida": "Buscando os modelos na gerenciadora. As correspondências aparecem aqui em instantes.",
+    "cargaChegou": "{n} correspondências novas para conferir.",
+    "cargaSemNovidade": "A busca rodou e não encontrou correspondência nova.",
+    "cargaFalhou": "Não deu para pedir a busca. Tente de novo."
   },
   "PreSm": {
     "titulo": "Pré-SM",

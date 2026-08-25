@@ -86,6 +86,7 @@ gerenciadora** — pode ser promovido sozinho.
 - [X] T021 [P] Teste em `pre-sm-modelos.test.ts` cobrindo as quatro tolerâncias, cada uma com um caso real do levantamento
 - [X] T022 Acrescentar `getModelosPreSM` ao cliente em `workers/lib/integra/cliente.ts`
 - [X] T023 Escrever a carga que consulta os modelos, propõe as correspondências e grava com `confirmado_em` **nulo** em `packages/db/src/trips/pre-sm-modelos.ts`
+- [X] T023b **O GATILHO da carga** — ela existia sem quem a chamasse, e a tela de conferência nascia vazia sem caminho para preenchê-la. Job `pre_sm.carregar_modelos` em `workers/jobs/pre-sm/carregar-modelos.ts`, pedido pelo botão da própria tela via `POST /api/admin/pre-sm-modelos`. Leitura pura: **não** olha `INTEGRA_PRE_SM_ATIVO`, porque é o preparo que precisa acontecer ANTES de alguém ligar a criação. Conferido contra a produção em 25/08: 89 modelos, 134 rotas, 80 casadas, **84% das viagens**
 - [X] T024 Expor a lista para conferência humana em `apps/web/app/api/admin/pre-sm-modelos/route.ts` (GET lista, PATCH confirma/desfaz, auditado na mesma transação) e a tela em `apps/web/app/(shell)/admin/pre-sm-modelos/`, com item no menu sob Cadastros
 - [X] T025 Garantir em `packages/db/src/trips/pre-sm-modelos.ts` que **só linha confirmada** vale para criar Pré-SM — um casamento errado do normalizador viraria escolta contratada para a rota errada, e o normalizador já errou uma vez
 
