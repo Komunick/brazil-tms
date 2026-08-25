@@ -67,7 +67,7 @@ de novo e conferir que o valor volta sem perguntar.
 - [X] T012 [P] [US2] Escrever em `packages/shared/src/domain/pre-sm.ts` a tradução `ownership_type` → vínculo da gerenciadora (`owned`→`F`, `agregado`→`A`, `terceiro`→`T`, `subcontracted`→**nada**), com teste em `pre-sm.test.ts`
 - [X] T013 [P] [US2] Escrever em `packages/shared/src/domain/pre-sm.ts` a regra que deriva o vínculo sugerido a partir do `CNPJProprietario`: CNPJ de raiz `03571231` → frota própria; valor com zeros à esquerda (CPF) → nunca frota própria; outro CNPJ → sem sugestão. Com teste
 - [X] T014 [US2] Acrescentar `getVeiculo` e `getCarreta` ao cliente em `workers/lib/integra/cliente.ts` — feito na Fase 4, junto do resto do cliente
-- [ ] T015 [US2] **ADIADA PARA A FASE 4, e o desenho mudou.** O plano pedia o BFF expondo a sugestão do dono, o que exigiria a credencial de produção da Logae dentro do app web — furando a regra de segredos, que manda ela viver só no worker. A sugestão passa a ser um trabalho do worker, que grava o resultado; a tela lê o nosso banco. Na Fase 3 o pré-preenchimento vem de `GET /api/fleet/vinculos`, **sem nenhuma chamada externa**
+- [ ] T015 [US2] **CANCELADA — o desenho mudou, e não há o que fazer.** O plano pedia o BFF expondo a sugestão do dono, o que exigiria a credencial de produção da Logae dentro do app web, furando a regra de segredos. A sugestão pelo `CNPJProprietario` continua possível, mas como trabalho do worker gravando o resultado — e ficou **fora desta fatia**: o pré-preenchimento pelo que já está no cadastro (Fase 3) já entrega o valor da história, e a pessoa responde uma vez por recurso de qualquer jeito. Na Fase 3 o pré-preenchimento vem de `GET /api/fleet/vinculos`, **sem nenhuma chamada externa**
 - [X] T016 [US2] Acrescentar o campo de vínculo ao `apps/web/components/trips/portal-assign-dialog.tsx`, um por recurso (veículo, cada carreta, cada motorista), pré-selecionado pela sugestão e **em branco para motorista** — a gerenciadora não informa vínculo de motorista, e um palpite ali seria invenção
 - [X] T017 [US2] Gravar o vínculo escolhido no recurso ao confirmar a atribuição, em `packages/db/src/trips/pre-sm.ts`, registrando de onde veio a sugestão (FR-011) — sem a evidência, a próxima pessoa não tem como conferir por que aquele valor está lá
 - [X] T018 [US2] Não voltar a perguntar quando o recurso já estiver classificado (FR-010), em `apps/web/components/trips/portal-assign-dialog.tsx`
@@ -103,9 +103,9 @@ que faltou, com caminho para resolver.
 - [X] T026 [P] [US3] Escrever em `packages/shared/src/domain/pre-sm.ts` a decisão de **não criar**, devolvendo o motivo específico: sem CPF, sem modelo confirmado, sem vínculo de algum recurso (FR-012)
 - [X] T027 [P] [US3] Teste da decisão em `pre-sm.test.ts`, um caso por motivo — inclusive o caso em que faltam dois, para o motivo mostrado ser o mais acionável
 - [X] T028 [P] [US3] Escrever a montagem do corpo da Pré-SM a partir da viagem (campos, formato de data, placas), pura e testada
-- [ ] T029 [US3] Gravar o estado `sem_dados` com o motivo em `trip_pre_sm`, separado de `recusada` — um é problema nosso e o outro é resposta dela, e mandam a pessoa para lugares diferentes
-- [ ] T030 [US3] Mostrar o motivo na viagem, com o caminho para resolver (FR-013), em `apps/web/components/trips/pre-sm-status.tsx`
-- [ ] T031 [P] [US3] Textos dos motivos em `apps/web/messages/pt-BR.json`
+- [X] T029 [US3] Gravar o estado `sem_dados` com o motivo em `trip_pre_sm`, separado de `recusada` — um é problema nosso e o outro é resposta dela, e mandam a pessoa para lugares diferentes
+- [X] T030 [US3] Mostrar o motivo na viagem, com o caminho para resolver (FR-013), em `apps/web/components/trips/pre-sm-status.tsx`
+- [X] T031 [P] [US3] Textos dos motivos em `apps/web/messages/pt-BR.json`
 
 **Checkpoint**: a decisão inteira é testável sem rede, e a falha nunca é silenciosa.
 
@@ -161,7 +161,7 @@ uma criação errada — por isso entra na mesma fatia da criação, não numa s
 
 ## Phase 8: A virada e o fechamento
 
-- [ ] T053 Rodar `tsc`, `eslint`, `build` e `vitest` no monorepo inteiro; abrir o PR para `dev`
+- [X] T053 Rodar `tsc`, `eslint`, `build` e `vitest` no monorepo inteiro; abrir o PR para `dev`
 - [ ] T054 Após o merge, **reiniciar o worker** — job novo não vale sem restart, e worker velho mascara o conserto
 - [ ] T055 Com o interruptor ainda desligado, conferir em produção por pelo menos um dia: quantas viagens gerariam Pré-SM, quantas cairiam em `sem_dados` e por quê. É a validação que substitui a homologação que não temos
 - [ ] T056 **Com o usuário presente**, ligar o interruptor com teto `1`, atribuir **uma** viagem escolhida, e conferir a Pré-SM no sistema da gerenciadora — com o cancelamento à mão
@@ -208,3 +208,34 @@ ambiente de teste.
 Nenhuma prova que a gerenciadora **aceita** o nosso corpo. Só a T056 responde isso, e ela é manual,
 com o usuário, em produção. Está assim de propósito: fingir cobertura seria pior do que admitir a
 falta.
+
+---
+
+## Onde a fatia parou (2026-08-25)
+
+**50 de 58 feitas.** As sete primeiras fases estão no `dev`, e **nenhuma linha chama a gerenciadora
+hoje** — `INTEGRA_PRE_SM_ATIVO` ausente é desligado, e o teto diário é zero.
+
+### O que sobra, e de quem é
+
+| | |
+|---|---|
+| **T002** | pôr as credenciais no `devops/config.env` da VM — **é produção**, e a feature fica desligada sem elas de qualquer jeito |
+| **T050** | avisar quando a atribuição mudar depois da Pré-SM criada. **Não foi feito**; é o único pedaço de código que falta |
+| **T054–T057** | reiniciar o worker, observar um dia com o interruptor desligado, e a virada — **com o usuário** |
+| **T058** | a entrada em Novidades, depois que a feature valer de verdade |
+| T015 | cancelada, ver acima |
+
+### A sequência da virada, e por que ela é assim
+
+Não há ambiente de homologação (`CodErro 100`, medido). Então a validação é esta, nesta ordem:
+
+1. **Reiniciar o worker** — job novo não existe sem isso, e worker velho mascara o resultado.
+2. **Observar um dia com o interruptor desligado.** O job roda inteiro e grava em
+   `trip_pre_sm.payload_enviado` o que teria mandado. Ler essas linhas responde, sem custo: quantas
+   viagens gerariam Pré-SM, quantas cairiam em `sem_dados`, e se o corpo está certo.
+3. **Ligar com teto `1`, uma viagem escolhida, com o usuário presente** — e o cancelamento à mão.
+4. **Subir o teto** conforme a confiança.
+
+O que **nada disso prova antes da hora**: que a gerenciadora aceita o nosso corpo. Só a primeira
+criação real responde, e ela custa dinheiro. Foi por isso que a feature nasceu desligada.
