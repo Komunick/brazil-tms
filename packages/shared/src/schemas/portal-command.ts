@@ -31,6 +31,27 @@ export const portalActionBodySchema = z
       .nullish(),
     /** Observação livre de quem decidiu. Vai junto para o portal e fica no registro daqui. */
     remark: z.string().trim().max(500).nullish(),
+    /**
+     * O VÍNCULO DE CADA RECURSO, quando quem atribui o informa (2026-08-25, fatia 026).
+     *
+     * NÃO vai para o portal do cliente — ele não tem esse campo e não sabe o que fazer com ele.
+     * Serve para gravar no NOSSO cadastro, porque é a gerenciadora Logae que exige a classificação
+     * (frota própria, agregado ou terceiro) em toda solicitação de monitoramento.
+     *
+     * Tudo opcional: quem já foi classificado não é perguntado de novo, e uma atribuição de quem
+     * não sabe responder continua funcionando — ela só não gera Pré-SM, e a viagem diz por quê.
+     *
+     * As placas vêm na MESMA ORDEM de `plates`: a primeira é o cavalo, as seguintes são carretas.
+     * Amarrar por posição, e não por placa, evita que uma correção de digitação no meio do
+     * formulário desassocie o vínculo do veículo a que ele se referia.
+     */
+    vinculos: z
+      .object({
+        placas: z.array(z.enum(["owned", "agregado", "terceiro"]).nullable()).max(3).optional(),
+        motorista: z.enum(["owned", "agregado", "terceiro"]).nullish(),
+        segundoMotorista: z.enum(["owned", "agregado", "terceiro"]).nullish(),
+      })
+      .optional(),
   })
   .refine((v) => v.action !== "reject" || v.reasonId != null, {
     message: "Escolha o motivo da recusa.",

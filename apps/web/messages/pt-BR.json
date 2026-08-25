@@ -1482,6 +1482,11 @@
       "semHistorico": "Ninguém entregou nesta rota ainda. Sem histórico, sem ranking — a escolha é sua.",
       "comoCalcula": "Baseado nas entregas concluídas no destino dentro do horário do cliente. A nota é esse percentual com um crédito de 5 entregas na média da empresa, para quem rodou pouco não aparecer com 100%.",
       "verHistorico": "Ver histórico deste motorista"
+    },
+    "vinculo": {
+      "owned": "Frota",
+      "agregado": "Agregado",
+      "terceiro": "Terceiro"
     }
   },
   "Sla": {

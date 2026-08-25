@@ -26,7 +26,13 @@ import {
 } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { MelhoresDaRota } from "@/components/trips/melhores-da-rota";
-import { TripsError, usePortalAction, usePortalDrivers } from "@/lib/trips/client";
+import {
+  TripsError,
+  usePortalAction,
+  usePortalDrivers,
+  useVinculosDasPlacas,
+} from "@/lib/trips/client";
+import { VinculoDoRecurso, type VinculoEscolhido } from "@/components/trips/vinculo-do-recurso";
 
 /**
  * ESCALAR MOTORISTA E PLACA SEM ABRIR O PORTAL (2026-08-21, a pedido).
@@ -134,7 +140,29 @@ export function PortalAssignDialog({
     [motoristas.data],
   );
 
+  /**
+   * O VÍNCULO DE CADA RECURSO (2026-08-25, fatia 026).
+   *
+   * Guardado por POSIÇÃO, na mesma ordem de `placas`: a primeira é o cavalo, as seguintes são
+   * carretas. Amarrar por posição e não por placa faz o vínculo acompanhar o campo quando alguém
+   * corrige uma digitação no meio do formulário — por placa, a correção desassociaria a escolha do
+   * veículo a que ela se referia.
+   *
+   * Começa vazio: o que já está classificado vem do cadastro (ver `vinculoDaPlaca` abaixo) e não
+   * precisa de estado local, porque não é editável aqui.
+   */
+  const [vinculoDasPlacas, setVinculoDasPlacas] = useState<(VinculoEscolhido | null)[]>([]);
+  const [vinculoMotorista, setVinculoMotorista] = useState<VinculoEscolhido | null>(null);
+  const [vinculoSegundo, setVinculoSegundo] = useState<VinculoEscolhido | null>(null);
+
   const preenchidas = placas.map(normalizarPlaca).filter(Boolean);
+  const jaClassificados = useVinculosDasPlacas(preenchidas, open);
+
+  const escolhido = (m: MotoristaDoPortal | undefined) => m?.vinculo ?? null;
+  const doMotorista = escolhido(motoristas.data?.items?.find((m) => String(m.portalDriverId) === driverId));
+  const doSegundo = escolhido(
+    motoristas.data?.items?.find((m) => String(m.portalDriverId) === secondDriverId),
+  );
   const impedimento = impedimentoDaAtribuicao({
     driverId: Number(driverId) || 0,
     secondDriverId: secondDriverId ? Number(secondDriverId) : null,
@@ -173,6 +201,14 @@ export function PortalAssignDialog({
                 emptyText={t("noDriver")}
               />
               <AvisoDaCnh driverId={driverId} motoristas={motoristas.data?.items} />
+              {driverId ? (
+                <VinculoDoRecurso
+                  rotulo={t("driver")}
+                  valor={doMotorista ?? vinculoMotorista}
+                  jaClassificado={doMotorista != null}
+                  aoEscolher={setVinculoMotorista}
+                />
+              ) : null}
             </div>
 
             <div className="space-y-1.5">
@@ -188,6 +224,14 @@ export function PortalAssignDialog({
                 clearLabel={t("noSecondDriver")}
               />
               <AvisoDaCnh driverId={secondDriverId} motoristas={motoristas.data?.items} />
+              {secondDriverId ? (
+                <VinculoDoRecurso
+                  rotulo={t("secondDriver")}
+                  valor={doSegundo ?? vinculoSegundo}
+                  jaClassificado={doSegundo != null}
+                  aoEscolher={setVinculoSegundo}
+                />
+              ) : null}
             </div>
 
             {placas.map((placa, i) => (
@@ -218,6 +262,22 @@ export function PortalAssignDialog({
                     </Button>
                   ) : null}
                 </div>
+                {/* O vínculo acompanha a placa, e só aparece depois de ela estar preenchida —
+                    perguntar a classificação de um campo vazio não faz sentido. */}
+                {normalizarPlaca(placa) ? (
+                  <VinculoDoRecurso
+                    rotulo={placas.length > 1 && i > 0 ? t("plateN", { n: String(i + 1) }) : t("plate")}
+                    valor={jaClassificados[normalizarPlaca(placa)] ?? vinculoDasPlacas[i] ?? null}
+                    jaClassificado={jaClassificados[normalizarPlaca(placa)] != null}
+                    aoEscolher={(v) =>
+                      setVinculoDasPlacas((atual) => {
+                        const proximo = [...atual];
+                        proximo[i] = v;
+                        return proximo;
+                      })
+                    }
+                  />
+                ) : null}
               </div>
             ))}
 
@@ -263,6 +323,18 @@ export function PortalAssignDialog({
                   driverId: Number(driverId),
                   secondDriverId: secondDriverId ? Number(secondDriverId) : null,
                   plates: preenchidas,
+                  /**
+                   * Só o que ESTA tela escolheu. O que já estava classificado não é reenviado: a
+                   * gravação ignoraria de qualquer jeito (ela só preenche vazio), e mandar de volta
+                   * o valor lido daria a impressão de que a tela pode sobrescrever o cadastro.
+                   */
+                  vinculos: {
+                    placas: preenchidas.map((p, i) =>
+                      jaClassificados[p] != null ? null : (vinculoDasPlacas[i] ?? null),
+                    ),
+                    motorista: doMotorista != null ? null : vinculoMotorista,
+                    segundoMotorista: doSegundo != null ? null : vinculoSegundo,
+                  },
                 },
                 {
                   onSuccess: () => {

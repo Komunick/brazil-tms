@@ -64,14 +64,14 @@ inofensiva enquanto ela não estiver provada.
 **Independent Test**: atribuir um veículo nunca classificado, ver a sugestão, trocar, salvar; atribuir
 de novo e conferir que o valor volta sem perguntar.
 
-- [ ] T012 [P] [US2] Escrever em `packages/shared/src/domain/pre-sm.ts` a tradução `ownership_type` → vínculo da gerenciadora (`owned`→`F`, `agregado`→`A`, `terceiro`→`T`, `subcontracted`→**nada**), com teste em `pre-sm.test.ts`
-- [ ] T013 [P] [US2] Escrever em `packages/shared/src/domain/pre-sm.ts` a regra que deriva o vínculo sugerido a partir do `CNPJProprietario`: CNPJ de raiz `03571231` → frota própria; valor com zeros à esquerda (CPF) → nunca frota própria; outro CNPJ → sem sugestão. Com teste
-- [ ] T014 [US2] Acrescentar ao cliente da Integra em `workers/lib/integra/cliente.ts` os métodos `getVeiculo` e `getCarreta` (leitura), usados para a sugestão
-- [ ] T015 [US2] Expor no BFF a sugestão de vínculo por placa, em `apps/web/app/api/trips/[id]/pre-sm/vinculo-sugerido/route.ts`, com a permissão de atribuir
-- [ ] T016 [US2] Acrescentar o campo de vínculo ao `apps/web/components/trips/portal-assign-dialog.tsx`, um por recurso (veículo, cada carreta, cada motorista), pré-selecionado pela sugestão e **em branco para motorista** — a gerenciadora não informa vínculo de motorista, e um palpite ali seria invenção
-- [ ] T017 [US2] Gravar o vínculo escolhido no recurso ao confirmar a atribuição, em `packages/db/src/trips/pre-sm.ts`, registrando de onde veio a sugestão (FR-011) — sem a evidência, a próxima pessoa não tem como conferir por que aquele valor está lá
-- [ ] T018 [US2] Não voltar a perguntar quando o recurso já estiver classificado (FR-010), em `apps/web/components/trips/portal-assign-dialog.tsx`
-- [ ] T019 [P] [US2] Textos em `apps/web/messages/pt-BR.json`
+- [X] T012 [P] [US2] Escrever em `packages/shared/src/domain/pre-sm.ts` a tradução `ownership_type` → vínculo da gerenciadora (`owned`→`F`, `agregado`→`A`, `terceiro`→`T`, `subcontracted`→**nada**), com teste em `pre-sm.test.ts`
+- [X] T013 [P] [US2] Escrever em `packages/shared/src/domain/pre-sm.ts` a regra que deriva o vínculo sugerido a partir do `CNPJProprietario`: CNPJ de raiz `03571231` → frota própria; valor com zeros à esquerda (CPF) → nunca frota própria; outro CNPJ → sem sugestão. Com teste
+- [ ] T014 [US2] **ADIADA PARA A FASE 4** — acrescentar `getVeiculo` e `getCarreta` ao cliente em `workers/lib/integra/cliente.ts`
+- [ ] T015 [US2] **ADIADA PARA A FASE 4, e o desenho mudou.** O plano pedia o BFF expondo a sugestão do dono, o que exigiria a credencial de produção da Logae dentro do app web — furando a regra de segredos, que manda ela viver só no worker. A sugestão passa a ser um trabalho do worker, que grava o resultado; a tela lê o nosso banco. Na Fase 3 o pré-preenchimento vem de `GET /api/fleet/vinculos`, **sem nenhuma chamada externa**
+- [X] T016 [US2] Acrescentar o campo de vínculo ao `apps/web/components/trips/portal-assign-dialog.tsx`, um por recurso (veículo, cada carreta, cada motorista), pré-selecionado pela sugestão e **em branco para motorista** — a gerenciadora não informa vínculo de motorista, e um palpite ali seria invenção
+- [X] T017 [US2] Gravar o vínculo escolhido no recurso ao confirmar a atribuição, em `packages/db/src/trips/pre-sm.ts`, registrando de onde veio a sugestão (FR-011) — sem a evidência, a próxima pessoa não tem como conferir por que aquele valor está lá
+- [X] T018 [US2] Não voltar a perguntar quando o recurso já estiver classificado (FR-010), em `apps/web/components/trips/portal-assign-dialog.tsx`
+- [X] T019 [P] [US2] Textos em `apps/web/messages/pt-BR.json`
 
 **Checkpoint**: o cadastro passa a distinguir agregado de terceiro. **Entrega valor sem a
 gerenciadora** — pode ser promovido sozinho.

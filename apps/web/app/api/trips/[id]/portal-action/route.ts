@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { portalActionBodySchema } from "@brazil-tms/shared";
-import { enfileirarOrdemDoPortal, ordensDaViagem, OrdemRecusada } from "@brazil-tms/db";
+import {
+  enfileirarOrdemDoPortal,
+  gravarVinculosDaAtribuicao,
+  ordensDaViagem,
+  OrdemRecusada,
+} from "@brazil-tms/db";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
 import { Conflict, NotFound, handleRouteError } from "@/lib/api/respond";
 
@@ -65,6 +70,25 @@ export async function POST(
       plates: body.plates ?? [],
       requestedBy: ctx.userId,
     });
+
+    /**
+     * O VÍNCULO VAI PARA O NOSSO CADASTRO, e DEPOIS de a ordem estar enfileirada (2026-08-25, 026).
+     *
+     * A ordem do portal é o que a pessoa pediu; o vínculo é um efeito colateral útil que a
+     * gerenciadora Logae vai exigir mais adiante. Se ele viesse antes e falhasse, a atribuição —
+     * que é o pedido de verdade — não aconteceria por causa de um dado acessório.
+     *
+     * `await` mesmo assim, e não disparar-e-esquecer: a função inteira já engole os próprios erros
+     * (ver `pre-sm-vinculos.ts`), e esperar por ela deixa a resposta refletir o que de fato ficou
+     * gravado. São dois `update` por índice, no mesmo banco — não é o que torna esta rota lenta.
+     */
+    if (body.action === "assign") {
+      await gravarVinculosDaAtribuicao({
+        placas: body.plates ?? [],
+        vinculos: body.vinculos,
+        portalDriverIds: [body.driverId, body.secondDriverId],
+      });
+    }
 
     return NextResponse.json({ item }, { status: 202 });
   } catch (error) {
