@@ -84,9 +84,10 @@ confirmadas passam a valer.
 ### A carga, e a tela
 
 - [ ] T019 [US4] Escrever o job `pre_sm.carregar_cadastro` em `workers/jobs/pre-sm/carregar-cadastro.ts`: consulta cidades e rotas e propõe as duas correspondências. **Uma carga só** — a rota depende do IBGE da cidade, e dois jobs criariam uma ordem implícita (R6)
+- [ ] T019b [US4] Gravar as propostas com `ON CONFLICT DO NOTHING`, **nunca `DO UPDATE`** (FR-021). Se a correspondência já existe, ou alguém a confirmou — e sobrescrever apagaria a conferência dela — ou está esperando conferência, e a proposta nova é a mesma. Em nenhum dos dois casos o certo é mexer. A exceção legítima (o cadastro mudou na gerenciadora) é trabalho de tela, com a pessoa vendo o que troca
 - [ ] T020 [US4] Registrar o job em `workers/jobs/index.ts` e **remover** o `pre_sm.carregar_modelos`
-- [ ] T021 [US4] Acrescentar a tela de conferência de cidades em `apps/web/app/(shell)/admin/pre-sm-cidades/` e a rota `app/api/admin/pre-sm-cidades/route.ts` (GET lista, PATCH confirma/desfaz), espelhando a de rotas que já existe
-- [ ] T022 [US4] Adaptar a tela de rotas existente para mostrar `CodRota` e a descrição da rota; renomear a rota de API e o item de menu
+- [ ] T021 [US4] Acrescentar a tela de conferência de cidades em `apps/web/app/(shell)/admin/pre-sm-cidades/` e a rota `app/api/admin/pre-sm-cidades/route.ts` (GET lista, PATCH confirma/desfaz), espelhando a de rotas que já existe. Permissão **`manage_commercial_data`**, e **não** `assign_resources` (FR-024): quem escala **usa** esta decisão, não a toma — senão a pessoa impedida de escalar alguém poderia se autoliberar confirmando uma correspondência
+- [ ] T022 [US4] Adaptar a tela de rotas existente para mostrar `CodRota` e a descrição da rota; renomear a rota de API e o item de menu. Mesma permissão `manage_commercial_data`
 - [ ] T023 [P] [US4] Textos das duas telas em `apps/web/messages/pt-BR.json`
 - [ ] T024 [US4] **Rodar a carga contra a produção** e conferir os números: quantas das 228 estações casaram, quantas das ~80 rotas. É leitura, não custa nada. Registrar o medido no `research.md`
 
@@ -155,6 +156,7 @@ existe com motorista, placas e horário certos — e que o TMS mostra o número.
 - [ ] T046 [US1] Adaptar `workers/jobs/pre-sm/criar.ts` e `index.ts` para montar o corpo novo. O interruptor e o teto diário **continuam**, desligados
 - [ ] T047 [US1] Escrever `apps/web/app/api/gr/[tripId]/enviar/route.ts`: enfileira o job, devolve 202. **Nunca chamar a Integra da rota** — a credencial vive só no worker
 - [ ] T048 [US1] Tratar a colisão do índice único parcial como "já existe", não como erro — é a garantia contra dois cliques simultâneos (FR-008)
+- [ ] T048b [US1] Registrar **quem apertou Enviar e quando** (FR-009), na rota e não no worker: o worker sabe o que aconteceu, não quem quis. A 026 já guarda `requested_by`, mas ali o autor era o sistema — aqui é uma pessoa, e é a informação que alguém vai procurar quando a gerenciadora cobrar por uma solicitação de que ninguém se lembra
 - [ ] T049 [US1] Mostrar na linha que o pedido está **em andamento** enquanto a gerenciadora não responde, distinguindo isso de ter falhado (FR-010, FR-013)
 - [ ] T050 [US1] **Ensaio com o interruptor desligado, um dia inteiro**: o job grava em `trip_pre_sm.payload_enviado` o que *teria* mandado. Ler essas linhas responde quantas viagens sairiam limpas — **sem custo**. É a validação que substitui a homologação que não temos
 
@@ -174,6 +176,7 @@ existe com motorista, placas e horário certos — e que o TMS mostra o número.
 - [ ] T051 [US3] Pôr o botão de cancelar na seção das já enviadas, reusando o diálogo de confirmação da 026 — o texto que diz que a cobrança não volta é o que faz alguém parar e pensar
 - [ ] T052 [US3] Depois de cancelada, a viagem volta a aparecer na fila podendo gerar outra — o índice único parcial já permite isso
 - [ ] T053 [US3] Quando a gerenciadora **recusa** cancelar (tipicamente porque a Pré-SM já foi efetivada), a viagem continua marcada como ativa e a mensagem dela aparece inteira
+- [ ] T053b [US3] Mostrar o **aviso de divergência** na seção das já enviadas (FR-016), reusando `divergenciasDaPreSm` da 026. É o requisito que a aba existe para tornar visível: a escolta foi contratada com o motorista ou a placa antigos, e hoje isso só aparece se alguém abrir a viagem. Calculado na leitura, **nunca guardado** — muda a cada reatribuição e uma coluna ficaria velha no instante seguinte
 
 ---
 

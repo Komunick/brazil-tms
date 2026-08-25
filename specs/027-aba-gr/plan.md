@@ -220,12 +220,15 @@ packages/shared/src/domain/
 
 packages/db/
 ├── migrations/00NN_aba_gr.sql   NOVO — cod_modelo → cod_rota, tabela de cidade
-├── schema/pre-sm-route-models.ts   MUDA
+├── schema/pre-sm-route-links.ts    MUDA (era pre-sm-route-models.ts)
 ├── schema/pre-sm-city-links.ts     NOVO
 └── src/trips/
     ├── pre-sm-rotas.ts       MUDA (era pre-sm-modelos.ts)
     ├── pre-sm-cidades.ts     NOVO
     └── gr-fila.ts            NOVO — a consulta da aba
+
+packages/shared/src/domain/
+└── pre-sm-cadastro.ts        NOVO — o casamento de cidade e de rota, puro
 
 apps/web/
 ├── app/(shell)/gr/page.tsx                      NOVO — a aba
