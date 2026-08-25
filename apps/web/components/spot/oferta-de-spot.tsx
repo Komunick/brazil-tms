@@ -8,6 +8,7 @@ import { useSpotOffers } from "@/lib/trips/client";
 import { decidirAviso, estadoInicial, novasOfertas } from "@/lib/spot/ofertas";
 import { tocarAviso } from "@/lib/spot/som";
 import { avisarNoSistema } from "@/lib/spot/aviso-do-sistema";
+import { EVENTO_ENSAIO } from "@/lib/spot/ensaio";
 
 /**
  * O AVISO DE OFERTA no meio da tela (2026-08-18).
@@ -129,6 +130,29 @@ export function OfertaDeSpot() {
       return [decisao.anunciar];
     });
   }, [ofertas]);
+
+  /**
+   * O ENSAIO — o mesmo cartão, o mesmo som, o mesmo aviso, com uma oferta de mentira (2026-08-24).
+   *
+   * Ele entra pela porta da frente de propósito: `setFila` direto, como a oferta de verdade faz. Um
+   * ensaio que desenhasse o cartão por outro caminho provaria que o outro caminho funciona.
+   *
+   * Não passa por `novasOfertas` nem por `decidirAviso`: a oferta de ensaio não está na resposta do
+   * servidor, e registrá-la na memória de vistos faria a próxima oferta REAL com aquele id ser
+   * tratada como já anunciada. O preço é que o ensaio ignora a regra de rajada — o que é correto:
+   * quem apertou o botão quer ver o cartão agora, mesmo que já haja um na tela.
+   */
+  useEffect(() => {
+    const aoEnsaiar = (e: Event) => {
+      const oferta = (e as CustomEvent<SpotOfferView>).detail;
+      if (!oferta) return;
+      tocarAviso();
+      avisarNoSistema(t("systemTitle"), oferta.route, { somenteSeEscondido: false });
+      setFila([oferta]);
+    };
+    window.addEventListener(EVENTO_ENSAIO, aoEnsaiar);
+    return () => window.removeEventListener(EVENTO_ENSAIO, aoEnsaiar);
+  }, [t]);
 
   const atual = fila[0];
 

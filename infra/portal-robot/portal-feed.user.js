@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.14.0
+// @version      1.15.0
 // @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -455,6 +455,127 @@
    * O preço vai como TEXTO, como o portal manda. Converter para número aqui obrigaria a decidir o
    * que fazer com centavo, moeda e vazio — decisões que pertencem a quem exibe, não a quem lê.
    */
+  /**
+   * A COMPARAÇÃO DE NOME É A MESMA DO MONITOR ANTIGO, linha por linha.
+   *
+   * O portal escreve a mesma estação de vários jeitos — com acento, com parênteses, colando letra e
+   * número (`ARACAJU02`). Esta função existia no script da VM Windows e vem copiada sem uma
+   * diferença: mudar a normalização junto com a origem do aviso faria uma rota deixar de casar sem
+   * ninguém saber se a culpa foi da lista ou da regra.
+   *
+   * O `split("|").pop()` está aqui porque o portal às vezes prefixa o nome com um código.
+   */
+  function normalizarNome(s) {
+    return String(s == null ? "" : s)
+      .split("|")
+      .pop()
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .toUpperCase()
+      .replace(/\([^)]*\)/g, " ")
+      .replace(/([A-Z])(\d)/g, "$1 $2")
+      .replace(/(\d)([A-Z])/g, "$1 $2")
+      .replace(/[^A-Z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  /**
+   * AS ROTAS QUE INTERESSAM — a lista que veio do monitor antigo (2026-08-24).
+   *
+   * Sessenta e três pares ORIGEM,DESTINO, copiados do script da VM Windows sem uma vírgula de
+   * diferença. Ele filtrava por eles desde sempre, e a primeira versão deste ciclo NÃO filtrava:
+   * mandaria toda oferta em leilão. Medido no instante em que o defeito foi apontado — das 10
+   * ofertas abertas, várias eram de Itajaí, Curitiba e Varginha, que não são rota nossa. Aviso
+   * demais é como aviso nenhum: em uma semana ninguém olha mais o grupo.
+   *
+   * A lista fica AQUI e não na malha do TMS (`lanes.in_network`), por enquanto: são duas listas com
+   * histórias diferentes — a malha nasceu do que a empresa RODOU, esta é do que a operação quer ser
+   * AVISADA. Unificá-las é decisão de negócio, e trocar a regra no mesmo dia em que se troca a
+   * origem do aviso seria mudar duas coisas de uma vez.
+   */
+  const ROTAS_DE_INTERESSE = [
+    "SoC_GO_Goiânia_02,LM Hub_TO_Palmas",
+    "SoC_PE_Jaboatão dos Guararapes,LM Hub_RN_Natal_01",
+    "SoC_SP_Santana,LM Hub_SP_Guarujá",
+    "SoC_BA_Simoes Filho,LM Hub_SE_Aracaju_02",
+    "SoC_SP_São Bernardo do Campo,LM Hub_SP_Guarujá",
+    "SoC_GO_Goiânia_02,LM Hub_BA_Barreiras",
+    "SoC_PE_Jaboatão dos Guararapes,XPT_PB_Patos",
+    "SoC_BA_Simoes Filho,LM Hub_MA_São Luís_01",
+    "FM Hub_PR_Umuarama_02,SoC_MG_Betim",
+    "SoC_RJ_Duque de Caxias,SoC_CE_Itaitinga",
+    "SoC_PE_Jaboatão dos Guararapes,LM Hub_PE_Recife_Guabiraba",
+    "SoC_SP_Guarulhos,SoC_CE_Itaitinga",
+    "LM Hub_TO_Palmas,SoC_GO_Goiânia_02",
+    "SoC_SP_Louveira,LM Hub_SP_Campinas_PqCidade",
+    "SoC_MG_Betim,XPT_MG_Diamantina",
+    "SoC_BA_Simoes Filho,LM Hub_BA_Simões Filho",
+    "SoC_PE_Jaboatão dos Guararapes,LM Hub_PE_Recife_Jaboatão",
+    "SoC_BA_Simoes Filho,LM Hub_SE_Aracaju_01",
+    "SoC_PE_Jaboatão dos Guararapes,LM Hub_PE_Recife_Muribeca",
+    "FBS_SP_Franco da Rocha,LM Hub_SP_Santo André",
+    "SoC_GO_Goiânia_02,SoC_CE_Itaitinga",
+    "SoC_MG_Betim,XPT_MG_Caratinga",
+    "LM Hub_SP_Guarujá,SoC_SP_São Bernardo do Campo",
+    "FM Hub_SE_Aracaju02,SoC_BA_Simoes Filho",
+    "SoC_PE_Jaboatão dos Guararapes,LM Hub_PB_João Pessoa_Gramame",
+    "SoC_BA_Simoes Filho,LM Hub_BA_Alagoinhas",
+    "SoC_BA_Simoes Filho,XPT_SE_Itabaiana",
+    "SoC_BA_Simoes Filho,XPT_BA_Senhor do Bonfim",
+    "SoC_MG_Betim,XPT_MG_Januária",
+    "SoC_RJ_Duque de Caxias,XPT_MG_Leopoldina_03",
+    "SoC_BA_Simoes Filho,XPT_BA_Jequié_02",
+    "SoC_MG_Betim,XPT_MG_Curvelo",
+    "SoC_BA_Simoes Filho,XPT_BA_Porto Seguro_04",
+    "SoC_MG_Betim,XPT_BA_Guanambi_02",
+    "LM Hub_MA_São Luís_01,SoC_BA_Simoes Filho",
+    "SoC_SP_Guarulhos,LM Hub_SP_Guarujá",
+    "SoC_BA_Simoes Filho,XPT_BA_Ribeira do Pombal",
+    "SoC_RJ_Duque de Caxias,LM Hub_MG_Contagem_01",
+    "FM Hub_PB_JoãoPessoa_Industrial,SoC_PE_Jaboatão dos Guararapes",
+    "FM Hub_SE_Aracaju02,SoC_SP_São Bernardo do Campo",
+    "LM Hub_SP_Campinas_PqCidade,SoC_SP_Louveira",
+    "SoC_CE_Itaitinga,SoC_GO_Goiânia_02",
+    "LM Hub_RN_Natal_01,SoC_PE_Jaboatão dos Guararapes",
+    "XPT_PB_Patos,SoC_PE_Jaboatão dos Guararapes",
+    "XPT_SE_Itabaiana,SoC_BA_Simoes Filho",
+    "XPT_BA_Senhor do Bonfim,SoC_BA_Simoes Filho",
+    "XPT_BA_Guanambi_02,SoC_MG_Betim",
+    "XPT_MG_Leopoldina_03,SoC_RJ_Rio de Janeiro",
+    "XPT_MG_Januária,SoC_MG_Betim",
+    "XPT_BA_Ribeira do Pombal,SoC_BA_Simoes Filho",
+    "XPT_MG_Diamantina,SoC_MG_Betim",
+    "LM Hub_BA_Alagoinhas,SoC_BA_Simoes Filho",
+    "XPT_BA_Jequié_02,SoC_BA_Simoes Filho",
+    "FM Hub_MG_Belo Horizonte_10,LM Hub_MG_Divinópolis",
+    "LM Hub_PE_Recife_Guabiraba,SoC_PE_Jaboatão dos Guararapes",
+    "LM Hub_PE_Recife_Jaboatão,SoC_PE_Jaboatão dos Guararapes",
+    "XPT_MG_Caratinga,SoC_MG_Betim",
+    "XPT_MG_Curvelo,SoC_MG_Betim",
+    "LM Hub_PB_João Pessoa_Gramame,SoC_PE_Jaboatão dos Guararapes",
+    "XPT_BA_Porto Seguro_04,SoC_BA_Simoes Filho",
+    "SoC_BA2,SoC_BA_Simoes Filho",
+    "SoC_BA_Simoes Filho,SoC_PE_Jaboatão dos Guararapes",
+    "SoC_PE_Jaboatão dos Guararapes,SoC_BA_Simoes Filho",
+  ];
+
+  const ROTAS_PERMITIDAS = new Set(
+    ROTAS_DE_INTERESSE.map((linha) => {
+      const c = linha.indexOf(",");
+      return `${normalizarNome(linha.slice(0, c))} -> ${normalizarNome(linha.slice(c + 1))}`;
+    }),
+  );
+
+  /** A rota da viagem, no mesmo formato da lista: primeira parada -> última. */
+  function rotaPermitida(v) {
+    const paradas = Array.isArray(v.trip_station) ? v.trip_station : [];
+    if (paradas.length < 2) return false;
+    const origem = normalizarNome(paradas[0]?.station_name);
+    const destino = normalizarNome(paradas[paradas.length - 1]?.station_name);
+    return ROTAS_PERMITIDAS.has(`${origem} -> ${destino}`);
+  }
+
   const spotJaVistos = new Set();
 
   function paraOferta(v) {
@@ -508,7 +629,10 @@
       1,
     );
     const lista = payload?.data?.list ?? [];
-    const emLeilao = lista.filter((v) => v.bid_status === CONFIG.spotBidStatusAberto);
+    // Dois filtros, na ordem que o monitor antigo usava: primeiro a rota, depois o leilão.
+    const emLeilao = lista
+      .filter(rotaPermitida)
+      .filter((v) => v.bid_status === CONFIG.spotBidStatusAberto);
 
     let novas = 0;
     for (const v of emLeilao) {
