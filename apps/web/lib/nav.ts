@@ -169,6 +169,15 @@ export const NAV_ITEMS: readonly NavItem[] = [
     permission: "view_audit_log",
     grupo: "sistema",
   },
+  /**
+   * Novidades (2026-08-25): o que mudou no TMS.
+   *
+   * SEM `permission`, ao contrário dos dois itens acima — é o único item de "Sistema" que todo mundo
+   * enxerga. A tela não mostra dado nenhum do negócio: mostra o que o sistema passou a fazer, e quem
+   * usa convive com as mudanças queira ou não. Restringi-la só garantiria que parte das pessoas
+   * descobrisse cada mudança tropeçando nela.
+   */
+  { key: "novidades", href: "/novidades", icon: "Sparkles", grupo: "sistema" },
   // 002 — commercial master data (manage_commercial_data: Admin, Ops Manager).
   {
     key: "customers",
