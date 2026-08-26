@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   EXPORT_ROW_CAP,
@@ -62,6 +62,7 @@ import type {
   MotoristaDoPortal,
   Comentario,
   LinhaDaProgramacao,
+  MarcaDaProgramacao,
   PlacaDoPortal,
   ProgramacaoDaViagem,
   StatusDaProgramacao,
@@ -78,6 +79,18 @@ import type {
  */
 
 // --- Poll/cap constants --------------------------------------------------------------------------
+
+/**
+ * AS MARCAS DA PROGRAMAÇÃO — status e contagem de comentários (2026-08-26, a pedido).
+ *
+ * Dez segundos, contra os 60 do quadro inteiro. O que justifica o passo curto é o TAMANHO: três
+ * colunas por viagem marcada, e só as marcadas. Não confunda com acelerar o quadro — aquilo seriam
+ * dezenas de quilobytes por pessoa a cada dez segundos, para atualizar dois campos.
+ *
+ * Dez e não cinco porque o gesto que isto acompanha é humano: alguém marcando linhas enquanto monta
+ * o dia. Cinco segundos dobrariam o tráfego para ganhar uma diferença que ninguém percebe.
+ */
+export const MARCAS_POLL_MS = 10_000;
 
 /** Control Tower board — dense active-trips list; 30s polling (plan: Performance Goals, R-poll). */
 export const CONTROL_TOWER_POLL_MS = 30_000;
@@ -401,12 +414,64 @@ export function useProgramacao(
     // inverso, e sem ordenar seriam duas entradas de cache para a mesma lista.
     ...[...regioes].sort().map((r) => ["regioes", r] as [string, string]),
   ]).toString();
-  return useQuery({
+  const quadro = useQuery({
     queryKey: [...PROGRAMACAO, busca],
     queryFn: async () =>
       asJson<{ linhas: LinhaDaProgramacao[] }>(await fetch(`/api/me/programacao?${busca}`)),
     refetchInterval: DASHBOARD_POLL_MS,
   });
+
+  /**
+   * AS MARCAS CORREM POR FORA, num passo muito mais curto (2026-08-26, a pedido).
+   *
+   * O quadro inteiro continua a 60s, e é o certo: origem, destino, janela e telefone vêm do portal e
+   * mudam a cada poucos minutos, na melhor das hipóteses. Puxar centenas de linhas de vinte campos
+   * de dez em dez segundos, por pessoa, o dia inteiro, seria desperdício.
+   *
+   * Mas DUAS coisas mudam por gesto humano, agora: o status e a contagem de comentários. Uma pessoa
+   * marca "Enviado" e a colega ao lado só via daqui a um minuto — num quadro que duas pessoas
+   * trabalham juntas, isso faz as duas marcarem a mesma viagem.
+   *
+   * Esta consulta traz três colunas por viagem marcada. É uma fração do tamanho, e por isso corre
+   * num passo que faz a tela parecer viva.
+   */
+  const marcas = useQuery({
+    queryKey: [...PROGRAMACAO, "marcas"],
+    queryFn: async () =>
+      asJson<{ marcas: MarcaDaProgramacao[] }>(await fetch("/api/me/programacao/marcas")),
+    refetchInterval: MARCAS_POLL_MS,
+  });
+
+  /**
+   * A FUSÃO ACONTECE NA LEITURA, e não escrevendo no cache do quadro.
+   *
+   * Escrever no cache pareceria mais direto e é uma armadilha: a próxima recarga do quadro traria
+   * o valor do servidor por cima, e o que a pessoa acabou de ver piscaria de volta ao antigo por
+   * um instante. Aqui as duas consultas vivem separadas e a linha é montada na hora.
+   *
+   * ── A AUSÊNCIA TAMBÉM É INFORMAÇÃO ────────────────────────────────────────────────────────
+   *
+   * Quem TIRA um status some da lista de marcas. Por isso a linha não marcada recebe `null`, e não
+   * o que o quadro trouxe — senão o status removido por uma pessoa continuaria na tela das outras
+   * até a recarga de 60 segundos.
+   *
+   * Enquanto as marcas não chegaram (primeira carga), vale o que o quadro trouxe: melhor um valor
+   * de um minuto atrás do que a coluna piscar vazia ao abrir a tela.
+   */
+  const linhas = useMemo(() => {
+    const doQuadro = quadro.data?.linhas;
+    const lista = marcas.data?.marcas;
+    if (!doQuadro || !lista) return doQuadro;
+    const porViagem = new Map(lista.map((m) => [m.tripId, m]));
+    return doQuadro.map((l) => {
+      const m = porViagem.get(l.tripId);
+      return { ...l, statusOperacional: m?.status ?? null, comentarios: m?.comentarios ?? 0 };
+    });
+  }, [quadro.data, marcas.data]);
+
+  return { ...quadro, data: linhas ? { linhas } : quadro.data } as UseQueryResult<{
+    linhas: LinhaDaProgramacao[];
+  }>;
 }
 
 /**
@@ -489,9 +554,50 @@ export function useMarcarStatus(tripId: string) {
           body: JSON.stringify({ status }),
         }),
       ),
+    /**
+     * O SELO MUDA NO CLIQUE, antes de o servidor responder (2026-08-26, a pedido).
+     *
+     * Sem isto, marcar um status era: manda o PATCH, espera a resposta, invalida o quadro INTEIRO,
+     * espera as centenas de linhas voltarem — e só então o selo muda. Meio segundo num dia bom, e
+     * a sensação de que o clique não fez nada. Quem sentiu isso foi o usuário.
+     *
+     * A escrita otimista vai na lista de MARCAS, e não na do quadro: é ela que a tela lê para o
+     * status, e é a menor das duas. Se o servidor recusar, `onError` devolve o que estava.
+     */
+    onMutate: async (status) => {
+      const chave = [...PROGRAMACAO, "marcas"];
+      await queryClient.cancelQueries({ queryKey: chave });
+      const antes = queryClient.getQueryData<{ marcas: MarcaDaProgramacao[] }>(chave);
+      if (antes) {
+        const outras = antes.marcas.filter((m) => m.tripId !== tripId);
+        const minha = antes.marcas.find((m) => m.tripId === tripId);
+        // Tirar o status NÃO tira a linha das marcas quando ela ainda tem comentários — a contagem
+        // continua valendo, e removê-la faria o marcador de recado sumir junto.
+        const comentarios = minha?.comentarios ?? 0;
+        queryClient.setQueryData(chave, {
+          marcas:
+            status === null && comentarios === 0
+              ? outras
+              : [...outras, { tripId, status, comentarios }],
+        });
+      }
+      return { antes };
+    },
+    onError: (_erro, _v, ctx) => {
+      if (ctx?.antes) queryClient.setQueryData([...PROGRAMACAO, "marcas"], ctx.antes);
+    },
     onSuccess: (dados) => {
       queryClient.setQueryData([...TRIPS_ROOT, tripId, "programacao"], dados);
-      void queryClient.invalidateQueries({ queryKey: PROGRAMACAO });
+    },
+    /**
+     * A CONFERÊNCIA COM O SERVIDOR vem no fim, sempre — deu certo ou não.
+     *
+     * Só as MARCAS são invalidadas, não o quadro: o quadro não mostra o status (a tela o lê das
+     * marcas), e recarregar centenas de linhas a cada clique era exatamente o desperdício que a
+     * separação veio resolver.
+     */
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: [...PROGRAMACAO, "marcas"] });
     },
   });
 }
