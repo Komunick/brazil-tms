@@ -124,17 +124,17 @@ funcionando ainda**.
 **Independent Test**: pôr uma viagem com motorista sem CPF na fila e conferir que ela aparece, diz
 "falta CPF", tem link para o cadastro, e destrava depois de o CPF ser preenchido.
 
-- [ ] T032 [US2] Escrever `packages/db/src/trips/gr-fila.ts`: a consulta que cruza viagens atribuídas, ordem do portal, vínculos, correspondências confirmadas e o estado da Pré-SM. **Sem coluna guardada de "está pronta"** — ela ficaria velha no instante seguinte (ver `data-model.md`)
-- [ ] T033 [US2] Qualificar as colunas ambíguas na consulta (`updated_at` existe em `trips` e em `drivers`) — sem o prefixo o Postgres recusa a consulta inteira, e nenhum teste unitário pega isso
-- [ ] T034 [US2] Expor a fila em `apps/web/app/api/gr/route.ts`, permissão `assign_resources`
-- [ ] T035 [US2] Escrever a tela em `apps/web/app/(shell)/gr/page.tsx` e `apps/web/components/gr/`, com polling via TanStack Query (**sem Realtime** — restrição da constituição)
-- [ ] T036 [US2] Cada linha mostra o que será enviado: placas, motorista (e o segundo), o vínculo de cada recurso, e a janela de coleta (FR-002)
-- [ ] T037 [US2] Cada linha mostra **todos** os motivos que faltam, cada um com o caminho para resolver — cadastro do motorista, diálogo de atribuição, tela de conferência (FR-006, FR-007)
-- [ ] T038 [US2] Ordenar a fila pela urgência da coleta: o que sai primeiro aparece primeiro (FR-004)
-- [ ] T039 [US2] Seção separada para as já enviadas, com o código da Pré-SM (FR-014)
-- [ ] T040 [P] [US2] Textos da aba em `apps/web/messages/pt-BR.json`
-- [ ] T041 [US2] Item de menu para a aba GR, perto da expedição — é tela de operação, não de administração
-- [ ] T042 [US2] **Abrir a aba com dados reais de produção** e conferir a fila contra o que se sabe: quantas viagens prontas, quantas com cada motivo. Ainda sem botão que gaste
+- [X] T032 [US2] Escrever `packages/db/src/trips/gr-fila.ts`: a consulta que cruza viagens atribuídas, ordem do portal, vínculos, correspondências confirmadas e o estado da Pré-SM. **Sem coluna guardada de "está pronta"** — ela ficaria velha no instante seguinte (ver `data-model.md`)
+- [X] T033 [US2] Qualificar as colunas ambíguas na consulta (`updated_at` existe em `trips` e em `drivers`) — sem o prefixo o Postgres recusa a consulta inteira, e nenhum teste unitário pega isso
+- [X] T034 [US2] Expor a fila em `apps/web/app/api/gr/route.ts`, permissão `assign_resources`
+- [X] T035 [US2] Escrever a tela em `apps/web/app/(shell)/gr/page.tsx` e `apps/web/components/gr/`, com polling via TanStack Query (**sem Realtime** — restrição da constituição)
+- [X] T036 [US2] Cada linha mostra o que será enviado: placas, motorista (e o segundo), o vínculo de cada recurso, e a janela de coleta (FR-002)
+- [X] T037 [US2] Cada linha mostra **todos** os motivos que faltam, cada um com o caminho para resolver — cadastro do motorista, diálogo de atribuição, tela de conferência (FR-006, FR-007)
+- [X] T038 [US2] Ordenar a fila pela urgência da coleta: o que sai primeiro aparece primeiro (FR-004)
+- [X] T039 [US2] Seção separada para as já enviadas, com o código da Pré-SM (FR-014)
+- [X] T040 [P] [US2] Textos da aba em `apps/web/messages/pt-BR.json`
+- [X] T041 [US2] Item de menu para a aba GR, perto da expedição — é tela de operação, não de administração
+- [ ] T042 [US2] **BLOQUEADA ATÉ O DEPLOY** — a consulta foi provada contra a produção (28 viagens na fila, 25 com CPF), mas abrir a tela com dados reais precisa do app deployado. **Abrir a aba com dados reais de produção** e conferir a fila contra o que se sabe: quantas viagens prontas, quantas com cada motivo. Ainda sem botão que gaste
 
 **Checkpoint**: a aba serve como painel de trabalho mesmo sem enviar nada — já diz o que precisa ser
 resolvido no cadastro.

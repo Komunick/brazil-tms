@@ -90,6 +90,23 @@ export const NAV_ITEMS: readonly NavItem[] = [
     permission: "assign_resources",
     grupo: "operacao",
   },
+  /**
+   * A aba GR — a Pré-SM da viagem (2026-08-26, fatia 027).
+   *
+   * Fica logo depois da expedição porque é o passo seguinte dela: a viagem é atribuída ali e cai
+   * aqui. Mesma chave (`assign_resources`) porque é a mesma pessoa — a Pré-SM nasce da atribuição
+   * que ela acabou de fazer.
+   *
+   * É tela de OPERAÇÃO, não de administração: as duas telas de conferência de cadastro moram em
+   * Cadastros, esta mora no dia a dia.
+   */
+  {
+    key: "gr",
+    href: "/gr",
+    icon: "ShieldCheck",
+    permission: "assign_resources",
+    grupo: "operacao",
+  },
   // 007 — Exception Management queue (view_all_trips: all 7 internal roles read) + per-customer SLA
   // rules admin (manage_commercial_data: Admin, Ops Manager).
   {

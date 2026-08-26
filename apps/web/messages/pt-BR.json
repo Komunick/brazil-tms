@@ -99,7 +99,8 @@
     "minhaProgramacao": "Minha Programação",
     "novidades": "Novidades",
     "preSmRotas": "Rotas da gerenciadora",
-    "preSmCidades": "Cidades da gerenciadora"
+    "preSmCidades": "Cidades da gerenciadora",
+    "gr": "GR — Pré-SM"
   },
   "FreightRates": {
     "screenTitle": "Tabela de Fretes",
@@ -2155,5 +2156,33 @@
     "cargaChegou": "{n} correspondências novas para conferir.",
     "cargaSemNovidade": "A busca rodou e não encontrou correspondência nova.",
     "cargaFalhou": "Não deu para pedir a busca. Tente de novo."
+  },
+  "GR": {
+    "title": "GR — Pré-SM",
+    "subtitle": "As viagens atribuídas esperando pré-solicitação de monitoramento. Envie uma por vez; o que falta aparece na própria linha.",
+    "buscar": "Buscar por LH, estação, motorista ou placa",
+    "prontas": "{n} prontas para enviar",
+    "naFila": "{n} na fila",
+    "jaEnviadas": "Já enviadas ({n})",
+    "filaVazia": "Nenhuma viagem atribuída esperando Pré-SM.",
+    "coletaEm": "coleta {data}",
+    "enviar": "Enviar Pré-SM",
+    "semConfiguracao": "A integração com a gerenciadora não está configurada — faltam o código da filial e o do perfil de segurança. Isso é ajuste de instalação, não de cadastro.",
+    "motivo": {
+      "sem_rota": "A rota desta viagem ainda não tem correspondência confirmada.",
+      "sem_cidade_origem": "A cidade da estação de origem ainda não foi confirmada.",
+      "sem_cidade_destino": "A cidade da estação de destino ainda não foi confirmada.",
+      "sem_cpf": "O motorista está sem CPF no cadastro.",
+      "sem_placa": "A atribuição não tem placa.",
+      "sem_vinculo_veiculo": "Falta classificar o veículo ou a carreta como frota, agregado ou terceiro.",
+      "sem_vinculo_motorista": "Falta classificar o motorista como frota, agregado ou terceiro.",
+      "sem_janela_coleta": "A viagem está sem a janela de coleta.",
+      "sem_janela_entrega": "A viagem está sem a janela de entrega."
+    },
+    "irParaRotas": "conferir rotas",
+    "irParaCidades": "conferir cidades",
+    "irParaMotoristas": "abrir motoristas",
+    "irParaVeiculos": "abrir veículos",
+    "irParaViagem": "abrir a viagem"
   }
 }

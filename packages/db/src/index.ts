@@ -289,3 +289,6 @@ export {
   motoristasBloqueadosEntre,
   type MotoristaBloqueado,
 } from "./fleet/driver-block";
+
+// A fila da aba GR — uma consulta, não uma tabela (027).
+export { filaDaGR, type LinhaDaFilaGR } from "./trips/gr-fila";
