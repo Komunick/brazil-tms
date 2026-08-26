@@ -158,6 +158,17 @@ export interface LinhaDaProgramacao {
    * Vem em branco assim que o portal escala alguém de verdade: a intenção não disputa espaço com
    * o fato. Quem decide isso é a consulta, não a tela — ver o `case` no SELECT.
    */
+  /**
+   * O STATUS QUE A OPERAÇÃO MARCOU — a coluna que a planilha tem (2026-08-26).
+   *
+   * `statusOperacional` e não `status`, porque `status` já é o da VIAGEM, que vem do portal. São
+   * coisas diferentes e ficam na mesma linha: um diz o que aconteceu com a carga, o outro o que a
+   * operação fez sobre ela. Chamar os dois de status foi o primeiro erro que o compilador pegou.
+   *
+   * Compartilhado, ao contrário da cor: a planilha tem UMA coluna que todo mundo lê. `null` é o
+   * normal da esmagadora maioria das linhas.
+   */
+  statusOperacional: "A_ENVIAR" | "ENVIADO" | "PROG_OK" | "NO_SHOW" | null;
   previstoMotorista: string | null;
   previstoPlaca: string | null;
   /** Quantos recados a viagem tem. É só o número: o texto se lê abrindo a LH. */
@@ -215,6 +226,7 @@ export async function readProgramacao(
     telefone: string | null;
     cor: string | null;
     oculta: boolean;
+    status_operacional: string | null;
     previsto_motorista: string | null;
     previsto_placa: string | null;
     comentarios: number;
@@ -254,6 +266,7 @@ export async function readProgramacao(
         obrigaria quem olha a decidir qual vale, e essa dúvida é justamente o que a coluna existe
         para não criar. A linha continua no banco: se a atribuição cair, o previsto reaparece.
       */
+      pv.status as status_operacional,
       case when nullif(btrim(t.customer_fields ->> 'Motorista (portal)'), '') is null
            then dpv.name end as previsto_motorista,
       case when nullif(btrim(t.customer_fields ->> 'Placa (portal)'), '') is null
@@ -271,7 +284,7 @@ export async function readProgramacao(
     left join motorista_do_portal m
       on m.nome = upper(btrim(t.customer_fields ->> 'Motorista (portal)'))
     left join ${userWatchedTrips} w on w.trip_id = t.id and w.user_id = ${userId}
-    left join trip_previsto pv on pv.trip_id = t.id
+    left join trip_programacao pv on pv.trip_id = t.id
     -- O nome sai do cadastro na leitura, nunca de uma copia guardada: "portal_driver_id" e a chave
     -- estavel, e um nome copiado envelheceria sem que ninguém soubesse de onde veio.
     left join drivers dpv on dpv.portal_driver_id = pv.portal_driver_id
@@ -312,6 +325,8 @@ export async function readProgramacao(
 
     oculta: r.oculta,
 
+    statusOperacional:
+      (r.status_operacional as "A_ENVIAR" | "ENVIADO" | "PROG_OK" | "NO_SHOW" | null) ?? null,
     previstoMotorista: r.previsto_motorista,
 
     previstoPlaca: r.previsto_placa,

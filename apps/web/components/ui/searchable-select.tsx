@@ -41,6 +41,20 @@ export interface SearchableSelectProps {
   clearable?: boolean;
   clearLabel?: string;
   disabled?: boolean;
+  /**
+   * TEXTO LIVRE VIRA VALOR — a exceção, e ela é opt-in (2026-08-26, para as placas).
+   *
+   * O comportamento normal é estrito: o que não está na lista não pode ser escolhido, e é o certo
+   * para motorista (um id do portal que não existe é uma ordem que vai falhar).
+   *
+   * Para PLACA é o contrário. A lista sai do que o portal já usou, e um caminhão novo — na primeira
+   * viagem dele — não está lá. Recusar o que a pessoa digitou impediria justamente a atribuição que
+   * ela precisa fazer, e a lista deixaria de ser ajuda para virar obstáculo.
+   *
+   * Com `livre`, o texto digitado que não casa com nenhuma opção é COMITADO ao sair do campo ou
+   * no Enter, e passa a ser exibido como se fosse uma opção.
+   */
+  livre?: boolean;
 }
 
 const CLEAR = "__clear__";
@@ -56,13 +70,24 @@ export function SearchableSelect({
   clearable,
   clearLabel,
   disabled,
+  livre,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const selected = useMemo(() => options.find((o) => o.id === value) ?? null, [options, value]);
+  /**
+   * Com `livre`, um valor que não está na lista ainda precisa APARECER no campo.
+   *
+   * Sem esta segunda metade, a placa digitada à mão sumiria da tela no instante em que fosse
+   * gravada — o campo voltaria a mostrar o `placeholder`, e quem digitou concluiria que se perdeu.
+   */
+  const selected = useMemo(
+    () =>
+      options.find((o) => o.id === value) ?? (livre && value ? { id: value, label: value } : null),
+    [options, value, livre],
+  );
 
   const filtered = useMemo(() => {
     const q = normalizeForSearch(query, mode);
@@ -72,10 +97,7 @@ export function SearchableSelect({
 
   // The rendered rows: the pinned clear item (when clearable) + the filtered options (FR-006).
   const rows = useMemo(
-    () =>
-      clearable && clearLabel
-        ? [{ id: CLEAR, label: clearLabel }, ...filtered]
-        : filtered,
+    () => (clearable && clearLabel ? [{ id: CLEAR, label: clearLabel }, ...filtered] : filtered),
     [clearable, clearLabel, filtered],
   );
 
@@ -105,7 +127,19 @@ export function SearchableSelect({
     setOpen(true);
   }
 
-  function close() {
+  /**
+   * `comTexto` só é verdadeiro nos dois caminhos em que a pessoa TERMINOU de digitar: sair do campo
+   * e Enter sem nada para escolher. Nos outros — Esc, e o `close()` que vem depois de `pick` — o
+   * texto é descartado, senão sair pelo Esc gravaria o que estava escrito, que é o oposto de Esc.
+   */
+  function close(comTexto = false) {
+    if (comTexto && livre) {
+      const texto = query.trim();
+      const jaExiste = rows.some(
+        (r) => normalizeForSearch(r.label, mode) === normalizeForSearch(texto, mode),
+      );
+      if (texto !== "" && !jaExiste) onChange(texto);
+    }
     setOpen(false);
     setQuery("");
   }
@@ -136,6 +170,8 @@ export function SearchableSelect({
       // A single filtered option needs no arrowing; otherwise pick the active row.
       const target = filtered.length === 1 && query ? filtered[0] : rows[activeIndex];
       if (target) pick(target.id);
+      // Nada para escolher e texto digitado: em modo livre, Enter comita o que está escrito.
+      else close(true);
     } else if (e.key === "Escape") {
       e.preventDefault();
       close();
@@ -165,7 +201,7 @@ export function SearchableSelect({
           setQuery(e.target.value);
           setActiveIndex(0);
         }}
-        onBlur={close}
+        onBlur={() => close(true)}
         onKeyDown={onKeyDown}
         className="pr-8"
       />

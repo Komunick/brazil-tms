@@ -2,18 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import {
-  ChevronDown,
-  ChevronRight,
-  Eye,
-  EyeOff,
-  MessageSquare,
-  Palette,
-  SlidersHorizontal,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, Eye, EyeOff, Palette, SlidersHorizontal } from "lucide-react";
 import { useMarcarViagem, useProgramacao } from "@/lib/trips/client";
 import { proximasFrentes } from "@/lib/trips/frentes";
 import { ProgramacaoDetalhe } from "@/components/trips/programacao-detalhe";
+import { StatusDaLinha } from "@/components/trips/status-da-linha";
+import { ComentariosDaLinha } from "@/components/trips/comentarios-da-linha";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import {
   REGION_ORDER,
@@ -471,7 +465,9 @@ export function MinhaProgramacaoClient({
             <Table className={cn(recolhidos.has(dia) && "hidden")}>
               <TableHeader>
                 <TableRow>
+                  {/* A coluna das MARCAÇÕES: a cor (pessoal) e o status (de todos). */}
                   <TableHead className="w-8" />
+                  <TableHead className="w-24">{t("statusOperacional")}</TableHead>
                   <TableHead>{t("lh")}</TableHead>
                   <TableHead>{t("rota")}</TableHead>
                   <TableHead>{t("etaOrigem")}</TableHead>
@@ -530,6 +526,19 @@ export function MinhaProgramacaoClient({
                       </div>
                     </TableCell>
 
+                    {/*
+                      O STATUS FICA AO LADO DA COR (2026-08-26, a pedido), e é a mesma ideia vista
+                      de dois ângulos: uma marcação pessoal e uma de todos, no mesmo canto da linha.
+                      A caixinha abre para baixo e some ao escolher — a linha não cresce.
+                    */}
+                    <TableCell className="p-1">
+                      <StatusDaLinha
+                        tripId={l.tripId}
+                        status={l.statusOperacional}
+                        podeMarcar={podeAtribuir}
+                      />
+                    </TableCell>
+
                     <TableCell className="font-mono text-xs">
                       {/*
                         Clicar na LH abre uma JANELA, não outra página (2026-08-24, a pedido).
@@ -546,26 +555,22 @@ export function MinhaProgramacaoClient({
                         {l.externalTripId ?? "—"}
                       </button>
                       {/*
-                        O RECADO SE ANUNCIA NA LINHA, e o texto se lê abrindo a LH (2026-08-26).
-                        A escolha foi do usuário, contra a alternativa de virar aviso no sino: um
-                        comentário não é uma tarefa pendente, e transformá-lo em algo a "dar
-                        ciência" faria a operação aprender a fechar avisos sem ler. Aqui ele fica
-                        visível para quem estiver olhando aquela linha, que é quem precisa dele.
+                        O RECADO ABRE NO PRÓPRIO MARCADOR (2026-08-26, a pedido).
+
+                        Antes ele abria a janela inteira da viagem, e a conversa ficava no rodapé
+                        dela, depois da linha do tempo — ler um recado custava abrir, rolar, ler e
+                        fechar. O usuário apontou, e agora o marcador abre só a conversa.
+
+                        Ele aparece MESMO COM ZERO, apagado: sem isso não haveria por onde escrever
+                        o PRIMEIRO comentário sem abrir a LH, que é justamente o caminho que isto
+                        veio encurtar.
                       */}
-                      {l.comentarios > 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => setViagemAberta(l.tripId)}
-                          title={t("temComentarios", { n: l.comentarios })}
-                          className="ml-1.5 inline-flex items-center gap-0.5 align-middle text-muted-foreground hover:text-foreground"
-                        >
-                          <MessageSquare className="h-3 w-3" aria-hidden />
-                          <span className="text-[10px] tabular-nums">{l.comentarios}</span>
-                          <span className="sr-only">
-                            {t("temComentarios", { n: l.comentarios })}
-                          </span>
-                        </button>
-                      ) : null}
+                      <ComentariosDaLinha
+                        tripId={l.tripId}
+                        externalTripId={l.externalTripId}
+                        quantos={l.comentarios}
+                        userId={userId}
+                      />
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs">
                       {l.origem ?? "—"}

@@ -14,7 +14,6 @@ import {
 import type { MotoristaDoPortal } from "@brazil-tms/db";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -30,6 +29,7 @@ import {
   TripsError,
   usePortalAction,
   usePortalDrivers,
+  usePortalPlacas,
   useVinculosDasPlacas,
 } from "@/lib/trips/client";
 import { VinculoDoRecurso, type VinculoEscolhido } from "@/components/trips/vinculo-do-recurso";
@@ -94,6 +94,7 @@ export function PortalAssignDialog({
 }) {
   const t = useTranslations("Trips.portalAssign");
   const motoristas = usePortalDrivers();
+  const placasConhecidas = usePortalPlacas();
   const acao = usePortalAction(tripId);
 
   const quantas = placasEsperadas(vehicleType);
@@ -131,6 +132,17 @@ export function PortalAssignDialog({
    * dependência para errar, e sem o risco de herdar o motorista da viagem anterior — que era o que
    * o efeito existia para evitar.
    */
+  /**
+   * As placas em OPÇÕES, memoizadas uma vez para todos os campos.
+   *
+   * Dentro do `map` seriam duas ou três listas de 936 itens reconstruídas a cada tecla digitada em
+   * qualquer um deles.
+   */
+  const opcoesDePlaca = useMemo(
+    () => (placasConhecidas.data?.items ?? []).map((p) => ({ id: p.placa, label: p.placa })),
+    [placasConhecidas.data],
+  );
+
   const opcoes = useMemo(
     () =>
       (motoristas.data?.items ?? []).map((m) => ({
@@ -171,7 +183,9 @@ export function PortalAssignDialog({
   const jaClassificados = useVinculosDasPlacas(preenchidas, open);
 
   const escolhido = (m: MotoristaDoPortal | undefined) => m?.vinculo ?? null;
-  const doMotorista = escolhido(motoristas.data?.items?.find((m) => String(m.portalDriverId) === driverId));
+  const doMotorista = escolhido(
+    motoristas.data?.items?.find((m) => String(m.portalDriverId) === driverId),
+  );
   const doSegundo = escolhido(
     motoristas.data?.items?.find((m) => String(m.portalDriverId) === secondDriverId),
   );
@@ -252,18 +266,40 @@ export function PortalAssignDialog({
                   {placas.length > 1 ? t("plateN", { n: String(i + 1) }) : t("plate")}
                 </Label>
                 <div className="flex gap-2">
-                  <Input
-                    id={`placa-${tripId}-${i}`}
-                    value={placa}
-                    maxLength={8}
-                    autoComplete="off"
-                    className="uppercase"
-                    onChange={(e) =>
-                      setPlacas((atual) =>
-                        atual.map((p, j) => (j === i ? normalizarPlaca(e.target.value) : p)),
-                      )
-                    }
-                  />
+                  {/*
+                    A PLACA VEM DE LISTA, como o motorista (2026-08-26, a pedido).
+
+                    Era campo de texto livre ao lado de um motorista que vinha de lista, e a
+                    assimetria custava caro: quem digita erra, e uma placa errada no portal é uma
+                    ordem errada que JÁ SAIU.
+
+                    ── `livre`, e não uma lista estrita ──────────────────────────────────────
+
+                    A lista sai do que o portal já usou — 936 placas, medidas em 26/08. Um caminhão
+                    novo, na primeira viagem dele, não está lá. Recusar o que a pessoa digitou
+                    impediria justamente a atribuição que ela precisa fazer, e a lista deixaria de
+                    ser ajuda para virar obstáculo. Aqui ela SUGERE; quem manda é quem escala.
+
+                    `mode="plate"` faz a busca ignorar hífen e espaço: "abc-1d23" acha "ABC1D23".
+                  */}
+                  <div className="flex-1">
+                    <SearchableSelect
+                      id={`placa-${tripId}-${i}`}
+                      value={placa}
+                      onChange={(v) =>
+                        setPlacas((atual) =>
+                          atual.map((p, j) => (j === i ? normalizarPlaca(v) : p)),
+                        )
+                      }
+                      options={opcoesDePlaca}
+                      placeholder={
+                        placasConhecidas.isLoading ? t("loadingPlates") : t("platePlaceholder")
+                      }
+                      emptyText={t("noPlate")}
+                      mode="plate"
+                      livre
+                    />
+                  </div>
                   {placas.length > 1 ? (
                     <Button
                       type="button"
@@ -278,7 +314,9 @@ export function PortalAssignDialog({
                     perguntar a classificação de um campo vazio não faz sentido. */}
                 {normalizarPlaca(placa) ? (
                   <VinculoDoRecurso
-                    rotulo={placas.length > 1 && i > 0 ? t("plateN", { n: String(i + 1) }) : t("plate")}
+                    rotulo={
+                      placas.length > 1 && i > 0 ? t("plateN", { n: String(i + 1) }) : t("plate")
+                    }
                     valor={jaClassificados[normalizarPlaca(placa)] ?? vinculoDasPlacas[i] ?? null}
                     jaClassificado={jaClassificados[normalizarPlaca(placa)] != null}
                     aoEscolher={(v) =>

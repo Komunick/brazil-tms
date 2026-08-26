@@ -1504,7 +1504,10 @@
       "cnhVencida": "CNH VENCIDA em {data}. Confira antes de escalar.",
       "cnhVencendo": "CNH vence em {data}.",
       "cnhSemData": "Sem data de CNH no cadastro — não dá para conferir.",
-      "driverBlocked": "bloqueado"
+      "driverBlocked": "bloqueado",
+      "loadingPlates": "Carregando placas…",
+      "platePlaceholder": "Escolher ou digitar a placa",
+      "noPlate": "Nenhuma placa. Digite para usar mesmo assim."
     },
     "melhoresDaRota": {
       "titulo": "Nesta rota",
@@ -2069,7 +2072,10 @@
     "semComentarios": "Nenhum comentário nesta viagem.",
     "apagarComentario": "Apagar comentário",
     "autorDesconhecido": "Alguém",
-    "temComentarios": "{n, plural, one {# comentário} other {# comentários}}"
+    "temComentarios": "{n, plural, one {# comentário} other {# comentários}}",
+    "statusOperacional": "Status",
+    "marcarStatus": "Marcar status",
+    "semStatus": "Sem status"
   },
   "HistoricoMotorista": {
     "titulo": "Histórico do motorista",

@@ -41,6 +41,30 @@ export const NOVIDADES: readonly Novidade[] = [
   {
     data: "2026-08-26",
     tipo: "novidade",
+    titulo: "A placa vem de lista, como o motorista",
+    descricao:
+      "No formulário de atribuição a placa era campo de digitar, ao lado de um motorista que vinha de lista. Agora ela também sugere — as placas que o portal já usou, buscáveis ignorando hífen. Um caminhão novo continua podendo ser digitado.",
+    onde: "Expedição e Minha Programação · atribuir",
+  },
+  {
+    data: "2026-08-26",
+    tipo: "novidade",
+    titulo: "O comentário abre no próprio marcador",
+    descricao:
+      "Antes era preciso abrir a viagem e rolar até o fim para ler um recado. Agora o marcador da linha abre só a conversa, com o campo de escrever. Ele aparece em todas as linhas, apagado quando não há comentário.",
+    onde: "Minha Programação",
+  },
+  {
+    data: "2026-08-26",
+    tipo: "novidade",
+    titulo: "Status na linha: a enviar, enviado, prog OK, no show",
+    descricao:
+      "A coluna STATUS da planilha, com as mesmas quatro marcas e as mesmas cores. Fica ao lado da paleta, abre numa caixinha e não estica a linha. É de todos — ao contrário da cor, que continua sendo sua.",
+    onde: "Minha Programação",
+  },
+  {
+    data: "2026-08-26",
+    tipo: "novidade",
     titulo: "Comentar numa LH",
     descricao:
       "Dentro da viagem dá para deixar um recado — o que o cliente pediu, o que o motorista avisou. Fica visível para todos, e a linha da programação passa a mostrar quantos comentários a LH tem.",
