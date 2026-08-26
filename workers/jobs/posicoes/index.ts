@@ -1,7 +1,7 @@
 import { type PgBoss } from "pg-boss";
 import { gravarPosicoesDaGerenciadora, type PosicaoParaGravar } from "@brazil-tms/db";
 import { JOB, work } from "../../lib/queue";
-import { credenciaisDaIntegra, getPosicoes } from "../../lib/integra/cliente";
+import { IntegraRecusou, credenciaisDaIntegra, getPosicoes } from "../../lib/integra/cliente";
 
 /**
  * ONDE ESTÁ CADA CAMINHÃO — a carga das posições da gerenciadora (2026-08-26, a pedido).
@@ -32,6 +32,8 @@ import { credenciaisDaIntegra, getPosicoes } from "../../lib/integra/cliente";
 
 export interface ResultadoDaCarga {
   ligado: boolean;
+  /** A gerenciadora recusou por consulta rápida demais. Não é falha — ver o topo de `runCarregarPosicoes`. */
+  limitada?: boolean;
   recebidas: number;
   gravadas: number;
   /** Sem coordenada utilizável: nulas, ou zero-zero. Ver o comentário de `coordenada`. */
@@ -42,7 +44,31 @@ export async function runCarregarPosicoes(): Promise<ResultadoDaCarga> {
   const cred = credenciaisDaIntegra();
   if (!cred) return { ligado: false, recebidas: 0, gravadas: 0, descartadas: 0 };
 
-  const cruas = await getPosicoes(cred);
+  /**
+   * A GERENCIADORA LIMITA A FREQUÊNCIA: dez segundos entre consultas.
+   *
+   * Descoberto do jeito difícil em 26/08. Uma falha de gravação fez o pg-boss reexecutar o job em
+   * rajada, as chamadas caíram dentro dos dez segundos, e a API passou a responder
+   * "CONSUMO INDEVIDO. 10 segundos". O sintoma que aparecia PRIMEIRO no log não era a causa — o
+   * defeito real era uma data mal serializada no INSERT.
+   *
+   * ── E POR QUE ISSO NÃO PODE VIRAR EXCEÇÃO ─────────────────────────────────────────────────
+   *
+   * Porque exceção faz o pg-boss tentar de novo, e tentar de novo é exatamente o que a gerenciadora
+   * está pedindo para não fazer. Seria um laço que se alimenta: recusa, retenta, recusa.
+   *
+   * O job roda de minuto em minuto. Perder um ciclo não custa nada — o próximo traz a posição de
+   * qualquer forma, e ela terá menos de sessenta segundos.
+   */
+  let cruas;
+  try {
+    cruas = await getPosicoes(cred);
+  } catch (e) {
+    if (e instanceof IntegraRecusou && /CONSUMO INDEVIDO/i.test(e.message)) {
+      return { ligado: true, limitada: true, recebidas: 0, gravadas: 0, descartadas: 0 };
+    }
+    throw e;
+  }
 
   const paraGravar: PosicaoParaGravar[] = [];
   let descartadas = 0;

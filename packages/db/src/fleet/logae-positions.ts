@@ -38,11 +38,7 @@ export async function gravarPosicoesDaGerenciadora(
 ): Promise<number> {
   if (posicoes.length === 0) return 0;
 
-  const valores = posicoes.map(
-    (p) =>
-      sql`(${p.placa}, ${p.latitude}, ${p.longitude}, ${p.cidade}, ${p.uf},
-           ${p.cpfMotorista}, ${p.ignicao}, ${p.referencia}, ${p.posicaoEm}, now())`,
-  );
+  const valores = posicoes.map(linhaDeValores);
 
   await db.execute(sql`
     insert into logae_positions
@@ -144,4 +140,34 @@ export async function frotaComPosicao(idadeMaximaMinutos = 24 * 60): Promise<Vei
     motorista: r.motorista,
     cpfMotorista: r.cpf_motorista,
   }));
+}
+
+/**
+ * A DATA VAI EM ISO, e não como `Date`.
+ *
+ * Passar o objeto direto para o template do drizzle o serializa com `toString()`, e o que chega
+ * ao Postgres é `Wed Aug 26 2026 17:23:02 GMT+0000 (Coordinated Universal Time)`. O sufixo entre
+ * parênteses não é data para ninguém, e o INSERT INTEIRO falha — não a linha, a instrução toda.
+ *
+ * ── O MODO COMO ISSO FALHOU É O QUE VALE GUARDAR ──────────────────────────────────────────
+ *
+ * O job passou nos testes, porque eles usam mock do banco. A mesma consulta escrita à mão no psql
+ * funcionou. Só a combinação drizzle + `Date` quebrava.
+ *
+ * E o erro do drizzle mostra a consulta e os parâmetros mas ESCONDE a mensagem do Postgres, que
+ * fica em `.cause` — foi preciso ler os 819 parâmetros do log até achar a data torta.
+ *
+ * Pior: cascateou. O insert falhando fez o pg-boss reexecutar, as chamadas caíram dentro do
+ * limite de dez segundos da Integra, e o log passou a gritar "CONSUMO INDEVIDO". O sintoma que
+ * aparecia primeiro não era a causa.
+ *
+ * ── E O COMENTÁRIO FICA AQUI FORA, não dentro do `sql` ────────────────────────────────────
+ *
+ * Comentário dentro de template literal não é comentário — é TEXTO. E as crases dele encerram o
+ * literal, com erro de sintaxe a três linhas de distância. Custou uma segunda ida.
+ */
+export function linhaDeValores(p: PosicaoParaGravar) {
+  return sql`(${p.placa}, ${p.latitude}, ${p.longitude}, ${p.cidade}, ${p.uf},
+           ${p.cpfMotorista}, ${p.ignicao}, ${p.referencia},
+           ${p.posicaoEm ? p.posicaoEm.toISOString() : null}, now())`;
 }
