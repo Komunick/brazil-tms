@@ -148,9 +148,13 @@ resolvido no cadastro.
 **Independent Test**: com uma viagem completa, apertar Enviar e conferir na gerenciadora que a Pré-SM
 existe com motorista, placas e horário certos — e que o TMS mostra o número.
 
-> **DEPENDE DA RESPOSTA PENDENTE.** Não se sabe como o `setPreSM` amarra a Pré-SM à programação do
-> eTorre. As tasks abaixo podem ser escritas antes, mas **T050 não deve ser executada** sem a
-> resposta ou sem aceitar o risco de a Pré-SM nascer solta. Ver `contracts/setpresm.md`.
+> **ESTA FASE PODE SER FEITA INTEIRA.** Nada aqui depende da pendência, e nada aqui gasta.
+>
+> O T050 é o ensaio **com o interruptor desligado**: o job monta o corpo e grava o que *teria*
+> mandado, sem chamar a gerenciadora. É de graça e é o que substitui a homologação que não temos.
+>
+> Quem espera a resposta é a **Fase 9** — a criação de verdade. Se a Pré-SM nascer solta da
+> programação, é o corpo que muda, e ele mora num arquivo só.
 
 - [ ] T043 [US1] Acrescentar `setPreSM` a `workers/lib/integra/cliente.ts`, tratando `CodErro`/`MsgErro` e o formato de URL com o nome do método **entre aspas** (`%22`)
 - [ ] T044 [P] [US1] Teste do cliente — só o formato da chamada e a leitura da resposta, **sem rede**

@@ -114,7 +114,9 @@ ver as notas abaixo.
 
 **A que continua: como o `setPreSM` amarra a Pré-SM à programação** que a Logae já tem do portal.
 Não há campo de código de programação em nenhum método de criação — conferido em
-`docs/INTEGRA-14.2-REFERENCIA.md`. É pergunta para a gerenciadora, e bloqueia **só a Etapa 5**.
+`docs/INTEGRA-14.2-REFERENCIA.md`. É pergunta para a gerenciadora, e bloqueia **só a criação real** — a Fase 9 das tasks. Todas as
+seis etapas abaixo podem ser feitas inteiras, inclusive o ensaio com o interruptor desligado, que
+não chama ninguém.
 
 > **Resolvida — a conta ESCREVE.** Medido em 25/08 com um teste que não cria nada:
 > `setCancelaPreSM` com um código fora da faixa devolveu `CodErro 137 — não existe Pré-Solicitação
