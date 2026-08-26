@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.15.0
+// @version      1.16.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -589,40 +589,110 @@
   }
 
   /**
-   * A nota do velocímetro e a faixa em que caiu.
+   * A NOTA DO VELOCÍMETRO E A FAIXA EM QUE CAIU — achadas por POSIÇÃO na tela.
    *
-   * O par é o que identifica: a legenda em que a nota caiu fica ESCRITA LOGO ABAIXO do número, dentro
-   * do medidor. Pegar "o primeiro número com vírgula da página" pegaria qualquer pontuação de bloco;
-   * pegar "o primeiro 'Zona de …'" pegaria a legenda de cores, que lista as quatro. Só o par número +
-   * faixa colados identifica o medidor — e quando ele não está na tela (filtro vazio), não acha nada,
-   * que é exatamente o que se quer.
+   * ── POR QUE DEIXOU DE SER POR ORDEM NA ÁRVORE (2026-08-26) ────────────────────────────────
    *
-   * A CASA DECIMAL É OPCIONAL, e isso custou dois ciclos inteiros. O relatório escreve o número com as
-   * casas que precisar: `62,75` num período, `73` noutro. Exigir vírgula fazia a nota sumir em toda
-   * leitura de nota redonda — e, como sem nota a leitura não conta como amostra, o robô passava dois
-   * minutos recusando uma tela cheia e reclamando do filtro Transportador.
+   * A versão anterior procurava "um número seguido imediatamente de uma faixa" na lista de textos.
+   * Funcionou por semanas e quebrou em 24/08, quando alguém acrescentou uma linha de META ao
+   * relatório. O contêiner do medidor passou a ler assim:
    *
-   * O `110` do eixo do medidor também é um inteiro de três dígitos, mas não tem faixa escrita embaixo.
-   * Quem separa os dois é o par, não o formato — e a legenda de cores, que lista as quatro faixas em
-   * sequência, é descartada porque um item dela vem sempre seguido de outro.
+   *   "Valor desejado: 100830110"   ← "Valor desejado: 100" + "83" + "0" + "110", colados
    *
-   * O "de" da faixa É OPCIONAL, e isso custou o dia 18/08 inteiro. O texto embaixo do número não é
-   * o mesmo da legenda de cores: a legenda escreve "Zona de Evolução", o medidor escreve "Zona
-   * evolução". Cada faixa teve o rótulo digitado à mão no relatório, então a grafia varia de uma
-   * para a outra — as notas que caíam em atenção liam normalmente, e a primeira nota que subiu para
-   * a faixa de evolução (89, em 18/08) veio sem nota nenhuma, três ciclos seguidos.
+   * A nota virou vizinha do eixo ("0") em vez da faixa, e o par sumiu. Resultado: a nota veio VAZIA
+   * nos TRÊS recortes ao mesmo tempo, enquanto os 20 indicadores continuavam chegando — o modo mais
+   * caro de falhar, porque o cartão fica no ar parecendo certo, só sem o número.
+   *
+   * Foi a TERCEIRA quebra por leitura de texto neste mesmo lugar: antes já custaram a casa decimal
+   * opcional e o "de" opcional da faixa. Ordem no DOM é a coisa mais frágil de um raspador, e o
+   * Looker a remonta a cada edição do relatório — que é feita por gente de fora, sem nos avisar.
+   *
+   * ── O QUE SUBSTITUI ───────────────────────────────────────────────────────────────────────
+   *
+   * A faixa continua sendo a âncora (ela é o que identifica o medidor), mas o número agora é o
+   * CANDIDATO GEOMETRICAMENTE MAIS PRÓXIMO dela — o que está desenhado logo acima, que é como um
+   * humano identifica a nota olhando a tela.
+   *
+   * Isso sobrevive a remontagem da árvore, que é o que muda quando editam o relatório. O que ele
+   * não sobrevive é a um redesenho do medidor — e aí nenhuma regra sobreviveria.
+   *
+   * ── AS TRÊS EXCLUSÕES, e cada uma tem uma história ────────────────────────────────────────
+   *
+   * O EIXO: "0" e "110" são as pontas da escala e ficam a poucos pixels do número. São excluídos
+   * por serem os extremos do medidor — sem isso, "110" ganharia de "83" em algumas telas.
+   *
+   * A META: "Valor desejado: 100" é o texto que quebrou a versão anterior. Ele não é um número
+   * puro, então o padrão já o descarta — mas fica escrito aqui porque foi ele a causa.
+   *
+   * A LEGENDA DE CORES: lista as quatro faixas em sequência ("Zona de Excelência", "Zona de
+   * Evolução", …) e fica ao lado do medidor. Uma legenda nunca tem número perto o bastante para
+   * vencer o do próprio medidor, mas a distância máxima existe para garantir isso.
    */
   const EH_FAIXA = /^(Zona (de )?.+|Fora da faixa)$/;
-  const EH_NOTA = /^\d{1,3}(,\d{1,2})?$/;
+  const EH_NOTA = /^d{1,3}(,d{1,2})?$/;
+
+  /**
+   * O quão perto o número precisa estar da faixa, em pixels.
+   *
+   * O medidor inteiro cabe em cerca de 180×120, e o número fica logo acima do rótulo. Cento e
+   * cinquenta dá folga para variação de tamanho de tela sem alcançar o cartão vizinho — que numa
+   * tela de 1080 está a mais de 300 pixels.
+   */
+  const PERTO_DA_FAIXA = 150;
+
+  /** O centro visível de um elemento, ou `null` se ele não ocupa espaço. */
+  function centro(el) {
+    const r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) return null;
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  }
 
   function notaEZona() {
     const todos = textos();
-    for (let i = 1; i < todos.length; i++) {
-      if (!EH_FAIXA.test(todos[i].txt)) continue;
-      const antes = todos[i - 1].txt;
-      if (EH_NOTA.test(antes)) return { score: antes, zone: todos[i].txt };
+
+    /**
+     * Os candidatos a NOTA: número puro, visível, e que não seja ponta do eixo.
+     *
+     * As pontas são descobertas pelo VALOR e não pela posição: o eixo do medidor vai de 0 a 110, e
+     * esses dois números não são nota nunca — 0 seria nota zero, que o relatório escreveria como
+     * "0,00" junto de uma faixa, e 110 está fora da escala de qualquer indicador.
+     */
+    const numeros = todos
+      .filter((x) => EH_NOTA.test(x.txt) && x.txt !== "0" && x.txt !== "110")
+      .map((x) => ({ txt: x.txt, c: centro(x.el) }))
+      .filter((x) => x.c);
+
+    /**
+     * O PAR MAIS PRÓXIMO DA PÁGINA INTEIRA — e não o primeiro que aparecer.
+     *
+     * Esta distinção foi descoberta testando contra a tela, e a primeira versão do conserto REPROVOU
+     * nela: parando na primeira faixa encontrada, o robô pegava a legenda do GRÁFICO HISTÓRICO
+     * ("Zona Crítica (60)", da linha tracejada) com um rótulo de barra ao lado, devolvendo 76,1.
+     *
+     * O que separa os dois é a DISTÂNCIA. Medido na tela em 26/08:
+     *
+     *   velocímetro:  "83" ↔ "Zona evolução"        15 px
+     *   gráfico:      "76,1" ↔ "Zona Crítica (60)"  47 px
+     *
+     * O rótulo do medidor fica colado no número, por desenho; o do gráfico é uma legenda solta que
+     * calha de passar perto de uma barra. Varrer tudo e ficar com o menor resolve sem depender de
+     * qual widget o Looker desenhou primeiro.
+     */
+    let melhor = null;
+    let menor = Infinity;
+    for (const alvo of todos) {
+      if (!EH_FAIXA.test(alvo.txt)) continue;
+      const cf = centro(alvo.el);
+      if (!cf) continue;
+      for (const n of numeros) {
+        const d = Math.hypot(n.c.x - cf.x, n.c.y - cf.y);
+        if (d < menor) {
+          menor = d;
+          melhor = { score: n.txt, zone: alvo.txt };
+        }
+      }
     }
-    return { score: null, zone: null };
+    return melhor && menor <= PERTO_DA_FAIXA ? melhor : { score: null, zone: null };
   }
 
   /** Entrega ao TMS. `GM_xmlhttpRequest` porque a chamada é cross-origin. */
