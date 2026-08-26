@@ -34,8 +34,8 @@ certo é `CodErro` dentro de `result[0]` — **zero é sucesso**.
 
 | campo | de onde sai | obr. |
 |---|---|---|
-| `CodFilial` | **configuração** por cliente — **de onde sai é PENDÊNCIA**, ver abaixo | sim |
-| `CodPerfilSeguranca` | **configuração** por cliente — é o `DDR SHOPEE` da tela, mas **de onde sai é PENDÊNCIA** | sim |
+| `CodFilial` | configuração — **`9332`**, de `getTabela(FILIAIS)` | sim |
+| `CodPerfilSeguranca` | configuração — **`20785` (DDR SHOPEE)**, de `getTabela(PERFIL_SEGURANCA)` | sim |
 | `PlacaVeiculo` | `portal_commands.plates[0]` | sim |
 | `VincVeiculo` | `vehicles.ownership_type` → `F` / `A` / `T` | sim |
 | `CPFMotorista1` | `drivers.cpf`, pelo id do portal | sim |
@@ -96,9 +96,10 @@ nossa. É o que permite conversar com a gerenciadora citando o código.
 
 | método | para quê | custa? |
 |---|---|---|
-| `getRotas` **sem parâmetros** | as 518 rotas dela, com o IBGE de origem e destino de cada uma. É daqui que sai o catálogo de cidades — **não** do `getCidades`, que ignora o filtro e devolve o mundo (R2b) | não |
-| `getCliente` | `CodFilial` — **fonte incerta**, ver abaixo | não |
-| `getTabela` | `CodPerfilSeguranca` — **fonte incerta**, ver abaixo | não |
+| `getRotas` **sem parâmetros** | as 518 rotas dela, com o IBGE de origem e destino de cada uma | não |
+| `getCidades` | o catálogo de **5.571** cidades brasileiras, com `CodIBGE`. Filtros: `FiltroCidade`, `FiltroEstado`, `FiltroPais` — **não** `UF`/`Cidade` | não |
+| `getTabela(FILIAIS)` | `CodFilial` = **9332** | não |
+| `getTabela(PERFIL_SEGURANCA)` | `CodPerfilSeguranca` = **20785** (DDR SHOPEE) | não |
 | `getConsultaPreSMAberta` | conferir o antes e o depois de um envio | não |
 | `setCancelaPreSM` | desfazer — já implementado na 026 | a criação já foi cobrada |
 
@@ -129,18 +130,32 @@ avisa *"esta programação já possui uma Pré-Solicitação em aberto"*.
 
 Ou é por placa e data, ou é algo que não reconhecemos. **Pergunta pendente com a gerenciadora.**
 
-### E duas que apareceram ao testar (25/08)
+### Duas pendências que a documentação resolveu (25/08)
 
-**De onde saem `CodFilial` e `CodPerfilSeguranca`?** Os dois são obrigatórios e não temos fonte. O
-`getCliente` com o **nosso próprio CNPJ** (`03571231000143`) responde `CodErro 109 — O CADASTRO NÃO
-EXISTE`, e a lista de tabelas que o `getTabela` aceita não expõe perfil de segurança.
+Foram levantadas como "sem fonte" numa primeira leitura, e **o erro era meu**: chamei os métodos
+com o nome errado de parâmetro. Com o nome certo, os dois respondem:
 
-**A nossa conta pode escrever?** Toda chamada feita até hoje foi LEITURA — `getRotas`, `getCidades`,
-`getConsultaPreSMAberta`, `getVeiculo`, `getMotorista`, todas com `CodErro 0`. **Nenhuma escrita foi
-tentada.** Que a conta leia não prova que ela cria, e o `CodErro 100` em homologação mostra que ela
-é restrita por ambiente.
+| campo | valor | como |
+|---|---|---|
+| `CodFilial` | **9332** | `getTabela(NomeTabela: "FILIAIS")` → `03571231000143 - BRAZIL TRANSPORTS LTDA` |
+| `CodPerfilSeguranca` | **20785** | `getTabela(NomeTabela: "PERFIL_SEGURANCA")` → `DDR SHOPEE` — o mesmo que aparece na tela deles |
+
+O parâmetro é **`NomeTabela`**, não `Tabela`. E o `getCidades` filtra por **`FiltroCidade` /
+`FiltroEstado` / `FiltroPais`**, não por `UF` / `Cidade` — com os nomes certos ele devolve a cidade
+exata, não o catálogo mundial.
+
+Os quatro perfis que a conta tem: `18405` (até 2 milhões, Chubb) · `18409` (sem atuação) · `18480`
+(outra GR) · **`20785` (DDR SHOPEE)**, que é o das viagens da Shopee.
+
+### A que continua sem resposta
+
+**A nossa conta pode ESCREVER?** Toda chamada feita até hoje foi leitura, e todas responderam
+`CodErro 0`. **Nenhuma escrita foi tentada.** Que a conta leia não prova que ela cria, e o
+`CodErro 100` em homologação mostra que ela é restrita por ambiente.
+
+O manual **não responde isso** — nenhuma documentação responde. Só uma chamada de escrita, ou a
+gerenciadora dizendo.
 
 E a de sempre: se o `CNPJEmbarcador` é exigido na prática — a tela o marcava como obrigatório, o
 manual não.
-
 Quando as respostas chegarem, **muda um arquivo**: `packages/shared/src/domain/pre-sm-corpo.ts`.

@@ -95,7 +95,7 @@ com o `setPreSMdeModelo` — foi carregado da 026 para cá sem reconferir. Medid
 | | rotas | viagens (90 dias) |
 |---|---|---|
 | nossas | 134 | 4.508 |
-| com as duas cidades reconhecidas | 61 | — |
+| com IBGE nas duas pontas | 96 | — |
 | **com rota cadastrada na gerenciadora** | **53** | **2.340 — 52%** |
 
 **48% das viagens não têm rota cadastrada lá.** Não é defeito do nosso lado: é trabalho de cadastro
@@ -109,22 +109,23 @@ rota", e o texto da tela precisa deixar claro que isso é cadastro pendente **l�
 
 ## As pendências, e como o plano se organiza em volta delas
 
-São **três**, e nenhuma foi resolvida por suposição.
+São **duas**, e nenhuma foi resolvida por suposição. Uma terceira caiu ao ler o manual direito
+— ver a nota abaixo.
 
 **1. Como o `setPreSM` amarra a Pré-SM à programação** que a Logae já tem do portal. Não há campo de
 código de programação em nenhum método de criação — conferido em
 `docs/INTEGRA-14.2-REFERENCIA.md`.
 
-**2. De onde saem `CodFilial` e `CodPerfilSeguranca`**, que o `setPreSM` exige. Medido em 25/08: o
-`getCliente` com o **nosso próprio CNPJ** responde `CodErro 109 — O CADASTRO NÃO EXISTE`, e a lista
-de tabelas do `getTabela` não expõe perfil de segurança. **Não sabemos de onde tirar os dois.**
-
-**3. Se a nossa conta pode ESCREVER.** Toda chamada feita até hoje foi leitura — `getRotas`,
+**2. Se a nossa conta pode ESCREVER.** Toda chamada feita até hoje foi leitura — `getRotas`,
 `getCidades`, `getConsultaPreSMAberta`, `getVeiculo`, `getMotorista`, todas com `CodErro 0`. Que ela
 leia **não prova** que ela cria, e o `CodErro 100` em homologação mostra que a conta é restrita por
 ambiente.
 
-As três são pergunta para a gerenciadora, e as três bloqueiam **só a Etapa 5**.
+As duas são pergunta para a gerenciadora, e as duas bloqueiam **só a Etapa 5**.
+
+> **Uma terceira pendência foi resolvida na documentação**, depois de um erro meu de parâmetro:
+> `CodFilial` = **9332** (`getTabela(FILIAIS)`) e `CodPerfilSeguranca` = **20785 · DDR SHOPEE**
+> (`getTabela(PERFIL_SEGURANCA)`). Ver R5 em `research.md`.
 
 Isso **não bloqueia nada até a Etapa 5**. A ordem abaixo põe primeiro tudo o que independe da
 resposta, e isola o formato do corpo num arquivo só:
@@ -152,13 +153,12 @@ devolve.
 
 A tabela de cidade é irmã: estação normalizada → código IBGE, `confirmado_em` nulo ao nascer.
 
-**O catálogo de cidades vem das PRÓPRIAS rotas, não do `getCidades`** (R2b). O `getRotas` sem
-parâmetros devolve **518 rotas**, e cada uma traz `CodIBGECidadeOrigem`/`CidadeOrigem` e
-`CodIBGECidadeDestino`/`CidadeDestino` — as 518 têm os quatro. Daí saem **72 cidades**, que são
-exatamente as que interessam: as que ela reconhece em rota cadastrada.
+O `getRotas` sem parâmetros devolve **518 rotas**, e cada uma traz `CodIBGECidadeOrigem` e
+`CodIBGECidadeDestino` — as 518 têm os quatro campos. É o que permite casar o par de IBGE com
+`CodRota` sem uma chamada por rota.
 
-O `getCidades`, testado com `{UF: "MG", Cidade: "BETIM"}`, **ignorou o filtro** e devolveu o catálogo
-mundial, com cidades do Peru na primeira página. Ele serve para outra coisa.
+O catálogo de cidades sai do `getCidades` com `FiltroPais: "BR"` — **5.571 cidades**, com `CodIBGE`.
+**Não** do `getTabela(CIDADES)`, que devolve código interno e leva a 0% de correspondência (R2b).
 
 **Verificável**: rodar a carga e ver as correspondências propostas na tela, sem nenhuma confirmada.
 

@@ -276,8 +276,9 @@ que só as confirmadas passam a valer.
   134 rotas nossas, **53 existem lá** — 52% das viagens. O resto é trabalho de cadastro **na
   Logae**, e a fila diz exatamente quais faltam. A tela precisa deixar claro que isso é pendência
   deles, não defeito daqui.
-- **O perfil de segurança e a filial são constantes por cliente.** A tela mostrava `DDR SHOPEE`
-  fixo. Se um segundo cliente exigir valores diferentes, vira configuração — não código.
+- **O perfil de segurança e a filial são constantes por cliente**, e os valores já são conhecidos:
+  filial `9332` e perfil `20785 · DDR SHOPEE`, ambos vindos do cadastro da gerenciadora. Se um
+  segundo cliente exigir valores diferentes, vira configuração — não código.
 - **A criação automática continua existindo, desligada.** O trabalho de fundo da 026 fica no código
   com o interruptor ausente, para ser ligado depois que a aba tiver rodado e houver confiança.
 

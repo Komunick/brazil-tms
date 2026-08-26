@@ -73,10 +73,12 @@ confirmadas passam a valer.
 
 ### O casamento com o cadastro da gerenciadora
 
-- [ ] T012 [US4] Acrescentar `getRotas` a `workers/lib/integra/cliente.ts`, conforme a referência. **Remover** `setPreSMdeModelo` e `getModelosPreSM`. **NÃO usar `getCidades`** — testado em 25/08, ele ignora o filtro de UF/cidade e devolve o catálogo mundial (R2b); o catálogo que interessa sai das próprias rotas
+- [ ] T012 [US4] Acrescentar `getRotas`, `getCidades` e `getTabela` a `workers/lib/integra/cliente.ts`. **Remover** `setPreSMdeModelo` e `getModelosPreSM`. **Atenção aos nomes dos parâmetros**: `getTabela` usa `NomeTabela` (não `Tabela`) e `getCidades` usa `FiltroCidade`/`FiltroEstado`/`FiltroPais` (não `Cidade`/`UF`) — errar o nome devolve `CodErro 105` e **parece** que o recurso não existe (R2b, R5)
 - [ ] T013 [P] [US4] Teste do cliente em `cliente.test.ts` — só o formato da chamada e a leitura da resposta, **sem rede**
 - [ ] T014 [US4] Escrever em `packages/shared/src/domain/pre-sm-cadastro.ts` o casamento de cidade (estação → cidade da gerenciadora) e o de rota (par origem–destino → `CodRota`), puros
 - [ ] T015 [P] [US4] Testes do casamento com as cidades e rotas reais medidas em 25/08
+- [ ] T015b [US4] Acrescentar a tolerância do **sufixo de bairro ou distrito** ao casamento de cidade: quando o nome inteiro não achar, cair para o primeiro termo. Medido em 25/08: **27 cidades não resolvem** por isso — `RECIFE MURIBECA`, `SANTANA`, `CAMPINAS PQ CIDADE`, `UMUARAMA PQ INDUST II` —, e elas valem **38 dos 134 pares de rota**
+- [ ] T015c [P] [US4] Teste da tolerância com as quatro estações acima, e o caso que ela **não** pode quebrar: `SIMOES FILHO` continua casando com `SIMOES FILHO`, não virando `SIMOES`
 - [ ] T016 [US4] Escrever `packages/db/src/trips/pre-sm-cidades.ts`: gravar propostas com `confirmado_em` **nulo**, listar, confirmar/desfazer (auditado na mesma transação), e a leitura que **só** devolve confirmada
 - [ ] T017 [US4] Adaptar `packages/db/src/trips/pre-sm-modelos.ts` → `pre-sm-rotas.ts`, trocando modelo por rota. A trava de "só confirmada vale" continua **dentro** da função, não no chamador
 - [ ] T018 [US4] Acrescentar as ações de auditoria (`pre_sm.cidade.confirmar` / `.desconfirmar`) em `packages/shared/src/audit/actions.ts`, no tipo **e** no catálogo, com os rótulos pt-BR — há teste-guarda que exige rótulo para cada ação
@@ -89,7 +91,7 @@ confirmadas passam a valer.
 - [ ] T021 [US4] Acrescentar a tela de conferência de cidades em `apps/web/app/(shell)/admin/pre-sm-cidades/` e a rota `app/api/admin/pre-sm-cidades/route.ts` (GET lista, PATCH confirma/desfaz), espelhando a de rotas que já existe. Permissão **`manage_commercial_data`**, e **não** `assign_resources` (FR-024): quem escala **usa** esta decisão, não a toma — senão a pessoa impedida de escalar alguém poderia se autoliberar confirmando uma correspondência
 - [ ] T022 [US4] Adaptar a tela de rotas existente para mostrar `CodRota` e a descrição da rota; renomear a rota de API e o item de menu. Mesma permissão `manage_commercial_data`
 - [ ] T023 [P] [US4] Textos das duas telas em `apps/web/messages/pt-BR.json`
-- [ ] T024 [US4] **Rodar a carga contra a produção** e conferir contra o já medido em 25/08: 518 rotas dela, 61 das nossas com as duas cidades reconhecidas, **53 com rota cadastrada** (52% das viagens). Número muito diferente disso é defeito do casamento, não do cadastro — investigar antes de seguir
+- [ ] T024 [US4] **Rodar a carga contra a produção** e conferir contra o já medido em 25/08: 518 rotas dela, **96** das nossas com IBGE nas duas pontas, **53 com rota cadastrada** (52% das viagens). Número muito diferente disso é defeito do casamento, não do cadastro — investigar antes de seguir
 
 **Checkpoint**: as duas telas mostram propostas reais, nenhuma confirmada, e o número de acerto está
 medido.
@@ -152,7 +154,7 @@ existe com motorista, placas e horário certos — e que o TMS mostra o número.
 
 - [ ] T043 [US1] Acrescentar `setPreSM` a `workers/lib/integra/cliente.ts`, tratando `CodErro`/`MsgErro` e o formato de URL com o nome do método **entre aspas** (`%22`)
 - [ ] T044 [P] [US1] Teste do cliente — só o formato da chamada e a leitura da resposta, **sem rede**
-- [ ] T045 [US1] Buscar `CodFilial` e `CodPerfilSeguranca` por **configuração**, não constante no código (R5, princípio V da constituição)
+- [ ] T045 [US1] Pôr `CodFilial` (**9332**) e `CodPerfilSeguranca` (**20785 · DDR SHOPEE**) em **configuração**, não constante no código (R5, princípio V). Os valores já foram achados: `getTabela(FILIAIS)` e `getTabela(PERFIL_SEGURANCA)`
 - [ ] T046 [US1] Adaptar `workers/jobs/pre-sm/criar.ts` e `index.ts` para montar o corpo novo. O interruptor e o teto diário **continuam**, desligados
 - [ ] T047 [US1] Escrever `apps/web/app/api/gr/[tripId]/enviar/route.ts`: enfileira o job, devolve 202. **Nunca chamar a Integra da rota** — a credencial vive só no worker
 - [ ] T048 [US1] Tratar a colisão do índice único parcial como "já existe", não como erro — é a garantia contra dois cliques simultâneos (FR-008)

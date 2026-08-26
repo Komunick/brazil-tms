@@ -104,15 +104,25 @@ o formato do corpo que muda, e ele mora num arquivo só.
 
 1. Como o `setPreSM` amarra a Pré-SM à programação do eTorre? Não há campo de código de programação
    em nenhum método de criação.
-2. **De onde saem `CodFilial` e `CodPerfilSeguranca`?** Os dois são obrigatórios. Medido em 25/08: o
-   `getCliente` com o **nosso próprio CNPJ** responde `CodErro 109 — O CADASTRO NÃO EXISTE`, e a
-   lista de tabelas do `getTabela` não expõe perfil de segurança.
-3. **A nossa conta pode escrever?** Toda chamada feita até hoje foi leitura. Que ela leia não prova
-   que ela cria, e o `CodErro 100` em homologação mostra que a conta é restrita por ambiente.
-4. O `CNPJEmbarcador` é exigido na prática? A tela marcava como obrigatório; o manual, não.
+2. **A nossa conta pode escrever?** Toda chamada feita até hoje foi leitura, e todas responderam
+   `CodErro 0`. **Nenhuma escrita foi tentada.** Que a conta leia não prova que ela cria, e o
+   `CodErro 100` em homologação mostra que ela é restrita por ambiente. **O manual não responde isso
+   — nenhuma documentação responde.**
+3. O `CNPJEmbarcador` é exigido na prática? A tela marcava como obrigatório; o manual, não.
 
-**As três primeiras bloqueiam a etapa 5.** Não comece o envio sem elas — foi construir sobre
+**As duas primeiras bloqueiam a etapa 5.** Não comece o envio sem elas — foi construir sobre
 suposição que custou a 026 inteira.
+
+### Já resolvidas, e como
+
+`CodFilial` = **9332** · `CodPerfilSeguranca` = **20785 (DDR SHOPEE)**, os dois de `getTabela`.
+
+Estiveram listados como "sem fonte" por algumas horas, e **o erro era meu**: chamei com `Tabela` em
+vez de `NomeTabela`, e com `UF`/`Cidade` em vez de `FiltroEstado`/`FiltroCidade`.
+
+**Um erro de parâmetro se parece com um limite da API.** O `CodErro 105` devolve a lista de valores
+aceitos truncada em 250 caracteres, o que escondeu justamente `FILIAIS` e `PERFIL_SEGURANCA`. Antes
+de concluir que algo não existe, confira o nome do campo no manual.
 
 **Do nosso lado**: as credenciais da Logae precisam ir ao `devops/config.env` da VM, **e** ao
 `.env.local`. Só no segundo não segura — o próximo deploy regenera esse arquivo a partir do

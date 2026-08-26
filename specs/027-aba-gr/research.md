@@ -50,23 +50,27 @@ humana. Escrever no cadastro faria uma proposta não conferida virar verdade em 
 
 ---
 
-## R2b — O catálogo de cidades vem das próprias rotas, não do `getCidades`
+## R2b — O catálogo de cidades vem do `getCidades`, e ele filtra
 
-**Decisão**: extrair as cidades das 518 rotas que o `getRotas` devolve, com o IBGE que vem junto.
-**Não usar `getCidades`.**
+**Decisão**: `getCidades` com `FiltroPais: "BR"` — **5.571 cidades brasileiras**, cada uma com
+`CodIBGE`, `Cidade`, `Estado` e `UF`.
 
-**Por quê**: medido em 25/08, e derruba a suposição do R2 original.
+**Cuidado com a fonte parecida**: `getTabela(NomeTabela: "CIDADES")` devolve `{Codigo, Descricao}`
+com **código interno**, que **não** casa com o que o `getRotas` usa. Medido: trocar a fonte leva a
+**0% de correspondência**, e o erro não dá sintoma nenhum — só uma lista vazia que parece cadastro
+faltando.
 
-O `getRotas` chamado **sem** origem e destino devolve **518 rotas**, e cada uma traz
-`CodIBGECidadeOrigem`, `CidadeOrigem`, `CodIBGECidadeDestino` e `CidadeDestino` — **as 518 têm os
-quatro**. Daí saem **72 cidades distintas**, que são exatamente as que interessam: as que ela
-reconhece em rota cadastrada.
+**Os filtros são `FiltroCidade`, `FiltroEstado` e `FiltroPais`** — não `Cidade` e `UF`. Com os nomes
+certos, `{FiltroCidade: "BETIM", FiltroEstado: "MINAS", FiltroPais: "BR"}` devolve **uma** linha:
+`{CodIBGE: 3106705, Cidade: "BETIM", UF: "MG"}`.
 
-O `getCidades`, testado com `{UF: "MG", Cidade: "BETIM"}`, **ignorou o filtro** e devolveu o
-catálogo mundial — a primeira página vinha com cidades do Peru. Ele serve para outra coisa.
+> **Uma versão anterior deste R2b afirmava que o `getCidades` "ignora o filtro e devolve o catálogo
+> mundial", e mandava tirar as cidades das próprias rotas.** Era erro meu: eu tinha chamado com
+> `{UF, Cidade}`. O mesmo tipo de erro do R5 — ver a lição lá.
 
-**Consequência prática**: a ponte de cidade fica menor e mais confiável. Em vez de casar 228
-estações contra um catálogo mundial, casa contra 72 cidades que já se sabe terem rota.
+O `getRotas` sem parâmetros continua útil, mas por outro motivo: ele traz as **518 rotas** com
+`CodIBGECidadeOrigem` e `CodIBGECidadeDestino` — as 518 têm os quatro campos. É o que permite casar
+o par de IBGE com `CodRota` sem uma chamada por rota.
 
 ---
 
@@ -100,11 +104,21 @@ com o `setPreSMdeModelo` — foi carregado da 026 para a 027 sem reconferir. Med
 | | rotas | viagens |
 |---|---|---|
 | nossas, em 90 dias | 134 | 4.508 |
-| com as duas cidades reconhecidas | 61 | — |
+| com IBGE nas duas pontas | **96** | — |
 | **com rota de fato cadastrada** | **53** | **2.340 — 52%** |
 
-**48% das viagens não têm rota cadastrada na gerenciadora.** Isso não é defeito do nosso lado: é
-trabalho de cadastro **na Logae**, e a lista das que faltam é o que se leva para eles.
+Os 52% foram medidos **duas vezes, por caminhos diferentes** — uma com o catálogo tirado das rotas
+(61 pares resolvidos) e outra com o catálogo completo do `getCidades` (96 pares). O número de rotas
+casadas não mudou: **53**. É o que dá confiança nele.
+
+**E o gargalo ficou claro**: das 134, **96 resolvem cidade** e só 53 têm rota. O problema não é o
+casamento de cidade — é **rota que não existe no cadastro da Logae**. Isso não é defeito do nosso
+lado, e a lista das que faltam é o que se leva para eles.
+
+As **27 cidades que não resolvem** são estações com sufixo de bairro ou distrito — `RECIFE
+MURIBECA`, `SANTANA`, `CAMPINAS PQ CIDADE`, `UMUARAMA PQ INDUST II`. Precisam de uma tolerância a
+mais no casamento: cair para o primeiro termo quando o nome inteiro não achar. **Isso vale 38 pares
+de rota**, e é trabalho pequeno.
 
 Duas leituras do mesmo número, e as duas importam:
 
@@ -160,18 +174,22 @@ com outro perfil não pode exigir código.
 **Descartado — constante no código**: funcionaria hoje e viraria um `if` por cliente no primeiro
 dia em que houvesse dois.
 
-**MAS DE ONDE OS VALORES SAEM É PENDÊNCIA.** A primeira versão deste R5 dizia "saem de `getCliente`
-e `getTabela` — leitura, e uma vez". Testado em 25/08, e não é assim:
+**E os valores foram achados** (25/08), depois de um erro meu:
 
-- `getCliente` com o **nosso próprio CNPJ** (`03571231000143`) → `CodErro 109 — O CADASTRO NÃO
-  EXISTE`
-- a lista de tabelas que o `getTabela` aceita **não expõe** perfil de segurança
+| campo | valor | como |
+|---|---|---|
+| `CodFilial` | **9332** | `getTabela(NomeTabela: "FILIAIS")` |
+| `CodPerfilSeguranca` | **20785** | `getTabela(NomeTabela: "PERFIL_SEGURANCA")` → `DDR SHOPEE` |
 
-A decisão (configuração, não constante) continua certa. O que falta é saber o que pôr na
-configuração — e isso é pergunta para a gerenciadora, não coisa que se descubra tentando.
+A primeira tentativa deu `CodErro 105 — valor fora do conjunto`, e eu concluí que a tabela não
+existia. **O parâmetro é `NomeTabela`, não `Tabela`** — o manual diz, e eu não tinha lido essa
+linha. A lista de tabelas que o erro devolve vem truncada em 250 caracteres, o que escondeu
+justamente `FILIAIS` e `PERFIL_SEGURANCA`.
+
+Fica a lição, que já é a terceira do dia: **um erro de parâmetro se parece com um limite da API.**
+Antes de concluir que algo não existe, conferir o nome do campo no manual.
 
 ---
-
 ## R6 — Uma carga só para cidade e rota
 
 **Decisão**: um job (`pre_sm.carregar_cadastro`) que consulta cidades e rotas e propõe as duas
