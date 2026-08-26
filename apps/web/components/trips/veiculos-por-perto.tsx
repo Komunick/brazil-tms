@@ -45,6 +45,18 @@ export function VeiculosPorPerto({
 }) {
   const t = useTranslations("Trips.portalAssign");
   const [aberto, setAberto] = useState(false);
+  /**
+   * OS DOIS CONTROLES QUE A TELA DELES TEM (2026-08-26, a pedido).
+   *
+   * O raio nasce em 150 km, e não no máximo: a pergunta que este painel responde é "quem está
+   * PERTO", e abrir em 300 encheria a lista de caminhões que ninguém vai chamar. Quem precisar de
+   * mais arrasta.
+   *
+   * "Só livres" nasce LIGADO porque é o caso normal — quem está montando o dia procura quem pode
+   * atender. Desligar mostra os ocupados junto, para quando se quer ver a frota inteira.
+   */
+  const [raioKm, setRaioKm] = useState(150);
+  const [soLivres, setSoLivres] = useState(true);
   const frota = useFrotaComPosicao();
   const estacoes = useEstacoesComCoordenada();
 
@@ -106,13 +118,22 @@ export function VeiculosPorPerto({
      * O raio de 300 km é generoso de propósito — é para ORDENAR, não para excluir. Quem está a 280
      * km raramente serve, mas ver que ele existe é melhor que uma lista vazia que não explica nada.
      */
+    /**
+     * O FILTRO DE LIVRES VEM ANTES DO DE DISTÂNCIA, e a ordem importa para o que se lê.
+     *
+     * Um caminhão a 25 km EM VIAGEM não serve, e um a 39 km livre serve. Filtrando primeiro, o
+     * "3 a menos de 150 km" do cabeçalho conta quem PODE atender — que é o número que a pessoa usa
+     * para decidir se procura mais longe ou liga para alguém.
+     */
+    const disponiveis = soLivres ? lista.filter((v) => !v.emViagem) : lista;
+
     const naCidade = daOrigem
-      ? lista
+      ? disponiveis
           .map((v) => ({ v, km: distanciaKm(daOrigem, { lat: v.latitude, lon: v.longitude }) }))
-          .filter((x) => x.km <= 300)
+          .filter((x) => x.km <= raioKm)
           .sort((a, b) => a.km - b.km)
           .map((x) => ({ ...x.v, km: x.km }))
-      : lista
+      : disponiveis
           .filter((v) => dela(v.cidade) === alvo.cidade && (!alvo.uf || dela(v.uf) === alvo.uf))
           .map((v) => ({ ...v, km: null as number | null }));
     return {
@@ -122,7 +143,7 @@ export function VeiculosPorPerto({
         destaque: naCidade.some((v) => v.placa === p.id),
       })),
     };
-  }, [frota.data, alvo, daOrigem, t]);
+  }, [frota.data, alvo, daOrigem, raioKm, soLivres, t]);
 
   // Sem origem não há o que dizer, e um painel vazio é ruído.
   if (!origem) return null;
@@ -143,7 +164,7 @@ export function VeiculosPorPerto({
             {perto.length === 0
               ? t("nenhumNaCidade", { cidade: alvo.cidade || "—" })
               : daOrigem
-                ? t("aMenosDeKm", { n: perto.length })
+                ? t("aMenosDeKm", { n: perto.length, km: raioKm })
                 : t("naCidadeDaColeta", { n: perto.length, cidade: alvo.cidade })}
           </span>
         )}
@@ -152,6 +173,40 @@ export function VeiculosPorPerto({
 
       {aberto ? (
         <div className="space-y-2 border-t p-3">
+          {/*
+            OS CONTROLES SÓ APARECEM COM COORDENADA (2026-08-26).
+
+            Sem ela o painel casa por CIDADE, e um cursor de raio ali seria um controle que não faz
+            nada — pior que a ausência dele, porque promete precisão que a tela não tem. O de
+            "só livres" fica, porque funciona nos dois modos.
+          */}
+          <div className="flex flex-wrap items-center gap-3 text-xs">
+            {daOrigem ? (
+              <label className="flex items-center gap-2">
+                <span className="text-muted-foreground">{t("raio")}</span>
+                <input
+                  type="range"
+                  min={25}
+                  max={500}
+                  step={25}
+                  value={raioKm}
+                  onChange={(e) => setRaioKm(Number(e.target.value))}
+                  className="h-1 w-32 accent-primary"
+                />
+                <span className="w-16 tabular-nums">{t("aKm", { n: raioKm })}</span>
+              </label>
+            ) : null}
+            <label className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={soLivres}
+                onChange={(e) => setSoLivres(e.target.checked)}
+                className="h-3.5 w-3.5 accent-primary"
+              />
+              <span>{t("soLivres")}</span>
+            </label>
+          </div>
+
           {perto.length > 0 ? (
             <ul className="space-y-1">
               {perto.map((v) => (
@@ -161,6 +216,24 @@ export function VeiculosPorPerto({
                   <span className="truncate text-muted-foreground">
                     {v.motorista ?? v.cpfMotorista ?? t("semMotoristaVinculado")}
                   </span>
+                  {/*
+                    EM VIAGEM É AVISO, e por isso tem cor.
+
+                    Ele só aparece quando o filtro "só livres" está desligado — com ele ligado, todo
+                    mundo na lista está livre e um selo "livre" em toda linha seria ruído. Aqui a
+                    ausência do selo já diz que está livre.
+
+                    O número da LH vai junto porque é a pergunta seguinte: "em viagem" leva a "qual?",
+                    e sem ele a pessoa teria de procurar.
+                  */}
+                  {v.emViagem ? (
+                    <span
+                      className="shrink-0 rounded bg-amber-100 px-1 py-px text-[10px] font-medium text-amber-800 dark:bg-amber-900 dark:text-amber-100"
+                      title={t("emViagemNa", { lh: v.emViagem })}
+                    >
+                      {t("emViagem")}
+                    </span>
+                  ) : null}
                   {/* A IDADE DA POSIÇÃO é o que decide se ela vale: um caminhão "em Guarulhos"
                       há seis horas pode estar em Curitiba agora. */}
                   {v.km == null ? null : (
@@ -198,9 +271,24 @@ export function VeiculosPorPerto({
             </p>
           )}
 
+          {/*
+            SEM POSIÇÃO, O MAPA NÃO SOME — ele explica (2026-08-26, a pedido).
+
+            A primeira versão escondia o mapa quando não havia ponto. Em produção isso acontece
+            SEMPRE, porque a credencial da gerenciadora não está configurada lá e o job sobe
+            desligado — e o usuário abriu o painel, viu só texto, e perguntou "cadê o mapa?".
+
+            Sumir sem explicação é a pior resposta: quem olha não sabe se é defeito, se é
+            permissão, ou se a frota inteira está parada. Uma frase que diz o que falta transforma
+            "está quebrado" em "falta ligar", que é acionável.
+          */}
           {todos.length > 0 ? (
             <MapaDePosicoes pontos={todos} altura="18rem" aoClicar={aoEscolherPlaca} />
-          ) : null}
+          ) : frota.isPending ? null : (
+            <div className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
+              {t("semPosicaoNenhuma")}
+            </div>
+          )}
         </div>
       ) : null}
     </div>
