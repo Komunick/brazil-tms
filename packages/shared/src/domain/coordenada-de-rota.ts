@@ -37,13 +37,23 @@ export interface PontasDaRota {
 /**
  * Lê o primeiro e o último ponto do KML.
  *
- * ── A ORDEM DO KML É `lon,lat`, e não o contrário ─────────────────────────────────────────────
+ * ── A GERENCIADORA MANDA `lat,lon,alt` — CONTRA O PADRÃO DO FORMATO ───────────────────────────
  *
- * É o padrão do formato, e é o inverso de como se fala ("latitude e longitude"). Trocar os dois põe
- * o Brasil na Somália — e o mapa mostra caminhões na África sem nenhum erro aparecer.
+ * KML especifica `lon,lat,alt`. O que a Logae devolve é `-12.81504,-38.39845,0`: latitude
+ * primeiro. Medido em 26/08 na rota Simões Filho → São Luís, cujo primeiro ponto tem de cair na
+ * Bahia (lat -12,8) e não no meio do Atlântico.
  *
- * A guarda contra isso é a faixa: no Brasil a latitude vive entre -34 e +6, e a longitude entre -74
- * e -34. Um par invertido cai fora e é recusado.
+ * Eu li isso errado na primeira vez e ACERTEI POR ACASO, conferindo os números contra a cidade a
+ * olho. Quem denunciou foi a faixa do Brasil, que recusou a leitura invertida.
+ *
+ * ── POR ISSO A LEITURA TENTA AS DUAS ORDENS ───────────────────────────────────────────────────
+ *
+ * Primeiro `lat,lon`, que é o que eles mandam hoje; se cair fora do Brasil, tenta trocado. Não é
+ * adivinhação: as faixas não se sobrepõem (latitude vive entre -34 e +6, longitude entre -74 e -34),
+ * então no máximo uma das duas leituras é válida.
+ *
+ * A alternativa era fixar a ordem deles. Se um dia corrigirem para o padrão, isso quebraria em
+ * silêncio — e o sintoma seria caminhões na África.
  */
 export function pontasDoKML(kml: string | null | undefined): PontasDaRota {
   const blocos = [...String(kml ?? "").matchAll(/<coordinates>([\s\S]*?)<\/coordinates>/g)].map(
@@ -58,10 +68,14 @@ export function pontasDoKML(kml: string | null | undefined): PontasDaRota {
 }
 
 function lerPonto(s: string): { lat: number; lon: number } | null {
-  const [lon, lat] = s.split(",").map(Number);
-  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-  if (lat === 0 && lon === 0) return null;
-  return dentroDoBrasil(lat!, lon!) ? { lat: lat!, lon: lon! } : null;
+  // O terceiro campo é a altitude, e não interessa.
+  const [a, b] = s.split(",").map(Number);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+  if (a === 0 && b === 0) return null;
+  // A ordem deles primeiro; a do padrão como reserva. Ver o comentário acima.
+  if (dentroDoBrasil(a!, b!)) return { lat: a!, lon: b! };
+  if (dentroDoBrasil(b!, a!)) return { lat: b!, lon: a! };
+  return null;
 }
 
 /**
@@ -126,4 +140,34 @@ export function distanciaKm(
   const h =
     Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLon / 2) ** 2;
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+/**
+ * AS CHAVES QUE UMA ESTAÇÃO PODE ASSUMIR, da mais específica para a mais tolerante.
+ *
+ * ── POR QUE O NOME EXATO NÃO BASTA ────────────────────────────────────────────────────────────
+ *
+ * `SOC_GO_GOIANIA_02 (AEROPORTO)` normaliza para a chave `GO GOIANIA 2`. A gerenciadora chama
+ * aquela cidade de `GOIANIA/GO`. Comparando só a chave inteira, a estação de maior volume de Goiás
+ * não casaria com rota nenhuma — e o job gravaria zero para ela, sem erro e sem pista.
+ *
+ * O sufixo é numeração de pátio (`_02`, `_03`) ou referência de bairro (`(AEROPORTO)`,
+ * `PQ_INDUST_II`). Nenhum deles muda a CIDADE, que é a precisão que esta busca usa.
+ *
+ * ── DO MAIS LONGO PARA O MAIS CURTO, PARANDO NO PRIMEIRO ACERTO ───────────────────────────────
+ *
+ * A mesma régua de `acharCidade` na fatia 027, e pela mesma razão medida lá: cair direto para o
+ * primeiro termo quebra nomes compostos — `SAO LUIS 01` viraria `SAO`, que casa com São Paulo, São
+ * Bernardo e mais uma dúzia. Descer um termo por vez preserva `SAO LUIS` antes de chegar a `SAO`.
+ *
+ * Quem chama tenta as chaves na ordem e para na primeira que achar rota.
+ */
+export function chavesToleradas(chaveDaEstacaoNorm: string): string[] {
+  const partes = chaveDaEstacaoNorm.split(" ").filter(Boolean);
+  if (partes.length < 2) return chaveDaEstacaoNorm ? [chaveDaEstacaoNorm] : [];
+  const uf = partes[0]!;
+  const termos = partes.slice(1);
+  const saida: string[] = [];
+  for (let n = termos.length; n >= 1; n--) saida.push([uf, ...termos.slice(0, n)].join(" "));
+  return saida;
 }

@@ -1,32 +1,57 @@
 import { describe, expect, it } from "vitest";
-import { chaveDaCidadeDelas, distanciaKm, pontasDoKML } from "./coordenada-de-rota";
+import {
+  chaveDaCidadeDelas,
+  chavesToleradas,
+  distanciaKm,
+  pontasDoKML,
+} from "./coordenada-de-rota";
 import { chaveDaEstacao } from "./pre-sm-cadastro";
 
 /**
  * A COORDENADA TIRADA DO KML DAS ROTAS (2026-08-26, a pedido).
  *
- * O valor destes testes está quase todo em UM caso: **a ordem `lon,lat`**.
+ * O valor destes testes está quase todo num caso: **a ordem das coordenadas**.
  *
- * KML manda longitude primeiro — o inverso de como se fala. Trocar os dois põe o Brasil na Somália,
- * e o resultado é um mapa com caminhões na África sem erro nenhum aparecer. É o tipo de defeito que
- * tipo não pega (dois `number` são dois `number`) e que só se vê olhando a tela.
+ * O padrão KML é `lon,lat`. A gerenciadora manda `lat,lon,alt` — contra o padrão. Trocar os dois
+ * põe o Brasil na Somália, e o resultado é um mapa com caminhões na África sem erro nenhum aparecer.
+ * É o tipo de defeito que tipo não pega (dois `number` são dois `number`).
+ *
+ * Eu li errado na primeira vez e ACERTEI POR ACASO, conferindo os números contra a cidade a olho.
+ * Quem denunciou foi a faixa do Brasil, ao recusar a leitura invertida na primeira simulação real.
  */
 describe("pontasDoKML", () => {
   /** Medido em 26/08 na rota real Simões Filho → São Luís, encurtado ao essencial. */
   const kml = (coords: string) =>
     `<?xml version="1.0"?><kml><Document><Placemark><LineString><coordinates>${coords}</coordinates></LineString></Placemark></Document></kml>`;
 
-  it("lê longitude primeiro, como o formato manda", () => {
-    const p = pontasDoKML(kml("-38.39845,-12.81504 -40.1,-10.2 -44.25751,-2.62759"));
-    // Simões Filho: latitude -12,8 e longitude -38,4. Invertido cairia no oceano Índico.
+  /**
+   * O QUE A GERENCIADORA MANDA DE VERDADE: `lat,lon,alt`.
+   *
+   * Contra o padrão do formato, que é `lon,lat`. Estes são os pontos reais da rota Simões Filho →
+   * São Luís, copiados da resposta de 26/08 — repare no terceiro campo, a altitude.
+   */
+  it("lê a ordem da gerenciadora, que é latitude primeiro", () => {
+    const p = pontasDoKML(kml("-12.81504,-38.39845,0 -10.2,-40.1,0 -2.62759,-44.25751,0"));
+    // Simões Filho fica na Bahia: latitude -12,8, longitude -38,4.
     expect(p.origem).toEqual({ lat: -12.81504, lon: -38.39845 });
     expect(p.destino).toEqual({ lat: -2.62759, lon: -44.25751 });
   });
 
-  it("recusa o par invertido em vez de mandá-lo para o mapa", () => {
-    // O mesmo ponto ao contrário: latitude -38,4 não existe no Brasil.
-    const p = pontasDoKML(kml("-12.81504,-38.39845"));
-    expect(p.origem).toBeNull();
+  /**
+   * E TAMBÉM A ORDEM DO PADRÃO, se um dia eles corrigirem.
+   *
+   * Fixar a ordem deles quebraria em silêncio no dia da correção, e o sintoma seria caminhões na
+   * África. Como as faixas de latitude e longitude do Brasil não se sobrepõem, no máximo uma das
+   * duas leituras é válida — não há adivinhação.
+   */
+  it("lê também a ordem do padrão, sem confundir as duas", () => {
+    const p = pontasDoKML(kml("-38.39845,-12.81504,0"));
+    expect(p.origem).toEqual({ lat: -12.81504, lon: -38.39845 });
+  });
+
+  it("recusa o ponto que não cabe no Brasil em nenhuma das ordens", () => {
+    // Paris: 48,85 / 2,35. Nenhuma leitura o põe no Brasil.
+    expect(pontasDoKML(kml("48.8566,2.3522,0")).origem).toBeNull();
   });
 
   it("recusa zero-zero, que é um ponto no Atlântico", () => {
@@ -111,5 +136,39 @@ describe("distanciaKm", () => {
     const deslocada = ordem({ lat: simoesFilho.lat + 0.072, lon: simoesFilho.lon });
     expect(deslocada).toEqual(exata);
     expect(exata).toEqual(["perto", "medio", "longe"]);
+  });
+});
+
+/**
+ * A TOLERÂNCIA DE SUFIXO — o defeito que só apareceu simulando o job (2026-08-26).
+ *
+ * `SOC_GO_GOIANIA_02 (AEROPORTO)` normaliza para `GO GOIANIA 2`, e a gerenciadora chama a cidade de
+ * `GOIANIA/GO`. Com a chave exata, a estação de MAIOR VOLUME de Goiás não casava com rota nenhuma —
+ * e o job gravaria zero para ela, sem erro e sem pista.
+ *
+ * Descoberto rodando a lógica contra a API antes de ligar o job. Nenhum teste teria pego: eu não
+ * sabia que o caso existia.
+ */
+describe("chavesToleradas", () => {
+  it("afrouxa o sufixo de pátio, que é o caso que quebrou", () => {
+    expect(chavesToleradas("GO GOIANIA 2")).toEqual(["GO GOIANIA 2", "GO GOIANIA"]);
+  });
+
+  /**
+   * DO MAIS LONGO PARA O MAIS CURTO, e a ordem é o ponto.
+   *
+   * Cair direto no primeiro termo quebraria nomes compostos: `SAO LUIS 01` viraria `SAO`, que casa
+   * com São Paulo, São Bernardo e mais uma dúzia. Descer um por vez preserva `SAO LUIS` antes.
+   */
+  it("preserva o nome composto antes de chegar ao primeiro termo", () => {
+    expect(chavesToleradas("MA SAO LUIS 1")).toEqual(["MA SAO LUIS 1", "MA SAO LUIS", "MA SAO"]);
+  });
+
+  it("o nome de uma palavra só devolve ele mesmo", () => {
+    expect(chavesToleradas("MG BETIM")).toEqual(["MG BETIM"]);
+  });
+
+  it("vazio não vira lista com string vazia dentro", () => {
+    expect(chavesToleradas("")).toEqual([]);
   });
 });
