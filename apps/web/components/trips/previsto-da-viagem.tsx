@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { normalizarPlaca } from "@brazil-tms/shared";
-import { usePortalDrivers, usePrevisto, useSalvarPrevisto } from "@/lib/trips/client";
+import { usePortalDrivers, useProgramacaoDaViagem, useSalvarPrevisto } from "@/lib/trips/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,11 +30,11 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
  */
 export function PrevistoDaViagem({ tripId, podeMexer }: { tripId: string; podeMexer: boolean }) {
   const t = useTranslations("Programacao");
-  const consulta = usePrevisto(tripId);
+  const consulta = useProgramacaoDaViagem(tripId);
   const salvar = useSalvarPrevisto(tripId);
   const motoristas = usePortalDrivers();
 
-  const previsto = consulta.data?.previsto ?? null;
+  const previsto = consulta.data?.programacao ?? null;
   const [editando, setEditando] = useState(false);
 
   if (consulta.isPending) return null;

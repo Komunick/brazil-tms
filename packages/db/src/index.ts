@@ -51,8 +51,10 @@ export {
   type CancellationOptionItem,
 } from "./trips/trip-cancellation";
 export { addTripNote } from "./trips/trip-events";
-export { lerPrevisto, salvarPrevisto } from "./trips/previsto";
-export type { Previsto } from "./trips/previsto";
+export { lerProgramacaoDaViagem, salvarPrevisto, marcarStatus } from "./trips/trip-programacao";
+export type { ProgramacaoDaViagem } from "./trips/trip-programacao";
+export { listarPlacasDoPortal } from "./trips/portal-placas";
+export type { PlacaDoPortal } from "./trips/portal-placas";
 export { listarComentarios, comentar, apagarComentario } from "./trips/comentarios";
 export type { Comentario } from "./trips/comentarios";
 export { createException, updateException, transitionException } from "./trips/exceptions";

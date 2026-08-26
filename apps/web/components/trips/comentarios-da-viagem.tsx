@@ -28,7 +28,22 @@ import { Textarea } from "@/components/ui/textarea";
  * Ao contrário de um chat. A pergunta aqui é "o que há de novo nesta viagem", e a resposta tem de
  * estar na primeira linha; quem quiser o histórico rola.
  */
-export function ComentariosDaViagem({ tripId, userId }: { tripId: string; userId: string }) {
+export function ComentariosDaViagem({
+  tripId,
+  userId,
+  semTitulo,
+}: {
+  tripId: string;
+  userId: string;
+  /**
+   * Sem o cabeçalho "Comentários" — para quando quem chama JÁ diz do que se trata.
+   *
+   * É o caso da janelinha aberta pelo marcador da linha, cujo título é o número da LH e cujo
+   * conteúdo inteiro é a conversa. Repetir "Comentários" ali seria dizer duas vezes a mesma coisa
+   * em quatro centímetros de tela.
+   */
+  semTitulo?: boolean;
+}) {
   const t = useTranslations("Programacao");
   const consulta = useComentarios(tripId);
   const enviar = useComentar(tripId);
@@ -40,12 +55,14 @@ export function ComentariosDaViagem({ tripId, userId }: { tripId: string; userId
 
   return (
     <section aria-label={t("comentarios")} className="space-y-2">
-      <h3 className="text-sm font-medium">
-        {t("comentarios")}
-        {itens.length > 0 ? (
-          <span className="ml-1.5 text-xs font-normal text-muted-foreground">{itens.length}</span>
-        ) : null}
-      </h3>
+      {semTitulo ? null : (
+        <h3 className="text-sm font-medium">
+          {t("comentarios")}
+          {itens.length > 0 ? (
+            <span className="ml-1.5 text-xs font-normal text-muted-foreground">{itens.length}</span>
+          ) : null}
+        </h3>
+      )}
 
       <div className="space-y-1.5">
         <Textarea
