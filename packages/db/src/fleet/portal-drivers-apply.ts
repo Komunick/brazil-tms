@@ -1,5 +1,5 @@
 import { and, eq, isNull, or, sql } from "drizzle-orm";
-import type { PortalDriver } from "@brazil-tms/shared";
+import type { CampoRevelavel, PortalDriver } from "@brazil-tms/shared";
 import { db } from "../client";
 import { drivers } from "../../schema";
 
@@ -43,7 +43,7 @@ export interface ResumoDoCadastro {
 /** Motorista de quem ainda falta algo que só a revelação traz. */
 export interface FaltaRevelar {
   portalDriverId: string;
-  campos: ("driver_name" | "phone" | "national_id")[];
+  campos: CampoRevelavel[];
 }
 
 /**
@@ -163,9 +163,9 @@ export async function applyPortalDrivers(entrada: PortalDriver[]): Promise<{
         .where(eq(drivers.id, atual.id));
     }
 
-    const pendentes: ("driver_name" | "phone" | "national_id")[] = [];
+    const pendentes: CampoRevelavel[] = [];
     if (!atual.phone && !p.phone) pendentes.push("phone");
-    if (!atual.cpf && !p.cpf) pendentes.push("national_id");
+    if (!atual.cpf && !p.cpf) pendentes.push("cpf");
     if (pendentes.length > 0) falta.push({ portalDriverId: p.portalDriverId, campos: pendentes });
   }
 
@@ -194,16 +194,22 @@ export async function applyPortalDrivers(entrada: PortalDriver[]): Promise<{
  */
 export async function applyDriverSensitive(
   portalDriverId: string,
-  campo: "driver_name" | "phone" | "national_id",
+  campo: CampoRevelavel,
   valor: string,
 ): Promise<boolean> {
   const limpo = valor.trim();
   if (!limpo) return false;
 
-  /** O nome do campo lá e a coluna daqui — a tradução mora num lugar só. */
-  const coluna =
-    campo === "phone" ? drivers.phone : campo === "national_id" ? drivers.cpf : drivers.name;
-  const nomeDaColuna = campo === "phone" ? "phone" : campo === "national_id" ? "cpf" : "name";
+  /**
+   * O nome do campo lá e a coluna daqui — a tradução mora num lugar só.
+   *
+   * `national_id` continua reconhecido, e é de propósito: o robô pode entregar uma revelação que
+   * ele já tinha pedido antes da correção, e o dado é o mesmo. Recusá-lo jogaria fora um CPF que
+   * chegou.
+   */
+  const ehCpf = campo === "cpf" || campo === "national_id";
+  const coluna = campo === "phone" ? drivers.phone : ehCpf ? drivers.cpf : drivers.name;
+  const nomeDaColuna = campo === "phone" ? "phone" : ehCpf ? "cpf" : "name";
   const resultado = await db
     .update(drivers)
     .set({ [nomeDaColuna]: limpo, updatedAt: new Date() })

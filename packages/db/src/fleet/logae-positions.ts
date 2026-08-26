@@ -73,6 +73,14 @@ export interface VeiculoNoMapa {
   /** Do nosso cadastro, casado pelo CPF que a gerenciadora manda. `null` = não achamos. */
   motorista: string | null;
   cpfMotorista: string | null;
+  /**
+   * A LH em que este caminhão está agora, se houver.
+   *
+   * É o que a tela da gerenciadora chama de "Status Viagem", e é a informação que mais decide na
+   * hora de escalar: um caminhão a 25 km EM VIAGEM não serve, e um a 39 km LIVRE serve. Sem isso, a
+   * lista ordenada por distância manda a pessoa ligar para quem não pode atender.
+   */
+  emViagem: string | null;
 }
 
 /**
@@ -103,6 +111,7 @@ export async function frotaComPosicao(idadeMaximaMinutos = 24 * 60): Promise<Vei
     minutos: number | null;
     motorista: string | null;
     cpf_motorista: string | null;
+    em_viagem: string | null;
   }>(sql`
     select
       p.placa, p.latitude, p.longitude, p.cidade, p.uf, p.ignicao, p.referencia,
@@ -110,8 +119,36 @@ export async function frotaComPosicao(idadeMaximaMinutos = 24 * 60): Promise<Vei
       case when p.posicao_em is null then null
            else floor(extract(epoch from (now() - p.posicao_em)) / 60)::int end as minutos,
       d.name as motorista,
-      p.cpf_motorista
+      p.cpf_motorista,
+      v.external_trip_id as em_viagem
     from logae_positions p
+    /**
+     * A VIAGEM EM CURSO, casada pela PLACA que o portal escreve.
+     *
+     * ── A JANELA É DE "at_origin" A "unloaded" ─────────────────────────────────────────────
+     *
+     * "assigned" e "confirmed" ficam de FORA de propósito: o caminhão foi escalado e ainda não
+     * saiu, então continua disponível para quem estiver montando o dia. Contá-los como ocupados
+     * esconderia metade da frota logo depois da atribuição da manhã.
+     *
+     * Do "completed" em diante também sai — a viagem acabou.
+     *
+     * ── "distinct on" PORQUE UMA PLACA PODE APARECER EM DUAS ──────────────────────────────
+     *
+     * Reatribuição e correção deixam mais de uma LH viva com a mesma placa. Sem o corte, o join
+     * duplicaria a linha do veículo e o mesmo caminhão apareceria duas vezes na lista. A mais
+     * recente é a que vale.
+     */
+    left join lateral (
+      select t.external_trip_id
+        from trips t
+       where t.current_status in ('at_origin','loading','loaded','in_transit',
+                                  'at_destination','unloading','unloaded')
+         and upper(regexp_replace(coalesce(t.customer_fields ->> 'Placa (portal)', ''),
+                                  '[^A-Za-z0-9,]', '', 'g')) like '%' || p.placa || '%'
+       order by t.updated_at desc
+       limit 1
+    ) v on true
     -- Por CPF, e só dígitos dos dois lados: o cadastro guarda com pontuação em parte das linhas.
     left join drivers d
       on regexp_replace(coalesce(d.cpf, ''), '[^0-9]', '', 'g')
@@ -139,6 +176,7 @@ export async function frotaComPosicao(idadeMaximaMinutos = 24 * 60): Promise<Vei
     minutos: r.minutos == null ? null : Number(r.minutos),
     motorista: r.motorista,
     cpfMotorista: r.cpf_motorista,
+    emViagem: r.em_viagem,
   }));
 }
 
