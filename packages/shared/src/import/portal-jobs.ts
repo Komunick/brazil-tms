@@ -38,6 +38,7 @@ export const PRE_SM_JOBS = {
    * credencial, vale um grupo próprio.
    */
   posicoesCarregar: "integra.carregar_posicoes",
+  coordenadasCarregar: "integra.carregar_coordenadas",
 } as const;
 
 export type PreSmJobName = (typeof PRE_SM_JOBS)[keyof typeof PRE_SM_JOBS];
@@ -59,6 +60,8 @@ export interface PreSmJobPayloads {
    * filtra por placa, devolve todas de uma vez. Pedir menos custaria a mesma chamada.
    */
   "integra.carregar_posicoes": Record<string, never>;
+  /** A varredura das coordenadas de estação. Também sem payload: ela decide sozinha o que falta. */
+  "integra.carregar_coordenadas": Record<string, never>;
 }
 
 /**

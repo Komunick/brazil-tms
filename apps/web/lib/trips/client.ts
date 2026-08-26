@@ -64,6 +64,7 @@ import type {
   LinhaDaProgramacao,
   MarcaDaProgramacao,
   PlacaDoPortal,
+  EstacaoComCoordenada,
   VeiculoNoMapa,
   ProgramacaoDaViagem,
   StatusDaProgramacao,
@@ -685,6 +686,21 @@ export function useFrotaComPosicao(
     queryFn: async () =>
       asJson<{ veiculos: VeiculoNoMapa[] }>(await fetch(`/api/fleet/posicoes?minutos=${minutos}`)),
     refetchInterval: 30_000,
+  });
+}
+
+/**
+ * AS ESTAÇÕES QUE JÁ TÊM COORDENADA (2026-08-26, a pedido).
+ *
+ * Vida longa: coordenada de pátio não muda. Cinco minutos é generoso e evita uma consulta a cada
+ * abertura de diálogo de atribuição.
+ */
+export function useEstacoesComCoordenada(): UseQueryResult<{ estacoes: EstacaoComCoordenada[] }> {
+  return useQuery({
+    queryKey: [...TRIPS_ROOT, "estacoes-coordenada"],
+    queryFn: async () =>
+      asJson<{ estacoes: EstacaoComCoordenada[] }>(await fetch("/api/fleet/estacoes")),
+    staleTime: 5 * 60_000,
   });
 }
 

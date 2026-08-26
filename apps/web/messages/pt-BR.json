@@ -1515,7 +1515,9 @@
       "nenhumNaCidadeExplicacao": "Nenhum veículo monitorado está em {cidade} agora. O mapa abaixo mostra onde a frota está — pode haver um perto, na cidade vizinha.",
       "minutosAtras": "{n} min",
       "semMotoristaVinculado": "sem motorista vinculado",
-      "usarEstaPlaca": "Usar"
+      "usarEstaPlaca": "Usar",
+      "aKm": "{n} km",
+      "aMenosDeKm": "{n, plural, one {# a menos de 300 km} other {# a menos de 300 km}}, em linha reta"
     },
     "melhoresDaRota": {
       "titulo": "Nesta rota",

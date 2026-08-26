@@ -3,8 +3,8 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { MapPin, Truck } from "lucide-react";
-import { ufECidadeDaEstacao } from "@brazil-tms/shared";
-import { useFrotaComPosicao } from "@/lib/trips/client";
+import { chaveDaEstacao, distanciaKm, ufECidadeDaEstacao } from "@brazil-tms/shared";
+import { useEstacoesComCoordenada, useFrotaComPosicao } from "@/lib/trips/client";
 import { MapaDePosicoes, type PontoNoMapa } from "@/components/fleet/mapa-de-posicoes";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -46,6 +46,21 @@ export function VeiculosPorPerto({
   const t = useTranslations("Trips.portalAssign");
   const [aberto, setAberto] = useState(false);
   const frota = useFrotaComPosicao();
+  const estacoes = useEstacoesComCoordenada();
+
+  /**
+   * A COORDENADA DA ORIGEM, quando ela já foi descoberta.
+   *
+   * Casada pela CHAVE (`BA SIMOES FILHO`) e não pelo id da estação, de propósito: o mesmo pátio
+   * aparece com grafias diferentes no cadastro (`SOC SOC_BA_Simões Filho` e `SoC_BA_Simoes Filho`
+   * são a mesma coisa), e casar por id perderia a coordenada de todas menos uma.
+   */
+  const daOrigem = useMemo(() => {
+    const chave = chaveDaEstacao(origem);
+    if (!chave) return null;
+    const e = (estacoes.data?.estacoes ?? []).find((x) => chaveDaEstacao(x.nome) === chave);
+    return e ? { lat: e.latitude, lon: e.longitude } : null;
+  }, [estacoes.data, origem]);
 
   const alvo = useMemo(() => ufECidadeDaEstacao(origem), [origem]);
 
@@ -82,9 +97,24 @@ export function VeiculosPorPerto({
         .replace(/[̀-ͯ]/g, "")
         .trim();
 
-    const naCidade = lista.filter(
-      (v) => dela(v.cidade) === alvo.cidade && (!alvo.uf || dela(v.uf) === alvo.uf),
-    );
+    /**
+     * COM COORDENADA, ORDENA POR DISTÂNCIA. Sem ela, casa por cidade.
+     *
+     * As duas respostas servem, e a diferença precisa aparecer na tela: "está na cidade da coleta" e
+     * "está a 25 km" são afirmações de força diferente, e quem escala precisa saber qual está lendo.
+     *
+     * O raio de 300 km é generoso de propósito — é para ORDENAR, não para excluir. Quem está a 280
+     * km raramente serve, mas ver que ele existe é melhor que uma lista vazia que não explica nada.
+     */
+    const naCidade = daOrigem
+      ? lista
+          .map((v) => ({ v, km: distanciaKm(daOrigem, { lat: v.latitude, lon: v.longitude }) }))
+          .filter((x) => x.km <= 300)
+          .sort((a, b) => a.km - b.km)
+          .map((x) => ({ ...x.v, km: x.km }))
+      : lista
+          .filter((v) => dela(v.cidade) === alvo.cidade && (!alvo.uf || dela(v.uf) === alvo.uf))
+          .map((v) => ({ ...v, km: null as number | null }));
     return {
       perto: naCidade,
       todos: pontos.map((p) => ({
@@ -92,7 +122,7 @@ export function VeiculosPorPerto({
         destaque: naCidade.some((v) => v.placa === p.id),
       })),
     };
-  }, [frota.data, alvo, t]);
+  }, [frota.data, alvo, daOrigem, t]);
 
   // Sem origem não há o que dizer, e um painel vazio é ruído.
   if (!origem) return null;
@@ -110,9 +140,11 @@ export function VeiculosPorPerto({
           <span className="text-muted-foreground">{t("carregandoFrota")}</span>
         ) : (
           <span className="text-muted-foreground">
-            {perto.length > 0
-              ? t("naCidadeDaColeta", { n: perto.length, cidade: alvo.cidade })
-              : t("nenhumNaCidade", { cidade: alvo.cidade || "—" })}
+            {perto.length === 0
+              ? t("nenhumNaCidade", { cidade: alvo.cidade || "—" })
+              : daOrigem
+                ? t("aMenosDeKm", { n: perto.length })
+                : t("naCidadeDaColeta", { n: perto.length, cidade: alvo.cidade })}
           </span>
         )}
         <span className="ml-auto text-muted-foreground">{aberto ? "−" : "+"}</span>
@@ -131,6 +163,11 @@ export function VeiculosPorPerto({
                   </span>
                   {/* A IDADE DA POSIÇÃO é o que decide se ela vale: um caminhão "em Guarulhos"
                       há seis horas pode estar em Curitiba agora. */}
+                  {v.km == null ? null : (
+                    <span className="shrink-0 font-medium tabular-nums">
+                      {t("aKm", { n: Math.round(v.km) })}
+                    </span>
+                  )}
                   {v.minutos == null ? null : (
                     <span
                       className={cn(
