@@ -2,11 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import {
-  APARENCIA_DO_STATUS,
-  STATUS_DA_PROGRAMACAO,
-  type StatusDaProgramacao,
-} from "@brazil-tms/shared";
+import { STATUS_DA_PROGRAMACAO, type StatusDaProgramacao } from "@brazil-tms/shared";
+import { APARENCIA_DO_STATUS } from "@/lib/trips/aparencia-do-status";
 import { useMarcarStatus } from "@/lib/trips/client";
 import { cn } from "@/lib/utils";
 

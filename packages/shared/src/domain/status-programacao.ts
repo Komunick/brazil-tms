@@ -28,33 +28,12 @@ export const STATUS_DA_PROGRAMACAO = ["A_ENVIAR", "ENVIADO", "PROG_OK", "NO_SHOW
 export type StatusDaProgramacao = (typeof STATUS_DA_PROGRAMACAO)[number];
 
 /**
- * O RÓTULO E A COR DE CADA UM, copiados da planilha.
+ * A APARÊNCIA (rótulo e cor) NÃO MORA AQUI — está em `apps/web/lib/trips/aparencia-do-status.ts`.
  *
- * As cores importam mais do que parecem: quem trabalha nessa planilha há meses reconhece o verde
- * escuro como "enviado" antes de ler a palavra. Trocá-las por uma paleta nossa "mais bonita"
- * custaria essa leitura, e não devolveria nada.
+ * Ela nasceu neste arquivo e QUEBROU: o Tailwind varre só `./app`, `./components` e `./lib` de
+ * `apps/web`, então classes escritas neste pacote não chegam ao CSS gerado. O selo "Enviado" saiu
+ * branco sobre branco, e nada acusou — build, typecheck e teste passaram todos.
  *
- * As classes são do Tailwind e ficam aqui, ao lado do valor, de propósito: separar o significado da
- * sua cor faria as duas listas divergirem no primeiro status novo.
+ * A divisão vale a pena guardar: os VALORES ficam aqui, porque o banco e a API precisam deles; a
+ * aparência fica no app, porque é do navegador e é lá que o Tailwind olha.
  */
-export const APARENCIA_DO_STATUS: Record<StatusDaProgramacao, { rotulo: string; classe: string }> =
-  {
-    A_ENVIAR: {
-      rotulo: "A enviar",
-      classe: "bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100",
-    },
-    ENVIADO: {
-      rotulo: "Enviado",
-      classe: "bg-emerald-700 text-white dark:bg-emerald-600",
-    },
-    PROG_OK: {
-      rotulo: "Prog OK",
-      classe: "bg-emerald-400 text-emerald-950 dark:bg-emerald-500 dark:text-emerald-950",
-    },
-    NO_SHOW: {
-      rotulo: "No show",
-      // Contorno em vez de preenchimento: na planilha o NO SHOW é o único claro, e essa diferença é
-      // o que faz o olho parar nele numa coluna cheia de verdes.
-      classe: "border border-rose-400 bg-transparent text-rose-600 dark:text-rose-400",
-    },
-  };
