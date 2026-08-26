@@ -55,6 +55,23 @@ export const locations = pgTable(
     country: text("country").notNull().default("BR"),
     latitude: doublePrecision("latitude"),
     longitude: doublePrecision("longitude"),
+    /**
+     * DE ONDE VEIO A COORDENADA (2026-08-26, a pedido).
+     *
+     * As colunas de latitude e longitude existiam desde sempre e estavam VAZIAS nas 459 estações. O
+     * que faltava não era a coluna — era a procedência: sem ela ninguém sabe se um ponto foi
+     * deduzido pela máquina ou conferido por alguém, e portanto ninguém sabe se pode confiar.
+     *
+     *   `logae_rota`  deduzida do KML de uma rota da gerenciadora. Precisão de CIDADE — cai sobre
+     *                 uma instalação logística real, mas não necessariamente sobre o nosso pátio.
+     *   `manual`      alguém marcou no mapa. É a verdade, e a carga automática NUNCA sobrescreve.
+     *
+     * Essa última regra é o ponto inteiro desta coluna. Sem ela, o job desfaria toda correção
+     * humana, e o defeito apareceria como "a coordenada volta sozinha para o lugar errado" — um
+     * sintoma que não aponta para causa nenhuma.
+     */
+    coordenadaOrigem: text("coordenada_origem"),
+    coordenadaEm: timestamp("coordenada_em", { withTimezone: true }),
     gateInstructions: text("gate_instructions"),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

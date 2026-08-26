@@ -337,3 +337,48 @@ export async function getPosicoes(cred: Credenciais): Promise<PosicaoDaGerenciad
   });
   return r.Posicoes ?? [];
 }
+
+export interface RotaComKML extends RotaDaGerenciadora {
+  KML?: string;
+  KMDistancia?: number;
+}
+
+/**
+ * UMA ROTA COM A GEOMETRIA — é daqui que sai a coordenada das estações (2026-08-26).
+ *
+ * `DevolverKML: "S"` devolve a rota inteira em KML: medido em 26/08, **11.440 pontos e 340 KB** numa
+ * rota de 1.553 km. O primeiro ponto é a origem e o último é o destino, e ambos caem sobre
+ * instalações logísticas reais.
+ *
+ * ── O CUSTO É DE PACIÊNCIA, NÃO DE DINHEIRO ───────────────────────────────────────────────────
+ *
+ * É leitura: não gasta solicitação. Mas a gerenciadora recusa chamadas com menos de DEZ SEGUNDOS de
+ * intervalo ("CONSUMO INDEVIDO. 10 segundos"), então quem varre precisa ir devagar. E são 340 KB por
+ * resposta para extrair dois pontos — desperdício de banda que não é nosso: é o formato deles, e não
+ * há como pedir menos.
+ *
+ * ── `Codigo` E O PAR DE IBGE, JUNTOS ──────────────────────────────────────────────────────────
+ *
+ * O manual diz que os dois IBGE são obrigatórios, e que sem eles "todas as rotas do cliente serão
+ * listadas SEM DETALHAMENTO" — que é justamente o modo em que o KML não vem. Mandar os três é o que
+ * garante a rota certa com a geometria dentro.
+ *
+ * `CriarSeNaoExistir` fica de fora, e de propósito: ele CRIA rota no cadastro da gerenciadora. Uma
+ * varredura de leitura que cria coisa do outro lado seria a pior surpresa possível.
+ */
+export async function getRotaComKML(
+  cred: Credenciais,
+  codigo: number,
+  ibgeOrigem: number,
+  ibgeDestino: number,
+): Promise<RotaComKML | null> {
+  const r = await chamar<{ Rotas?: RotaComKML[] }>("getRotas", {
+    ...cred,
+    Codigo: codigo,
+    CodIBGECidadeOrigem: ibgeOrigem,
+    CodIBGECidadeDestino: ibgeDestino,
+    DevolverKML: "S",
+    DetalharRota: "N",
+  });
+  return (r.Rotas ?? [])[0] ?? null;
+}

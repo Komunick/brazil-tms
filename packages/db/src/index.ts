@@ -56,6 +56,13 @@ export type { ProgramacaoDaViagem } from "./trips/trip-programacao";
 export { listarPlacasDoPortal } from "./trips/portal-placas";
 export { marcasDaProgramacao } from "./users/marcas-da-programacao";
 export { gravarPosicoesDaGerenciadora, frotaComPosicao } from "./fleet/logae-positions";
+export {
+  estacoesSemCoordenada,
+  gravarCoordenadaDaEstacao,
+  marcarCoordenadaAMao,
+  estacoesComCoordenada,
+} from "./fleet/coordenadas-de-estacao";
+export type { EstacaoSemCoordenada, EstacaoComCoordenada } from "./fleet/coordenadas-de-estacao";
 export type { PosicaoParaGravar, VeiculoNoMapa } from "./fleet/logae-positions";
 export type { MarcaDaProgramacao } from "./users/marcas-da-programacao";
 export type { PlacaDoPortal } from "./trips/portal-placas";

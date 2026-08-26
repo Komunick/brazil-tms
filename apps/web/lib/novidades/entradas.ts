@@ -41,6 +41,14 @@ export const NOVIDADES: readonly Novidade[] = [
   {
     data: "2026-08-26",
     tipo: "novidade",
+    titulo: "Veículos por perto agora em quilômetros",
+    descricao:
+      'O painel de atribuição dizia "3 na cidade da coleta". Onde já se sabe onde a estação fica, ele passa a dizer "a 12 km, a 25 km, a 39 km", em ordem. A distância é em linha reta — de estrada costuma ser mais.',
+    onde: "Expedição e Minha Programação · atribuir",
+  },
+  {
+    data: "2026-08-26",
+    tipo: "novidade",
     titulo: "Veículos por perto, na hora de atribuir",
     descricao:
       "O formulário de atribuição passa a mostrar quais caminhões monitorados estão na cidade da coleta agora, com o motorista e há quantos minutos foi a última posição. Um clique preenche a placa. Abaixo, o mapa com a frota inteira — às vezes o bom está na cidade vizinha.",
