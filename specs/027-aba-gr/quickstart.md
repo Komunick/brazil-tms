@@ -102,27 +102,32 @@ o formato do corpo que muda, e ele mora num arquivo só.
 
 **Com a gerenciadora**, e nenhuma bloqueia as etapas 1 a 4:
 
-1. Como o `setPreSM` amarra a Pré-SM à programação do eTorre? Não há campo de código de programação
-   em nenhum método de criação.
-2. **A nossa conta pode escrever?** Toda chamada feita até hoje foi leitura, e todas responderam
-   `CodErro 0`. **Nenhuma escrita foi tentada.** Que a conta leia não prova que ela cria, e o
-   `CodErro 100` em homologação mostra que ela é restrita por ambiente. **O manual não responde isso
-   — nenhuma documentação responde.**
-3. O `CNPJEmbarcador` é exigido na prática? A tela marcava como obrigatório; o manual, não.
+**Uma só**: como o `setPreSM` amarra a Pré-SM à programação do eTorre? Não há campo de código de
+programação em nenhum método de criação. Bloqueia só a etapa 5.
 
-**As duas primeiras bloqueiam a etapa 5.** Não comece o envio sem elas — foi construir sobre
-suposição que custou a 026 inteira.
+E uma menor, da mesma família: o `CNPJEmbarcador` é exigido na prática? A tela marcava como
+obrigatório, o manual não.
 
 ### Já resolvidas, e como
 
+**A conta ESCREVE.** `setCancelaPreSM` com o código `999999999` — fora da faixa real, que tem 8
+dígitos — devolveu `CodErro 137 — não existe Pré-Solicitação cadastrada com esse código`. **Não** é
+`103 — METODO NAO LIBERADO`, que é como a API recusa por permissão: o método executou, foi ao banco
+procurar, e voltou. Só chega aí quem tem permissão. E não cancelou nada.
+
 `CodFilial` = **9332** · `CodPerfilSeguranca` = **20785 (DDR SHOPEE)**, os dois de `getTabela`.
 
-Estiveram listados como "sem fonte" por algumas horas, e **o erro era meu**: chamei com `Tabela` em
-vez de `NomeTabela`, e com `UF`/`Cidade` em vez de `FiltroEstado`/`FiltroCidade`.
+### Duas lições que essas respostas deixaram
 
-**Um erro de parâmetro se parece com um limite da API.** O `CodErro 105` devolve a lista de valores
-aceitos truncada em 250 caracteres, o que escondeu justamente `FILIAIS` e `PERFIL_SEGURANCA`. Antes
-de concluir que algo não existe, confira o nome do campo no manual.
+**Um erro de parâmetro se parece com um limite da API.** `CodFilial` e `CodPerfilSeguranca` foram
+dados como "sem fonte" por horas porque chamei com `Tabela` em vez de `NomeTabela`. O `CodErro 105`
+devolve a lista de valores aceitos **truncada em 250 caracteres**, o que escondeu justamente
+`FILIAIS` e `PERFIL_SEGURANCA`. Antes de concluir que algo não existe, confira o nome do campo.
+
+**A própria API se documenta.** `getTabela(NomeTabela: "ERROS_WEBSERVICE")` devolve os 14 códigos de
+erro — é assim que se descobre que existe um código específico para "método não liberado", e
+portanto que dá para testar permissão sem criar nada. A tabela não é exaustiva: o `137` que apareceu
+no teste não está nela.
 
 **Do nosso lado**: as credenciais da Logae precisam ir ao `devops/config.env` da VM, **e** ao
 `.env.local`. Só no segundo não segura — o próximo deploy regenera esse arquivo a partir do

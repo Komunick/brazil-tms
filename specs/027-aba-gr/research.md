@@ -190,6 +190,35 @@ Fica a lição, que já é a terceira do dia: **um erro de parâmetro se parece 
 Antes de concluir que algo não existe, conferir o nome do campo no manual.
 
 ---
+## R5b — A conta escreve, e dá para provar sem criar nada
+
+**Decisão**: não esperar resposta da gerenciadora sobre permissão de escrita. Foi medido.
+
+**Como**: a API tem um código de erro específico para falta de permissão — **`103 — METODO NAO
+LIBERADO`** —, e a lista completa sai de `getTabela(NomeTabela: "ERROS_WEBSERVICE")`. Basta chamar
+um método de escrita de um jeito que não possa fazer efeito e ver se o `103` aparece.
+
+O `setCancelaPreSM` serve: ele só cancela, nunca cria, e com um código fora da faixa não tem o que
+cancelar. Os códigos reais têm 8 dígitos (`10.108.691`); usei `999999999`.
+
+```
+setCancelaPreSM  → CodErro 137  Nao existe Pre-Solicitacao cadastrada com esse codigo
+setEfetivaPreSM  → CodErro 105  Valor fora do conjunto [S,N]. Campo: JaPassouRaioOrigem
+```
+
+O `137` é a prova: o método **executou** — autenticou, consultou o banco, e respondeu que não achou.
+Só chega aí quem tem permissão.
+
+**Descartado — o teste que eu tinha inventado antes**: chamar `setPreSM` pedindo alteração de um
+código inexistente, esperando que a permissão fosse conferida antes dos campos. Não é: produção e
+homologação devolveram o **mesmo** erro de campo faltando, e homologação recusa a nossa conta. A API
+valida o corpo **antes** de conferir quem chama, então aquele teste nunca chegaria na resposta.
+
+**Descartado — perguntar e esperar**: teria funcionado, e teria custado um ou dois dias. O teste
+custou uma chamada.
+
+---
+
 ## R6 — Uma carga só para cidade e rota
 
 **Decisão**: um job (`pre_sm.carregar_cadastro`) que consulta cidades e rotas e propõe as duas

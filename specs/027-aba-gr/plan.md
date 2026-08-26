@@ -109,24 +109,22 @@ rota", e o texto da tela precisa deixar claro que isso é cadastro pendente **l�
 
 ## As pendências, e como o plano se organiza em volta delas
 
-São **duas**, e nenhuma foi resolvida por suposição. Uma terceira caiu ao ler o manual direito
-— ver a nota abaixo.
+É **uma só**, e não foi resolvida por suposição. Outras duas caíram ao ler o manual e ao testar —
+ver as notas abaixo.
 
-**1. Como o `setPreSM` amarra a Pré-SM à programação** que a Logae já tem do portal. Não há campo de
-código de programação em nenhum método de criação — conferido em
-`docs/INTEGRA-14.2-REFERENCIA.md`.
+**A que continua: como o `setPreSM` amarra a Pré-SM à programação** que a Logae já tem do portal.
+Não há campo de código de programação em nenhum método de criação — conferido em
+`docs/INTEGRA-14.2-REFERENCIA.md`. É pergunta para a gerenciadora, e bloqueia **só a Etapa 5**.
 
-**2. Se a nossa conta pode ESCREVER.** Toda chamada feita até hoje foi leitura — `getRotas`,
-`getCidades`, `getConsultaPreSMAberta`, `getVeiculo`, `getMotorista`, todas com `CodErro 0`. Que ela
-leia **não prova** que ela cria, e o `CodErro 100` em homologação mostra que a conta é restrita por
-ambiente.
+> **Resolvida — a conta ESCREVE.** Medido em 25/08 com um teste que não cria nada:
+> `setCancelaPreSM` com um código fora da faixa devolveu `CodErro 137 — não existe Pré-Solicitação
+> cadastrada com esse código`. Não é `103 — METODO NAO LIBERADO`, que é como a API recusa por
+> permissão: o método **executou**, foi ao banco procurar e voltou. Só chega aí quem tem permissão.
+> O `setEfetivaPreSM` confirmou pelo outro lado, já pedindo o campo seguinte.
 
-As duas são pergunta para a gerenciadora, e as duas bloqueiam **só a Etapa 5**.
-
-> **Uma terceira pendência foi resolvida na documentação**, depois de um erro meu de parâmetro:
-> `CodFilial` = **9332** (`getTabela(FILIAIS)`) e `CodPerfilSeguranca` = **20785 · DDR SHOPEE**
-> (`getTabela(PERFIL_SEGURANCA)`). Ver R5 em `research.md`.
-
+> **Resolvida — os valores de filial e perfil.** `CodFilial` = **9332** (`getTabela(FILIAIS)`) e
+> `CodPerfilSeguranca` = **20785 · DDR SHOPEE** (`getTabela(PERFIL_SEGURANCA)`). Ver R5 em
+> `research.md`.
 Isso **não bloqueia nada até a Etapa 5**. A ordem abaixo põe primeiro tudo o que independe da
 resposta, e isola o formato do corpo num arquivo só:
 

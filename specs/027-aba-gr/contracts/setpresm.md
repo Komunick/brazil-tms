@@ -147,15 +147,26 @@ exata, não o catálogo mundial.
 Os quatro perfis que a conta tem: `18405` (até 2 milhões, Chubb) · `18409` (sem atuação) · `18480`
 (outra GR) · **`20785` (DDR SHOPEE)**, que é o das viagens da Shopee.
 
-### A que continua sem resposta
+### Resolvida — a conta ESCREVE (25/08)
 
-**A nossa conta pode ESCREVER?** Toda chamada feita até hoje foi leitura, e todas responderam
-`CodErro 0`. **Nenhuma escrita foi tentada.** Que a conta leia não prova que ela cria, e o
-`CodErro 100` em homologação mostra que ela é restrita por ambiente.
+Testado sem criar nada: `setCancelaPreSM` com o código `999999999`, fora da faixa real (os códigos
+vistos têm 8 dígitos — `10.108.691`, `10.194.878`).
 
-O manual **não responde isso** — nenhuma documentação responde. Só uma chamada de escrita, ou a
-gerenciadora dizendo.
+```
+setCancelaPreSM  → CodErro 137  Nao existe Pre-Solicitacao cadastrada com esse codigo
+setEfetivaPreSM  → CodErro 105  Valor fora do conjunto [S,N]. Campo: JaPassouRaioOrigem
+```
 
-E a de sempre: se o `CNPJEmbarcador` é exigido na prática — a tela o marcava como obrigatório, o
-manual não.
+Nenhum dos dois é **`103 — METODO NAO LIBERADO`**, que é como a API recusa por permissão (a lista
+completa sai de `getTabela(NomeTabela: "ERROS_WEBSERVICE")`).
+
+O `137` é o que prova: o método **executou** — autenticou, foi ao banco procurar o código, e voltou
+dizendo que não achou. Só chega nesse ponto quem tem permissão. E não cancelou nada.
+
+### A que continua
+
+Só o `CNPJEmbarcador`: é exigido na prática? A tela marcava como obrigatório, o manual não.
+
+E a de cima, a da amarração com a programação — que é a única que ainda pede resposta da
+gerenciadora.
 Quando as respostas chegarem, **muda um arquivo**: `packages/shared/src/domain/pre-sm-corpo.ts`.
