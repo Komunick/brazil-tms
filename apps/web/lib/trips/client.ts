@@ -62,7 +62,9 @@ import type {
   MotoristaDoPortal,
   Comentario,
   LinhaDaProgramacao,
-  Previsto,
+  PlacaDoPortal,
+  ProgramacaoDaViagem,
+  StatusDaProgramacao,
   RotaDoMotorista,
   RegistroDoMotorista,
 } from "@brazil-tms/db";
@@ -431,39 +433,80 @@ export function useMarcarViagem() {
 }
 
 /**
- * O PREVISTO — quem VAI dirigir, antes de a atribuição existir (2026-08-26, a pedido).
+ * O QUE A OPERAÇÃO DECIDIU SOBRE A VIAGEM — o previsto e o status (2026-08-26, a pedido).
  *
- * Gravar INVALIDA a programação inteira, e não só esta viagem: a linha do quadro mostra o previsto,
- * e deixar o quadro velho enquanto a janela mostra o novo é a divergência que faz alguém prever
- * duas vezes.
+ * As três gravações INVALIDAM a programação inteira, e não só esta viagem: a linha do quadro mostra
+ * as duas coisas, e deixar o quadro velho enquanto a janela mostra o novo é a divergência que faz
+ * alguém marcar duas vezes.
  */
+export function useProgramacaoDaViagem(
+  tripId: string,
+  enabled = true,
+): UseQueryResult<{ programacao: ProgramacaoDaViagem | null }> {
+  return useQuery({
+    queryKey: [...TRIPS_ROOT, tripId, "programacao"],
+    queryFn: async () =>
+      asJson<{ programacao: ProgramacaoDaViagem | null }>(
+        await fetch(`/api/trips/${tripId}/programacao`),
+      ),
+    enabled: enabled && tripId !== "",
+  });
+}
+
 export function useSalvarPrevisto(tripId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (dados: { portalDriverId: string | null; placa: string | null }) =>
-      asJson<{ previsto: Previsto | null }>(
-        await fetch(`/api/trips/${tripId}/previsto`, {
+      asJson<{ programacao: ProgramacaoDaViagem | null }>(
+        await fetch(`/api/trips/${tripId}/programacao`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(dados),
         }),
       ),
-    onSuccess: () => {
+    onSuccess: (dados) => {
+      queryClient.setQueryData([...TRIPS_ROOT, tripId, "programacao"], dados);
       void queryClient.invalidateQueries({ queryKey: PROGRAMACAO });
-      void queryClient.invalidateQueries({ queryKey: [...TRIPS_ROOT, tripId, "previsto"] });
     },
   });
 }
 
-export function usePrevisto(
-  tripId: string,
-  enabled = true,
-): UseQueryResult<{ previsto: Previsto | null }> {
+/**
+ * O status marca com PATCH, e não divide o PUT com o previsto.
+ *
+ * Silencioso no aviso do canto: marcar um status é gesto de tela, feito dezenas de vezes seguidas
+ * enquanto se monta o dia. Um "Concluído" a cada clique viraria ruído — mesma decisão da cor.
+ */
+export function useMarcarStatus(tripId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: { silencioso: true },
+    mutationFn: async (status: StatusDaProgramacao | null) =>
+      asJson<{ programacao: ProgramacaoDaViagem | null }>(
+        await fetch(`/api/trips/${tripId}/programacao`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        }),
+      ),
+    onSuccess: (dados) => {
+      queryClient.setQueryData([...TRIPS_ROOT, tripId, "programacao"], dados);
+      void queryClient.invalidateQueries({ queryKey: PROGRAMACAO });
+    },
+  });
+}
+
+/**
+ * AS PLACAS QUE O PORTAL JÁ USOU — a lista do campo de placa (2026-08-26, a pedido).
+ *
+ * Mesma vida longa da lista de motoristas: são 936 placas que mudam devagar, e recarregá-las a cada
+ * abertura de diálogo seria uma consulta pesada para um dado que é o mesmo há semanas.
+ */
+export function usePortalPlacas(): UseQueryResult<{ items: PlacaDoPortal[] }> {
   return useQuery({
-    queryKey: [...TRIPS_ROOT, tripId, "previsto"],
-    queryFn: async () =>
-      asJson<{ previsto: Previsto | null }>(await fetch(`/api/trips/${tripId}/previsto`)),
-    enabled: enabled && tripId !== "",
+    queryKey: ["portal-placas"],
+    queryFn: async () => asJson<{ items: PlacaDoPortal[] }>(await fetch("/api/portal-placas")),
+    staleTime: 10 * 60_000,
   });
 }
 

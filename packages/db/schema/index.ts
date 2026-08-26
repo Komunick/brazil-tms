@@ -50,7 +50,7 @@ export * from "./user-watched-trips";
 export * from "./driver-records";
 // A Pré-SM na gerenciadora Logae, e a ponte rota → modelo dela (026).
 export * from "./trip-pre-sm";
-export * from "./trip-previsto";
+export * from "./trip-programacao";
 export * from "./trip-comments";
 export * from "./pre-sm-route-links";
 export * from "./pre-sm-city-links";

@@ -15,6 +15,7 @@ export * from "./domain/pre-sm-modelos";
 export * from "./domain/pre-sm-cadastro";
 export * from "./domain/pre-sm-corpo";
 export * from "./domain/region";
+export * from "./domain/status-programacao";
 export * from "./domain/assignment-eligibility";
 export * from "./domain/sla-risk";
 export * from "./domain/exceptions";
