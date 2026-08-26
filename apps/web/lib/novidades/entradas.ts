@@ -41,6 +41,22 @@ export const NOVIDADES: readonly Novidade[] = [
   {
     data: "2026-08-26",
     tipo: "novidade",
+    titulo: "Veículos por perto, na hora de atribuir",
+    descricao:
+      "O formulário de atribuição passa a mostrar quais caminhões monitorados estão na cidade da coleta agora, com o motorista e há quantos minutos foi a última posição. Um clique preenche a placa. Abaixo, o mapa com a frota inteira — às vezes o bom está na cidade vizinha.",
+    onde: "Expedição e Minha Programação · atribuir",
+  },
+  {
+    data: "2026-08-26",
+    tipo: "novidade",
+    titulo: "O status muda na hora",
+    descricao:
+      "Marcar um status era esperar o quadro inteiro recarregar para o selo mudar. Agora ele muda no clique. E o que a colega marcar aparece em dez segundos, sem recarregar a página.",
+    onde: "Minha Programação",
+  },
+  {
+    data: "2026-08-26",
+    tipo: "novidade",
     titulo: "A placa vem de lista, como o motorista",
     descricao:
       "No formulário de atribuição a placa era campo de digitar, ao lado de um motorista que vinha de lista. Agora ela também sugere — as placas que o portal já usou, buscáveis ignorando hífen. Um caminhão novo continua podendo ser digitado.",

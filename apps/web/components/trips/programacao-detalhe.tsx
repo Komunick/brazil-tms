@@ -172,6 +172,7 @@ export function ProgramacaoDetalhe({
                    que `portal-trip-facts.ts` grava — as mesmas que o quadro da Expedição lê. */
                 driverAtual={viagem.customerFields?.["ID do motorista (portal)"] ?? null}
                 placaAtual={viagem.customerFields?.["Placa (portal)"] ?? null}
+                origem={viagem.originName ?? null}
                 quantosMelhores={10}
                 onVerHistorico={(id, nome) => setHistorico({ id, nome })}
                 open={atribuindo}

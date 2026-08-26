@@ -64,6 +64,7 @@ import type {
   LinhaDaProgramacao,
   MarcaDaProgramacao,
   PlacaDoPortal,
+  VeiculoNoMapa,
   ProgramacaoDaViagem,
   StatusDaProgramacao,
   RotaDoMotorista,
@@ -667,6 +668,23 @@ export function useApagarComentario(tripId: string) {
       queryClient.setQueryData([...TRIPS_ROOT, tripId, "comentarios"], dados);
       void queryClient.invalidateQueries({ queryKey: PROGRAMACAO });
     },
+  });
+}
+
+/**
+ * ONDE ESTÁ A FROTA — as posições com coordenada (2026-08-26, a pedido).
+ *
+ * Trinta segundos: o job da gerenciadora carrega de minuto em minuto, então um passo mais curto
+ * pediria ao servidor um dado que ainda não mudou. Mais longo desperdiçaria frescor que já está lá.
+ */
+export function useFrotaComPosicao(
+  minutos = 24 * 60,
+): UseQueryResult<{ veiculos: VeiculoNoMapa[] }> {
+  return useQuery({
+    queryKey: [...TRIPS_ROOT, "frota-posicao", minutos],
+    queryFn: async () =>
+      asJson<{ veiculos: VeiculoNoMapa[] }>(await fetch(`/api/fleet/posicoes?minutos=${minutos}`)),
+    refetchInterval: 30_000,
   });
 }
 

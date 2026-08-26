@@ -365,6 +365,13 @@
       "when": 1787666400005,
       "tag": "0051_status_da_programacao",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1787666400006,
+      "tag": "0052_posicoes_da_gerenciadora",
+      "breakpoints": true
     }
   ]
 }

@@ -55,6 +55,8 @@ export { lerProgramacaoDaViagem, salvarPrevisto, marcarStatus } from "./trips/tr
 export type { ProgramacaoDaViagem } from "./trips/trip-programacao";
 export { listarPlacasDoPortal } from "./trips/portal-placas";
 export { marcasDaProgramacao } from "./users/marcas-da-programacao";
+export { gravarPosicoesDaGerenciadora, frotaComPosicao } from "./fleet/logae-positions";
+export type { PosicaoParaGravar, VeiculoNoMapa } from "./fleet/logae-positions";
 export type { MarcaDaProgramacao } from "./users/marcas-da-programacao";
 export type { PlacaDoPortal } from "./trips/portal-placas";
 export { listarComentarios, comentar, apagarComentario } from "./trips/comentarios";
