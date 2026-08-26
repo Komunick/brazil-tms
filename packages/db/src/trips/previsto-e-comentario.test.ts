@@ -34,7 +34,7 @@ describe("a migração 0050 e o schema", () => {
    * que também tem `.name`, e sem ele o teste procuraria uma coluna chamada "enableRLS" na
    * migração — falhando por um motivo que não tem nada a ver com o que ele existe para provar.
    */
-  const colunasDe = (tabela: Record<string, unknown>): string[] =>
+  const colunasDe = (tabela: object): string[] =>
     Object.values(tabela)
       .filter(
         (c): c is { name: string } =>
