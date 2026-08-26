@@ -30,6 +30,15 @@ export const PRE_SM_JOBS = {
   preSmCriar: "pre_sm.criar",
   preSmCancelar: "pre_sm.cancelar",
   preSmCarregarCadastro: "pre_sm.carregar_cadastro",
+  /**
+   * A carga das POSIÇÕES da gerenciadora (2026-08-26).
+   *
+   * Fica junto dos outros porque usa a MESMA credencial da Integra, que vive só no worker. Não tem
+   * nada a ver com Pré-SM, e o nome diz isso — se um dia houver um terceiro assunto usando aquela
+   * credencial, vale um grupo próprio.
+   */
+  posicoesCarregar: "integra.carregar_posicoes",
+  coordenadasCarregar: "integra.carregar_coordenadas",
 } as const;
 
 export type PreSmJobName = (typeof PRE_SM_JOBS)[keyof typeof PRE_SM_JOBS];
@@ -44,6 +53,15 @@ export interface PreSmJobPayloads {
   "pre_sm.criar": PreSmCriarPayload;
   "pre_sm.cancelar": PreSmCancelarPayload;
   "pre_sm.carregar_cadastro": PreSmCarregarCadastroPayload;
+  /**
+   * A carga das posições não recebe nada: ela busca a frota inteira, sempre.
+   *
+   * Um payload com "só estas placas" seria a otimização óbvia e não serve — o método da Integra não
+   * filtra por placa, devolve todas de uma vez. Pedir menos custaria a mesma chamada.
+   */
+  "integra.carregar_posicoes": Record<string, never>;
+  /** A varredura das coordenadas de estação. Também sem payload: ela decide sozinha o que falta. */
+  "integra.carregar_coordenadas": Record<string, never>;
 }
 
 /**

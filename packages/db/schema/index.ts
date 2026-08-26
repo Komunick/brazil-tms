@@ -52,5 +52,6 @@ export * from "./driver-records";
 export * from "./trip-pre-sm";
 export * from "./trip-programacao";
 export * from "./trip-comments";
+export * from "./logae-positions";
 export * from "./pre-sm-route-links";
 export * from "./pre-sm-city-links";

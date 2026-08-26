@@ -493,6 +493,7 @@ export function DispatchBoard() {
           vehicleType={(portalRow.plannedVehicleType as VehicleType | null) ?? null}
           driverAtual={portalRow.portalDriverId}
           placaAtual={portalRow.portalPlate}
+          origem={portalRow.originName ?? null}
           onSent={() => setEmVoo((atual) => new Set(atual).add(portalRow.id))}
           open
           onOpenChange={(aberto) => !aberto && setPortalRow(null)}
