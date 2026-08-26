@@ -57,8 +57,31 @@ export interface PortalDriver {
   bruto: Record<string, unknown>;
 }
 
-/** Os campos que a revelação sabe entregar, no nome que o portal usa. */
-export const CAMPOS_REVELAVEIS = ["driver_name", "phone", "national_id"] as const;
+/**
+ * Os campos que a revelação sabe entregar, no nome que o PORTAL usa.
+ *
+ * ── O CPF MUDOU DE NOME, E CUSTOU QUATRO DIAS (2026-08-26) ────────────────────────────────────
+ *
+ * Era `national_id`, e funcionou até 22/08. Em 23/08 o portal passou a responder
+ * `retcode 271601065 — "You do not have permission to view this sensitive data"` para esse campo, e
+ * SÓ para ele: nome e telefone continuaram vindo normalmente.
+ *
+ * A mensagem parecia revogação de permissão da conta, e não era. A tela do portal continua
+ * revelando o CPF pelo olho da lista — conferido na aba Network em 26/08, a chamada que devolve
+ * 200 é `data?data_field=cpf&driver_id=…`. O que mudou foi o nome do campo.
+ *
+ * ── O QUE ISSO CUSTOU ────────────────────────────────────────────────────────────────────────
+ *
+ * Medido em produção em 26/08: dos 1.449 motoristas, só 400 têm CPF — e desde 23/08 **todo
+ * motorista novo entra sem**. Foram 71 em quatro dias, 21 só no dia 26. E CPF é campo obrigatório
+ * do `setPreSM`: cada um desses é uma viagem que a aba GR bloqueia.
+ *
+ * ── `national_id` FICA NA LISTA, e é de propósito ────────────────────────────────────────────
+ *
+ * O robô pode entregar uma revelação que já tinha pedido antes da correção. O dado é o mesmo, e
+ * recusá-lo por causa do rótulo jogaria fora um CPF que chegou. Ele só não é mais PEDIDO.
+ */
+export const CAMPOS_REVELAVEIS = ["driver_name", "phone", "cpf", "national_id"] as const;
 export type CampoRevelavel = (typeof CAMPOS_REVELAVEIS)[number];
 
 const texto = (v: unknown): string | null => {
