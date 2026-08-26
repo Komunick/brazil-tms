@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { definirConfirmacaoDaCorrespondencia, listarCorrespondencias } from "@brazil-tms/db";
-import { PRE_SM_JOBS, type PreSmCarregarModelosPayload } from "@brazil-tms/shared";
+import { PRE_SM_JOBS, type PreSmCarregarCadastroPayload } from "@brazil-tms/shared";
 import { getBffBoss } from "@/lib/queue/boss";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
 import { Conflict, handleRouteError } from "@/lib/api/respond";
@@ -90,8 +90,8 @@ export async function POST(): Promise<NextResponse> {
     requirePermission(ctx, "manage_commercial_data");
 
     const boss = await getBffBoss();
-    const payload: PreSmCarregarModelosPayload = { pedidoPor: ctx.userId };
-    await boss.send(PRE_SM_JOBS.preSmCarregarModelos, payload as object);
+    const payload: PreSmCarregarCadastroPayload = { pedidoPor: ctx.userId };
+    await boss.send(PRE_SM_JOBS.preSmCarregarCadastro, payload as object);
 
     return NextResponse.json({ ok: true }, { status: 202 });
   } catch (error) {

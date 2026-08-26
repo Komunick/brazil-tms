@@ -38,8 +38,8 @@ tabela, ela está errada — leia o plano de novo.
 
 ## Phase 1 — Setup
 
-- [ ] T001 Ler `docs/INTEGRA-14.2-REFERENCIA.md` nas seções `setPreSM`, `getCidades`, `getRotas`, `getCliente` e `getTabela`, e conferir contra `specs/027-aba-gr/contracts/setpresm.md` — divergência entre os dois é defeito do contrato, e é para consertar agora
-- [ ] T002 Confirmar no banco de dev que `pre_sm_route_models` e `trip_pre_sm` continuam vazias (`select count(*)`) — a migração da Fase 2 assume isso e fica errada se houver dado
+- [X] T001 Ler `docs/INTEGRA-14.2-REFERENCIA.md` nas seções `setPreSM`, `getCidades`, `getRotas`, `getCliente` e `getTabela`, e conferir contra `specs/027-aba-gr/contracts/setpresm.md` — divergência entre os dois é defeito do contrato, e é para consertar agora
+- [X] T002 Confirmar no banco de dev que `pre_sm_route_models` e `trip_pre_sm` continuam vazias (`select count(*)`) — a migração da Fase 2 assume isso e fica errada se houver dado
 
 ---
 
@@ -47,12 +47,12 @@ tabela, ela está errada — leia o plano de novo.
 
 **A migração.** Uma só, escrita à mão, fazendo três coisas.
 
-- [ ] T003 Conferir a versão do Postgres em produção (era 16.14) e se a migração precisa de algo fora de transação
-- [ ] T004 Escrever `packages/db/migrations/00NN_aba_gr.sql` **à mão**: renomear `pre_sm_route_models` → `pre_sm_route_links`, renomear `cod_modelo` → `cod_rota`, e criar `pre_sm_city_links` conforme `data-model.md`. **NÃO usar `drizzle-kit generate`** — o journal tem 49 entradas e 27 snapshots, ele diffa contra o `0024` e **recria tabelas de produção**
-- [ ] T005 Acrescentar a entrada no `packages/db/migrations/meta/_journal.json`
-- [ ] T006 [P] Escrever `packages/db/schema/pre-sm-city-links.ts` com o comentário do porquê de `uf`, `cidade_nome` e `descricao` existirem (ver `data-model.md`)
-- [ ] T007 Renomear `packages/db/schema/pre-sm-route-models.ts` → `pre-sm-route-links.ts` e trocar `codModelo` por `codRota`; atualizar `packages/db/schema/index.ts`
-- [ ] T008 Aplicar a migração no dev e conferir no banco: as duas tabelas com a forma nova, e o índice único de `trip_pre_sm` **intacto**
+- [X] T003 Conferir a versão do Postgres em produção (era 16.14) e se a migração precisa de algo fora de transação
+- [X] T004 Escrever `packages/db/migrations/00NN_aba_gr.sql` **à mão**: renomear `pre_sm_route_models` → `pre_sm_route_links`, renomear `cod_modelo` → `cod_rota`, e criar `pre_sm_city_links` conforme `data-model.md`. **NÃO usar `drizzle-kit generate`** — o journal tem 49 entradas e 27 snapshots, ele diffa contra o `0024` e **recria tabelas de produção**
+- [X] T005 Acrescentar a entrada no `packages/db/migrations/meta/_journal.json`
+- [X] T006 [P] Escrever `packages/db/schema/pre-sm-city-links.ts` com o comentário do porquê de `uf`, `cidade_nome` e `descricao` existirem (ver `data-model.md`)
+- [X] T007 Renomear `packages/db/schema/pre-sm-route-models.ts` → `pre-sm-route-links.ts` e trocar `codModelo` por `codRota`; atualizar `packages/db/schema/index.ts`
+- [X] T008 Aplicar a migração no dev e conferir no banco: as duas tabelas com a forma nova, e o índice único de `trip_pre_sm` **intacto**
 
 **Checkpoint**: o banco tem as duas pontes, e nada da 026 quebrou.
 
@@ -67,9 +67,9 @@ confirmadas passam a valer.
 
 ### A extração de cidade a partir do nome
 
-- [ ] T009 [US4] Acrescentar `ufECidadeDaEstacao` em `packages/shared/src/domain/pre-sm-modelos.ts`, **ao lado** de `tokensDaEstacao` e usando a MESMA separação por `_` e o mesmo índice de UF. **Não escrever um segundo normalizador** — dois divergem em silêncio e a estação simplesmente não casa, sem erro nenhum
-- [ ] T010 [P] [US4] Teste em `pre-sm-modelos.test.ts` com estações reais: `SOC_MG_BETIM`, `LM HUB_TO_PALMAS`, `SOC_PE_JABOATÃO DOS GUARARAPES`, `FM HUB_PR_UMUARAMA_PQ_INDUST_II`, e o caso sem UF no nome
-- [ ] T011 [P] [US4] Teste que amarra as duas funções: para a mesma estação, o que `tokensDaEstacao` descarta é exatamente o que `ufECidadeDaEstacao` devolve. É o teste que impede a divergência silenciosa
+- [X] T009 [US4] Acrescentar `ufECidadeDaEstacao` em `packages/shared/src/domain/pre-sm-modelos.ts`, **ao lado** de `tokensDaEstacao` e usando a MESMA separação por `_` e o mesmo índice de UF. **Não escrever um segundo normalizador** — dois divergem em silêncio e a estação simplesmente não casa, sem erro nenhum
+- [X] T010 [P] [US4] Teste em `pre-sm-modelos.test.ts` com estações reais: `SOC_MG_BETIM`, `LM HUB_TO_PALMAS`, `SOC_PE_JABOATÃO DOS GUARARAPES`, `FM HUB_PR_UMUARAMA_PQ_INDUST_II`, e o caso sem UF no nome
+- [X] T011 [P] [US4] Teste que amarra as duas funções: para a mesma estação, o que `tokensDaEstacao` descarta é exatamente o que `ufECidadeDaEstacao` devolve. É o teste que impede a divergência silenciosa
 
 ### O casamento com o cadastro da gerenciadora
 
@@ -80,14 +80,14 @@ confirmadas passam a valer.
 - [ ] T015b [US4] Acrescentar a tolerância do **sufixo de bairro ou distrito** ao casamento de cidade: quando o nome inteiro não achar, cair para o primeiro termo. Medido em 25/08: **27 cidades não resolvem** por isso — `RECIFE MURIBECA`, `SANTANA`, `CAMPINAS PQ CIDADE`, `UMUARAMA PQ INDUST II` —, e elas valem **38 dos 134 pares de rota**
 - [ ] T015c [P] [US4] Teste da tolerância com as quatro estações acima, e o caso que ela **não** pode quebrar: `SIMOES FILHO` continua casando com `SIMOES FILHO`, não virando `SIMOES`
 - [ ] T016 [US4] Escrever `packages/db/src/trips/pre-sm-cidades.ts`: gravar propostas com `confirmado_em` **nulo**, listar, confirmar/desfazer (auditado na mesma transação), e a leitura que **só** devolve confirmada
-- [ ] T017 [US4] Adaptar `packages/db/src/trips/pre-sm-modelos.ts` → `pre-sm-rotas.ts`, trocando modelo por rota. A trava de "só confirmada vale" continua **dentro** da função, não no chamador
+- [X] T017 [US4] Adaptar `packages/db/src/trips/pre-sm-modelos.ts` → `pre-sm-rotas.ts`, trocando modelo por rota. A trava de "só confirmada vale" continua **dentro** da função, não no chamador
 - [ ] T018 [US4] Acrescentar as ações de auditoria (`pre_sm.cidade.confirmar` / `.desconfirmar`) em `packages/shared/src/audit/actions.ts`, no tipo **e** no catálogo, com os rótulos pt-BR — há teste-guarda que exige rótulo para cada ação
 
 ### A carga, e a tela
 
 - [ ] T019 [US4] Escrever o job `pre_sm.carregar_cadastro` em `workers/jobs/pre-sm/carregar-cadastro.ts`: consulta cidades e rotas e propõe as duas correspondências. **Uma carga só** — a rota depende do IBGE da cidade, e dois jobs criariam uma ordem implícita (R6)
 - [ ] T019b [US4] Gravar as propostas com `ON CONFLICT DO NOTHING`, **nunca `DO UPDATE`** (FR-021). Se a correspondência já existe, ou alguém a confirmou — e sobrescrever apagaria a conferência dela — ou está esperando conferência, e a proposta nova é a mesma. Em nenhum dos dois casos o certo é mexer. A exceção legítima (o cadastro mudou na gerenciadora) é trabalho de tela, com a pessoa vendo o que troca
-- [ ] T020 [US4] Registrar o job em `workers/jobs/index.ts` e **remover** o `pre_sm.carregar_modelos`
+- [X] T020 [US4] Registrar o job em `workers/jobs/index.ts` e **remover** o `pre_sm.carregar_modelos`
 - [ ] T021 [US4] Acrescentar a tela de conferência de cidades em `apps/web/app/(shell)/admin/pre-sm-cidades/` e a rota `app/api/admin/pre-sm-cidades/route.ts` (GET lista, PATCH confirma/desfaz), espelhando a de rotas que já existe. Permissão **`manage_commercial_data`**, e **não** `assign_resources` (FR-024): quem escala **usa** esta decisão, não a toma — senão a pessoa impedida de escalar alguém poderia se autoliberar confirmando uma correspondência
 - [ ] T022 [US4] Adaptar a tela de rotas existente para mostrar `CodRota` e a descrição da rota; renomear a rota de API e o item de menu. Mesma permissão `manage_commercial_data`
 - [ ] T023 [P] [US4] Textos das duas telas em `apps/web/messages/pt-BR.json`

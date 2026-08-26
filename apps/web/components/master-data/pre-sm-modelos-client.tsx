@@ -200,7 +200,7 @@ export function PreSmModelosClient() {
                         colunas à esquerda para decidir se o casamento está certo — sem ela, a
                         conferência seria aprovar um número. */}
                     <TableCell>
-                      <span className="text-muted-foreground">{i.codModelo}</span>{" "}
+                      <span className="text-muted-foreground">{i.codRota}</span>{" "}
                       <span>{i.descricao}</span>
                     </TableCell>
                     <TableCell className="text-xs">

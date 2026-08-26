@@ -29,7 +29,7 @@ export interface PortalJobPayloads {
 export const PRE_SM_JOBS = {
   preSmCriar: "pre_sm.criar",
   preSmCancelar: "pre_sm.cancelar",
-  preSmCarregarModelos: "pre_sm.carregar_modelos",
+  preSmCarregarCadastro: "pre_sm.carregar_cadastro",
 } as const;
 
 export type PreSmJobName = (typeof PRE_SM_JOBS)[keyof typeof PRE_SM_JOBS];
@@ -43,7 +43,7 @@ export interface PreSmCriarPayload {
 export interface PreSmJobPayloads {
   "pre_sm.criar": PreSmCriarPayload;
   "pre_sm.cancelar": PreSmCancelarPayload;
-  "pre_sm.carregar_modelos": PreSmCarregarModelosPayload;
+  "pre_sm.carregar_cadastro": PreSmCarregarCadastroPayload;
 }
 
 /**
@@ -63,7 +63,7 @@ export interface PreSmCancelarPayload {
 }
 
 /**
- * A CARGA DAS CORRESPONDÊNCIAS ROTA → MODELO (2026-08-25, fatia 026).
+ * A CARGA DO CADASTRO DA GERENCIADORA — CIDADES E ROTAS (2026-08-25, fatia 026).
  *
  * Consulta os modelos de Pré-SM cadastrados na gerenciadora, casa com as nossas rotas e grava as
  * propostas — todas **por confirmar**. Não cria Pré-SM nenhuma e não gasta nada: `getModelosPreSM`
@@ -76,7 +76,7 @@ export interface PreSmCancelarPayload {
  * `diasParaTras` limita quais rotas entram NESTA rodada — as que rodaram no período. A tabela
  * acumula entre rodadas, então uma rota sazonal entra quando voltar a aparecer.
  */
-export interface PreSmCarregarModelosPayload {
+export interface PreSmCarregarCadastroPayload {
   /** Quem pediu. Só para o log: é a resposta de "quem mandou rodar isso" quando alguém estranhar. */
   pedidoPor: string;
   diasParaTras?: number;

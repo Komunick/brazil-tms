@@ -4,6 +4,7 @@ import {
   normalizarEstacao,
   proporCorrespondencias,
   tokensDaEstacao,
+  ufECidadeDaEstacao,
   type ModeloDaGerenciadora,
 } from "./pre-sm-modelos";
 
@@ -127,5 +128,62 @@ describe("proporCorrespondencias", () => {
       MODELOS,
     );
     expect(r).toHaveLength(1);
+  });
+});
+
+/**
+ * A UF E A CIDADE, tiradas do nome da estação (2026-08-25, fatia 027).
+ *
+ * O `setPreSM` pede o código IBGE das cidades de coleta e entrega. O nosso cadastro quase não tem
+ * cidade preenchida — 8 das 228 estações —, mas o nome carrega.
+ */
+describe("ufECidadeDaEstacao", () => {
+  it("separa as estações reais do cadastro", () => {
+    expect(ufECidadeDaEstacao("SOC_MG_BETIM")).toEqual({ uf: "MG", cidade: "BETIM" });
+    expect(ufECidadeDaEstacao("LM HUB_TO_PALMAS")).toEqual({ uf: "TO", cidade: "PALMAS" });
+    expect(ufECidadeDaEstacao("SOC_PE_JABOATÃO DOS GUARARAPES")).toEqual({
+      uf: "PE",
+      cidade: "JABOATAO DOS GUARARAPES",
+    });
+  });
+
+  /** O caso com mais partes depois da UF — o nome não para no primeiro `_`. */
+  it("a cidade é tudo o que vem depois da UF, não só o primeiro pedaço", () => {
+    expect(ufECidadeDaEstacao("FM HUB_PR_UMUARAMA_PQ_INDUST_II").cidade).toBe(
+      "UMUARAMA PQ INDUST II",
+    );
+  });
+
+  /**
+   * "Não sei" em vez de palpite. Sem UF no nome, quem chama precisa poder distinguir isso de uma
+   * extração bem-sucedida — senão uma estação fora do padrão viraria uma cidade inventada.
+   */
+  it("sem UF no nome, a UF vem vazia", () => {
+    expect(ufECidadeDaEstacao("CD São Paulo").uf).toBe("");
+    expect(ufECidadeDaEstacao("").uf).toBe("");
+    expect(ufECidadeDaEstacao(null).uf).toBe("");
+  });
+
+  /**
+   * O TESTE QUE IMPEDE A DIVERGÊNCIA SILENCIOSA.
+   *
+   * `tokensDaEstacao` descarta tudo até a UF; `ufECidadeDaEstacao` devolve o que ela descarta. Se as
+   * duas se separarem, nada quebra visivelmente — a estação apenas deixa de casar, sem erro em lugar
+   * nenhum. Este teste amarra uma na outra.
+   *
+   * A única diferença legítima é o `FILHO`, que a primeira remove de propósito.
+   */
+  it("o que uma descarta é exatamente o que a outra devolve", () => {
+    for (const estacao of [
+      "SOC_MG_BETIM",
+      "LM HUB_TO_PALMAS",
+      "SOC_PE_JABOATÃO DOS GUARARAPES",
+      "FM HUB_PR_UMUARAMA_PQ_INDUST_II",
+      "SOC_GO_GOIANIA_02 (AEROPORTO)",
+    ]) {
+      const { cidade } = ufECidadeDaEstacao(estacao);
+      const daCidade = cidade.split(" ").filter((t) => t && t !== "FILHO");
+      expect([...tokensDaEstacao(estacao)].sort()).toEqual([...new Set(daCidade)].sort());
+    }
   });
 });
