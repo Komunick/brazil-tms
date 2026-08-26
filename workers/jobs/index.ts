@@ -11,6 +11,7 @@ import { registerPortalWithdrawn } from "./portal-withdrawn";
 import { registerPreSmCriar } from "./pre-sm";
 import { registerPreSmCancelar } from "./pre-sm/cancelar";
 import { registerPreSmCarregarCadastro } from "./pre-sm/carregar-cadastro";
+import { registerCarregarPosicoes } from "./posicoes";
 
 /**
  * Registry of import job handlers (feature 004, research R3). The bootstrap (`workers/index.ts`)
@@ -68,4 +69,5 @@ export async function registerJobHandlers(boss: PgBoss): Promise<void> {
    * criação: é o preparo que precisa acontecer antes de ligá-lo.
    */
   await registerPreSmCarregarCadastro(boss);
+  await registerCarregarPosicoes(boss);
 }

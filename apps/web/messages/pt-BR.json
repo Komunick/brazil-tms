@@ -1507,7 +1507,15 @@
       "driverBlocked": "bloqueado",
       "loadingPlates": "Carregando placas…",
       "platePlaceholder": "Escolher ou digitar a placa",
-      "noPlate": "Nenhuma placa. Digite para usar mesmo assim."
+      "noPlate": "Nenhuma placa. Digite para usar mesmo assim.",
+      "veiculosPorPerto": "Veículos por perto",
+      "carregandoFrota": "carregando…",
+      "naCidadeDaColeta": "{n, plural, one {# na cidade da coleta} other {# na cidade da coleta}} ({cidade})",
+      "nenhumNaCidade": "nenhum em {cidade}",
+      "nenhumNaCidadeExplicacao": "Nenhum veículo monitorado está em {cidade} agora. O mapa abaixo mostra onde a frota está — pode haver um perto, na cidade vizinha.",
+      "minutosAtras": "{n} min",
+      "semMotoristaVinculado": "sem motorista vinculado",
+      "usarEstaPlaca": "Usar"
     },
     "melhoresDaRota": {
       "titulo": "Nesta rota",

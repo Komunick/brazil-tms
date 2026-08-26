@@ -33,6 +33,7 @@ import {
   useVinculosDasPlacas,
 } from "@/lib/trips/client";
 import { VinculoDoRecurso, type VinculoEscolhido } from "@/components/trips/vinculo-do-recurso";
+import { VeiculosPorPerto } from "@/components/trips/veiculos-por-perto";
 
 /**
  * ESCALAR MOTORISTA E PLACA SEM ABRIR O PORTAL (2026-08-21, a pedido).
@@ -59,6 +60,7 @@ export function PortalAssignDialog({
   vehicleType,
   driverAtual,
   placaAtual,
+  origem,
   onSent,
   quantosMelhores,
   onVerHistorico,
@@ -78,6 +80,13 @@ export function PortalAssignDialog({
    */
   driverAtual?: string | null;
   placaAtual?: string | null;
+  /**
+   * A ESTAÇÃO DE ORIGEM, como o portal a escreve (`SOC_SP_GUARULHOS`).
+   *
+   * Serve só para o painel de veículos por perto. Opcional de propósito: quem não passar continua
+   * com o formulário de sempre, e o painel simplesmente não aparece — nada quebra.
+   */
+  origem?: string | null;
   /** Chamado quando a ordem entrou na fila — quem desenha usa para acompanhar o resultado. */
   onSent?: () => void;
   /**
@@ -203,6 +212,25 @@ export function PortalAssignDialog({
           <DialogTitle>{driverAtual ? t("titleEdit") : t("title")}</DialogTitle>
           <DialogDescription>{t("subtitle", { lh: externalTripId ?? tripId })}</DialogDescription>
         </DialogHeader>
+
+        {/*
+          OS VEÍCULOS PERTO DA ORIGEM ficam ACIMA das duas colunas, e recolhidos (2026-08-26).
+
+          Acima porque a pergunta que eles respondem — "quem está na cidade da coleta agora" — vem
+          ANTES de escolher motorista e placa, não depois. Embaixo, chegaria com a decisão tomada.
+
+          Recolhidos porque a maioria das atribuições não precisa deles: quem já sabe quem vai
+          dirigir só quer preencher os campos. Aberto, ocupa a tela toda; fechado, uma linha que
+          diz quantos estão por perto — o que já é meia resposta.
+        */}
+        <VeiculosPorPerto
+          origem={origem ?? null}
+          /* Escolher no painel PREENCHE o primeiro campo de placa, e não grava nada: quem manda
+             continua sendo o botão de confirmar. */
+          aoEscolherPlaca={(p) =>
+            setPlacas((atual) => atual.map((v, i) => (i === 0 ? normalizarPlaca(p) : v)))
+          }
+        />
 
         {/**
          * DUAS COLUNAS: o formulário e, ao lado, quem já entregou bem NESTA rota.

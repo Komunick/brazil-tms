@@ -33,20 +33,29 @@ export const APARENCIA_DO_STATUS: Record<StatusDaProgramacao, { rotulo: string; 
   {
     A_ENVIAR: {
       rotulo: "A enviar",
-      classe: "bg-slate-200 text-slate-800 dark:bg-slate-700 dark:text-slate-100",
+      // Azul escuro. No tema escuro ele clareia um passo, senão some no fundo da página.
+      classe: "bg-blue-900 text-white dark:bg-blue-800 dark:text-white",
     },
     ENVIADO: {
       rotulo: "Enviado",
-      classe: "bg-emerald-700 text-white dark:bg-emerald-600 dark:text-white",
+      /**
+       * Preto — e no tema escuro ele ganha um contorno.
+       *
+       * Preto sobre fundo escuro perde a BORDA: o texto continua legível, mas o selo deixa de ser
+       * um selo e vira texto solto, e o olho não o acha mais numa coluna. O anel devolve o
+       * contorno sem clarear o preto, que é o que o usuário pediu.
+       */
+      classe:
+        "bg-neutral-900 text-white dark:bg-black dark:text-white dark:ring-1 dark:ring-white/25",
     },
     PROG_OK: {
       rotulo: "Prog OK",
+      // Mantido: é o verde da planilha, e o usuário pediu para não mexer.
       classe: "bg-emerald-400 text-emerald-950 dark:bg-emerald-500 dark:text-emerald-950",
     },
     NO_SHOW: {
       rotulo: "No show",
-      // Contorno em vez de preenchimento: na planilha o NO SHOW é o único claro, e essa diferença é
-      // o que faz o olho parar nele numa coluna cheia de verdes.
-      classe: "border border-rose-400 bg-transparent text-rose-600 dark:text-rose-400",
+      // Violeta.
+      classe: "bg-violet-600 text-white dark:bg-violet-500 dark:text-white",
     },
   };

@@ -281,3 +281,59 @@ export async function getStatusPreSM(
 export async function setCancelaPreSM(cred: Credenciais, codigo: number): Promise<void> {
   await chamar("setCancelaPreSM", { ...cred, CodPreSolicitacao: codigo });
 }
+
+export interface PosicaoDaGerenciadora {
+  CodPosicao: number;
+  Placa: string;
+  CodTerminal?: string;
+  TipoRastreador?: string;
+  DataHoraPos?: string;
+  Ignicao?: string;
+  Latitude?: number | string;
+  Longitude?: number | string;
+  PosReferencia?: string;
+  Cidade?: string;
+  UF?: string;
+  Pais?: string;
+  /** O CPF do motorista vinculado — NÃO o nome, apesar do rótulo. Ver o comentário abaixo. */
+  Motorista?: string;
+}
+
+/**
+ * A ÚLTIMA POSIÇÃO DE CADA VEÍCULO MONITORADO (2026-08-26, a pedido).
+ *
+ * Medido em 26/08 contra a produção: **91 veículos**, 89 com coordenada válida, e **82 com posição
+ * de menos de uma hora**. É a frota que a gerenciadora monitora — não as 936 placas que o portal
+ * usa, e sim as que têm rastreador cadastrado com ela.
+ *
+ * ── `TipoConsulta` MUDA TUDO ──────────────────────────────────────────────────────────────────
+ *
+ * `Ultimas` devolve a última posição de cada veículo ativo, que é o que interessa a quem pergunta
+ * "onde está a frota agora". As outras duas paginam o HISTÓRICO: `Primeiras` traz 500 posições das
+ * últimas 72 horas, e `Proximas` continua de onde `CodUltPosicao` parou. Pedir `Primeiras` aqui
+ * traria centenas de linhas do mesmo caminhão e nenhuma resposta.
+ *
+ * `CodUltPosicao: "0"` deixa o controle com a gerenciadora, como o manual permite.
+ *
+ * ── O CAMPO `Motorista` TRAZ CPF, NÃO NOME ────────────────────────────────────────────────────
+ *
+ * Conferido nos 91: vêm `08004345441`, `30951722816` — onze dígitos. O rótulo engana e o conteúdo
+ * é melhor do que ele promete: CPF é chave estável, e casar por CPF evita o casamento por nome,
+ * que é frágil e já custou caro nesta base.
+ *
+ * ── E NEM TUDO QUE VOLTA PRESTA ───────────────────────────────────────────────────────────────
+ *
+ * Dois dos 91 vieram com latitude e longitude ZERO e sem data. Zero-zero é uma coordenada válida no
+ * Atlântico, ao largo da África — se passar adiante, aparece no mapa como um caminhão no meio do
+ * oceano. Quem consome precisa descartar.
+ *
+ * É LEITURA: não custa solicitação. Pode ser chamado à vontade.
+ */
+export async function getPosicoes(cred: Credenciais): Promise<PosicaoDaGerenciadora[]> {
+  const r = await chamar<{ Posicoes?: PosicaoDaGerenciadora[] }>("getPosicoes", {
+    ...cred,
+    TipoConsulta: "Ultimas",
+    CodUltPosicao: "0",
+  });
+  return r.Posicoes ?? [];
+}
