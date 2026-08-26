@@ -248,13 +248,21 @@ export {
 } from "./trips/pre-sm-vinculos";
 // A ponte rota → modelo de Pré-SM: a carga propõe, uma pessoa confirma (026).
 export {
-  gravarPropostasDeModelo,
+  gravarPropostasDeRota,
   listarCorrespondencias,
   definirConfirmacaoDaCorrespondencia,
-  modeloConfirmadoDaRota,
+  codRotaConfirmada,
   rotasParaCorrespondencia,
   type CorrespondenciaDaRota,
 } from "./trips/pre-sm-rotas";
+// A ponte estação → cidade: a carga propõe, uma pessoa confirma (027).
+export {
+  gravarPropostasDeCidade,
+  listarCorrespondenciasDeCidade,
+  definirConfirmacaoDaCidade,
+  ibgeConfirmadoDaEstacao,
+  type CorrespondenciaDaCidade,
+} from "./trips/pre-sm-cidades";
 // O estado da Pré-SM por viagem (026).
 export {
   abrirTentativaDePreSm,

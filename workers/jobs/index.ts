@@ -10,6 +10,7 @@ import { registerBillingExport } from "./billing-export";
 import { registerPortalWithdrawn } from "./portal-withdrawn";
 import { registerPreSmCriar } from "./pre-sm";
 import { registerPreSmCancelar } from "./pre-sm/cancelar";
+import { registerPreSmCarregarCadastro } from "./pre-sm/carregar-cadastro";
 
 /**
  * Registry of import job handlers (feature 004, research R3). The bootstrap (`workers/index.ts`)
@@ -57,4 +58,14 @@ export async function registerJobHandlers(boss: PgBoss): Promise<void> {
    * única forma de desfazer uma Pré-SM criada por engano, e ela já foi cobrada.
    */
   await registerPreSmCancelar(boss);
+  /**
+   * A carga do cadastro da gerenciadora é PEDIDA pela tela, não agendada.
+   *
+   * Só faz sentido rodá-la quando alguém vai conferir o resultado: uma carga automática encheria
+   * as listas de propostas que ninguém olharia, e proposta não conferida não cria Pré-SM nenhuma.
+   *
+   * Leitura pura — não cria nada na gerenciadora e não custa. Por isso NÃO olha o interruptor da
+   * criação: é o preparo que precisa acontecer antes de ligá-lo.
+   */
+  await registerPreSmCarregarCadastro(boss);
 }

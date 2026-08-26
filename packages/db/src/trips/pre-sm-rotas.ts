@@ -4,7 +4,7 @@ import { writeAudit } from "../audit/write-audit";
 import { preSmRouteLinks } from "../../schema";
 
 /**
- * A PONTE ROTA → MODELO, e quem pode atravessá-la (2026-08-25, fatia 026).
+ * A PONTE ROTA → ROTA DELA, e quem pode atravessá-la (2026-08-25, fatias 026/027).
  *
  * A carga PROPÕE; uma pessoa CONFIRMA; só linha confirmada cria Pré-SM.
  *
@@ -35,10 +35,10 @@ export interface CorrespondenciaDaRota {
  * sobrescrever apagaria a conferência de alguém — ou está esperando conferência, e a proposta nova
  * é a mesma. Em nenhum dos dois casos o certo é mexer.
  *
- * A exceção legítima — o modelo daquela rota mudou na gerenciadora — é trabalho de cadastro, feito
+ * A exceção legítima — o código daquela rota mudou na gerenciadora — é trabalho de cadastro, feito
  * na tela, com a pessoa vendo o que está trocando.
  */
-export async function gravarPropostasDeModelo(
+export async function gravarPropostasDeRota(
   propostas: readonly {
     origemNorm: string;
     destinoNorm: string;
@@ -137,7 +137,7 @@ export async function definirConfirmacaoDaCorrespondencia(entrada: {
  * mesmo desfecho — a Pré-SM não é criada e a viagem diz por quê (FR-012) —, e distingui-los aqui
  * daria a quem chama uma escolha que ele não deve ter.
  */
-export async function modeloConfirmadoDaRota(
+export async function codRotaConfirmada(
   origemNorm: string,
   destinoNorm: string,
 ): Promise<number | null> {

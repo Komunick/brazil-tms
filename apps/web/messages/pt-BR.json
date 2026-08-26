@@ -442,7 +442,9 @@
     "pre_sm_modelo_desconfirmar": "Correspondência de rota desfeita",
     "pre_sm_cancelar": "Pré-SM cancelada",
     "driver_block": "Motorista bloqueado",
-    "driver_unblock": "Motorista desbloqueado"
+    "driver_unblock": "Motorista desbloqueado",
+    "pre_sm_cidade_confirmar": "Correspondência de cidade confirmada",
+    "pre_sm_cidade_desconfirmar": "Correspondência de cidade desfeita"
   },
   "Documents": {
     "title": "Documentos",

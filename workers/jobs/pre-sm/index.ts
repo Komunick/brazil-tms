@@ -6,7 +6,7 @@ import {
   criadasHoje,
   dadosDaPreSm,
   encerrarTentativaDePreSm,
-  modeloConfirmadoDaRota,
+  codRotaConfirmada,
 } from "@brazil-tms/db";
 import { JOB, work } from "../../lib/queue";
 import {
@@ -52,11 +52,11 @@ export async function runPreSmCriar(payload: PreSmCriarPayload): Promise<void> {
   }
 
   const { origemNorm, destinoNorm } = chaveDaRota(dados.origem, dados.destino);
-  const codModelo = await modeloConfirmadoDaRota(origemNorm, destinoNorm);
+  const codRota = await codRotaConfirmada(origemNorm, destinoNorm);
 
   const desfecho = decidir(
     {
-      codModelo,
+      codModelo: codRota,
       cpfMotorista: dados.cpfMotorista,
       vinculoMotorista: dados.vinculoMotorista as OwnershipType | null,
       cpfSegundoMotorista: dados.cpfSegundoMotorista,
@@ -84,7 +84,7 @@ export async function runPreSmCriar(payload: PreSmCriarPayload): Promise<void> {
    */
   const tentativa = await abrirTentativaDePreSm({
     tripId: dados.tripId,
-    codModelo,
+    codModelo: codRota,
     payloadEnviado: desfecho.tipo === "nao_criar" ? null : desfecho.corpo,
   });
 
