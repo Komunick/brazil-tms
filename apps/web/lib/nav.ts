@@ -208,9 +208,23 @@ export const NAV_ITEMS: readonly NavItem[] = [
    * quem confirma aqui é quem administra a malha lá. Mesma permissão pelo mesmo motivo.
    */
   {
-    key: "preSmModelos",
-    href: "/admin/pre-sm-modelos",
+    key: "preSmRotas",
+    href: "/admin/pre-sm-rotas",
     icon: "ShieldCheck",
+    permission: "manage_commercial_data",
+    grupo: "cadastros",
+  },
+  /**
+   * A conferência das correspondências ESTAÇÃO → CIDADE (2026-08-26, fatia 027).
+   *
+   * Irmã da de cima, e ao lado dela: o `setPreSM` pede o código IBGE das cidades de coleta e de
+   * entrega, e a cidade sai do NOME da estação. Mesma permissão pelo mesmo motivo — é decisão de
+   * cadastro, não de escala.
+   */
+  {
+    key: "preSmCidades",
+    href: "/admin/pre-sm-cidades",
+    icon: "MapPin",
     permission: "manage_commercial_data",
     grupo: "cadastros",
   },

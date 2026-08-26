@@ -74,7 +74,7 @@ confirmadas passam a valer.
 ### O casamento com o cadastro da gerenciadora
 
 - [X] T012 [US4] Acrescentar `getRotas`, `getCidades` e `getTabela` a `workers/lib/integra/cliente.ts`. **Remover** `setPreSMdeModelo` e `getModelosPreSM`. **Atenção aos nomes dos parâmetros**: `getTabela` usa `NomeTabela` (não `Tabela`) e `getCidades` usa `FiltroCidade`/`FiltroEstado`/`FiltroPais` (não `Cidade`/`UF`) — errar o nome devolve `CodErro 105` e **parece** que o recurso não existe (R2b, R5)
-- [ ] T013 [P] [US4] Teste do cliente em `cliente.test.ts` — só o formato da chamada e a leitura da resposta, **sem rede**
+- [X] T013 [P] [US4] Teste do cliente em `cliente.test.ts` — só o formato da chamada e a leitura da resposta, **sem rede**
 - [X] T014 [US4] Escrever em `packages/shared/src/domain/pre-sm-cadastro.ts` o casamento de cidade (estação → cidade da gerenciadora) e o de rota (par origem–destino → `CodRota`), puros
 - [X] T015 [P] [US4] Testes do casamento com as cidades e rotas reais medidas em 25/08
 - [X] T015b [US4] Acrescentar a tolerância do **sufixo de bairro ou distrito** ao casamento de cidade: quando o nome inteiro não achar, cair para o primeiro termo. Medido em 25/08: **27 cidades não resolvem** por isso — `RECIFE MURIBECA`, `SANTANA`, `CAMPINAS PQ CIDADE`, `UMUARAMA PQ INDUST II` —, e elas valem **38 dos 134 pares de rota**
@@ -88,10 +88,10 @@ confirmadas passam a valer.
 - [X] T019 [US4] Escrever o job `pre_sm.carregar_cadastro` em `workers/jobs/pre-sm/carregar-cadastro.ts`: consulta cidades e rotas e propõe as duas correspondências. **Uma carga só** — a rota depende do IBGE da cidade, e dois jobs criariam uma ordem implícita (R6)
 - [X] T019b [US4] Gravar as propostas com `ON CONFLICT DO NOTHING`, **nunca `DO UPDATE`** (FR-021). Se a correspondência já existe, ou alguém a confirmou — e sobrescrever apagaria a conferência dela — ou está esperando conferência, e a proposta nova é a mesma. Em nenhum dos dois casos o certo é mexer. A exceção legítima (o cadastro mudou na gerenciadora) é trabalho de tela, com a pessoa vendo o que troca
 - [X] T020 [US4] Registrar o job em `workers/jobs/index.ts` e **remover** o `pre_sm.carregar_modelos`
-- [ ] T021 [US4] Acrescentar a tela de conferência de cidades em `apps/web/app/(shell)/admin/pre-sm-cidades/` e a rota `app/api/admin/pre-sm-cidades/route.ts` (GET lista, PATCH confirma/desfaz), espelhando a de rotas que já existe. Permissão **`manage_commercial_data`**, e **não** `assign_resources` (FR-024): quem escala **usa** esta decisão, não a toma — senão a pessoa impedida de escalar alguém poderia se autoliberar confirmando uma correspondência
-- [ ] T022 [US4] Adaptar a tela de rotas existente para mostrar `CodRota` e a descrição da rota; renomear a rota de API e o item de menu. Mesma permissão `manage_commercial_data`
-- [ ] T023 [P] [US4] Textos das duas telas em `apps/web/messages/pt-BR.json`
-- [ ] T024 [US4] **Rodar a carga contra a produção** e conferir contra o já medido em 25/08: 518 rotas dela, **96** das nossas com IBGE nas duas pontas, **53 com rota cadastrada** (52% das viagens). Número muito diferente disso é defeito do casamento, não do cadastro — investigar antes de seguir
+- [X] T021 [US4] Acrescentar a tela de conferência de cidades em `apps/web/app/(shell)/admin/pre-sm-cidades/` e a rota `app/api/admin/pre-sm-cidades/route.ts` (GET lista, PATCH confirma/desfaz), espelhando a de rotas que já existe. Permissão **`manage_commercial_data`**, e **não** `assign_resources` (FR-024): quem escala **usa** esta decisão, não a toma — senão a pessoa impedida de escalar alguém poderia se autoliberar confirmando uma correspondência
+- [X] T022 [US4] Adaptar a tela de rotas existente para mostrar `CodRota` e a descrição da rota; renomear a rota de API e o item de menu. Mesma permissão `manage_commercial_data`
+- [X] T023 [P] [US4] Textos das duas telas em `apps/web/messages/pt-BR.json`
+- [ ] T024 [US4] **BLOQUEADA ATÉ O DEPLOY** — o banco de dev vive na VM e não é alcançável da máquina de desenvolvimento. As duas metades estão verificadas em separado: o casamento contra a produção deu **57 rotas** e a gravação com `DO NOTHING` foi provada no banco. **Rodar a carga contra a produção** e conferir contra o já medido em 25/08: 518 rotas dela, **96** das nossas com IBGE nas duas pontas, **53 com rota cadastrada** (52% das viagens). Número muito diferente disso é defeito do casamento, não do cadastro — investigar antes de seguir
 
 **Checkpoint**: as duas telas mostram propostas reais, nenhuma confirmada, e o número de acerto está
 medido.

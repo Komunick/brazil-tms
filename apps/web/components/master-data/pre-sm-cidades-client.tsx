@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { CorrespondenciaDaRota } from "@brazil-tms/db";
+import type { CorrespondenciaDaCidade } from "@brazil-tms/db";
 import { formatDateTime } from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,27 +21,27 @@ import { avisar } from "@/lib/ui/avisos";
 import { cn } from "@/lib/utils";
 
 /**
- * CONFERIR AS CORRESPONDÊNCIAS ROTA → MODELO (2026-08-25, fatia 026).
+ * CONFERIR AS CORRESPONDÊNCIAS ESTAÇÃO → CIDADE (2026-08-26, fatia 027).
  *
  * ── O QUE ESTA TELA DECIDE, E POR QUE ELA EXISTE ──────────────────────────────────────────────
  *
- * A carga casa as nossas rotas com os modelos de Pré-SM da gerenciadora por nome de estação, com
- * quatro tolerâncias que saíram de erro medido. Ela acerta 84% das viagens — e o que erra **não
- * erra em branco: erra apontando para OUTRA rota**.
+ * O `setPreSM` pede o código IBGE das cidades de coleta e de entrega. A carga tira a cidade do NOME
+ * da estação — `SOC_MG_BETIM` vira `MG · BETIM` — e casa contra as 5.571 cidades do cadastro dela,
+ * tolerando sufixo de bairro ao descartar termos do fim.
  *
- * Uma Pré-SM criada com o modelo errado é escolta contratada para um trajeto que o caminhão não
- * vai fazer. Ninguém percebe até o veículo estar na estrada.
+ * Ela acerta a maioria, e o que erra **não erra em branco: erra apontando para OUTRA cidade**.
+ * `RECIFE MURIBECA` cairia em `RECIFE` mesmo se Muribeca fosse município próprio.
  *
- * Por isso confirmar é ato humano, e é auditado: a gerenciadora cobra por solicitação, e uma rota
- * confirmada passa a gerar Pré-SM sozinha.
+ * Uma Pré-SM com a cidade errada é escolta contratada para um trajeto que o caminhão não vai fazer.
+ * Ninguém percebe até o veículo estar na estrada.
  *
  * ── AS PENDENTES VÊM PRIMEIRO ─────────────────────────────────────────────────────────────────
  *
  * Elas são o trabalho; as confirmadas são histórico. Ordenar por nome misturaria as duas e faria a
  * pessoa procurar o que falta no meio do que já está feito.
  */
-export function PreSmModelosClient() {
-  const t = useTranslations("PreSmModelos");
+export function PreSmCidadesClient() {
+  const t = useTranslations("PreSmCidades");
   const qc = useQueryClient();
   const [busca, setBusca] = useState("");
   /**
@@ -57,11 +57,11 @@ export function PreSmModelosClient() {
   const contagemAoPedir = useRef<number | null>(null);
 
   const consulta = useQuery({
-    queryKey: ["pre-sm-modelos"],
+    queryKey: ["pre-sm-cidades"],
     queryFn: async () => {
-      const res = await fetch("/api/admin/pre-sm-modelos");
+      const res = await fetch("/api/admin/pre-sm-cidades");
       if (!res.ok) throw new Error(String(res.status));
-      return (await res.json()) as { items: CorrespondenciaDaRota[] };
+      return (await res.json()) as { items: CorrespondenciaDaCidade[] };
     },
     refetchInterval: esperandoCarga ? 3_000 : false,
   });
@@ -78,7 +78,7 @@ export function PreSmModelosClient() {
    */
   const carregar = useMutation({
     mutationFn: async () => {
-      const res = await fetch("/api/admin/pre-sm-modelos", { method: "POST" });
+      const res = await fetch("/api/admin/pre-sm-cidades", { method: "POST" });
       if (!res.ok) throw new Error(String(res.status));
     },
     onSuccess: () => {
@@ -91,7 +91,7 @@ export function PreSmModelosClient() {
 
   const definir = useMutation({
     mutationFn: async (v: { id: string; confirmar: boolean }) => {
-      const res = await fetch("/api/admin/pre-sm-modelos", {
+      const res = await fetch("/api/admin/pre-sm-cidades", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(v),
@@ -99,7 +99,7 @@ export function PreSmModelosClient() {
       if (!res.ok) throw new Error(String(res.status));
     },
     onSuccess: (_d, v) => {
-      void qc.invalidateQueries({ queryKey: ["pre-sm-modelos"] });
+      void qc.invalidateQueries({ queryKey: ["pre-sm-cidades"] });
       // O MESMO aviso do canto que toda gravação usa desde 24/08 — um padrão próprio aqui
       // obrigaria quem olha a aprender dois jeitos de o sistema dizer "deu certo".
       avisar({ tipo: "ok", texto: v.confirmar ? t("confirmada") : t("desfeita") });
@@ -113,7 +113,7 @@ export function PreSmModelosClient() {
     const termo = busca.trim().toUpperCase();
     if (!termo) return itens;
     return itens.filter((i) =>
-      [i.origemNorm, i.destinoNorm, i.descricao].some((c) => c.toUpperCase().includes(termo)),
+      [i.estacaoNorm, i.cidadeNome, i.uf, i.descricao].some((c) => c.toUpperCase().includes(termo)),
     );
   }, [itens, busca]);
 
@@ -182,9 +182,9 @@ export function PreSmModelosClient() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t("origem")}</TableHead>
-                <TableHead>{t("destino")}</TableHead>
-                <TableHead>{t("modelo")}</TableHead>
+                <TableHead>{t("estacao")}</TableHead>
+                
+                <TableHead>{t("cidade")}</TableHead>
                 <TableHead>{t("estado")}</TableHead>
                 <TableHead />
               </TableRow>
@@ -194,13 +194,13 @@ export function PreSmModelosClient() {
                 const confirmada = i.confirmadoEm != null;
                 return (
                   <TableRow key={i.id} className={cn(!confirmada && "bg-warning/5")}>
-                    <TableCell className="font-medium">{i.origemNorm}</TableCell>
-                    <TableCell className="font-medium">{i.destinoNorm}</TableCell>
-                    {/* A descrição é como ELA escreve a rota. É o que a pessoa compara com as duas
-                        colunas à esquerda para decidir se o casamento está certo — sem ela, a
-                        conferência seria aprovar um número. */}
+                    <TableCell className="font-medium">{i.estacaoNorm}</TableCell>
+                    
+                    {/* A descrição é como ELA escreve a cidade. É o que a pessoa compara com a estação à
+                        esquerda para decidir se o casamento está certo — sem ela, a conferência
+                        seria aprovar um número. */}
                     <TableCell>
-                      <span className="text-muted-foreground">{i.codRota}</span>{" "}
+                      <span className="font-mono text-xs tabular-nums text-muted-foreground">{i.codIbge}</span>{" "}
                       <span>{i.descricao}</span>
                     </TableCell>
                     <TableCell className="text-xs">
