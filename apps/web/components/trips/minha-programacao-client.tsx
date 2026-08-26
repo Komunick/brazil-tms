@@ -2,8 +2,17 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronDown, ChevronRight, Eye, EyeOff, Palette, SlidersHorizontal } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  EyeOff,
+  MessageSquare,
+  Palette,
+  SlidersHorizontal,
+} from "lucide-react";
 import { useMarcarViagem, useProgramacao } from "@/lib/trips/client";
+import { proximasFrentes } from "@/lib/trips/frentes";
 import { ProgramacaoDetalhe } from "@/components/trips/programacao-detalhe";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import {
@@ -68,7 +77,8 @@ const CORES = [
   },
   {
     chave: "ambar",
-    classe: "bg-amber-400 hover:bg-amber-500 text-amber-950 [&_a]:text-amber-950 [&_button]:text-amber-950",
+    classe:
+      "bg-amber-400 hover:bg-amber-500 text-amber-950 [&_a]:text-amber-950 [&_button]:text-amber-950",
     ponto: "bg-amber-400",
   },
   {
@@ -128,7 +138,8 @@ const statusDaLinha = (l: {
   status: string;
   acceptanceStatus: string | null;
   portalStatus: string | null;
-}): TripDisplayStatus => displayStatusOf(l.status as TripStatus, l.acceptanceStatus, l.portalStatus);
+}): TripDisplayStatus =>
+  displayStatusOf(l.status as TripStatus, l.acceptanceStatus, l.portalStatus);
 
 /** ONTEM/HOJE/AMANHÃ por extenso; do terceiro dia em diante a data já diz mais que a palavra. */
 function rotuloDoDia(dia: string, hoje: string, t: (k: string) => string): string {
@@ -142,9 +153,22 @@ function rotuloDoDia(dia: string, hoje: string, t: (k: string) => string): strin
   return `${d.toLocaleDateString("pt-BR", { weekday: "short" })} · ${data}`;
 }
 
-export function MinhaProgramacaoClient() {
+export function MinhaProgramacaoClient({
+  userId,
+  podeAtribuir,
+}: {
+  userId: string;
+  podeAtribuir: boolean;
+}) {
   const t = useTranslations("Programacao");
-  const [frente, setFrente] = useState("");
+  /**
+   * ATÉ DUAS FRENTES (2026-08-26, a pedido).
+   *
+   * Lista vazia = todas. São três frentes cadastradas, então duas é "tudo menos uma" — que é o
+   * recorte que a operação pediu: quem cuida do Sudeste e do Sul-Centro-Oeste não quer o
+   * Norte-Nordeste no meio.
+   */
+  const [frentes, setFrentes] = useState<string[]>([]);
   const [mostrarOcultas, setMostrarOcultas] = useState(false);
   const [busca, setBusca] = useState("");
   const [paletaAberta, setPaletaAberta] = useState<string | null>(null);
@@ -154,7 +178,9 @@ export function MinhaProgramacaoClient() {
   const [diasEscondidos, setDiasEscondidos] = useState<Set<string>>(new Set());
   const [statusEscondidos, setStatusEscondidos] = useState<Set<string>>(new Set());
 
-  const consulta = useProgramacao(frente, { atras: 2, adiante: 7 });
+  const consulta = useProgramacao(frentes, { atras: 2, adiante: 7 });
+
+  const alternarFrente = (valor: string) => setFrentes((atual) => proximasFrentes(atual, valor));
   const marcar = useMarcarViagem();
 
   const hoje = useMemo(() => {
@@ -228,24 +254,28 @@ export function MinhaProgramacaoClient() {
           {/* A frente da estação de ORIGEM, como no resto do painel — a mesma régua em toda tela. */}
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="mr-1 text-xs text-muted-foreground">{t("porFrente")}</span>
-            {[{ valor: "", rotulo: t("todasAsFrentes") }, ...REGION_ORDER.map((r) => ({ valor: r, rotulo: r }))].map(
-              (f) => (
+            {[
+              { valor: "", rotulo: t("todasAsFrentes") },
+              ...REGION_ORDER.map((r) => ({ valor: r, rotulo: r })),
+            ].map((f) => {
+              const marcada = f.valor === "" ? frentes.length === 0 : frentes.includes(f.valor);
+              return (
                 <button
                   key={f.valor || "todas"}
                   type="button"
-                  aria-pressed={frente === f.valor}
-                  onClick={() => setFrente(f.valor)}
+                  aria-pressed={marcada}
+                  onClick={() => alternarFrente(f.valor)}
                   className={cn(
                     "rounded-full border px-3 py-1 text-xs transition-colors",
-                    frente === f.valor
+                    marcada
                       ? "border-primary bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {f.rotulo}
                 </button>
-              ),
-            )}
+              );
+            })}
           </div>
 
           <Input
@@ -467,9 +497,7 @@ export function MinhaProgramacaoClient() {
                         <button
                           type="button"
                           aria-label={t("marcarCor")}
-                          onClick={() =>
-                            setPaletaAberta((a) => (a === l.tripId ? null : l.tripId))
-                          }
+                          onClick={() => setPaletaAberta((a) => (a === l.tripId ? null : l.tripId))}
                           className="rounded p-1 text-muted-foreground hover:text-foreground"
                         >
                           <Palette className="h-3.5 w-3.5" aria-hidden />
@@ -517,6 +545,27 @@ export function MinhaProgramacaoClient() {
                       >
                         {l.externalTripId ?? "—"}
                       </button>
+                      {/*
+                        O RECADO SE ANUNCIA NA LINHA, e o texto se lê abrindo a LH (2026-08-26).
+                        A escolha foi do usuário, contra a alternativa de virar aviso no sino: um
+                        comentário não é uma tarefa pendente, e transformá-lo em algo a "dar
+                        ciência" faria a operação aprender a fechar avisos sem ler. Aqui ele fica
+                        visível para quem estiver olhando aquela linha, que é quem precisa dele.
+                      */}
+                      {l.comentarios > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => setViagemAberta(l.tripId)}
+                          title={t("temComentarios", { n: l.comentarios })}
+                          className="ml-1.5 inline-flex items-center gap-0.5 align-middle text-muted-foreground hover:text-foreground"
+                        >
+                          <MessageSquare className="h-3 w-3" aria-hidden />
+                          <span className="text-[10px] tabular-nums">{l.comentarios}</span>
+                          <span className="sr-only">
+                            {t("temComentarios", { n: l.comentarios })}
+                          </span>
+                        </button>
+                      ) : null}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs">
                       {l.origem ?? "—"}
@@ -540,9 +589,26 @@ export function MinhaProgramacaoClient() {
                         portalStatus={l.portalStatus}
                       />
                     </TableCell>
-                    <TableCell className="text-xs">{l.motorista || "—"}</TableCell>
+                    {/*
+                      O PREVISTO OCUPA A CÉLULA ENQUANTO ELA ESTIVER VAZIA (2026-08-26, a pedido).
+                      Não é uma coluna nova: duas colunas de motorista lado a lado obrigariam quem
+                      olha a decidir qual vale, toda linha, para sempre. Aqui a célula diz uma coisa
+                      só — o que está escalado, ou, na falta dele, o que se pretende. O selo em
+                      cinza e o itálico existem para que ninguém confunda intenção com ordem.
+                    */}
+                    <TableCell className="text-xs">
+                      {l.motorista ? (
+                        l.motorista
+                      ) : (
+                        <Previsto texto={l.previstoMotorista} rotulo={t("previsto")} />
+                      )}
+                    </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-xs">
-                      {l.placa || "—"}
+                      {l.placa ? (
+                        l.placa
+                      ) : (
+                        <Previsto texto={l.previstoPlaca} rotulo={t("previsto")} />
+                      )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs">
                       {/* Discar no celular, copiar no computador — o `tel:` faz as duas. */}
@@ -581,7 +647,28 @@ export function MinhaProgramacaoClient() {
         tripId={viagemAberta}
         aberto={viagemAberta !== null}
         aoFechar={() => setViagemAberta(null)}
+        userId={userId}
+        podeAtribuir={podeAtribuir}
       />
     </div>
+  );
+}
+
+/**
+ * O PREVISTO, quando existe — e um traço quando não.
+ *
+ * Componente e não expressão repetida porque são dois usos idênticos (motorista e placa) e o
+ * terceiro é provável. O selo vem em `not-italic` de propósito: itálico dentro de itálico deixa
+ * de ser distinção, e é a distinção inteira que este desenho está tentando fazer.
+ */
+function Previsto({ texto, rotulo }: { texto: string | null; rotulo: string }) {
+  if (!texto) return <span className="text-muted-foreground">—</span>;
+  return (
+    <span className="italic text-muted-foreground">
+      {texto}
+      <span className="ml-1 rounded bg-muted px-1 py-px text-[10px] font-normal not-italic">
+        {rotulo}
+      </span>
+    </span>
   );
 }
