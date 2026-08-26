@@ -35,7 +35,8 @@ o das telas de expedição que já existem.
 **Constraints**: sem Realtime (polling) · a credencial da gerenciadora **só** no worker · toda
 escrita na Integra é job · **sem ambiente de homologação** e **cobrança por solicitação**.
 
-**Scale/Scope**: ~150 viagens atribuídas por dia · 228 estações · ~80 rotas · uma tela nova, uma
+**Scale/Scope**: ~150 viagens atribuídas por dia · 228 estações nossas · **518 rotas cadastradas na
+gerenciadora, das quais 53 cobrem as nossas** (52% das viagens — medido) · uma tela nova, uma
 tabela nova, um job novo.
 
 ---
@@ -86,11 +87,44 @@ montar o corpo novo, e continua sem rodar enquanto `INTEGRA_PRE_SM_ATIVO` não f
 
 ---
 
-## A pendência, e como o plano se organiza em volta dela
+## A cobertura real, medida
 
-**Não se sabe como o `setPreSM` amarra a Pré-SM à programação que a Logae já tem do portal.** Não há
-campo de código de programação em nenhum método de criação — conferido em
-`docs/INTEGRA-14.2-REFERENCIA.md`. Pergunta pendente com a gerenciadora.
+O plano trazia "~80 rotas, 84% das viagens". **Aquele número era dos MODELOS**, que morreram junto
+com o `setPreSMdeModelo` — foi carregado da 026 para cá sem reconferir. Medido de verdade em 25/08:
+
+| | rotas | viagens (90 dias) |
+|---|---|---|
+| nossas | 134 | 4.508 |
+| com as duas cidades reconhecidas | 61 | — |
+| **com rota cadastrada na gerenciadora** | **53** | **2.340 — 52%** |
+
+**48% das viagens não têm rota cadastrada lá.** Não é defeito do nosso lado: é trabalho de cadastro
+**na Logae**, e a lista das que faltam é o que se leva para eles.
+
+Isso muda o que a aba promete. Ela vale desde o primeiro dia para metade das viagens **e diz quais
+rotas faltam cadastrar** — o que hoje ninguém sabe. Mas metade da fila vai aparecer travada em "sem
+rota", e o texto da tela precisa deixar claro que isso é cadastro pendente **lá**, não defeito daqui.
+
+---
+
+## As pendências, e como o plano se organiza em volta delas
+
+São **três**, e nenhuma foi resolvida por suposição.
+
+**1. Como o `setPreSM` amarra a Pré-SM à programação** que a Logae já tem do portal. Não há campo de
+código de programação em nenhum método de criação — conferido em
+`docs/INTEGRA-14.2-REFERENCIA.md`.
+
+**2. De onde saem `CodFilial` e `CodPerfilSeguranca`**, que o `setPreSM` exige. Medido em 25/08: o
+`getCliente` com o **nosso próprio CNPJ** responde `CodErro 109 — O CADASTRO NÃO EXISTE`, e a lista
+de tabelas do `getTabela` não expõe perfil de segurança. **Não sabemos de onde tirar os dois.**
+
+**3. Se a nossa conta pode ESCREVER.** Toda chamada feita até hoje foi leitura — `getRotas`,
+`getCidades`, `getConsultaPreSMAberta`, `getVeiculo`, `getMotorista`, todas com `CodErro 0`. Que ela
+leia **não prova** que ela cria, e o `CodErro 100` em homologação mostra que a conta é restrita por
+ambiente.
+
+As três são pergunta para a gerenciadora, e as três bloqueiam **só a Etapa 5**.
 
 Isso **não bloqueia nada até a Etapa 5**. A ordem abaixo põe primeiro tudo o que independe da
 resposta, e isola o formato do corpo num arquivo só:
@@ -118,9 +152,24 @@ devolve.
 
 A tabela de cidade é irmã: estação normalizada → código IBGE, `confirmado_em` nulo ao nascer.
 
+**O catálogo de cidades vem das PRÓPRIAS rotas, não do `getCidades`** (R2b). O `getRotas` sem
+parâmetros devolve **518 rotas**, e cada uma traz `CodIBGECidadeOrigem`/`CidadeOrigem` e
+`CodIBGECidadeDestino`/`CidadeDestino` — as 518 têm os quatro. Daí saem **72 cidades**, que são
+exatamente as que interessam: as que ela reconhece em rota cadastrada.
+
+O `getCidades`, testado com `{UF: "MG", Cidade: "BETIM"}`, **ignorou o filtro** e devolveu o catálogo
+mundial, com cidades do Peru na primeira página. Ele serve para outra coisa.
+
 **Verificável**: rodar a carga e ver as correspondências propostas na tela, sem nenhuma confirmada.
 
-### 2. A cidade sai do nome da estação
+### 2. A cidade sai do nome da estação, e o casamento é por cidade
+
+**O casamento é por CIDADE, não por estação** (R2c). As descrições das rotas dela são por cidade —
+`SHPX LOGISTICA LTDA. - SIMOES FILHO/BA/BRASIL ATE ...` — e **uma** das 518 usa o nosso padrão de
+estação. Casar por nome de estação acerta **1 rota de 134**, medido.
+
+O caminho tem três passos: estação → cidade (pelo nome da estação), cidade → IBGE (pelas 518 rotas),
+par de IBGE → `CodRota`.
 
 Medido: das 228 estações, **8 têm `city`** e 71 têm `state`. O nome carrega os dois.
 
@@ -180,9 +229,9 @@ camadas, nesta ordem:
 **Teste puro** (etapas 2 e 3): o casamento de nomes e a montagem do corpo são funções sem rede. A
 maior parte do que pode dar errado dá errado aqui.
 
-**Leitura contra a produção** (etapas 1 e 4): `getCidades` e `getRotas` são consulta — não criam
-nada e não custam. Dá para rodar a carga inteira, conferir as 228 estações e as ~80 rotas, e olhar a
-aba com dados reais, **antes de existir botão que gaste**.
+**Leitura contra a produção** (etapas 1 e 4): `getRotas` é consulta — não cria nada e não custa. Dá
+para carregar as 518 rotas dela, conferir contra as nossas 134, e olhar a aba com dados reais,
+**antes de existir botão que gaste**.
 
 **Ensaio com o interruptor desligado** (etapa 5): o job monta o corpo e grava o que teria mandado.
 Um dia disso responde quantas viagens sairiam limpas.
@@ -239,7 +288,7 @@ apps/web/
 └── messages/pt-BR.json                          MUDA
 
 workers/
-├── lib/integra/cliente.ts       MUDA — setPreSM, getCidades, getRotas entram;
+├── lib/integra/cliente.ts       MUDA — setPreSM e getRotas entram;
 │                                       setPreSMdeModelo e getModelosPreSM saem
 └── jobs/pre-sm/
     ├── criar.ts                 MUDA — decide com o corpo novo

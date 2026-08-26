@@ -73,7 +73,7 @@ confirmadas passam a valer.
 
 ### O casamento com o cadastro da gerenciadora
 
-- [ ] T012 [US4] Acrescentar `getCidades` e `getRotas` a `workers/lib/integra/cliente.ts`, conforme a referência. **Remover** `setPreSMdeModelo` e `getModelosPreSM`
+- [ ] T012 [US4] Acrescentar `getRotas` a `workers/lib/integra/cliente.ts`, conforme a referência. **Remover** `setPreSMdeModelo` e `getModelosPreSM`. **NÃO usar `getCidades`** — testado em 25/08, ele ignora o filtro de UF/cidade e devolve o catálogo mundial (R2b); o catálogo que interessa sai das próprias rotas
 - [ ] T013 [P] [US4] Teste do cliente em `cliente.test.ts` — só o formato da chamada e a leitura da resposta, **sem rede**
 - [ ] T014 [US4] Escrever em `packages/shared/src/domain/pre-sm-cadastro.ts` o casamento de cidade (estação → cidade da gerenciadora) e o de rota (par origem–destino → `CodRota`), puros
 - [ ] T015 [P] [US4] Testes do casamento com as cidades e rotas reais medidas em 25/08
@@ -89,7 +89,7 @@ confirmadas passam a valer.
 - [ ] T021 [US4] Acrescentar a tela de conferência de cidades em `apps/web/app/(shell)/admin/pre-sm-cidades/` e a rota `app/api/admin/pre-sm-cidades/route.ts` (GET lista, PATCH confirma/desfaz), espelhando a de rotas que já existe. Permissão **`manage_commercial_data`**, e **não** `assign_resources` (FR-024): quem escala **usa** esta decisão, não a toma — senão a pessoa impedida de escalar alguém poderia se autoliberar confirmando uma correspondência
 - [ ] T022 [US4] Adaptar a tela de rotas existente para mostrar `CodRota` e a descrição da rota; renomear a rota de API e o item de menu. Mesma permissão `manage_commercial_data`
 - [ ] T023 [P] [US4] Textos das duas telas em `apps/web/messages/pt-BR.json`
-- [ ] T024 [US4] **Rodar a carga contra a produção** e conferir os números: quantas das 228 estações casaram, quantas das ~80 rotas. É leitura, não custa nada. Registrar o medido no `research.md`
+- [ ] T024 [US4] **Rodar a carga contra a produção** e conferir contra o já medido em 25/08: 518 rotas dela, 61 das nossas com as duas cidades reconhecidas, **53 com rota cadastrada** (52% das viagens). Número muito diferente disso é defeito do casamento, não do cadastro — investigar antes de seguir
 
 **Checkpoint**: as duas telas mostram propostas reais, nenhuma confirmada, e o número de acerto está
 medido.
@@ -238,7 +238,7 @@ planilha mental de quem hoje descobre o problema abrindo o sistema da gerenciado
 | Fase | Toca a gerenciadora? | Custa? |
 |---|---|---|
 | 1 a 2 | não | — |
-| 3 | sim — `getCidades`, `getRotas` | **não**, é leitura |
+| 3 | sim — `getRotas` | **não**, é leitura |
 | 4 | não | — |
 | 5 | não | — |
 | 6 | só no ensaio desligado, que não chama | **não** |

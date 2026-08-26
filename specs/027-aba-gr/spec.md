@@ -269,9 +269,13 @@ que só as confirmadas passam a valer.
 - **A cidade da estação sai do nome dela.** Medido: das 228 estações, 8 têm cidade preenchida e 71
   têm UF — mas o nome carrega os dois (`SOC_MG_BETIM` → MG · Betim). É o mesmo padrão que o
   casamento de rotas já separa hoje.
-- **Uma pessoa confere as correspondências antes de a fila valer.** São ~228 estações e ~80 rotas,
+- **Uma pessoa confere as correspondências antes de a fila valer.** São 228 estações e 134 rotas,
   uma vez. O casamento por nome erra apontando para OUTRA cidade, não em branco — por isso a
   conferência não é burocracia.
+- **Metade das viagens não terá rota cadastrada na gerenciadora, no começo.** Medido em 25/08: das
+  134 rotas nossas, **53 existem lá** — 52% das viagens. O resto é trabalho de cadastro **na
+  Logae**, e a fila diz exatamente quais faltam. A tela precisa deixar claro que isso é pendência
+  deles, não defeito daqui.
 - **O perfil de segurança e a filial são constantes por cliente.** A tela mostrava `DDR SHOPEE`
   fixo. Se um segundo cliente exigir valores diferentes, vira configuração — não código.
 - **A criação automática continua existindo, desligada.** O trabalho de fundo da 026 fica no código

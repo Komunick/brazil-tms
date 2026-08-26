@@ -64,10 +64,10 @@ antes de qualquer gasto:
 | Camada | O que responde | Quando |
 |---|---|---|
 | teste puro | o casamento de nomes, o corpo, os motivos | etapas 2 e 3 |
-| leitura real | as 228 estações e ~80 rotas, com a aba já montada | etapas 1 e 4 |
+| leitura real | as 518 rotas dela contra as nossas 134, com a aba já montada | etapas 1 e 4 |
 | ensaio desligado | quantas viagens sairiam limpas num dia | etapa 5 |
 
-`getCidades`, `getRotas`, `getCliente` e `getTabela` são **consulta** — não criam nada e não custam.
+`getRotas`, `getCliente` e `getTabela` são **consulta** — não criam nada e não custam.
 Dá para carregar tudo, conferir as correspondências e olhar a aba com dados reais **antes de existir
 botão que gaste**.
 
@@ -104,7 +104,15 @@ o formato do corpo que muda, e ele mora num arquivo só.
 
 1. Como o `setPreSM` amarra a Pré-SM à programação do eTorre? Não há campo de código de programação
    em nenhum método de criação.
-2. O `CNPJEmbarcador` é exigido na prática? A tela marcava como obrigatório; o manual, não.
+2. **De onde saem `CodFilial` e `CodPerfilSeguranca`?** Os dois são obrigatórios. Medido em 25/08: o
+   `getCliente` com o **nosso próprio CNPJ** responde `CodErro 109 — O CADASTRO NÃO EXISTE`, e a
+   lista de tabelas do `getTabela` não expõe perfil de segurança.
+3. **A nossa conta pode escrever?** Toda chamada feita até hoje foi leitura. Que ela leia não prova
+   que ela cria, e o `CodErro 100` em homologação mostra que a conta é restrita por ambiente.
+4. O `CNPJEmbarcador` é exigido na prática? A tela marcava como obrigatório; o manual, não.
+
+**As três primeiras bloqueiam a etapa 5.** Não comece o envio sem elas — foi construir sobre
+suposição que custou a 026 inteira.
 
 **Do nosso lado**: as credenciais da Logae precisam ir ao `devops/config.env` da VM, **e** ao
 `.env.local`. Só no segundo não segura — o próximo deploy regenera esse arquivo a partir do

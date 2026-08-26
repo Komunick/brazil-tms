@@ -34,8 +34,8 @@ certo é `CodErro` dentro de `result[0]` — **zero é sucesso**.
 
 | campo | de onde sai | obr. |
 |---|---|---|
-| `CodFilial` | **configuração** por cliente (`getCliente`) | sim |
-| `CodPerfilSeguranca` | **configuração** por cliente (`getTabela`) — é o `DDR SHOPEE` da tela | sim |
+| `CodFilial` | **configuração** por cliente — **de onde sai é PENDÊNCIA**, ver abaixo | sim |
+| `CodPerfilSeguranca` | **configuração** por cliente — é o `DDR SHOPEE` da tela, mas **de onde sai é PENDÊNCIA** | sim |
 | `PlacaVeiculo` | `portal_commands.plates[0]` | sim |
 | `VincVeiculo` | `vehicles.ownership_type` → `F` / `A` / `T` | sim |
 | `CPFMotorista1` | `drivers.cpf`, pelo id do portal | sim |
@@ -96,10 +96,9 @@ nossa. É o que permite conversar com a gerenciadora citando o código.
 
 | método | para quê | custa? |
 |---|---|---|
-| `getCidades` | propor `cod_ibge` de cada estação | não |
-| `getRotas` | propor `cod_rota` de cada par origem–destino | não |
-| `getCliente` | `CodFilial` | não |
-| `getTabela` | `CodPerfilSeguranca` | não |
+| `getRotas` **sem parâmetros** | as 518 rotas dela, com o IBGE de origem e destino de cada uma. É daqui que sai o catálogo de cidades — **não** do `getCidades`, que ignora o filtro e devolve o mundo (R2b) | não |
+| `getCliente` | `CodFilial` — **fonte incerta**, ver abaixo | não |
+| `getTabela` | `CodPerfilSeguranca` — **fonte incerta**, ver abaixo | não |
 | `getConsultaPreSMAberta` | conferir o antes e o depois de um envio | não |
 | `setCancelaPreSM` | desfazer — já implementado na 026 | a criação já foi cobrada |
 
@@ -130,7 +129,18 @@ avisa *"esta programação já possui uma Pré-Solicitação em aberto"*.
 
 Ou é por placa e data, ou é algo que não reconhecemos. **Pergunta pendente com a gerenciadora.**
 
-Também pendente e da mesma família: se o `CNPJEmbarcador` é exigido na prática — a tela o marcava
-como obrigatório, o manual não.
+### E duas que apareceram ao testar (25/08)
+
+**De onde saem `CodFilial` e `CodPerfilSeguranca`?** Os dois são obrigatórios e não temos fonte. O
+`getCliente` com o **nosso próprio CNPJ** (`03571231000143`) responde `CodErro 109 — O CADASTRO NÃO
+EXISTE`, e a lista de tabelas que o `getTabela` aceita não expõe perfil de segurança.
+
+**A nossa conta pode escrever?** Toda chamada feita até hoje foi LEITURA — `getRotas`, `getCidades`,
+`getConsultaPreSMAberta`, `getVeiculo`, `getMotorista`, todas com `CodErro 0`. **Nenhuma escrita foi
+tentada.** Que a conta leia não prova que ela cria, e o `CodErro 100` em homologação mostra que ela
+é restrita por ambiente.
+
+E a de sempre: se o `CNPJEmbarcador` é exigido na prática — a tela o marcava como obrigatório, o
+manual não.
 
 Quando as respostas chegarem, **muda um arquivo**: `packages/shared/src/domain/pre-sm-corpo.ts`.

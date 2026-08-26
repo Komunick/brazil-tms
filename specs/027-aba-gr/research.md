@@ -50,6 +50,73 @@ humana. Escrever no cadastro faria uma proposta não conferida virar verdade em 
 
 ---
 
+## R2b — O catálogo de cidades vem das próprias rotas, não do `getCidades`
+
+**Decisão**: extrair as cidades das 518 rotas que o `getRotas` devolve, com o IBGE que vem junto.
+**Não usar `getCidades`.**
+
+**Por quê**: medido em 25/08, e derruba a suposição do R2 original.
+
+O `getRotas` chamado **sem** origem e destino devolve **518 rotas**, e cada uma traz
+`CodIBGECidadeOrigem`, `CidadeOrigem`, `CodIBGECidadeDestino` e `CidadeDestino` — **as 518 têm os
+quatro**. Daí saem **72 cidades distintas**, que são exatamente as que interessam: as que ela
+reconhece em rota cadastrada.
+
+O `getCidades`, testado com `{UF: "MG", Cidade: "BETIM"}`, **ignorou o filtro** e devolveu o
+catálogo mundial — a primeira página vinha com cidades do Peru. Ele serve para outra coisa.
+
+**Consequência prática**: a ponte de cidade fica menor e mais confiável. Em vez de casar 228
+estações contra um catálogo mundial, casa contra 72 cidades que já se sabe terem rota.
+
+---
+
+## R2c — O casamento é por CIDADE, não por estação
+
+**Decisão**: a chave da rota é o par de códigos IBGE, não o par de nomes de estação.
+
+**Por quê**: **as descrições das rotas dela são por cidade.** Medido:
+
+```
+SHPX LOGISTICA LTDA. - SIMOES FILHO/BA/BRASIL ATE SHPX LOGISTICA LTDA. - ARACAJU/SE/BRASIL
+SHPX LOGISTICA LTDA. - GOIANIA/GO/BRASIL ATE SHPX LOGISTICA LTDA. - BARREIRAS/BA/BRASIL
+```
+
+**Uma** das 518 usa o nosso padrão de estação (`LM HUB_BA_SIMÕES FILHO`). O plano original supunha
+que o casamento seria por nome de estação, como o de modelos da 026 — e não é.
+
+O caminho certo tem dois passos: estação → cidade (pelo nome da estação), cidade → IBGE (pelas 518
+rotas), e então o par de IBGE → `CodRota`.
+
+**Descartado — casar por nome de estação**: medido, casa **1 rota de 134**.
+
+---
+
+## R2d — A cobertura real, medida
+
+O plano trazia "~80 rotas, 84% das viagens". **Aquele número era dos MODELOS**, que morreram junto
+com o `setPreSMdeModelo` — foi carregado da 026 para a 027 sem reconferir. Medido de verdade em
+25/08, contra as 518 rotas:
+
+| | rotas | viagens |
+|---|---|---|
+| nossas, em 90 dias | 134 | 4.508 |
+| com as duas cidades reconhecidas | 61 | — |
+| **com rota de fato cadastrada** | **53** | **2.340 — 52%** |
+
+**48% das viagens não têm rota cadastrada na gerenciadora.** Isso não é defeito do nosso lado: é
+trabalho de cadastro **na Logae**, e a lista das que faltam é o que se leva para eles.
+
+Duas leituras do mesmo número, e as duas importam:
+
+**Para o produto**: a aba vale desde o primeiro dia para metade das viagens, e diz exatamente quais
+rotas faltam cadastrar. Isso é melhor do que parecer, porque hoje ninguém sabe quais são.
+
+**Para a expectativa**: quem esperava que a aba resolvesse tudo vai ver metade da fila travada em
+"sem rota". O texto da tela precisa deixar claro que isso é cadastro pendente **lá**, não defeito
+daqui.
+
+---
+
 ## R3 — O corpo do `setPreSM` fica isolado num arquivo puro
 
 **Decisão**: `packages/shared/src/domain/pre-sm-corpo.ts`, sem rede e sem banco, com o corpo e a
@@ -90,10 +157,18 @@ código.
 o princípio V da constituição é explícito: variação por cliente é configuração. Um segundo cliente
 com outro perfil não pode exigir código.
 
-Os valores saem de `getCliente` e `getTabela` — leitura, e uma vez.
-
 **Descartado — constante no código**: funcionaria hoje e viraria um `if` por cliente no primeiro
 dia em que houvesse dois.
+
+**MAS DE ONDE OS VALORES SAEM É PENDÊNCIA.** A primeira versão deste R5 dizia "saem de `getCliente`
+e `getTabela` — leitura, e uma vez". Testado em 25/08, e não é assim:
+
+- `getCliente` com o **nosso próprio CNPJ** (`03571231000143`) → `CodErro 109 — O CADASTRO NÃO
+  EXISTE`
+- a lista de tabelas que o `getTabela` aceita **não expõe** perfil de segurança
+
+A decisão (configuração, não constante) continua certa. O que falta é saber o que pôr na
+configuração — e isso é pergunta para a gerenciadora, não coisa que se descubra tentando.
 
 ---
 
@@ -102,9 +177,10 @@ dia em que houvesse dois.
 **Decisão**: um job (`pre_sm.carregar_cadastro`) que consulta cidades e rotas e propõe as duas
 correspondências.
 
-**Por quê**: a rota **depende** da cidade — `getRotas` recebe os dois códigos IBGE. Dois jobs
-separados criariam uma ordem implícita que ninguém documentou e que quebraria quando alguém
-rodasse na ordem errada.
+**Por quê**: a razão original era que a rota depende da cidade. Depois do R2b ela ficou **mais
+forte**: as duas correspondências saem da **mesma chamada**. Uma única `getRotas` sem parâmetros
+devolve as 518 rotas, e delas saem tanto o catálogo de 72 cidades (com IBGE) quanto os pares
+origem–destino. Dois jobs fariam a mesma chamada duas vezes para partir o resultado ao meio.
 
 **Descartado — dois botões na tela**: a pessoa teria de saber apertar um antes do outro. A ordem é
 do sistema, não dela.
@@ -121,7 +197,7 @@ cobra por solicitação. As duas primeiras camadas custam zero e pegam quase tud
 | Camada | O que pega | Custo |
 |---|---|---|
 | teste puro | casamento de nomes, montagem do corpo, motivos | zero |
-| leitura real (`getCidades`, `getRotas`) | as 228 estações e ~80 rotas, com a aba já montada | zero |
+| leitura real (`getRotas`) | as 518 rotas dela contra as nossas 134, com a aba já montada | zero |
 | ensaio desligado | quantas viagens sairiam limpas num dia | zero |
 | criação real | **se a gerenciadora aceita o corpo** | uma solicitação |
 
