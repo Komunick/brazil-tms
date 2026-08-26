@@ -73,12 +73,12 @@ confirmadas passam a valer.
 
 ### O casamento com o cadastro da gerenciadora
 
-- [ ] T012 [US4] Acrescentar `getRotas`, `getCidades` e `getTabela` a `workers/lib/integra/cliente.ts`. **Remover** `setPreSMdeModelo` e `getModelosPreSM`. **Atenção aos nomes dos parâmetros**: `getTabela` usa `NomeTabela` (não `Tabela`) e `getCidades` usa `FiltroCidade`/`FiltroEstado`/`FiltroPais` (não `Cidade`/`UF`) — errar o nome devolve `CodErro 105` e **parece** que o recurso não existe (R2b, R5)
+- [X] T012 [US4] Acrescentar `getRotas`, `getCidades` e `getTabela` a `workers/lib/integra/cliente.ts`. **Remover** `setPreSMdeModelo` e `getModelosPreSM`. **Atenção aos nomes dos parâmetros**: `getTabela` usa `NomeTabela` (não `Tabela`) e `getCidades` usa `FiltroCidade`/`FiltroEstado`/`FiltroPais` (não `Cidade`/`UF`) — errar o nome devolve `CodErro 105` e **parece** que o recurso não existe (R2b, R5)
 - [ ] T013 [P] [US4] Teste do cliente em `cliente.test.ts` — só o formato da chamada e a leitura da resposta, **sem rede**
-- [ ] T014 [US4] Escrever em `packages/shared/src/domain/pre-sm-cadastro.ts` o casamento de cidade (estação → cidade da gerenciadora) e o de rota (par origem–destino → `CodRota`), puros
-- [ ] T015 [P] [US4] Testes do casamento com as cidades e rotas reais medidas em 25/08
-- [ ] T015b [US4] Acrescentar a tolerância do **sufixo de bairro ou distrito** ao casamento de cidade: quando o nome inteiro não achar, cair para o primeiro termo. Medido em 25/08: **27 cidades não resolvem** por isso — `RECIFE MURIBECA`, `SANTANA`, `CAMPINAS PQ CIDADE`, `UMUARAMA PQ INDUST II` —, e elas valem **38 dos 134 pares de rota**
-- [ ] T015c [P] [US4] Teste da tolerância com as quatro estações acima, e o caso que ela **não** pode quebrar: `SIMOES FILHO` continua casando com `SIMOES FILHO`, não virando `SIMOES`
+- [X] T014 [US4] Escrever em `packages/shared/src/domain/pre-sm-cadastro.ts` o casamento de cidade (estação → cidade da gerenciadora) e o de rota (par origem–destino → `CodRota`), puros
+- [X] T015 [P] [US4] Testes do casamento com as cidades e rotas reais medidas em 25/08
+- [X] T015b [US4] Acrescentar a tolerância do **sufixo de bairro ou distrito** ao casamento de cidade: quando o nome inteiro não achar, cair para o primeiro termo. Medido em 25/08: **27 cidades não resolvem** por isso — `RECIFE MURIBECA`, `SANTANA`, `CAMPINAS PQ CIDADE`, `UMUARAMA PQ INDUST II` —, e elas valem **38 dos 134 pares de rota**
+- [X] T015c [P] [US4] Teste da tolerância com as quatro estações acima, e o caso que ela **não** pode quebrar: `SIMOES FILHO` continua casando com `SIMOES FILHO`, não virando `SIMOES`
 - [ ] T016 [US4] Escrever `packages/db/src/trips/pre-sm-cidades.ts`: gravar propostas com `confirmado_em` **nulo**, listar, confirmar/desfazer (auditado na mesma transação), e a leitura que **só** devolve confirmada
 - [X] T017 [US4] Adaptar `packages/db/src/trips/pre-sm-modelos.ts` → `pre-sm-rotas.ts`, trocando modelo por rota. A trava de "só confirmada vale" continua **dentro** da função, não no chamador
 - [ ] T018 [US4] Acrescentar as ações de auditoria (`pre_sm.cidade.confirmar` / `.desconfirmar`) em `packages/shared/src/audit/actions.ts`, no tipo **e** no catálogo, com os rótulos pt-BR — há teste-guarda que exige rótulo para cada ação
