@@ -1,9 +1,9 @@
 import {
-  montarCorpoDaPreSM,
-  motivoDeNaoCriar,
-  tokensDaEstacao,
-  type DadosParaPreSM,
-  type MotivoDeNaoCriar,
+  chaveDaEstacao,
+  montarCorpoDoSetPreSM,
+  motivosDeNaoEnviar,
+  type DadosParaSetPreSM,
+  type MotivoDeNaoEnviar,
 } from "@brazil-tms/shared";
 
 /**
@@ -19,7 +19,7 @@ import {
  */
 
 export type Desfecho =
-  | { tipo: "nao_criar"; motivo: MotivoDeNaoCriar }
+  | { tipo: "nao_criar"; motivos: MotivoDeNaoEnviar[] }
   | { tipo: "desligado"; corpo: Record<string, unknown> }
   | { tipo: "teto_atingido"; corpo: Record<string, unknown> }
   | { tipo: "criar"; corpo: Record<string, unknown> };
@@ -50,14 +50,17 @@ export interface Contexto {
  * "hoje já criou o quanto foi autorizado". Quem olha o registro precisa saber qual dos dois — no
  * primeiro caso espera-se a virada, no segundo espera-se amanhã.
  */
-export function decidir(dados: DadosParaPreSM, ctx: Contexto): Desfecho {
-  const motivo = motivoDeNaoCriar(dados);
-  if (motivo) return { tipo: "nao_criar", motivo };
+export function decidir(dados: DadosParaSetPreSM, ctx: Contexto): Desfecho {
+  const motivos = motivosDeNaoEnviar(dados);
+  if (motivos.length > 0) return { tipo: "nao_criar", motivos };
 
-  const corpo = montarCorpoDaPreSM(dados);
-  // `motivoDeNaoCriar` já respondeu `null`, então isto não deveria acontecer. É rede de segurança
-  // para o dia em que os dois discordarem — e discordar em silêncio seria pior.
-  if (!corpo) return { tipo: "nao_criar", motivo: "sem_modelo" };
+  const corpo = montarCorpoDoSetPreSM(dados);
+  /**
+   * `motivosDeNaoEnviar` já devolveu lista vazia, então isto só acontece quando falta a
+   * CONFIGURAÇÃO — filial ou perfil de segurança. Não é motivo de fila: é defeito de instalação, e
+   * a lista vazia é honesta. Mas criar sem corpo seria pior, então para aqui.
+   */
+  if (!corpo) return { tipo: "nao_criar", motivos: [] };
 
   const comoObjeto = corpo as unknown as Record<string, unknown>;
 
@@ -78,7 +81,7 @@ export function chaveDaRota(origem: string | null, destino: string | null): {
   destinoNorm: string;
 } {
   return {
-    origemNorm: [...tokensDaEstacao(origem)].join(" "),
-    destinoNorm: [...tokensDaEstacao(destino)].join(" "),
+    origemNorm: chaveDaEstacao(origem),
+    destinoNorm: chaveDaEstacao(destino),
   };
 }

@@ -64,16 +64,50 @@ export function normalizarEstacao(nome: string | null | undefined): string {
  * primeira contagem.
  */
 export function tokensDaEstacao(nome: string | null | undefined): Set<string> {
-  const partes = String(nome ?? "").split("_");
-  const iUf = partes.findIndex((p) => /^[A-Z]{2}$/.test(p.trim()));
-  const resto = iUf >= 0 ? partes.slice(iUf + 1) : partes;
+  const { cidade } = ufECidadeDaEstacao(nome);
   return new Set(
-    normalizarEstacao(resto.join(" "))
+    cidade
       .split(" ")
       // `FILHO` sai: `SIMOES FILHO` no nosso cadastro é `SIMOES` no modelo dela, e o sobrenome da
       // cidade não distingue nada — não há outra Simões na malha.
       .filter((t) => t && t !== "FILHO"),
   );
+}
+
+/**
+ * A UF E A CIDADE, tiradas do NOME da estação (2026-08-25, fatia 027).
+ *
+ * O `setPreSM` pede o código IBGE das cidades de coleta e entrega, e o nosso cadastro quase não tem
+ * cidade preenchida — medido: das 228 estações, **8 têm `city`** e 71 têm `state`. Mas o nome
+ * carrega os dois, sempre no mesmo formato `PREFIXO_UF_CIDADE`:
+ *
+ *   SOC_MG_BETIM                     →  { uf: "MG", cidade: "BETIM" }
+ *   LM HUB_TO_PALMAS                 →  { uf: "TO", cidade: "PALMAS" }
+ *   SOC_PE_JABOATÃO DOS GUARARAPES   →  { uf: "PE", cidade: "JABOATAO DOS GUARARAPES" }
+ *   FM HUB_PR_UMUARAMA_PQ_INDUST_II  →  { uf: "PR", cidade: "UMUARAMA PQ INDUST II" }
+ *
+ * ── É A MESMA SEPARAÇÃO DO `tokensDaEstacao`, E ISSO É O PONTO ────────────────────────────────
+ *
+ * Aquela função acha o índice da UF e **descarta** tudo até ela; esta **devolve** o que aquela joga
+ * fora. Por isso `tokensDaEstacao` foi reescrita para chamar esta, em vez de repetir a lógica.
+ *
+ * Dois separadores independentes divergiriam com o tempo, e a divergência seria **silenciosa**: a
+ * estação simplesmente não casaria, sem erro em lugar nenhum. É o mesmo defeito que a 026 quase teve
+ * entre a carga e a busca.
+ *
+ * Sem UF no nome, `uf` vem vazia e a cidade é o nome inteiro normalizado — quem chama trata isso
+ * como "não sei", que é diferente de um palpite.
+ */
+export function ufECidadeDaEstacao(nome: string | null | undefined): {
+  uf: string;
+  cidade: string;
+} {
+  const partes = String(nome ?? "").split("_");
+  const iUf = partes.findIndex((p) => /^[A-Z]{2}$/.test(p.trim()));
+  return {
+    uf: iUf >= 0 ? partes[iUf]!.trim().toUpperCase() : "",
+    cidade: normalizarEstacao((iUf >= 0 ? partes.slice(iUf + 1) : partes).join(" ")),
+  };
 }
 
 export interface ModeloDaGerenciadora {

@@ -39,6 +39,22 @@ export interface Novidade {
 
 export const NOVIDADES: readonly Novidade[] = [
   {
+    data: "2026-08-26",
+    tipo: "novidade",
+    titulo: "A aba GR: a Pré-SM sem sair do TMS",
+    descricao:
+      "As viagens atribuídas aparecem numa fila com o que será enviado à gerenciadora — placas, motorista e horário. Quando falta alguma coisa, a própria linha diz o quê e onde resolver. Envio de uma por vez, e a viagem continua visível depois, com o número da Pré-SM e o botão de cancelar.",
+    onde: "GR — Pré-SM, no menu de Operação",
+  },
+  {
+    data: "2026-08-26",
+    tipo: "novidade",
+    titulo: "Bloquear um motorista",
+    descricao:
+      "No cadastro do motorista dá para bloqueá-lo, com o motivo escrito. Bloqueado, ele não é escalado em viagem nenhuma — nem pelo diálogo do portal. A lista de bloqueados tem aba própria.",
+    onde: "Motoristas → abrir o cadastro",
+  },
+  {
     data: "2026-08-25",
     tipo: "correcao",
     titulo: "Atribuir pela Minha Programação chega no portal",

@@ -1,0 +1,254 @@
+# Research — 027 aba GR
+
+As decisões que não eram óbvias, com o que foi descartado junto.
+
+---
+
+## R1 — A tabela de rota muda de forma, não ganha coluna
+
+**Decisão**: renomear `cod_modelo` → `cod_rota` em `pre_sm_route_models`, na mesma migração que cria
+a tabela de cidade. Sem migração de dado.
+
+**Por quê**: as duas tabelas da 026 estão **vazias em todo lugar** — conferido em 25/08 no banco de
+dev (`0 correspondências, 0 pré-SMs`) — e a migração `0046` **nunca chegou à produção**. Não há dado
+a preservar, então a forma limpa custa o mesmo que a suja.
+
+**Descartado — acrescentar `cod_rota` e deixar `cod_modelo` nulo**: sobra uma coluna que ninguém
+preenche e que o próximo leitor vai tentar entender. Coluna morta é dívida que não avisa.
+
+**Descartado — tabela nova e abandonar a antiga**: dois lugares para a mesma pergunta ("qual é a
+rota desta viagem?"), e a certeza de que alguém vai ler o errado.
+
+---
+
+## R2 — A cidade sai do nome da estação, com a função que já existe
+
+**Decisão**: acrescentar `ufECidadeDaEstacao` ao lado de `tokensDaEstacao`, no mesmo arquivo,
+usando a mesma separação.
+
+**Por quê**: medido em produção — das 228 estações, **8 têm `city`** preenchida e 71 têm `state`.
+Preencher o cadastro à mão é 228 linhas de digitação que envelhecem. O nome já carrega:
+
+```
+SOC_MG_BETIM                    → MG · BETIM
+LM HUB_TO_PALMAS                → TO · PALMAS
+SOC_PE_JABOATÃO DOS GUARARAPES  → PE · JABOATAO DOS GUARARAPES
+FM HUB_PR_UMUARAMA_PQ_INDUST_II → PR · UMUARAMA PQ INDUST II
+```
+
+`tokensDaEstacao` **já** acha o índice da UF e descarta tudo até ela. A função nova devolve o que
+aquela joga fora. É uma linha de lógica nova, não um normalizador.
+
+**Descartado — escrever um extrator próprio**: os dois divergiriam com o tempo, e a divergência
+seria **silenciosa** — a estação simplesmente não casaria, sem erro em lugar nenhum. É o mesmo
+defeito que a 026 já teve entre a carga e a busca, e que só não aconteceu porque a chave foi
+extraída para uma função compartilhada.
+
+**Descartado — preencher `locations.city` na carga**: mistura duas coisas. O cadastro de locais é
+nosso e serve a outras telas; a correspondência com a gerenciadora é dela e precisa de conferência
+humana. Escrever no cadastro faria uma proposta não conferida virar verdade em todo o sistema.
+
+---
+
+## R2b — O catálogo de cidades vem do `getCidades`, e ele filtra
+
+**Decisão**: `getCidades` com `FiltroPais: "BR"` — **5.571 cidades brasileiras**, cada uma com
+`CodIBGE`, `Cidade`, `Estado` e `UF`.
+
+**Cuidado com a fonte parecida**: `getTabela(NomeTabela: "CIDADES")` devolve `{Codigo, Descricao}`
+com **código interno**, que **não** casa com o que o `getRotas` usa. Medido: trocar a fonte leva a
+**0% de correspondência**, e o erro não dá sintoma nenhum — só uma lista vazia que parece cadastro
+faltando.
+
+**Os filtros são `FiltroCidade`, `FiltroEstado` e `FiltroPais`** — não `Cidade` e `UF`. Com os nomes
+certos, `{FiltroCidade: "BETIM", FiltroEstado: "MINAS", FiltroPais: "BR"}` devolve **uma** linha:
+`{CodIBGE: 3106705, Cidade: "BETIM", UF: "MG"}`.
+
+> **Uma versão anterior deste R2b afirmava que o `getCidades` "ignora o filtro e devolve o catálogo
+> mundial", e mandava tirar as cidades das próprias rotas.** Era erro meu: eu tinha chamado com
+> `{UF, Cidade}`. O mesmo tipo de erro do R5 — ver a lição lá.
+
+O `getRotas` sem parâmetros continua útil, mas por outro motivo: ele traz as **518 rotas** com
+`CodIBGECidadeOrigem` e `CodIBGECidadeDestino` — as 518 têm os quatro campos. É o que permite casar
+o par de IBGE com `CodRota` sem uma chamada por rota.
+
+---
+
+## R2c — O casamento é por CIDADE, não por estação
+
+**Decisão**: a chave da rota é o par de códigos IBGE, não o par de nomes de estação.
+
+**Por quê**: **as descrições das rotas dela são por cidade.** Medido:
+
+```
+SHPX LOGISTICA LTDA. - SIMOES FILHO/BA/BRASIL ATE SHPX LOGISTICA LTDA. - ARACAJU/SE/BRASIL
+SHPX LOGISTICA LTDA. - GOIANIA/GO/BRASIL ATE SHPX LOGISTICA LTDA. - BARREIRAS/BA/BRASIL
+```
+
+**Uma** das 518 usa o nosso padrão de estação (`LM HUB_BA_SIMÕES FILHO`). O plano original supunha
+que o casamento seria por nome de estação, como o de modelos da 026 — e não é.
+
+O caminho certo tem dois passos: estação → cidade (pelo nome da estação), cidade → IBGE (pelas 518
+rotas), e então o par de IBGE → `CodRota`.
+
+**Descartado — casar por nome de estação**: medido, casa **1 rota de 134**.
+
+---
+
+## R2d — A cobertura real, medida
+
+O plano trazia "~80 rotas, 84% das viagens". **Aquele número era dos MODELOS**, que morreram junto
+com o `setPreSMdeModelo` — foi carregado da 026 para a 027 sem reconferir. Medido de verdade em
+25/08, contra as 518 rotas:
+
+| | rotas | viagens |
+|---|---|---|
+| nossas, em 90 dias | 134 | 4.508 |
+| com IBGE nas duas pontas | **96** | — |
+| **com rota de fato cadastrada** | **53** | **2.340 — 52%** |
+
+Os 52% foram medidos **duas vezes, por caminhos diferentes** — uma com o catálogo tirado das rotas
+(61 pares resolvidos) e outra com o catálogo completo do `getCidades` (96 pares). O número de rotas
+casadas não mudou: **53**. É o que dá confiança nele.
+
+**E o gargalo ficou claro**: das 134, **96 resolvem cidade** e só 53 têm rota. O problema não é o
+casamento de cidade — é **rota que não existe no cadastro da Logae**. Isso não é defeito do nosso
+lado, e a lista das que faltam é o que se leva para eles.
+
+As **27 cidades que não resolvem** são estações com sufixo de bairro ou distrito — `RECIFE
+MURIBECA`, `SANTANA`, `CAMPINAS PQ CIDADE`, `UMUARAMA PQ INDUST II`. Precisam de uma tolerância a
+mais no casamento: cair para o primeiro termo quando o nome inteiro não achar. **Isso vale 38 pares
+de rota**, e é trabalho pequeno.
+
+Duas leituras do mesmo número, e as duas importam:
+
+**Para o produto**: a aba vale desde o primeiro dia para metade das viagens, e diz exatamente quais
+rotas faltam cadastrar. Isso é melhor do que parecer, porque hoje ninguém sabe quais são.
+
+**Para a expectativa**: quem esperava que a aba resolvesse tudo vai ver metade da fila travada em
+"sem rota". O texto da tela precisa deixar claro que isso é cadastro pendente **lá**, não defeito
+daqui.
+
+---
+
+## R3 — O corpo do `setPreSM` fica isolado num arquivo puro
+
+**Decisão**: `packages/shared/src/domain/pre-sm-corpo.ts`, sem rede e sem banco, com o corpo e a
+lista de motivos.
+
+**Por quê**: é o **único** ponto que a resposta pendente da gerenciadora pode mudar. Não se sabe
+como o `setPreSM` amarra a Pré-SM à programação que ela já tem do portal — não há campo de código de
+programação em nenhum método de criação, conferido na referência.
+
+Isolando, a resposta muda um arquivo e seus testes. Espalhado pelo job, mudaria o job, o que grava,
+o que a tela mostra e o que os testes esperam.
+
+**Descartado — esperar a resposta antes de começar**: a fila, a aba e as duas pontes independem
+dela, e são a maior parte do trabalho. Parar tudo por uma pergunta que responde um arquivo seria
+trocar semanas por nada.
+
+---
+
+## R4 — Todos os motivos, não o primeiro
+
+**Decisão**: a montagem devolve **a lista** do que falta. A 026 devolvia um só, o mais acionável.
+
+**Por quê**: mudou o consumidor. Na 026, o motivo aparecia enterrado na viagem, e mostrar um só
+evitava confundir. Na aba GR o motivo **é** a fila: a pessoa está ali para resolver, e resolver o
+CPF para descobrir que também falta o vínculo é duas viagens ao cadastro em vez de uma.
+
+**Descartado — manter um motivo**: economiza uma linha de código e custa uma ida a mais ao cadastro
+por viagem, todo dia.
+
+---
+
+## R5 — Filial e perfil de segurança são configuração
+
+**Decisão**: `CodFilial` e `CodPerfilSeguranca` vêm de configuração por cliente, não de constante no
+código.
+
+**Por quê**: a tela mostrava `20785 - DDR SHOPEE` fixo, e hoje só existe um cliente com Pré-SM. Mas
+o princípio V da constituição é explícito: variação por cliente é configuração. Um segundo cliente
+com outro perfil não pode exigir código.
+
+**Descartado — constante no código**: funcionaria hoje e viraria um `if` por cliente no primeiro
+dia em que houvesse dois.
+
+**E os valores foram achados** (25/08), depois de um erro meu:
+
+| campo | valor | como |
+|---|---|---|
+| `CodFilial` | **9332** | `getTabela(NomeTabela: "FILIAIS")` |
+| `CodPerfilSeguranca` | **20785** | `getTabela(NomeTabela: "PERFIL_SEGURANCA")` → `DDR SHOPEE` |
+
+A primeira tentativa deu `CodErro 105 — valor fora do conjunto`, e eu concluí que a tabela não
+existia. **O parâmetro é `NomeTabela`, não `Tabela`** — o manual diz, e eu não tinha lido essa
+linha. A lista de tabelas que o erro devolve vem truncada em 250 caracteres, o que escondeu
+justamente `FILIAIS` e `PERFIL_SEGURANCA`.
+
+Fica a lição, que já é a terceira do dia: **um erro de parâmetro se parece com um limite da API.**
+Antes de concluir que algo não existe, conferir o nome do campo no manual.
+
+---
+## R5b — A conta escreve, e dá para provar sem criar nada
+
+**Decisão**: não esperar resposta da gerenciadora sobre permissão de escrita. Foi medido.
+
+**Como**: a API tem um código de erro específico para falta de permissão — **`103 — METODO NAO
+LIBERADO`** —, e a lista completa sai de `getTabela(NomeTabela: "ERROS_WEBSERVICE")`. Basta chamar
+um método de escrita de um jeito que não possa fazer efeito e ver se o `103` aparece.
+
+O `setCancelaPreSM` serve: ele só cancela, nunca cria, e com um código fora da faixa não tem o que
+cancelar. Os códigos reais têm 8 dígitos (`10.108.691`); usei `999999999`.
+
+```
+setCancelaPreSM  → CodErro 137  Nao existe Pre-Solicitacao cadastrada com esse codigo
+setEfetivaPreSM  → CodErro 105  Valor fora do conjunto [S,N]. Campo: JaPassouRaioOrigem
+```
+
+O `137` é a prova: o método **executou** — autenticou, consultou o banco, e respondeu que não achou.
+Só chega aí quem tem permissão.
+
+**Descartado — o teste que eu tinha inventado antes**: chamar `setPreSM` pedindo alteração de um
+código inexistente, esperando que a permissão fosse conferida antes dos campos. Não é: produção e
+homologação devolveram o **mesmo** erro de campo faltando, e homologação recusa a nossa conta. A API
+valida o corpo **antes** de conferir quem chama, então aquele teste nunca chegaria na resposta.
+
+**Descartado — perguntar e esperar**: teria funcionado, e teria custado um ou dois dias. O teste
+custou uma chamada.
+
+---
+
+## R6 — Uma carga só para cidade e rota
+
+**Decisão**: um job (`pre_sm.carregar_cadastro`) que consulta cidades e rotas e propõe as duas
+correspondências.
+
+**Por quê**: a razão original era que a rota depende da cidade. Depois do R2b ela ficou **mais
+forte**: as duas correspondências saem da **mesma chamada**. Uma única `getRotas` sem parâmetros
+devolve as 518 rotas, e delas saem tanto o catálogo de 72 cidades (com IBGE) quanto os pares
+origem–destino. Dois jobs fariam a mesma chamada duas vezes para partir o resultado ao meio.
+
+**Descartado — dois botões na tela**: a pessoa teria de saber apertar um antes do outro. A ordem é
+do sistema, não dela.
+
+---
+
+## R7 — Validar sem gastar, em três camadas
+
+**Decisão**: teste puro → leitura contra a produção → ensaio com o interruptor desligado.
+
+**Por quê**: não há homologação (`CodErro 100 — USUARIO INVALIDO`, medido em 25/08) e a gerenciadora
+cobra por solicitação. As duas primeiras camadas custam zero e pegam quase tudo:
+
+| Camada | O que pega | Custo |
+|---|---|---|
+| teste puro | casamento de nomes, montagem do corpo, motivos | zero |
+| leitura real (`getRotas`) | as 518 rotas dela contra as nossas 134, com a aba já montada | zero |
+| ensaio desligado | quantas viagens sairiam limpas num dia | zero |
+| criação real | **se a gerenciadora aceita o corpo** | uma solicitação |
+
+Só a última linha custa, e é a única que as outras não respondem.
+
+**Descartado — pedir ambiente de homologação e esperar**: já foi tentado; o login é recusado. Não é
+uma espera com prazo.

@@ -110,7 +110,7 @@ async function motoristaPeloPortal(
  * com `sem_vinculo_veiculo`, que é o certo: o portal aceita placa que o nosso cadastro não conhece,
  * e mandar um vínculo inventado é pior que não criar.
  */
-async function vinculosDasPlacas(placas: string[]): Promise<{ placa: string; vinculo: string | null }[]> {
+export async function vinculosDasPlacas(placas: string[]): Promise<{ placa: string; vinculo: string | null }[]> {
   if (placas.length === 0) return [];
 
   const [vs, cs] = await Promise.all([

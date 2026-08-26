@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   divergenciasDaPreSm,
   donoEhPessoaFisica,
-  montarCorpoDaPreSM,
-  motivoDeNaoCriar,
   paraDataHoraDaIntegra,
   vinculoParaLogae,
   vinculoSugerido,
@@ -88,98 +86,6 @@ describe("donoEhPessoaFisica", () => {
   it("vazio não é", () => {
     expect(donoEhPessoaFisica(null)).toBe(false);
     expect(donoEhPessoaFisica("")).toBe(false);
-  });
-});
-
-describe("motivoDeNaoCriar", () => {
-  const COMPLETO = {
-    codModelo: 23343,
-    cpfMotorista: "01932653546",
-    vinculoMotorista: "agregado" as const,
-    placas: [{ placa: "ATG9I07", vinculo: "agregado" as const }],
-    chegadaNaColeta: "2026-08-26T09:00:00Z",
-    saidaDaColeta: "2026-08-26T11:00:00Z",
-  };
-
-  it("com tudo, não há motivo — a Pré-SM pode ser criada", () => {
-    expect(motivoDeNaoCriar(COMPLETO)).toBeNull();
-  });
-
-  it("cada falta tem o seu motivo, porque cada uma se resolve em outro lugar", () => {
-    expect(motivoDeNaoCriar({ ...COMPLETO, codModelo: null })).toBe("sem_modelo");
-    expect(motivoDeNaoCriar({ ...COMPLETO, cpfMotorista: null })).toBe("sem_cpf");
-    expect(motivoDeNaoCriar({ ...COMPLETO, placas: [] })).toBe("sem_placa");
-    expect(motivoDeNaoCriar({ ...COMPLETO, vinculoMotorista: "subcontracted" })).toBe(
-      "sem_vinculo_motorista",
-    );
-    expect(
-      motivoDeNaoCriar({ ...COMPLETO, placas: [{ placa: "ATG9I07", vinculo: "subcontracted" }] }),
-    ).toBe("sem_vinculo_veiculo");
-    expect(motivoDeNaoCriar({ ...COMPLETO, saidaDaColeta: null })).toBe("sem_janela_coleta");
-  });
-
-  /**
-   * O CASO QUE JUSTIFICA A ORDEM DOS TESTES.
-   *
-   * Faltando modelo E CPF, a pessoa vê UM motivo. Tem de ser o modelo: ele é o único que não se
-   * resolve na viagem — exige cadastro na gerenciadora ou conferência de uma correspondência.
-   * Mostrar "sem CPF" faria alguém correr atrás do documento, resolver, e a Pré-SM continuar não
-   * saindo. Trabalho à toa, e a confiança na tela vai junto.
-   */
-  it("quando faltam dois, mostra o que NÃO se resolve na viagem", () => {
-    expect(motivoDeNaoCriar({ ...COMPLETO, codModelo: null, cpfMotorista: null })).toBe(
-      "sem_modelo",
-    );
-  });
-
-  it("CPF precisa ter 11 dígitos — meio CPF não é CPF", () => {
-    expect(motivoDeNaoCriar({ ...COMPLETO, cpfMotorista: "019326535" })).toBe("sem_cpf");
-    expect(motivoDeNaoCriar({ ...COMPLETO, cpfMotorista: "019.326.535-46" })).toBeNull();
-  });
-
-  it("o segundo motorista, quando existe, é cobrado igual ao primeiro", () => {
-    expect(
-      motivoDeNaoCriar({
-        ...COMPLETO,
-        cpfSegundoMotorista: "01932653547",
-        vinculoSegundoMotorista: "subcontracted",
-      }),
-    ).toBe("sem_vinculo_motorista");
-  });
-});
-
-describe("montarCorpoDaPreSM", () => {
-  const COMPLETO = {
-    codModelo: 23343,
-    cpfMotorista: "019.326.535-46",
-    vinculoMotorista: "agregado" as const,
-    placas: [
-      { placa: "MDS6J45", vinculo: "agregado" as const },
-      { placa: "CBS1E49", vinculo: "terceiro" as const },
-    ],
-    chegadaNaColeta: "2026-08-26T12:00:00Z",
-    saidaDaColeta: "2026-08-26T14:00:00Z",
-  };
-
-  it("monta o corpo com cavalo, carreta e as letras da gerenciadora", () => {
-    const c = montarCorpoDaPreSM(COMPLETO)!;
-    expect(c.CodModelo).toBe(23343);
-    expect(c.PlacaVeiculo).toBe("MDS6J45");
-    expect(c.VincVeiculo).toBe("A");
-    expect(c.PlacaCarreta1).toBe("CBS1E49");
-    expect(c.VincCarreta1).toBe("T");
-    expect(c.CPFMotorista1).toBe("01932653546");
-    expect(c.VincMotorista1).toBe("A");
-  });
-
-  it("não monta nada quando falta algo — meio corpo é pior que nenhum", () => {
-    expect(montarCorpoDaPreSM({ ...COMPLETO, codModelo: null })).toBeNull();
-  });
-
-  it("sem segundo motorista, os campos dele nem aparecem", () => {
-    const c = montarCorpoDaPreSM(COMPLETO)!;
-    expect(c.CPFMotorista2).toBeUndefined();
-    expect(c.VincMotorista2).toBeUndefined();
   });
 });
 

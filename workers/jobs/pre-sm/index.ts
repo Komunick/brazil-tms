@@ -4,18 +4,17 @@ import {
   abrirTentativaDePreSm,
   contarTentativa,
   criadasHoje,
-  dadosDaPreSm,
   encerrarTentativaDePreSm,
-  modeloConfirmadoDaRota,
+  linhaDaFilaGR,
 } from "@brazil-tms/db";
 import { JOB, work } from "../../lib/queue";
 import {
   credenciaisDaIntegra,
   IntegraIndisponivel,
   IntegraRecusou,
-  setPreSMdeModelo,
+  setPreSM,
 } from "../../lib/integra/cliente";
-import { chaveDaRota, decidir } from "./criar";
+import { decidir } from "./criar";
 
 /**
  * CRIAR A PRÉ-SM NA GERENCIADORA quando a atribuição volta confirmada do portal (2026-08-25, 026).
@@ -43,30 +42,41 @@ import { chaveDaRota, decidir } from "./criar";
  */
 export async function runPreSmCriar(payload: PreSmCriarPayload): Promise<void> {
   const inicio = Date.now();
-  const dados = await dadosDaPreSm(payload.portalCommandId);
+  /**
+   * A MESMA fonte que a fila da aba GR usa (2026-08-26, fatia 027).
+   *
+   * Se o job lesse o mundo por um caminho e a tela por outro, a linha ficaria verde e o envio
+   * recusaria — ou o contrário, que é pior: a pessoa apertaria achando que resolveu. Uma fonte só é
+   * o que garante que os dois concordem sempre.
+   */
+  const linha = await linhaDaFilaGR(payload.tripId);
 
-  if (!dados) {
-    // Ordem que não é de atribuição, ou que sumiu. Não há o que criar, e não é falha.
-    console.log(JSON.stringify({ job: JOB.preSmCriar, semOrdem: payload.portalCommandId }));
+  if (!linha) {
+    // A viagem saiu da fila entre o pedido e o trabalho: encerrada, cancelada, ou a atribuição
+    // desfeita. Não há o que criar, e não é falha.
+    console.log(JSON.stringify({ job: JOB.preSmCriar, foraDaFila: payload.tripId }));
     return;
   }
 
-  const { origemNorm, destinoNorm } = chaveDaRota(dados.origem, dados.destino);
-  const codModelo = await modeloConfirmadoDaRota(origemNorm, destinoNorm);
-
   const desfecho = decidir(
     {
-      codModelo,
-      cpfMotorista: dados.cpfMotorista,
-      vinculoMotorista: dados.vinculoMotorista as OwnershipType | null,
-      cpfSegundoMotorista: dados.cpfSegundoMotorista,
-      vinculoSegundoMotorista: dados.vinculoSegundoMotorista as OwnershipType | null,
-      placas: dados.placas.map((p) => ({
+      codFilial: Number(process.env.INTEGRA_COD_FILIAL ?? 0) || null,
+      codPerfilSeguranca: Number(process.env.INTEGRA_COD_PERFIL_SEGURANCA ?? 0) || null,
+      codRota: linha.codRota,
+      codIbgeOrigem: linha.codIbgeOrigem,
+      codIbgeDestino: linha.codIbgeDestino,
+      cpfMotorista: linha.cpfMotorista,
+      vinculoMotorista: linha.vinculoMotorista as OwnershipType | null,
+      cpfSegundoMotorista: linha.cpfSegundoMotorista,
+      vinculoSegundoMotorista: linha.vinculoSegundoMotorista as OwnershipType | null,
+      placas: linha.placas.map((p) => ({
         placa: p.placa,
         vinculo: p.vinculo as OwnershipType | null,
       })),
-      chegadaNaColeta: dados.chegadaNaColeta,
-      saidaDaColeta: dados.saidaDaColeta,
+      chegadaNaColeta: linha.chegadaNaColeta,
+      saidaDaColeta: linha.saidaDaColeta,
+      chegadaNaEntrega: linha.chegadaNaEntrega,
+      saidaDaEntrega: linha.saidaDaEntrega,
     },
     {
       ativo: process.env.INTEGRA_PRE_SM_ATIVO === "true",
@@ -83,14 +93,14 @@ export async function runPreSmCriar(payload: PreSmCriarPayload): Promise<void> {
    * é exatamente o desfecho que esta fatia existe para evitar.
    */
   const tentativa = await abrirTentativaDePreSm({
-    tripId: dados.tripId,
-    codModelo,
+    tripId: linha.tripId,
+    codModelo: linha.codRota,
     payloadEnviado: desfecho.tipo === "nao_criar" ? null : desfecho.corpo,
   });
 
   if (!tentativa) {
     // O índice único recusou: já existe uma viva. O reprocesso encontrou o trabalho feito.
-    console.log(JSON.stringify({ job: JOB.preSmCriar, tripId: dados.tripId, jaExistia: true }));
+    console.log(JSON.stringify({ job: JOB.preSmCriar, tripId: linha.tripId, jaExistia: true }));
     return;
   }
 
@@ -98,13 +108,13 @@ export async function runPreSmCriar(payload: PreSmCriarPayload): Promise<void> {
     await encerrarTentativaDePreSm({
       id: tentativa.id,
       status: "sem_dados",
-      motivo: desfecho.motivo,
+      motivo: desfecho.motivos.join(", ") || "sem_configuracao",
     });
     console.log(
       JSON.stringify({
         job: JOB.preSmCriar,
-        tripId: dados.tripId,
-        naoCriou: desfecho.motivo,
+        tripId: linha.tripId,
+        naoCriou: desfecho.motivos,
         durationMs: Date.now() - inicio,
       }),
     );
@@ -140,7 +150,7 @@ export async function runPreSmCriar(payload: PreSmCriarPayload): Promise<void> {
     console.log(
       JSON.stringify({
         job: JOB.preSmCriar,
-        tripId: dados.tripId,
+        tripId: linha.tripId,
         naoChamou: desfecho.tipo,
         durationMs: Date.now() - inicio,
       }),
@@ -152,7 +162,7 @@ export async function runPreSmCriar(payload: PreSmCriarPayload): Promise<void> {
   await contarTentativa(tentativa.id);
 
   try {
-    const { codigo } = await setPreSMdeModelo(cred, desfecho.corpo);
+    const { codigo } = await setPreSM(cred, desfecho.corpo);
     await encerrarTentativaDePreSm({
       id: tentativa.id,
       status: "criada",
@@ -161,7 +171,7 @@ export async function runPreSmCriar(payload: PreSmCriarPayload): Promise<void> {
     console.log(
       JSON.stringify({
         job: JOB.preSmCriar,
-        tripId: dados.tripId,
+        tripId: linha.tripId,
         criada: codigo,
         durationMs: Date.now() - inicio,
       }),
@@ -176,7 +186,7 @@ export async function runPreSmCriar(payload: PreSmCriarPayload): Promise<void> {
         motivo: `${e.codErro}: ${e.msgErro}`,
       });
       console.warn(
-        JSON.stringify({ job: JOB.preSmCriar, tripId: dados.tripId, recusada: e.codErro }),
+        JSON.stringify({ job: JOB.preSmCriar, tripId: linha.tripId, recusada: e.codErro }),
       );
       return;
     }
@@ -194,7 +204,7 @@ export async function runPreSmCriar(payload: PreSmCriarPayload): Promise<void> {
      */
     if (e instanceof IntegraIndisponivel) {
       console.warn(
-        JSON.stringify({ job: JOB.preSmCriar, tripId: dados.tripId, indisponivel: e.detalhe }),
+        JSON.stringify({ job: JOB.preSmCriar, tripId: linha.tripId, indisponivel: e.detalhe }),
       );
     }
     throw e;

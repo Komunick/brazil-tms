@@ -1,10 +1,10 @@
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { db } from "../client";
 import { writeAudit } from "../audit/write-audit";
-import { preSmRouteModels } from "../../schema";
+import { preSmRouteLinks } from "../../schema";
 
 /**
- * A PONTE ROTA → MODELO, e quem pode atravessá-la (2026-08-25, fatia 026).
+ * A PONTE ROTA → ROTA DELA, e quem pode atravessá-la (2026-08-25, fatias 026/027).
  *
  * A carga PROPÕE; uma pessoa CONFIRMA; só linha confirmada cria Pré-SM.
  *
@@ -23,7 +23,7 @@ export interface CorrespondenciaDaRota {
   id: string;
   origemNorm: string;
   destinoNorm: string;
-  codModelo: number;
+  codRota: number;
   descricao: string;
   confirmadoEm: string | null;
 }
@@ -35,26 +35,26 @@ export interface CorrespondenciaDaRota {
  * sobrescrever apagaria a conferência de alguém — ou está esperando conferência, e a proposta nova
  * é a mesma. Em nenhum dos dois casos o certo é mexer.
  *
- * A exceção legítima — o modelo daquela rota mudou na gerenciadora — é trabalho de cadastro, feito
+ * A exceção legítima — o código daquela rota mudou na gerenciadora — é trabalho de cadastro, feito
  * na tela, com a pessoa vendo o que está trocando.
  */
-export async function gravarPropostasDeModelo(
+export async function gravarPropostasDeRota(
   propostas: readonly {
     origemNorm: string;
     destinoNorm: string;
-    codModelo: number;
+    codRota: number;
     descricao: string;
   }[],
 ): Promise<{ novas: number }> {
   if (propostas.length === 0) return { novas: 0 };
 
   const linhas = await db
-    .insert(preSmRouteModels)
+    .insert(preSmRouteLinks)
     .values(propostas.map((p) => ({ ...p })))
     .onConflictDoNothing({
-      target: [preSmRouteModels.origemNorm, preSmRouteModels.destinoNorm],
+      target: [preSmRouteLinks.origemNorm, preSmRouteLinks.destinoNorm],
     })
-    .returning({ id: preSmRouteModels.id });
+    .returning({ id: preSmRouteLinks.id });
 
   return { novas: linhas.length };
 }
@@ -63,14 +63,14 @@ export async function gravarPropostasDeModelo(
 export async function listarCorrespondencias(): Promise<CorrespondenciaDaRota[]> {
   const linhas = await db
     .select()
-    .from(preSmRouteModels)
-    .orderBy(sql`${preSmRouteModels.confirmadoEm} nulls first`, preSmRouteModels.origemNorm);
+    .from(preSmRouteLinks)
+    .orderBy(sql`${preSmRouteLinks.confirmadoEm} nulls first`, preSmRouteLinks.origemNorm);
 
   return linhas.map((l) => ({
     id: l.id,
     origemNorm: l.origemNorm,
     destinoNorm: l.destinoNorm,
-    codModelo: l.codModelo,
+    codRota: l.codRota,
     descricao: l.descricao,
     confirmadoEm: l.confirmadoEm?.toISOString() ?? null,
   }));
@@ -94,22 +94,22 @@ export async function definirConfirmacaoDaCorrespondencia(entrada: {
 }): Promise<boolean> {
   return db.transaction(async (tx) => {
     const r = await tx
-      .update(preSmRouteModels)
+      .update(preSmRouteLinks)
       .set({
         confirmadoEm: entrada.confirmar ? new Date() : null,
         atualizadoEm: new Date(),
       })
       .where(
         and(
-          eq(preSmRouteModels.id, entrada.id),
+          eq(preSmRouteLinks.id, entrada.id),
           // O `where` exige o estado OPOSTO: confirmar o que já está confirmado devolve `false` em
           // vez de gravar uma auditoria de mudança que não houve.
           entrada.confirmar
-            ? sql`${preSmRouteModels.confirmadoEm} is null`
-            : isNotNull(preSmRouteModels.confirmadoEm),
+            ? sql`${preSmRouteLinks.confirmadoEm} is null`
+            : isNotNull(preSmRouteLinks.confirmadoEm),
         ),
       )
-      .returning({ id: preSmRouteModels.id });
+      .returning({ id: preSmRouteLinks.id });
 
     if (r.length === 0) return false;
 
@@ -137,18 +137,18 @@ export async function definirConfirmacaoDaCorrespondencia(entrada: {
  * mesmo desfecho — a Pré-SM não é criada e a viagem diz por quê (FR-012) —, e distingui-los aqui
  * daria a quem chama uma escolha que ele não deve ter.
  */
-export async function modeloConfirmadoDaRota(
+export async function codRotaConfirmada(
   origemNorm: string,
   destinoNorm: string,
 ): Promise<number | null> {
   const [linha] = await db
-    .select({ cod: preSmRouteModels.codModelo })
-    .from(preSmRouteModels)
+    .select({ cod: preSmRouteLinks.codRota })
+    .from(preSmRouteLinks)
     .where(
       and(
-        eq(preSmRouteModels.origemNorm, origemNorm),
-        eq(preSmRouteModels.destinoNorm, destinoNorm),
-        isNotNull(preSmRouteModels.confirmadoEm),
+        eq(preSmRouteLinks.origemNorm, origemNorm),
+        eq(preSmRouteLinks.destinoNorm, destinoNorm),
+        isNotNull(preSmRouteLinks.confirmadoEm),
       ),
     )
     .limit(1);
