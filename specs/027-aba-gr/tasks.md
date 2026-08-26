@@ -103,13 +103,13 @@ medido.
 **Goal**: montar o corpo e dizer o que falta, sem rede e sem banco. É o **único** arquivo que a
 resposta pendente da gerenciadora pode mudar.
 
-- [ ] T025 Escrever `packages/shared/src/domain/pre-sm-corpo.ts`: recebe o que a viagem tem, devolve o corpo do `setPreSM` **ou a lista dos motivos** de não dar
-- [ ] T026 [P] Implementar a lista de **todos** os motivos, não só o primeiro — mudou em relação à 026 (R4): na aba GR o motivo **é** a fila, e resolver o CPF para descobrir que falta o vínculo é duas idas ao cadastro
-- [ ] T027 [P] Implementar a conversão de data e hora para **horário de São Paulo**, no formato `"2015-07-17 16:00"` do manual — sem `T`, sem segundos
-- [ ] T028 [P] Teste em `pre-sm-corpo.test.ts` com um caso por motivo, **e** o caso em que faltam três ao mesmo tempo
-- [ ] T029 [P] Teste do fuso: `12:00Z` vira `09:00`. **Este erro passa em teste ingênuo e só aparece na estrada** — a escolta espera três horas fora
-- [ ] T030 [P] Teste do vínculo: `owned`→`F`, `agregado`→`A`, `terceiro`→`T`, e **`subcontracted` vira motivo de bloqueio**, nunca uma letra. Chutar mandaria informação errada para quem faz escolta, e o erro seria invisível
-- [ ] T031 [P] Teste que o corpo **não** é montado pela metade: faltando algo, devolve os motivos e nenhum corpo
+- [X] T025 Escrever `packages/shared/src/domain/pre-sm-corpo.ts`: recebe o que a viagem tem, devolve o corpo do `setPreSM` **ou a lista dos motivos** de não dar
+- [X] T026 [P] Implementar a lista de **todos** os motivos, não só o primeiro — mudou em relação à 026 (R4): na aba GR o motivo **é** a fila, e resolver o CPF para descobrir que falta o vínculo é duas idas ao cadastro
+- [X] T027 [P] Implementar a conversão de data e hora para **horário de São Paulo**, no formato `"2015-07-17 16:00"` do manual — sem `T`, sem segundos
+- [X] T028 [P] Teste em `pre-sm-corpo.test.ts` com um caso por motivo, **e** o caso em que faltam três ao mesmo tempo
+- [X] T029 [P] Teste do fuso: `12:00Z` vira `09:00`. **Este erro passa em teste ingênuo e só aparece na estrada** — a escolta espera três horas fora
+- [X] T030 [P] Teste do vínculo: `owned`→`F`, `agregado`→`A`, `terceiro`→`T`, e **`subcontracted` vira motivo de bloqueio**, nunca uma letra. Chutar mandaria informação errada para quem faz escolta, e o erro seria invisível
+- [X] T031 [P] Teste que o corpo **não** é montado pela metade: faltando algo, devolve os motivos e nenhum corpo
 
 **Checkpoint**: `pnpm vitest run packages/shared/src/domain/pre-sm-corpo.test.ts` verde. Nada tocou a
 gerenciadora.
