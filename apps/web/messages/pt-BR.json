@@ -1517,7 +1517,12 @@
       "semMotoristaVinculado": "sem motorista vinculado",
       "usarEstaPlaca": "Usar",
       "aKm": "{n} km",
-      "aMenosDeKm": "{n, plural, one {# a menos de 300 km} other {# a menos de 300 km}}, em linha reta"
+      "aMenosDeKm": "{n, plural, one {# a menos de {km} km} other {# a menos de {km} km}}, em linha reta",
+      "raio": "Raio",
+      "soLivres": "Só os livres",
+      "emViagem": "em viagem",
+      "emViagemNa": "Em viagem na {lh}",
+      "semPosicaoNenhuma": "Nenhuma posição de veículo carregada. O mapa aparece quando a integração com a gerenciadora estiver ligada neste ambiente."
     },
     "melhoresDaRota": {
       "titulo": "Nesta rota",
