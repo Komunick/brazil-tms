@@ -60,7 +60,9 @@ import type {
   BillingListRow,
   ExportBatchRow,
   MotoristaDoPortal,
+  Comentario,
   LinhaDaProgramacao,
+  Previsto,
   RotaDoMotorista,
   RegistroDoMotorista,
 } from "@brazil-tms/db";
@@ -387,14 +389,16 @@ const PROGRAMACAO = [...TRIPS_ROOT, "minha-programacao"] as const;
  * do que esperar.
  */
 export function useProgramacao(
-  regiao: string,
+  regioes: readonly string[],
   dias: { atras: number; adiante: number },
 ): UseQueryResult<{ linhas: LinhaDaProgramacao[] }> {
-  const busca = new URLSearchParams({
-    diasAtras: String(dias.atras),
-    diasAdiante: String(dias.adiante),
-    ...(regiao ? { regiao } : {}),
-  }).toString();
+  const busca = new URLSearchParams([
+    ["diasAtras", String(dias.atras)],
+    ["diasAdiante", String(dias.adiante)],
+    // ORDENADAS antes de virar chave: escolher SULCO e depois NONE é o mesmo recorte que o
+    // inverso, e sem ordenar seriam duas entradas de cache para a mesma lista.
+    ...[...regioes].sort().map((r) => ["regioes", r] as [string, string]),
+  ]).toString();
   return useQuery({
     queryKey: [...PROGRAMACAO, busca],
     queryFn: async () =>
@@ -423,6 +427,97 @@ export function useMarcarViagem() {
         }),
       ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: PROGRAMACAO }),
+  });
+}
+
+/**
+ * O PREVISTO — quem VAI dirigir, antes de a atribuição existir (2026-08-26, a pedido).
+ *
+ * Gravar INVALIDA a programação inteira, e não só esta viagem: a linha do quadro mostra o previsto,
+ * e deixar o quadro velho enquanto a janela mostra o novo é a divergência que faz alguém prever
+ * duas vezes.
+ */
+export function useSalvarPrevisto(tripId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (dados: { portalDriverId: string | null; placa: string | null }) =>
+      asJson<{ previsto: Previsto | null }>(
+        await fetch(`/api/trips/${tripId}/previsto`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(dados),
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: PROGRAMACAO });
+      void queryClient.invalidateQueries({ queryKey: [...TRIPS_ROOT, tripId, "previsto"] });
+    },
+  });
+}
+
+export function usePrevisto(
+  tripId: string,
+  enabled = true,
+): UseQueryResult<{ previsto: Previsto | null }> {
+  return useQuery({
+    queryKey: [...TRIPS_ROOT, tripId, "previsto"],
+    queryFn: async () =>
+      asJson<{ previsto: Previsto | null }>(await fetch(`/api/trips/${tripId}/previsto`)),
+    enabled: enabled && tripId !== "",
+  });
+}
+
+/**
+ * OS COMENTÁRIOS DA VIAGEM.
+ *
+ * As três chamadas devolvem a LISTA INTEIRA já atualizada — escrever e apagar não precisam de um
+ * segundo pedido para mostrar o resultado. A programação é invalidada junto porque a linha do
+ * quadro traz a CONTAGEM, e um marcador que não sobe ao comentar parece que o recado se perdeu.
+ */
+export function useComentarios(
+  tripId: string,
+  enabled = true,
+): UseQueryResult<{ itens: Comentario[] }> {
+  return useQuery({
+    queryKey: [...TRIPS_ROOT, tripId, "comentarios"],
+    queryFn: async () =>
+      asJson<{ itens: Comentario[] }>(await fetch(`/api/trips/${tripId}/comentarios`)),
+    enabled: enabled && tripId !== "",
+  });
+}
+
+export function useComentar(tripId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (texto: string) =>
+      asJson<{ itens: Comentario[] }>(
+        await fetch(`/api/trips/${tripId}/comentarios`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ texto }),
+        }),
+      ),
+    onSuccess: (dados) => {
+      queryClient.setQueryData([...TRIPS_ROOT, tripId, "comentarios"], dados);
+      void queryClient.invalidateQueries({ queryKey: PROGRAMACAO });
+    },
+  });
+}
+
+export function useApagarComentario(tripId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (comentarioId: string) =>
+      asJson<{ itens: Comentario[] }>(
+        await fetch(
+          `/api/trips/${tripId}/comentarios?comentario=${encodeURIComponent(comentarioId)}`,
+          { method: "DELETE" },
+        ),
+      ),
+    onSuccess: (dados) => {
+      queryClient.setQueryData([...TRIPS_ROOT, tripId, "comentarios"], dados);
+      void queryClient.invalidateQueries({ queryKey: PROGRAMACAO });
+    },
   });
 }
 
@@ -1481,8 +1576,7 @@ export function useRegistrarNoMotorista(driverId: string) {
           body: JSON.stringify(entrada),
         }),
       ),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["driver-historico", driverId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["driver-historico", driverId] }),
   });
 }
 
