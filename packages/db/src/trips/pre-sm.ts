@@ -201,6 +201,30 @@ export async function registrarPedidoDeCancelamento(entrada: {
 }
 
 /**
+ * Registra na auditoria QUEM apertou Enviar, e quando (2026-08-26, fatia 027).
+ *
+ * Fica no PEDIDO e não no worker, pela mesma razão do cancelamento: o worker sabe o que aconteceu
+ * com a gerenciadora, e não quem quis que acontecesse.
+ *
+ * A 026 já guardava `requested_by` em `trip_pre_sm`, mas ali o autor era o sistema — a criação era
+ * automática. Aqui o autor é uma pessoa, e é o nome dela que alguém vai procurar no dia em que a
+ * gerenciadora cobrar por uma solicitação de que ninguém se lembra.
+ */
+export async function registrarPedidoDeEnvio(entrada: {
+  tripId: string;
+  actorUserId: string;
+}): Promise<void> {
+  await writeAudit(db, {
+    actorUserId: entrada.actorUserId,
+    action: "pre_sm.enviar",
+    entityType: "trip",
+    entityId: entrada.tripId,
+    previousValue: null,
+    newValue: { pedido: "pre_sm" },
+  });
+}
+
+/**
  * O ESTADO DA PRÉ-SM **com o que a viagem tem agora** — para a tela apontar divergência (FR-018).
  *
  * Devolve o corpo que foi enviado e a atribuição atual lida do portal. A comparação em si é pura e

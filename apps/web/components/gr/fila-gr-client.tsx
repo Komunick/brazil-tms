@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ShieldCheck, Truck } from "lucide-react";
 import { formatDateTime } from "@brazil-tms/shared";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { avisar } from "@/lib/ui/avisos";
 import { normalizeForSearch } from "@/lib/search-normalize";
 import { cn } from "@/lib/utils";
 
@@ -163,7 +164,25 @@ export function FilaGrClient() {
 
 function LinhaDaFila({ l }: { l: LinhaGR }) {
   const t = useTranslations("GR");
+  const qc = useQueryClient();
   const criada = l.preSmStatus === "criada";
+  const emAndamento = l.preSmStatus === "pendente";
+
+  const enviar = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/gr/${l.tripId}/enviar`, { method: "POST" });
+      if (!res.ok) throw new Error(String(res.status));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["gr-fila"] });
+      /**
+       * "Pedida", não "criada". Quem cria de verdade é a gerenciadora, e a resposta vem depois —
+       * dizer "criada" no instante do clique seria mentir sobre algo que ainda não existe.
+       */
+      avisar({ tipo: "ok", texto: t("pedida") });
+    },
+    onError: () => avisar({ tipo: "erro", texto: t("envioFalhou") }),
+  });
 
   return (
     <Card className={cn(!criada && !l.pronta && "border-warning/50")}>
@@ -190,8 +209,20 @@ function LinhaDaFila({ l }: { l: LinhaGR }) {
             <Badge variant="secondary" className="ml-auto font-mono tabular-nums">
               {l.preSmCodigo}
             </Badge>
+          ) : emAndamento ? (
+            /* O pedido saiu e a gerenciadora ainda não respondeu. Distinguir isso de "falhou" é o
+               que impede alguém de apertar de novo e gerar uma segunda solicitação cobrada. */
+            <Badge variant="secondary" className="ml-auto">
+              {t("enviando")}
+            </Badge>
           ) : (
-            <Button type="button" size="sm" className="ml-auto" disabled={!l.pronta}>
+            <Button
+              type="button"
+              size="sm"
+              className="ml-auto"
+              disabled={!l.pronta || enviar.isPending}
+              onClick={() => enviar.mutate()}
+            >
               {t("enviar")}
             </Button>
           )}

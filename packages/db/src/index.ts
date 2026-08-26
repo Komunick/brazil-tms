@@ -277,7 +277,7 @@ export {
 export { dadosDaPreSm, type DadosDaPreSm } from "./trips/pre-sm-dados";
 export { ordemDeAtribuicaoConcluida } from "./trips/pre-sm-dados";
 export { preSmPorId } from "./trips/pre-sm";
-export { registrarPedidoDeCancelamento } from "./trips/pre-sm";
+export { registrarPedidoDeCancelamento, registrarPedidoDeEnvio } from "./trips/pre-sm";
 export { preSmComAtribuicaoAtual } from "./trips/pre-sm";
 // Bloquear um motorista — tirar alguém de circulação (2026-08-25, a pedido). NÃO é o
 // `status = 'blocked'`, que é o portal do CLIENTE tendo desativado a pessoa.
@@ -291,4 +291,4 @@ export {
 } from "./fleet/driver-block";
 
 // A fila da aba GR — uma consulta, não uma tabela (027).
-export { filaDaGR, type LinhaDaFilaGR } from "./trips/gr-fila";
+export { filaDaGR, linhaDaFilaGR, type LinhaDaFilaGR } from "./trips/gr-fila";

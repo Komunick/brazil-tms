@@ -45,6 +45,7 @@ export type AuditAction =
   // solicitação, e uma rota confirmada passa a gerar Pré-SM sozinha. Quem confirmou fica registrado.
   | "pre_sm.modelo.confirmar"
   | "pre_sm.modelo.desconfirmar"
+  | "pre_sm.enviar"
   | "pre_sm.cidade.confirmar"
   | "pre_sm.cidade.desconfirmar"
   // O cancelamento de uma Pré-SM já criada — e já cobrada pela gerenciadora.
@@ -207,6 +208,7 @@ export const ALL_AUDIT_ACTIONS = [
   "trip.portal_assign",
   "pre_sm.modelo.confirmar",
   "pre_sm.modelo.desconfirmar",
+  "pre_sm.enviar",
   "pre_sm.cidade.confirmar",
   "pre_sm.cidade.desconfirmar",
   "pre_sm.cancelar",

@@ -156,15 +156,15 @@ existe com motorista, placas e horário certos — e que o TMS mostra o número.
 > Quem espera a resposta é a **Fase 9** — a criação de verdade. Se a Pré-SM nascer solta da
 > programação, é o corpo que muda, e ele mora num arquivo só.
 
-- [ ] T043 [US1] Acrescentar `setPreSM` a `workers/lib/integra/cliente.ts`, tratando `CodErro`/`MsgErro` e o formato de URL com o nome do método **entre aspas** (`%22`)
-- [ ] T044 [P] [US1] Teste do cliente — só o formato da chamada e a leitura da resposta, **sem rede**
-- [ ] T045 [US1] Pôr `CodFilial` (**9332**) e `CodPerfilSeguranca` (**20785 · DDR SHOPEE**) em **configuração**, não constante no código (R5, princípio V). Os valores já foram achados: `getTabela(FILIAIS)` e `getTabela(PERFIL_SEGURANCA)`
-- [ ] T046 [US1] Adaptar `workers/jobs/pre-sm/criar.ts` e `index.ts` para montar o corpo novo. O interruptor e o teto diário **continuam**, desligados
-- [ ] T047 [US1] Escrever `apps/web/app/api/gr/[tripId]/enviar/route.ts`: enfileira o job, devolve 202. **Nunca chamar a Integra da rota** — a credencial vive só no worker
-- [ ] T048 [US1] Tratar a colisão do índice único parcial como "já existe", não como erro — é a garantia contra dois cliques simultâneos (FR-008)
-- [ ] T048b [US1] Registrar **quem apertou Enviar e quando** (FR-009), na rota e não no worker: o worker sabe o que aconteceu, não quem quis. A 026 já guarda `requested_by`, mas ali o autor era o sistema — aqui é uma pessoa, e é a informação que alguém vai procurar quando a gerenciadora cobrar por uma solicitação de que ninguém se lembra
-- [ ] T049 [US1] Mostrar na linha que o pedido está **em andamento** enquanto a gerenciadora não responde, distinguindo isso de ter falhado (FR-010, FR-013)
-- [ ] T050 [US1] **Ensaio com o interruptor desligado, um dia inteiro**: o job grava em `trip_pre_sm.payload_enviado` o que *teria* mandado. Ler essas linhas responde quantas viagens sairiam limpas — **sem custo**. É a validação que substitui a homologação que não temos
+- [X] T043 [US1] Acrescentar `setPreSM` a `workers/lib/integra/cliente.ts`, tratando `CodErro`/`MsgErro` e o formato de URL com o nome do método **entre aspas** (`%22`)
+- [X] T044 [P] [US1] Teste do cliente — só o formato da chamada e a leitura da resposta, **sem rede**
+- [X] T045 [US1] Pôr `CodFilial` (**9332**) e `CodPerfilSeguranca` (**20785 · DDR SHOPEE**) em **configuração**, não constante no código (R5, princípio V). Os valores já foram achados: `getTabela(FILIAIS)` e `getTabela(PERFIL_SEGURANCA)`
+- [X] T046 [US1] Adaptar `workers/jobs/pre-sm/criar.ts` e `index.ts` para montar o corpo novo. O interruptor e o teto diário **continuam**, desligados
+- [X] T047 [US1] Escrever `apps/web/app/api/gr/[tripId]/enviar/route.ts`: enfileira o job, devolve 202. **Nunca chamar a Integra da rota** — a credencial vive só no worker
+- [X] T048 [US1] Tratar a colisão do índice único parcial como "já existe", não como erro — é a garantia contra dois cliques simultâneos (FR-008)
+- [X] T048b [US1] Registrar **quem apertou Enviar e quando** (FR-009), na rota e não no worker: o worker sabe o que aconteceu, não quem quis. A 026 já guarda `requested_by`, mas ali o autor era o sistema — aqui é uma pessoa, e é a informação que alguém vai procurar quando a gerenciadora cobrar por uma solicitação de que ninguém se lembra
+- [X] T049 [US1] Mostrar na linha que o pedido está **em andamento** enquanto a gerenciadora não responde, distinguindo isso de ter falhado (FR-010, FR-013)
+- [ ] T050 [US1] **DEPOIS DO DEPLOY** — precisa do worker rodando com o código novo. **Ensaio com o interruptor desligado, um dia inteiro**: o job grava em `trip_pre_sm.payload_enviado` o que *teria* mandado. Ler essas linhas responde quantas viagens sairiam limpas — **sem custo**. É a validação que substitui a homologação que não temos
 
 **Checkpoint**: tudo pronto para a primeira criação real, e ela ainda não aconteceu.
 

@@ -216,3 +216,18 @@ function iso(v: unknown): string | null {
   const d = v instanceof Date ? v : new Date(String(v));
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
+
+/**
+ * A MESMA linha da fila, para UMA viagem.
+ *
+ * O job de criação usa esta função, e não uma consulta própria, de propósito: se a fila e o job
+ * lessem o mundo por caminhos diferentes, a tela poderia dizer "pronta" e o envio recusar — ou o
+ * contrário. Uma fonte só é o que garante que a linha verde vira Pré-SM.
+ *
+ * O filtro em memória parece desperdício e não é: a fila tem no máximo algumas centenas de linhas,
+ * e ter DUAS consultas com o mesmo `where` é exatamente como elas divergem com o tempo.
+ */
+export async function linhaDaFilaGR(tripId: string): Promise<LinhaDaFilaGR | null> {
+  const todas = await filaDaGR();
+  return todas.find((l) => l.tripId === tripId) ?? null;
+}

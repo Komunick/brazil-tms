@@ -225,22 +225,33 @@ export async function getCarreta(
 // ---------------------------------------------------------------------------
 
 /**
- * CRIA A PRÉ-SM a partir de um modelo.
+ * CRIA A PRÉ-SM (2026-08-26, fatia 027).
  *
  * ⚠️ **Isto CUSTA DINHEIRO.** A gerenciadora cobra por solicitação, e não existe ambiente de
  * homologação para nós (`CodErro 100`, medido). Quem chama tem de ter passado pelo interruptor e
  * pelo teto diário — ver `workers/jobs/pre-sm/index.ts`.
  *
- * Devolve o código da Pré-SM criada. Sem ele não há como consultar, alterar ou cancelar depois, e
- * a solicitação vira órfã do nosso lado — paga e invisível.
+ * ── POR QUE `setPreSM` E NÃO `setPreSMdeModelo` ───────────────────────────────────────────────
+ *
+ * A gerenciadora respondeu por escrito em 25/08, à pergunta sobre o vínculo com a programação do
+ * eTorre: **"Tem que ser pelo setPreSM"**. A fatia 026 tinha escolhido o outro, e ele morreu junto
+ * com o catálogo de modelos.
+ *
+ * ── O CORPO VEM PRONTO ────────────────────────────────────────────────────────────────────────
+ *
+ * Montá-lo é trabalho de `montarCorpoDoSetPreSM`, puro e testado. Este arquivo não decide nada
+ * sobre conteúdo: ele fala com a rede, e é só isso que não dá para testar sem o mundo.
+ *
+ * Devolve o código da Pré-SM criada. Sem ele não há como consultar, alterar ou cancelar depois, e a
+ * solicitação vira órfã do nosso lado — paga e invisível.
  */
-export async function setPreSMdeModelo(
+export async function setPreSM(
   cred: Credenciais,
   corpo: Record<string, unknown>,
 ): Promise<{ codigo: number | null }> {
-  const r = await chamar<{ PreSM?: { Codigo?: number }; Codigo?: number }>("setPreSMdeModelo", {
+  const r = await chamar<{ PreSM?: { Codigo?: number }; Codigo?: number }>("setPreSM", {
     ...cred,
-    Modelo: corpo,
+    ...corpo,
   });
   // A documentação mostra o código sob `PreSM`, mas a resposta real de outros métodos às vezes o
   // traz na raiz. Aceitar os dois evita perder o código por uma diferença de formato — e perder o

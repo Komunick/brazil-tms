@@ -446,7 +446,8 @@
     "driver_block": "Motorista bloqueado",
     "driver_unblock": "Motorista desbloqueado",
     "pre_sm_cidade_confirmar": "Correspondência de cidade confirmada",
-    "pre_sm_cidade_desconfirmar": "Correspondência de cidade desfeita"
+    "pre_sm_cidade_desconfirmar": "Correspondência de cidade desfeita",
+    "pre_sm_enviar": "Pré-SM pedida"
   },
   "Documents": {
     "title": "Documentos",
@@ -2183,6 +2184,9 @@
     "irParaCidades": "conferir cidades",
     "irParaMotoristas": "abrir motoristas",
     "irParaVeiculos": "abrir veículos",
-    "irParaViagem": "abrir a viagem"
+    "irParaViagem": "abrir a viagem",
+    "pedida": "Pré-SM pedida. O número aparece quando a gerenciadora responder.",
+    "envioFalhou": "Não deu para pedir a Pré-SM. Tente de novo.",
+    "enviando": "Enviando…"
   }
 }
