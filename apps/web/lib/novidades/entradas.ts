@@ -39,6 +39,46 @@ export interface Novidade {
 
 export const NOVIDADES: readonly Novidade[] = [
   {
+    data: "2026-08-26",
+    tipo: "novidade",
+    titulo: "Comentar numa LH",
+    descricao:
+      "Dentro da viagem dá para deixar um recado — o que o cliente pediu, o que o motorista avisou. Fica visível para todos, e a linha da programação passa a mostrar quantos comentários a LH tem.",
+    onde: "Minha Programação · janela da viagem",
+  },
+  {
+    data: "2026-08-26",
+    tipo: "novidade",
+    titulo: "Previsto: quem vai dirigir, antes de atribuir",
+    descricao:
+      "Dá para deixar salvo o motorista e a placa que você pretende escalar, sem mandar nada ao portal. Aparece na coluna de motorista em cinza, com o selo Previsto, e some sozinho assim que a atribuição de verdade chega.",
+    onde: "Minha Programação · janela da viagem",
+  },
+  {
+    data: "2026-08-26",
+    tipo: "novidade",
+    titulo: "Duas frentes ao mesmo tempo",
+    descricao:
+      "O filtro por frente aceitava uma só. Agora dá para escolher duas — e como são três, isso é ver tudo menos a que não interessa hoje.",
+    onde: "Minha Programação",
+  },
+  {
+    data: "2026-08-26",
+    tipo: "novidade",
+    titulo: "A aba GR: a Pré-SM sem sair do TMS",
+    descricao:
+      "As viagens atribuídas aparecem numa fila com o que será enviado à gerenciadora — placas, motorista e horário. Quando falta alguma coisa, a própria linha diz o quê e onde resolver. Envio de uma por vez, e a viagem continua visível depois, com o número da Pré-SM e o botão de cancelar.",
+    onde: "GR — Pré-SM, no menu de Operação",
+  },
+  {
+    data: "2026-08-26",
+    tipo: "novidade",
+    titulo: "Bloquear um motorista",
+    descricao:
+      "No cadastro do motorista dá para bloqueá-lo, com o motivo escrito. Bloqueado, ele não é escalado em viagem nenhuma — nem pelo diálogo do portal. A lista de bloqueados tem aba própria.",
+    onde: "Motoristas → abrir o cadastro",
+  },
+  {
     data: "2026-08-25",
     tipo: "correcao",
     titulo: "Atribuir pela Minha Programação chega no portal",

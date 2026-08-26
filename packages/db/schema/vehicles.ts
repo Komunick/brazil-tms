@@ -34,9 +34,22 @@ export const vehicles = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    /**
+     * Frota própria não tem transportadora; TODO O RESTO tem (2026-08-25, fatia 026).
+     *
+     * A forma anterior enumerava: `subcontracted ⇒ tem`, `owned ⇒ não tem`. Ao acrescentar
+     * `agregado` e `terceiro` ao enum, esses dois não satisfaziam nenhum dos dois braços — o banco
+     * recusaria toda linha com eles, e a feature quebraria no primeiro `update`, com a migração
+     * tendo passado sem erro.
+     *
+     * Escrito com `<> 'owned'` no lugar da lista, a regra diz a mesma coisa e não precisa mudar de
+     * novo quando surgir um quarto valor. `isOwnershipCarrierValid` (em `packages/shared`) é o
+     * espelho disto e foi reescrito junto — se um enumerar e o outro não, a tela aceita o que o
+     * banco recusa.
+     */
     check(
       "vehicles_ownership_carrier_ck",
-      sql`(${table.ownershipType} = 'subcontracted' AND ${table.carrierId} IS NOT NULL) OR (${table.ownershipType} = 'owned' AND ${table.carrierId} IS NULL)`,
+      sql`(${table.ownershipType} = 'owned' AND ${table.carrierId} IS NULL) OR (${table.ownershipType} <> 'owned' AND ${table.carrierId} IS NOT NULL)`,
     ),
     index("vehicles_carrier_idx").on(table.carrierId),
     index("vehicles_status_idx").on(table.status),

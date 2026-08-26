@@ -41,6 +41,15 @@ export type AuditAction =
   | "trip.portal_accept"
   | "trip.portal_reject"
   | "trip.portal_assign"
+  // 026 — a ponte rota → modelo de Pré-SM. Confirmar AUTORIZA GASTO: a gerenciadora cobra por
+  // solicitação, e uma rota confirmada passa a gerar Pré-SM sozinha. Quem confirmou fica registrado.
+  | "pre_sm.modelo.confirmar"
+  | "pre_sm.modelo.desconfirmar"
+  | "pre_sm.enviar"
+  | "pre_sm.cidade.confirmar"
+  | "pre_sm.cidade.desconfirmar"
+  // O cancelamento de uma Pré-SM já criada — e já cobrada pela gerenciadora.
+  | "pre_sm.cancelar"
   | "trip.create" // newValue = original_plan summary + initial status
   | "trip.plan_update" // accepted customer update to live planned_* fields (per-field prev/new)
   | "trip.fields_update" // the operation's own annotations (solicitação, checklist, SM Raster, CT-e, doca)
@@ -100,6 +109,11 @@ export type AuditAction =
   | "freight_rate.replace"
   // slice 025 — driver/vehicle registry attachments ("Documentos" tab, issue #32). Append-only:
   // one audit row per upload; there is no update/delete surface to audit.
+  // Tirar um motorista de circulação (2026-08-25, a pedido). NÃO é `driver.status_change`: aquele
+  // é o status operacional, e o bloqueio tem campo próprio para não se confundir com o
+  // `status = 'blocked'` que a carga do portal escreve quando o CLIENTE desativa alguém.
+  | "driver.block"
+  | "driver.unblock"
   | "driver.document_upload"
   | "vehicle.document_upload"
   // Removal of a user who never acted (no auditable history — see `deleteUser`). The row is gone,
@@ -185,11 +199,19 @@ export const ALL_AUDIT_ACTIONS = [
   "billing_item.update",
   "billing.export",
   "freight_rate.replace",
+  "driver.block",
+  "driver.unblock",
   "driver.document_upload",
   "vehicle.document_upload",
   "trip.portal_accept",
   "trip.portal_reject",
   "trip.portal_assign",
+  "pre_sm.modelo.confirmar",
+  "pre_sm.modelo.desconfirmar",
+  "pre_sm.enviar",
+  "pre_sm.cidade.confirmar",
+  "pre_sm.cidade.desconfirmar",
+  "pre_sm.cancelar",
 ] as const satisfies readonly AuditAction[];
 
 /**

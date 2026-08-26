@@ -24,7 +24,17 @@ export default async function MinhaProgramacaoPage() {
         <h1 className="text-2xl font-semibold">{t("title")}</h1>
         <p className="text-muted-foreground">{t("subtitle")}</p>
       </header>
-      <MinhaProgramacaoClient />
+      {/*
+        QUEM ESTÁ OLHANDO desce da PÁGINA, e não de uma chamada do navegador (2026-08-26).
+
+        O id serve para uma coisa só: decidir se o botão de apagar aparece no comentário. Quem
+        garante que ninguém apaga o recado de outra pessoa é o servidor, dentro do `where` que
+        apaga — isto aqui é conveniência de tela.
+      */}
+      <MinhaProgramacaoClient
+        userId={session.user.id}
+        podeAtribuir={can(session.user.role, "assign_resources")}
+      />
     </div>
   );
 }

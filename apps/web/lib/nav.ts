@@ -90,6 +90,23 @@ export const NAV_ITEMS: readonly NavItem[] = [
     permission: "assign_resources",
     grupo: "operacao",
   },
+  /**
+   * A aba GR — a Pré-SM da viagem (2026-08-26, fatia 027).
+   *
+   * Fica logo depois da expedição porque é o passo seguinte dela: a viagem é atribuída ali e cai
+   * aqui. Mesma chave (`assign_resources`) porque é a mesma pessoa — a Pré-SM nasce da atribuição
+   * que ela acabou de fazer.
+   *
+   * É tela de OPERAÇÃO, não de administração: as duas telas de conferência de cadastro moram em
+   * Cadastros, esta mora no dia a dia.
+   */
+  {
+    key: "gr",
+    href: "/gr",
+    icon: "ShieldCheck",
+    permission: "assign_resources",
+    grupo: "operacao",
+  },
   // 007 — Exception Management queue (view_all_trips: all 7 internal roles read) + per-customer SLA
   // rules admin (manage_commercial_data: Admin, Ops Manager).
   {
@@ -197,6 +214,34 @@ export const NAV_ITEMS: readonly NavItem[] = [
     key: "lanes",
     href: "/admin/lanes",
     icon: "Route",
+    permission: "manage_commercial_data",
+    grupo: "cadastros",
+  },
+  /**
+   * Modelos de Pré-SM (2026-08-25, fatia 026): a correspondência entre as nossas rotas e os modelos
+   * da gerenciadora Logae.
+   *
+   * Fica logo abaixo de Rotas porque é a mesma pergunta vista de outro lado — qual rota é qual —, e
+   * quem confirma aqui é quem administra a malha lá. Mesma permissão pelo mesmo motivo.
+   */
+  {
+    key: "preSmRotas",
+    href: "/admin/pre-sm-rotas",
+    icon: "ShieldCheck",
+    permission: "manage_commercial_data",
+    grupo: "cadastros",
+  },
+  /**
+   * A conferência das correspondências ESTAÇÃO → CIDADE (2026-08-26, fatia 027).
+   *
+   * Irmã da de cima, e ao lado dela: o `setPreSM` pede o código IBGE das cidades de coleta e de
+   * entrega, e a cidade sai do NOME da estação. Mesma permissão pelo mesmo motivo — é decisão de
+   * cadastro, não de escala.
+   */
+  {
+    key: "preSmCidades",
+    href: "/admin/pre-sm-cidades",
+    icon: "MapPin",
     permission: "manage_commercial_data",
     grupo: "cadastros",
   },

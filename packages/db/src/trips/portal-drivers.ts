@@ -44,6 +44,25 @@ export interface MotoristaDoPortal {
    * que faltava não era o dado, era alguém olhar para ele na hora de escalar.
    */
   licenseExpiry: string | null;
+  /**
+   * O vínculo já classificado deste motorista — `null` quando ninguém classificou ainda (026).
+   *
+   * A gerenciadora Logae exige saber se ele é frota, agregado ou terceiro. O nosso cadastro guarda
+   * `subcontracted` para 405 motoristas, que aqui significa **ainda não classificado** e chega como
+   * `null` — a tela pergunta uma vez, grava, e não pergunta de novo (FR-010).
+   */
+  vinculo: "owned" | "agregado" | "terceiro" | null;
+  /**
+   * O MOTIVO DO BLOQUEIO, ou `null` quando não está bloqueado (2026-08-25, a pedido).
+   *
+   * Bloqueado por NÓS — não confundir com `status = 'blocked'`, que é o portal do cliente tendo
+   * desativado a pessoa. Ver `fleet/driver-block.ts`.
+   *
+   * O motorista bloqueado CONTINUA na lista, riscado (decisão do usuário): sumir faria quem
+   * procura o nome achar que o cadastro se perdeu, e sair procurando o defeito errado. O motivo
+   * vem junto porque é ele que responde "por que não posso escalar esta pessoa".
+   */
+  bloqueio: string | null;
 }
 
 /**
@@ -60,6 +79,8 @@ export async function listarMotoristasDoPortal(limite = 600): Promise<MotoristaD
     trips: string;
     last_seen_at: Date;
     license_expiry: string | null;
+    ownership_type: string | null;
+    bloqueio: string | null;
   }>(sql`
     select distinct on (id_portal)
       id_portal   as portal_driver_id,
@@ -68,7 +89,10 @@ export async function listarMotoristasDoPortal(limite = 600): Promise<MotoristaD
       visto       as last_seen_at,
       -- LEFT JOIN, e nunca INNER: o motorista que ainda não existe no nosso cadastro precisa
       -- continuar aparecendo na lista. Some a validade, não o nome.
-      d.license_expiry::text as license_expiry
+      d.license_expiry::text as license_expiry,
+      d.ownership_type::text as ownership_type,
+      -- O bloqueio vem do MESMO left join: quem não existe no nosso cadastro não está bloqueado.
+      case when d.blocked_at is not null then coalesce(d.blocked_reason, '') end as bloqueio
     from (
       select
         (customer_fields ->> 'ID do motorista (portal)') as id_portal,
@@ -94,8 +118,24 @@ export async function listarMotoristasDoPortal(limite = 600): Promise<MotoristaD
       trips: Number(r.trips),
       lastSeenAt: new Date(r.last_seen_at).toISOString(),
       licenseExpiry: r.license_expiry ?? null,
+      vinculo: comoVinculo(r.ownership_type),
+      bloqueio: r.bloqueio ?? null,
     }))
     .filter((m) => Number.isFinite(m.portalDriverId) && m.portalDriverId > 0)
     .sort((a, b) => b.lastSeenAt.localeCompare(a.lastSeenAt) || b.trips - a.trips)
     .slice(0, limite);
+}
+
+/**
+ * O que o banco guarda → o que a tela entende.
+ *
+ * `subcontracted` vira `null` de propósito: para quem está escalando, ele é AUSÊNCIA de
+ * classificação, não um quarto tipo. Um campo vazio pede resposta; um campo escrito "de fora" não
+ * pede nada, e os 405 motoristas nessa situação nunca seriam classificados.
+ *
+ * Qualquer outro valor inesperado também vira `null` — melhor pedir de novo do que mandar para a
+ * gerenciadora algo que ninguém sabe o que é.
+ */
+function comoVinculo(v: string | null): "owned" | "agregado" | "terceiro" | null {
+  return v === "owned" || v === "agregado" || v === "terceiro" ? v : null;
 }

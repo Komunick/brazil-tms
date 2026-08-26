@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import {
   impedimentoDaAcao,
   impedimentoDaAtribuicao,
@@ -11,7 +11,7 @@ import {
   type PortalAction,
 } from "@brazil-tms/shared";
 import { db } from "../client";
-import { portalCommands, trips } from "../../schema";
+import { drivers, portalCommands, trips } from "../../schema";
 import { writeAudit } from "../audit/write-audit";
 
 /**
@@ -49,7 +49,15 @@ export class OrdemRecusada extends Error {
       | ImpedimentoDaAtribuicao
       | ImpedimentoParaAtribuir
       | "viagem_inexistente"
+      | "motorista_bloqueado"
       | "motivo_invalido",
+    /**
+     * O complemento que a mensagem precisa — hoje, QUEM está bloqueado.
+     *
+     * Numa atribuição com dois motoristas, "um deles está bloqueado" faria a pessoa adivinhar
+     * qual, e a adivinhação erraria metade das vezes.
+     */
+    readonly detalhe?: string,
   ) {
     super(motivo);
     this.name = "OrdemRecusada";
@@ -117,6 +125,44 @@ export async function enfileirarOrdemDoPortal(entrada: {
       .limit(1);
     const v = viagem[0];
     if (!v) throw new OrdemRecusada("viagem_inexistente");
+
+    /**
+     * MOTORISTA BLOQUEADO NÃO ENTRA EM VIAGEM (2026-08-25, a pedido).
+     *
+     * Aqui, e não na rota, por dois motivos. Está DENTRO da transação que trava a viagem, então
+     * não cabe um bloqueio acontecendo entre a checagem e a gravação. E é o ponto por onde toda
+     * atribuição passa — a tela já esconde o bloqueado, mas a tela não é garantia de nada: quem
+     * mantiveste a página aberta desde antes do bloqueio ainda tem o nome na lista.
+     *
+     * A checagem é por id do PORTAL, que é o que o diálogo manda. Quem não existe no nosso
+     * cadastro não pode estar bloqueado, e passa.
+     */
+    if (entrada.action === "assign") {
+      const ids = [entrada.driverId, entrada.secondDriverId]
+        .filter((d): d is number => d != null && Number.isFinite(d))
+        .map((d) => String(d));
+      if (ids.length > 0) {
+        const bloqueados = await tx
+          .select({ name: drivers.name, motivo: drivers.blockedReason })
+          .from(drivers)
+          .where(
+            and(
+              isNotNull(drivers.blockedAt),
+              // `inArray`, e NÃO o template `sql`: o drizzle passa o array como UM parâmetro, não
+              // como lista — a comparação nunca casaria, e a trava deixaria passar todo mundo sem
+              // erro nenhum aparecer.
+              inArray(drivers.portalDriverId, ids),
+            ),
+          );
+        const b = bloqueados[0];
+        if (b) {
+          throw new OrdemRecusada(
+            "motorista_bloqueado",
+            b.motivo ? `${b.name} — ${b.motivo}` : b.name,
+          );
+        }
+      }
+    }
 
     const campos = (v.customerFields ?? {}) as Record<string, string>;
     const abertas = await tx

@@ -152,6 +152,16 @@ export interface LinhaDaProgramacao {
   placa: string | null;
   cpf: string | null;
   telefone: string | null;
+  /**
+   * O PREVISTO — quem VAI dirigir, quando ainda não há atribuição (2026-08-26).
+   *
+   * Vem em branco assim que o portal escala alguém de verdade: a intenção não disputa espaço com
+   * o fato. Quem decide isso é a consulta, não a tela — ver o `case` no SELECT.
+   */
+  previstoMotorista: string | null;
+  previstoPlaca: string | null;
+  /** Quantos recados a viagem tem. É só o número: o texto se lê abrindo a LH. */
+  comentarios: number;
   /** A camada pessoal: cor posta por quem está olhando, e se ela escondeu esta linha. */
   cor: string | null;
   oculta: boolean;
@@ -159,11 +169,30 @@ export interface LinhaDaProgramacao {
 
 export async function readProgramacao(
   userId: string,
-  opcoes: { diasAtras?: number; diasAdiante?: number; regiao?: string | null } = {},
+  opcoes: { diasAtras?: number; diasAdiante?: number; regioes?: readonly string[] } = {},
 ): Promise<LinhaDaProgramacao[]> {
   const diasAtras = opcoes.diasAtras ?? 1;
   const diasAdiante = opcoes.diasAdiante ?? 7;
-  const regiao = opcoes.regiao ?? null;
+  const regioes = (opcoes.regioes ?? []).filter((r) => r.trim() !== "");
+
+  /**
+   * O FILTRO DE FRENTES É MONTADO, NÃO INTERPOLADO COMO ARRAY.
+   *
+   * ``sql`... = any(${lista})` `` NÃO expande array no drizzle — a consulta compila e não casa
+
+   * nada,
+   * em silêncio. Já custou caro uma vez nesta base (o filtro de placas bloqueadas, 2026-08-25).
+   * `sql.join` gera um parâmetro por valor, que é o caminho que o drizzle garante.
+   *
+   * Lista vazia = sem recorte, e não "nenhuma frente": quem não escolheu quer ver tudo.
+   */
+  const filtroDeFrente =
+    regioes.length === 0
+      ? sql`true`
+      : sql`lo.region::text in (${sql.join(
+          regioes.map((r) => sql`${r}`),
+          sql`, `,
+        )})`;
 
   const linhas = await db.execute<{
     trip_id: string;
@@ -186,6 +215,9 @@ export async function readProgramacao(
     telefone: string | null;
     cor: string | null;
     oculta: boolean;
+    previsto_motorista: string | null;
+    previsto_placa: string | null;
+    comentarios: number;
   }>(sql`
     with motorista_do_portal as (
       -- Um SELECT por viagem para achar CPF e telefone seria uma ida ao banco por linha. Aqui o
@@ -215,13 +247,34 @@ export async function readProgramacao(
       m.cpf,
       m.phone as telefone,
       w.cor,
-      coalesce(w.oculta, false) as oculta
+      coalesce(w.oculta, false) as oculta,
+      /*
+        O PREVISTO SÓ APARECE ENQUANTO NÃO HÁ ATRIBUIÇÃO.
+        Assim que o portal escala alguém, a intenção some da linha — mostrar os dois lado a lado
+        obrigaria quem olha a decidir qual vale, e essa dúvida é justamente o que a coluna existe
+        para não criar. A linha continua no banco: se a atribuição cair, o previsto reaparece.
+      */
+      case when nullif(btrim(t.customer_fields ->> 'Motorista (portal)'), '') is null
+           then dpv.name end as previsto_motorista,
+      case when nullif(btrim(t.customer_fields ->> 'Placa (portal)'), '') is null
+           then pv.placa end as previsto_placa,
+      /*
+        Subconsulta correlacionada e não CTE: são no máximo algumas centenas de linhas, cada uma
+        resolvida por "trip_comments_trip_idx". Uma CTE agregando a tabela inteira seria mais
+        trabalho para o banco a cada carga da tela, e a tela carrega sozinha de minuto em minuto.
+      */
+      (select count(*)::int from trip_comments tc
+        where tc.trip_id = t.id and tc.apagado_em is null) as comentarios
     from trips t
     left join locations lo on lo.id = t.origin_location_id
     left join locations ld on ld.id = t.destination_location_id
     left join motorista_do_portal m
       on m.nome = upper(btrim(t.customer_fields ->> 'Motorista (portal)'))
     left join ${userWatchedTrips} w on w.trip_id = t.id and w.user_id = ${userId}
+    left join trip_previsto pv on pv.trip_id = t.id
+    -- O nome sai do cadastro na leitura, nunca de uma copia guardada: "portal_driver_id" e a chave
+    -- estavel, e um nome copiado envelheceria sem que ninguém soubesse de onde veio.
+    left join drivers dpv on dpv.portal_driver_id = pv.portal_driver_id
     where t.planned_pickup_window_start is not null
       -- A janela é em DIAS de calendário, não em horas: "ontem" tem de trazer a viagem das 06h de
       -- ontem, e subtrair 24 horas de agora a deixaria de fora pela manhã.
@@ -232,7 +285,7 @@ export async function readProgramacao(
       -- Encerrada e cancelada saem: a programação é sobre o que ainda vai acontecer ou acabou de
       -- acontecer, e a planilha também não guarda o que morreu.
       and t.current_status not in ('cancelled', 'billing_pending', 'billing_ready', 'billed')
-      and (${regiao}::text is null or lo.region::text = ${regiao})
+      and ${filtroDeFrente}
     order by t.planned_pickup_window_start, t.external_trip_id
   `);
 
@@ -256,7 +309,14 @@ export async function readProgramacao(
     cpf: r.cpf,
     telefone: r.telefone,
     cor: r.cor,
+
     oculta: r.oculta,
+
+    previstoMotorista: r.previsto_motorista,
+
+    previstoPlaca: r.previsto_placa,
+
+    comentarios: Number(r.comentarios ?? 0),
   }));
 }
 

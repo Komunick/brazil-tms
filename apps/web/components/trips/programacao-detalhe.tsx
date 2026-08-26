@@ -7,6 +7,9 @@ import { ExternalLink } from "lucide-react";
 import type { TripStatus, VehicleType } from "@brazil-tms/shared";
 import { useTripDetail } from "@/lib/trips/client";
 import { PortalAssignDialog } from "@/components/trips/portal-assign-dialog";
+import { PreSmStatus } from "@/components/trips/pre-sm-status";
+import { PrevistoDaViagem } from "@/components/trips/previsto-da-viagem";
+import { ComentariosDaViagem } from "@/components/trips/comentarios-da-viagem";
 import { HistoricoDoMotorista } from "@/components/trips/historico-do-motorista";
 import { TimelineSection } from "@/components/trips/trip-detail/timeline";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
@@ -64,10 +67,16 @@ export function ProgramacaoDetalhe({
   tripId,
   aberto,
   aoFechar,
+  userId,
+  podeAtribuir: podeMexerNoPrevisto,
 }: {
   tripId: string | null;
   aberto: boolean;
   aoFechar: () => void;
+  /** Quem está olhando — só para decidir se o botão de apagar aparece no próprio comentário. */
+  userId: string;
+  /** `assign_resources`: prever é o passo anterior a escalar, e é a mesma pessoa. */
+  podeAtribuir: boolean;
 }) {
   const t = useTranslations("Programacao");
   const tDetalhe = useTranslations("Trips.detail");
@@ -170,9 +179,37 @@ export function ProgramacaoDetalhe({
               />
             ) : null}
 
+            {/*
+              O PREVISTO FICA JUNTO DA ATRIBUIÇÃO, e acima de tudo o mais (2026-08-26).
+
+              É a mesma decisão vista de dois momentos: antes de a ordem sair, o que se pretende;
+              depois, o que foi escalado. Pôr o previsto lá embaixo faria alguém prever de novo uma
+              viagem que já tem motorista, porque a resposta estaria fora da primeira tela.
+
+              Ele NÃO aparece quando já há atribuição — a mesma régua da linha da programação, e
+              pela mesma razão: intenção não disputa espaço com fato.
+            */}
+            {podeAtribuir && !viagem.currentAssignment ? (
+              <PrevistoDaViagem tripId={viagem.id} podeMexer={podeMexerNoPrevisto} />
+            ) : null}
+
+            {/* A Pré-SM fica ACIMA da linha do tempo: ela é sobre o que vai acontecer (a escolta
+                da viagem que está sendo escalada), e a linha do tempo é sobre o que já aconteceu.
+                E quando ela NÃO foi criada, o motivo é acionável agora — não daqui a três dias. */}
+            <PreSmStatus tripId={viagem.id} />
+
             <section aria-label={tDetalhe("timeline")}>
               <TimelineSection trip={viagem} />
             </section>
+
+            {/*
+              OS COMENTÁRIOS FICAM POR ÚLTIMO, e é onde eles servem.
+
+              Quem abre a janela vem decidir alguma coisa — onde a viagem está, quem vai dirigir.
+              O recado é o que se lê DEPOIS de ver os fatos, e o que se escreve depois de agir. No
+              topo, empurraria a linha do tempo para fora da tela em toda viagem que tem conversa.
+            */}
+            <ComentariosDaViagem tripId={viagem.id} userId={userId} />
           </div>
         ) : null}
       </DialogContent>

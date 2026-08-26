@@ -73,53 +73,51 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/025-resource-documents/plan.md` (Documents Tab for Drivers and Vehicles — issue #32 [0009]).
-**Slice novo domínio enxuto**: aba "Documentos" nas páginas de EDIÇÃO de motorista/veículo — histórico append-only de
-anexos (CNH digital, photocheck, CRLV…) sobre a tubulação de storage da 008. Tabela nova `resource_documents`
-(metadata; entity_type CHECK driver|vehicle extensível; binário SÓ no bucket privado `documents`, prefixo
-`resources/<tipo>/<id>/<docId>.<ext>` via `resourceDocumentStorageKey`). TRAPS: (1) NÃO tocar a tabela/rotas 008
-(`documents` é trip-scoped com verificação/billing — domínio shipped); (2) validar tipo (PDF/JPG/PNG) + tamanho
-(`DOCUMENT_MAX_BYTES`) e preflight do pai (existe + não arquivado → senão 404/409) ANTES do `putDocument`; rollback do
-binário se o insert falhar; (3) TERCEIRA migração `0009` em voo (PRs #39/#40 têm as suas) — renumerar no merge, nunca
-antes; (4) `driver-detail-client.tsx` também é editado pelo PR #39 — manter a edição das tabs cirúrgica. Permissão:
-`manage_fleet_data` em tudo (upload/list/download; sem chave nova). Tipos de documento = TEXTO LIVRE ≤60 com sugestões
-por entidade na UI (sem config nova — KISS; promover a master se o negócio pedir). Sem delete/replace: histórico é o
-pedido. Dep nova justificada: `@radix-ui/react-tabs` (shadcn tabs — a issue pede "aba"; mesma família Radix). Download
-= rota **302-redirect** para signed URL 60s + `<a target="_blank">` simples (padrão do error-report da 004; NUNCA
-`{url}`+`window.open` pós-await — popup block silencioso). Insert re-checa o pai com `FOR UPDATE` na mesma tx (guarda
-contra corrida com arquivamento; preflight da rota roda antes do upload do binário). Harness local sem Docker:
-mock-gotrue.mjs (fora do repo, .local) ganha endpoints mínimos de Storage p/ e2e completo. Fora de escopo: reboques, verificação, master de tipos, vínculo com
-validade (leitor 021).
+Active feature plan: `specs/027-aba-gr/plan.md` (a aba GR — a Pré-SM feita por uma pessoa, depois da
+atribuição). O desenho e as decisões de uso em `docs/PROPOSTA-ABA-GR.md`; as sete decisões difíceis
+em `specs/027-aba-gr/research.md`; a API inteira em `docs/INTEGRA-14.2-REFERENCIA.md`.
 
-Previous slice (015) context:
-Collapse Validation Statuses into "Recebida".
-For technologies, project structure, BFF/auth patterns, data model, contracts, and setup/test commands,
-read that plan and its `research.md`, `data-model.md`, `contracts/`, and `quickstart.md`.
-This is a **corrective, cross-cutting** change to the trip status machine that **references** shipped slices 003 (status
-machine), 004 (import+validation), 006 (dispatch/assignment), 013 (predefined import template), 014 (auto-validate) — it
-**supersedes 014's born-`validated`** decision and does **not** edit shipped specs; it **amends** `docs/PRD.md`
-(§7, §9.1, §11.2/11.3/11.4, §12, §12.1, §19.1, §30). Constitution is **not** amended. **Scope (narrowed with the user
-2026-06-07)**: collapse ONLY the three validation states — `received` ("Recebida"), `validation_error` ("Erro de
-validação"), `validated` ("Validada") — into a single `received`. Remove `validation_error` + `validated` from the
-**active** machine (18 → **16** values); `received` becomes the first dispatchable status. The `confirmed` step and
-EVERYTHING `assigned`/`confirmed`-onward are **OUT OF SCOPE and UNCHANGED**. **Transitions**: `received → [assigned,
-cancelled]`; `assigned → [confirmed, received, cancelled]` (`received` = unassign, was `validated`); delete the
-`validation_error`/`validated` rows; `confirmed`-onward unchanged. `ACTIVE_TRIP_STATUSES` 12 → 10; `NON_EDITABLE` stays 6
-(partition 10+6=16). **DB enum stays at 18 (2 dormant)** — Postgres has no `DROP VALUE`; keep `validation_error`/`validated`
-in the `trip_status` pgEnum (frozen by 0002 + immutable `trip_events` history), mark them dormant, and **pin the Drizzle
-columns** `trips.current_status` + `trips.disputed_from_status` to the 16-value `TripStatus` via `.$type<TripStatus>()`
-(type-only, no SQL diff). **One durable add**: data-only migration **0008** (`--custom`) backfilling
-`current_status`/`disputed_from_status` ∈ {validated, validation_error} → `received` (FR-006); `trip_events` left intact.
-**Born-received**: REVERT 014 — drop `createTrip`'s `initialStatus` param; the two `confirm-import` create sites born
-`received`; manual-create already `received`. **Dispatch/assign**: `DISPATCH_QUERY` `status=validated` → `status=received`;
-`assignTrip` source guard + event/audit `validated` → `received`; `unassignTrip` target `assigned → received`; BFF assign
-branch key `validated` → `received`; `ASSIGNABLE_STATUSES`/quick-assign gate `received`; `trip-status-badge` + pt-BR drop
-the 2 keys; unassign dialog copy → "Recebida". **CRITICAL TRAPS**: (1) `import_batch_status` is a SEPARATE enum that ALSO
-has `validated`/`confirming` — NEVER blind find-replace `'validated'`; batch `setBatchStatus("validated")` and all
-`importBatches.status` refs STAY. (2) Several tests/e2e assert the OLD design and must **INVERT**, not just re-seed
-(dispatch-board "received excluded" → included; trip-import "Validada" → "Recebida"; delete the born-validated unit test).
-(3) `trip-plan.ts indexOf("confirmed")` stays valid (`confirmed` retained) — the full-collapse landmine does NOT arise here.
-**Restart the pg-boss worker** after editing `confirm-import` (stale worker masks the fix; the `trip.create` audit born
-status is the tell). Out of scope (Future): removing `confirmed`/the confirm step; any new status; SLA redesign; touching
-`import_batch_status`; a manual "Validar" UI.
+**A 026 está no `dev` e NÃO deve ser promovida como está.** Ela cria a Pré-SM sozinha via
+`setPreSMdeModelo`, e a gerenciadora respondeu por escrito em 25/08: **"Tem que ser pelo setPreSM"**.
+A 027 substitui esse miolo. O resto da 026 sobrevive inteiro e **não se reescreve**.
+
+**O que a fatia faz**: a LH atribuída cai numa aba **GR**. A linha mostra o que será enviado (placas,
+motorista, vínculos, janela de coleta) e o que falta, com o botão travado enquanto faltar. Envio
+**uma por uma**, sem lote. Depois de enviada a viagem **fica** na aba, em seção separada, com o
+código e o cancelamento.
+
+**O QUE NÃO SE REESCREVE** (tudo já no `dev`): o vínculo A/F/T e as migrações `0046`/`0047` · a
+tabela `trip_pre_sm` e seus estados, incluindo `nao_tentada` · o índice único parcial · o
+cancelamento (`setCancelaPreSM`, job + botão) · o aviso de divergência · a tela de conferência de
+correspondências · o cliente da Integra em `workers/lib/integra/cliente.ts`.
+
+**O que SOME**: `setPreSMdeModelo` e `getModelosPreSM` no cliente · o job `pre_sm.carregar_modelos` ·
+a coluna `cod_modelo`.
+
+**ARMADILHAS desta fatia** — as cinco que quebram de verdade:
+
+1. **Não reescrever a 026.** A tabela do plano diz o que sobrevive. Refazer é retrabalho e risco.
+2. **`drizzle-kit generate` NÃO serve aqui.** O journal tem 49 entradas e 27 snapshots: ele diffa
+   contra o `0024` e **recria tabelas de produção**. Migração escrita à mão, sempre.
+3. **Reusar `tokensDaEstacao`, nunca escrever um segundo normalizador.** A função nova
+   (`ufECidadeDaEstacao`) devolve o que aquela descarta. Dois normalizadores divergem **em
+   silêncio** — a estação não casa e nenhum erro aparece.
+4. **Hora de São Paulo, nunca UTC.** A gerenciadora agenda escolta em hora local; mandar UTC desloca
+   toda coleta em três horas, **passa em teste**, e só aparece na estrada.
+5. **`subcontracted` não tem letra A/F/T.** Significa "ainda não classificado" — 1.246 veículos e
+   405 motoristas estão assim. Vira motivo de bloqueio, nunca um chute.
+
+**A PENDÊNCIA, com dono**: não se sabe como o `setPreSM` amarra a Pré-SM à programação que a Logae já
+tem do portal — **não há campo de código de programação em nenhum método de criação**, conferido na
+referência. Pergunta em aberto com a gerenciadora. Isso **não bloqueia as etapas 1 a 4**; o formato
+do corpo fica isolado em `packages/shared/src/domain/pre-sm-corpo.ts`, e é o único lugar que muda
+quando a resposta chegar.
+
+**Validar sem gastar**: não há homologação (`CodErro 100`, medido) e a gerenciadora **cobra por
+solicitação**. `getCidades`, `getRotas`, `getCliente` e `getTabela` são leitura e não custam — dá
+para carregar tudo e olhar a aba com dados reais antes de existir botão que gaste.
+
+**Fora de escopo**: efetivar (`setEfetivaPreSM`) · envio em lote · alterar Pré-SM quando a atribuição
+muda (só avisa) · cancelamento automático ao cancelar a viagem · documentos, ajudante e temperatura ·
+criar programação na Logae · ligar a criação automática.
 <!-- SPECKIT END -->

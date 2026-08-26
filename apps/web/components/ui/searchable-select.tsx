@@ -26,7 +26,14 @@ import { normalizeForSearch, type SearchMode } from "@/lib/search-normalize";
 export interface SearchableSelectProps {
   id: string;
   value: string;
-  options: { id: string; label: string }[];
+  /**
+   * Uma opção pode vir IMPEDIDA — aparece na lista, riscada, e não dá para escolher.
+   *
+   * Some da lista seria pior: quem procura o nome e não o acha conclui que o cadastro se perdeu e
+   * vai procurar o defeito errado. Riscado, com o `hint` dizendo por quê, a pessoa entende na
+   * hora. (2026-08-25, para o bloqueio de motorista.)
+   */
+  options: { id: string; label: string; disabled?: boolean; hint?: string }[];
   onChange: (value: string) => void;
   placeholder: string;
   emptyText: string;
@@ -68,7 +75,7 @@ export function SearchableSelect({
     () =>
       clearable && clearLabel
         ? [{ id: CLEAR, label: clearLabel }, ...filtered]
-        : (filtered as { id: string; label: string }[]),
+        : filtered,
     [clearable, clearLabel, filtered],
   );
 
@@ -104,6 +111,9 @@ export function SearchableSelect({
   }
 
   function pick(rowId: string) {
+    // A recusa mora AQUI, e não só no clique: o teclado chega ao mesmo lugar, e uma verificação
+    // por caminho é uma verificação que o próximo caminho esquece.
+    if (rows.find((r) => r.id === rowId)?.disabled) return;
     onChange(rowId === CLEAR ? "" : rowId);
     close();
   }
@@ -181,15 +191,23 @@ export function SearchableSelect({
                 id={`${id}-opt-${index}`}
                 role="option"
                 aria-selected={row.id === value || (row.id === CLEAR && !value)}
-                className={`cursor-pointer rounded-sm px-2 py-1.5 text-sm ${
-                  index === activeIndex ? "bg-accent text-accent-foreground" : ""
-                } ${row.id === CLEAR ? "text-muted-foreground" : ""}`}
+                aria-disabled={row.disabled ? true : undefined}
+                className={`rounded-sm px-2 py-1.5 text-sm ${
+                  row.disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                } ${index === activeIndex && !row.disabled ? "bg-accent text-accent-foreground" : ""} ${
+                  row.id === CLEAR ? "text-muted-foreground" : ""
+                }`}
                 // preventDefault on mousedown so the input's blur doesn't close the list pre-click.
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => pick(row.id)}
                 onMouseEnter={() => setActiveIndex(index)}
               >
-                {row.label}
+                <span className={row.disabled ? "line-through" : undefined}>{row.label}</span>
+                {/* O motivo vai junto da linha: sem ele, "riscado" só diz que não pode, e a
+                    pessoa fica sem saber o que fazer a respeito. */}
+                {row.hint ? (
+                  <span className="ml-2 text-xs text-muted-foreground">{row.hint}</span>
+                ) : null}
               </li>
             ))
           )}

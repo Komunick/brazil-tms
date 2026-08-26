@@ -29,7 +29,17 @@ export const dynamic = "force-dynamic";
 const consultaSchema = z.object({
   diasAtras: z.coerce.number().int().min(0).max(30).optional(),
   diasAdiante: z.coerce.number().int().min(0).max(30).optional(),
-  regiao: z.string().trim().max(40).optional(),
+  /**
+   * ATÉ DUAS FRENTES (2026-08-26, a pedido).
+   *
+   * Vazio = todas, e não "nenhuma": quem não escolheu quer ver tudo. O teto de duas é da tela e
+   * está repetido aqui porque o servidor não pode confiar no que a tela mandou — uma URL curiosa
+   * com as três frentes não deve custar mais consulta que o filtro oferece.
+   *
+   * São só três frentes cadastradas (NONE, SULCO, SUDESTE), então duas é "tudo menos uma" — que é
+   * exatamente o recorte que a operação pediu.
+   */
+  regioes: z.array(z.string().trim().max(40)).max(2).optional(),
 });
 
 /**
@@ -49,17 +59,18 @@ export async function GET(request: Request): Promise<NextResponse> {
     const ctx = await requireAuth();
     requirePermission(ctx, "view_all_trips");
     const params = new URL(request.url).searchParams;
-    const { diasAtras, diasAdiante, regiao } = consultaSchema.parse({
+    const { diasAtras, diasAdiante, regioes } = consultaSchema.parse({
       diasAtras: params.get("diasAtras") ?? undefined,
       diasAdiante: params.get("diasAdiante") ?? undefined,
-      regiao: params.get("regiao") ?? undefined,
+      // Repetido na query (`?regioes=NONE&regioes=SULCO`) e não separado por vírgula: é o que
+      // `URLSearchParams` já sabe montar e ler, sem inventar um formato para escapar depois.
+      regioes: params.getAll("regioes").filter((r) => r !== ""),
     });
     return NextResponse.json({
       linhas: await readProgramacao(ctx.userId, {
         diasAtras,
         diasAdiante,
-        // "" é o filtro "Geral" da tela, e não uma região chamada vazio.
-        regiao: regiao && regiao !== "" ? regiao : null,
+        regioes,
       }),
     });
   } catch (error) {

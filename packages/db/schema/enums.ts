@@ -31,7 +31,30 @@ export const resourceStatus = pgEnum("resource_status", [
   "blocked",
 ]);
 
-export const ownershipType = pgEnum("ownership_type", ["owned", "subcontracted"]);
+/**
+ * O VÍNCULO DO RECURSO — quatro valores no banco, TRÊS em uso (2026-08-25, fatia 026).
+ *
+ * A gerenciadora Logae exige, em toda solicitação de monitoramento, dizer o que é cada veículo,
+ * carreta e motorista: frota própria (`F`), agregado (`A`) ou terceiro/autônomo (`T`). O TMS
+ * distinguia só "nosso" de "de fora", o que resolvia o `F` e deixava os outros dois juntos.
+ *
+ * ── `subcontracted` FICA, DORMENTE ────────────────────────────────────────────────────────────
+ *
+ * Postgres não remove valor de enum, e é ele que 1.246 veículos, as carretas e 405 motoristas
+ * carregam hoje. Mesma situação de `validation_error`/`validated` no `trip_status` na 015, e mesma
+ * saída: o valor existe no banco, fica FORA do tipo TypeScript (`OwnershipType`), e as colunas são
+ * fixadas ao tipo restrito com `.$type<>()`.
+ *
+ * No código ele significa **"ainda não classificado"** — nunca erro. Não houve mutirão de cadastro:
+ * a classificação acontece pelo uso, quando o recurso aparece numa atribuição. Tratá-lo como
+ * irregularidade faria a tela acusar quase todo o cadastro.
+ */
+export const ownershipType = pgEnum("ownership_type", [
+  "owned",
+  "subcontracted",
+  "agregado",
+  "terceiro",
+]);
 
 export const vehicleType = pgEnum("vehicle_type", [
   "van",

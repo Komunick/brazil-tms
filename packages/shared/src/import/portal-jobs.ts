@@ -17,3 +17,67 @@ export type PortalWithdrawnPayload = Record<string, never>;
 export interface PortalJobPayloads {
   "portal.withdrawn": PortalWithdrawnPayload;
 }
+
+/**
+ * A criação da Pré-SM na gerenciadora Logae (2026-08-25, fatia 026).
+ *
+ * Ao contrário da varredura acima, este é ENFILEIRADO por evento: quando a ordem de atribuição volta
+ * confirmada do portal do cliente. É o único momento em que a atribuição existe dos dois lados e
+ * todos os campos estão disponíveis — antes disso, criar a Pré-SM de uma atribuição que o portal
+ * ainda pode recusar geraria escolta contratada para viagem que ninguém vai fazer.
+ */
+export const PRE_SM_JOBS = {
+  preSmCriar: "pre_sm.criar",
+  preSmCancelar: "pre_sm.cancelar",
+  preSmCarregarCadastro: "pre_sm.carregar_cadastro",
+} as const;
+
+export type PreSmJobName = (typeof PRE_SM_JOBS)[keyof typeof PRE_SM_JOBS];
+
+export interface PreSmCriarPayload {
+  tripId: string;
+  /** A ordem do portal que originou isto — é o que liga a Pré-SM à decisão que a pediu. */
+  portalCommandId: string;
+}
+
+export interface PreSmJobPayloads {
+  "pre_sm.criar": PreSmCriarPayload;
+  "pre_sm.cancelar": PreSmCancelarPayload;
+  "pre_sm.carregar_cadastro": PreSmCarregarCadastroPayload;
+}
+
+/**
+ * O CANCELAMENTO da Pré-SM (2026-08-25, fatia 026).
+ *
+ * Job separado, e não uma chamada direta do BFF, pela mesma regra que vale para a criação: a
+ * credencial da gerenciadora vive **só no worker**. Uma rota do app web que chamasse a Integra
+ * exigiria a senha de produção dentro do Next, e a constituição não permite.
+ *
+ * O efeito prático para quem clica: o botão pede, e o estado vira `cancelada` quando o worker
+ * confirma — não no instante do clique. É honesto, porque quem cancela de verdade é ela.
+ */
+export interface PreSmCancelarPayload {
+  tripPreSmId: string;
+  /** Quem pediu — vai para a auditoria do lado de cá. */
+  actorUserId: string;
+}
+
+/**
+ * A CARGA DO CADASTRO DA GERENCIADORA — CIDADES E ROTAS (2026-08-25, fatia 026).
+ *
+ * Consulta os modelos de Pré-SM cadastrados na gerenciadora, casa com as nossas rotas e grava as
+ * propostas — todas **por confirmar**. Não cria Pré-SM nenhuma e não gasta nada: `getModelosPreSM`
+ * é leitura, e a gerenciadora cobra por solicitação, não por consulta.
+ *
+ * É job pela mesma regra da criação e do cancelamento: a credencial vive só no worker. Sem isto, a
+ * tela de conferência nasce vazia e não há como preenchê-la — que era exatamente o estado da fatia
+ * antes desta peça.
+ *
+ * `diasParaTras` limita quais rotas entram NESTA rodada — as que rodaram no período. A tabela
+ * acumula entre rodadas, então uma rota sazonal entra quando voltar a aparecer.
+ */
+export interface PreSmCarregarCadastroPayload {
+  /** Quem pediu. Só para o log: é a resposta de "quem mandou rodar isso" quando alguém estranhar. */
+  pedidoPor: string;
+  diasParaTras?: number;
+}

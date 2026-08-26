@@ -8,6 +8,12 @@ export * from "./domain/trip-display-status";
 export * from "./domain/fleet-alerts";
 export * from "./domain/portal-acceptance";
 export * from "./domain/portal-assignment";
+// O vínculo que a gerenciadora Logae exige, e o que o dono do veículo sugere (026).
+export * from "./domain/pre-sm";
+// O casamento rota → modelo de Pré-SM, com as quatro tolerâncias de nome de estação (026).
+export * from "./domain/pre-sm-modelos";
+export * from "./domain/pre-sm-cadastro";
+export * from "./domain/pre-sm-corpo";
 export * from "./domain/region";
 export * from "./domain/assignment-eligibility";
 export * from "./domain/sla-risk";

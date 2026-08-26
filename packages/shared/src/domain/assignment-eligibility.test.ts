@@ -301,6 +301,9 @@ describe("DEFAULT_ASSIGNMENT_POLICY (data-model.md §3.2 — verbatim)", () => {
   const expected: Record<string, string> = {
     driver_inactive: "block",
     driver_blocked: "block",
+    // Bloqueio NOSSO, separado do `driver_blocked` que vem do status do portal do cliente
+    // (2026-08-25). Os dois barram, mas mandam a pessoa a lugares diferentes para resolver.
+    driver_blocked_here: "block",
     driver_unavailable: "warn",
     vehicle_inactive: "block",
     vehicle_blocked: "block",
@@ -351,5 +354,80 @@ describe("requiredResourcesFor (data-model.md §3.3, research §9)", () => {
 describe("ASSIGNMENT_TURNAROUND_BUFFER_MINUTES default", () => {
   it("is 0 (spec Blocked #6 documented default)", () => {
     expect(ASSIGNMENT_TURNAROUND_BUFFER_MINUTES).toBe(0);
+  });
+});
+
+/**
+ * O BLOQUEIO DE MOTORISTA (2026-08-25, a pedido).
+ *
+ * Bloquear tira alguém de circulação: enquanto bloqueado, ninguém o escala em viagem nenhuma.
+ *
+ * ── POR QUE UM CÓDIGO SEPARADO DE `driver_blocked` ────────────────────────────────────────────
+ *
+ * `driver_blocked` vem do `status = 'blocked'`, que significa "o portal do CLIENTE desativou ou
+ * suspendeu esta pessoa" — havia oito assim em produção no dia em que isto foi escrito.
+ *
+ * Os dois impedem a viagem, mas mandam a pessoa a lugares diferentes: um se resolve desbloqueando
+ * no nosso cadastro, o outro só com o cliente. Uma mensagem única faria metade das pessoas ir
+ * bater na porta errada.
+ */
+describe("motorista bloqueado por nós", () => {
+  const base = {
+    trip: { plannedVehicleType: null, windowStart: null, windowEnd: null },
+    overlaps: [],
+    now: new Date("2026-08-25T12:00:00Z"),
+  };
+
+  it("bloqueia a atribuição, e não dá para passar por cima", () => {
+    const findings = evaluateAssignmentEligibility(
+      {
+        ...base,
+        driver: { id: "d1", status: "active", licenseExpiry: null, blocked: true },
+      },
+      DEFAULT_ASSIGNMENT_POLICY,
+    );
+    const f = findings.find((x) => x.code === "driver_blocked_here");
+    expect(f).toBeDefined();
+    expect(f!.severity).toBe("block");
+  });
+
+  it("motorista ativo e não bloqueado não gera achado nenhum de status", () => {
+    const findings = evaluateAssignmentEligibility(
+      {
+        ...base,
+        driver: { id: "d1", status: "active", licenseExpiry: null, blocked: false },
+      },
+      DEFAULT_ASSIGNMENT_POLICY,
+    );
+    expect(findings.filter((x) => x.check === "resource_status")).toEqual([]);
+  });
+
+  /**
+   * O caso que justifica os dois códigos existirem.
+   *
+   * Alguém pode estar bloqueado por nós E desativado pelo cliente ao mesmo tempo. Os dois achados
+   * aparecem, porque resolver um não resolve o outro — e mostrar só um faria a pessoa desbloquear
+   * aqui, tentar de novo, e bater na segunda parede sem entender por quê.
+   */
+  it("bloqueado aqui E desativado pelo cliente acusa os dois", () => {
+    const findings = evaluateAssignmentEligibility(
+      {
+        ...base,
+        driver: { id: "d1", status: "blocked", licenseExpiry: null, blocked: true },
+      },
+      DEFAULT_ASSIGNMENT_POLICY,
+    );
+    const codigos = findings.map((f) => f.code);
+    expect(codigos).toContain("driver_blocked_here");
+    expect(codigos).toContain("driver_blocked");
+  });
+
+  /** `blocked` ausente é "não bloqueado" — o caminho de quem ainda não passou pela coluna nova. */
+  it("sem o campo, ninguém está bloqueado", () => {
+    const findings = evaluateAssignmentEligibility(
+      { ...base, driver: { id: "d1", status: "active", licenseExpiry: null } },
+      DEFAULT_ASSIGNMENT_POLICY,
+    );
+    expect(findings.map((f) => f.code)).not.toContain("driver_blocked_here");
   });
 });

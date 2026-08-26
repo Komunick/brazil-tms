@@ -8,6 +8,9 @@ import { registerSlaSweep } from "./sla-sweep";
 import { registerDocumentChecks } from "./document-checks";
 import { registerBillingExport } from "./billing-export";
 import { registerPortalWithdrawn } from "./portal-withdrawn";
+import { registerPreSmCriar } from "./pre-sm";
+import { registerPreSmCancelar } from "./pre-sm/cancelar";
+import { registerPreSmCarregarCadastro } from "./pre-sm/carregar-cadastro";
 
 /**
  * Registry of import job handlers (feature 004, research R3). The bootstrap (`workers/index.ts`)
@@ -37,4 +40,32 @@ export async function registerJobHandlers(boss: PgBoss): Promise<void> {
   await registerBillingExport(boss);
   // 2026-08-18: o TERCEIRO job agendado — a varredura das viagens que o cliente retirou do portal.
   await registerPortalWithdrawn(boss);
+  /**
+   * 2026-08-25 (026): a Pré-SM na gerenciadora Logae.
+   *
+   * ENFILEIRADO POR EVENTO, não agendado — ao contrário dos três acima. A ordem de atribuição
+   * voltando confirmada do portal é o único momento em que a atribuição existe dos dois lados e
+   * todos os campos estão disponíveis.
+   *
+   * Nasce DESLIGADO por variável de ambiente, com teto diário em zero: a gerenciadora cobra por
+   * solicitação e não tem homologação para nós. Ver `pre-sm/index.ts`.
+   */
+  await registerPreSmCriar(boss);
+  /**
+   * O cancelamento é job pelo mesmo motivo da criação: a credencial da gerenciadora vive só aqui.
+   *
+   * E ele entra na MESMA fatia da criação, não numa seguinte — sem ambiente de homologação, é a
+   * única forma de desfazer uma Pré-SM criada por engano, e ela já foi cobrada.
+   */
+  await registerPreSmCancelar(boss);
+  /**
+   * A carga do cadastro da gerenciadora é PEDIDA pela tela, não agendada.
+   *
+   * Só faz sentido rodá-la quando alguém vai conferir o resultado: uma carga automática encheria
+   * as listas de propostas que ninguém olharia, e proposta não conferida não cria Pré-SM nenhuma.
+   *
+   * Leitura pura — não cria nada na gerenciadora e não custa. Por isso NÃO olha o interruptor da
+   * criação: é o preparo que precisa acontecer antes de ligá-lo.
+   */
+  await registerPreSmCarregarCadastro(boss);
 }

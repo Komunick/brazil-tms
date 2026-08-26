@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { CreateDriverInput } from "@brazil-tms/shared";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ExpiryCell } from "@/components/master-data/expiry-cell";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,6 +34,14 @@ export function DriversClient({ canArchive }: { canArchive: boolean }) {
   const tMaster = useTranslations("MasterData");
   const queryClient = useQueryClient();
 
+  /**
+   * QUAL ABA — todos ou só os bloqueados (2026-08-25, a pedido).
+   *
+   * Filtro sobre a mesma lista, e não uma consulta separada: o bloqueio já vem no DTO, e uma
+   * segunda rota teria o seu próprio momento de carregamento — a aba pareceria vazia por um
+   * instante toda vez, que é exatamente o que faz alguém achar que perdeu um cadastro.
+   */
+  const [aba, setAba] = useState<"todos" | "bloqueados">("todos");
   const [search, setSearch] = useState("");
   const [includeArchived, setIncludeArchived] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -77,15 +86,18 @@ export function DriversClient({ canArchive }: { canArchive: boolean }) {
   const filtered = useMemo(() => {
     // Name matches accent-insensitively; the phone is stored as bare digits, so the typed term is
     // compared by ITS digits — "(11) 99999" still finds 11999998888.
+    const base = aba === "bloqueados" ? rows.filter((d) => d.blockedAt != null) : rows;
     const term = normalizeForSearch(search);
-    if (!term) return rows;
+    if (!term) return base;
     const digits = normalizeForSearch(search, "digits");
-    return rows.filter(
+    return base.filter(
       (d) =>
         normalizeForSearch(d.name).includes(term) ||
         (digits.length > 0 && (d.phone ?? "").includes(digits)),
     );
-  }, [rows, search]);
+  }, [rows, search, aba]);
+
+  const bloqueados = rows.filter((d) => d.blockedAt != null).length;
 
   const columns: ColumnDef<DriverDto>[] = [
     { accessorKey: "name", header: () => t("name") },
@@ -97,7 +109,15 @@ export function DriversClient({ canArchive }: { canArchive: boolean }) {
     {
       id: "_opStatus",
       header: () => tResources("status"),
-      cell: ({ row }) => <Badge variant="secondary">{tStatus(row.original.status)}</Badge>,
+      // O bloqueio ganha do status operacional na coluna: é a informação que muda o que dá para
+      // fazer com a pessoa. Mostrar "Ativo" para quem está bloqueado seria dizer o contrário do
+      // que vale.
+      cell: ({ row }) =>
+        row.original.blockedAt ? (
+          <Badge variant="destructive">{t("block.badge")}</Badge>
+        ) : (
+          <Badge variant="secondary">{tStatus(row.original.status)}</Badge>
+        ),
     },
     {
       id: "_expiry",
@@ -131,6 +151,17 @@ export function DriversClient({ canArchive }: { canArchive: boolean }) {
           {feedback}
         </p>
       ) : null}
+
+      {/* O número na aba é o tamanho do problema. Sem ele, saber se há alguém bloqueado exigiria
+          clicar — e ninguém clica numa aba que parece vazia. */}
+      <Tabs value={aba} onValueChange={(v) => setAba(v as "todos" | "bloqueados")}>
+        <TabsList>
+          <TabsTrigger value="todos">{t("block.abaTodos")}</TabsTrigger>
+          <TabsTrigger value="bloqueados">
+            {t("block.abaBloqueados", { n: bloqueados })}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <MasterDataTable
         rows={filtered}

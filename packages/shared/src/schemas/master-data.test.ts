@@ -9,6 +9,7 @@ import {
   createTrailerSchema,
   createVehicleSchema,
   isOwnershipCarrierValid,
+  precisaClassificarVinculo,
   plateSchema,
   ufSchema,
   updateCustomerSchema,
@@ -119,6 +120,31 @@ describe("ownership/carrier invariant (US3/US4)", () => {
       true,
     );
     expect(isOwnershipCarrierValid({})).toBe(true); // partial update, ownership absent
+  });
+
+  /**
+   * Os dois valores da 026, e o motivo do teste existir.
+   *
+   * A regra foi reescrita de "enumerar quem precisa de transportadora" para "`owned` não precisa,
+   * o resto precisa". Para `owned` e `subcontracted` o resultado é idêntico — foi por isso que
+   * TODOS os testes continuaram passando depois da mudança, e é justamente por isso que estes
+   * casos precisam existir: sem eles, alguém volta à forma enumerada sem nada quebrar, e aí
+   * `agregado` e `terceiro` passam a ser recusados em silêncio.
+   */
+  it("agregado e terceiro seguem a mesma regra: precisam de transportadora", () => {
+    expect(isOwnershipCarrierValid({ ownershipType: "agregado" })).toBe(false);
+    expect(isOwnershipCarrierValid({ ownershipType: "agregado", carrierId: UUID_A })).toBe(true);
+    expect(isOwnershipCarrierValid({ ownershipType: "terceiro" })).toBe(false);
+    expect(isOwnershipCarrierValid({ ownershipType: "terceiro", carrierId: UUID_A })).toBe(true);
+  });
+
+  it("subcontracted é falta de classificação, não erro", () => {
+    expect(precisaClassificarVinculo("subcontracted")).toBe(true);
+    expect(precisaClassificarVinculo(null)).toBe(true);
+    expect(precisaClassificarVinculo(undefined)).toBe(true);
+    expect(precisaClassificarVinculo("owned")).toBe(false);
+    expect(precisaClassificarVinculo("agregado")).toBe(false);
+    expect(precisaClassificarVinculo("terceiro")).toBe(false);
   });
 
   it("driver: subcontracted requires carrierId, owned forbids it", () => {

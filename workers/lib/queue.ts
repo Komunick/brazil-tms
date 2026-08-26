@@ -4,6 +4,7 @@ import {
   DOCUMENT_JOBS,
   IMPORT_JOBS,
   PORTAL_JOBS,
+  PRE_SM_JOBS,
   SLA_JOBS,
   type BillingJobName,
   type BillingJobPayloads,
@@ -13,6 +14,8 @@ import {
   type ImportJobPayloads,
   type PortalJobName,
   type PortalJobPayloads,
+  type PreSmJobName,
+  type PreSmJobPayloads,
   type SlaJobName,
   type SlaJobPayloads,
 } from "@brazil-tms/shared";
@@ -38,14 +41,22 @@ export const JOB = {
   ...BILLING_JOBS,
   ...DOCUMENT_JOBS,
   ...PORTAL_JOBS,
+  ...PRE_SM_JOBS,
 } as const;
 
-export type JobName = ImportJobName | SlaJobName | BillingJobName | DocumentJobName | PortalJobName;
+export type JobName =
+  | ImportJobName
+  | SlaJobName
+  | BillingJobName
+  | DocumentJobName
+  | PortalJobName
+  | PreSmJobName;
 export type JobPayloads = ImportJobPayloads &
   SlaJobPayloads &
   BillingJobPayloads &
   DocumentJobPayloads &
-  PortalJobPayloads;
+  PortalJobPayloads &
+  PreSmJobPayloads;
 
 /** Construct the pg-boss instance against the worker's DATABASE_URL (server/worker-only). */
 export function createBoss(): PgBoss {

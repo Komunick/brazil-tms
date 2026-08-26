@@ -51,6 +51,10 @@ export {
   type CancellationOptionItem,
 } from "./trips/trip-cancellation";
 export { addTripNote } from "./trips/trip-events";
+export { lerPrevisto, salvarPrevisto } from "./trips/previsto";
+export type { Previsto } from "./trips/previsto";
+export { listarComentarios, comentar, apagarComentario } from "./trips/comentarios";
+export type { Comentario } from "./trips/comentarios";
 export { createException, updateException, transitionException } from "./trips/exceptions";
 export {
   assignTrip,
@@ -239,3 +243,56 @@ export {
   registrarNoMotorista,
 } from "./fleet/driver-records";
 export type { RotaDoMotorista, RegistroDoMotorista } from "./fleet/driver-records";
+// O vínculo do recurso, gravado pelo diálogo de atribuição (026).
+export {
+  gravarVinculosDaAtribuicao,
+  vinculosPorPlaca,
+  type VinculoEscolhido,
+  type VinculosDaAtribuicao,
+} from "./trips/pre-sm-vinculos";
+// A ponte rota → modelo de Pré-SM: a carga propõe, uma pessoa confirma (026).
+export {
+  gravarPropostasDeRota,
+  listarCorrespondencias,
+  definirConfirmacaoDaCorrespondencia,
+  codRotaConfirmada,
+  rotasParaCorrespondencia,
+  type CorrespondenciaDaRota,
+} from "./trips/pre-sm-rotas";
+// A ponte estação → cidade: a carga propõe, uma pessoa confirma (027).
+export {
+  gravarPropostasDeCidade,
+  listarCorrespondenciasDeCidade,
+  definirConfirmacaoDaCidade,
+  ibgeConfirmadoDaEstacao,
+  type CorrespondenciaDaCidade,
+} from "./trips/pre-sm-cidades";
+// O estado da Pré-SM por viagem (026).
+export {
+  abrirTentativaDePreSm,
+  encerrarTentativaDePreSm,
+  contarTentativa,
+  preSmDaViagem,
+  preSmDeVariasViagens,
+  criadasHoje,
+  type PreSmDaViagem,
+  type PreSmStatus,
+} from "./trips/pre-sm";
+export { dadosDaPreSm, type DadosDaPreSm } from "./trips/pre-sm-dados";
+export { ordemDeAtribuicaoConcluida } from "./trips/pre-sm-dados";
+export { preSmPorId } from "./trips/pre-sm";
+export { registrarPedidoDeCancelamento, registrarPedidoDeEnvio } from "./trips/pre-sm";
+export { preSmComAtribuicaoAtual } from "./trips/pre-sm";
+// Bloquear um motorista — tirar alguém de circulação (2026-08-25, a pedido). NÃO é o
+// `status = 'blocked'`, que é o portal do CLIENTE tendo desativado a pessoa.
+export {
+  bloquearMotorista,
+  desbloquearMotorista,
+  listarMotoristasBloqueados,
+  bloqueiosPorIdDoPortal,
+  motoristasBloqueadosEntre,
+  type MotoristaBloqueado,
+} from "./fleet/driver-block";
+
+// A fila da aba GR — uma consulta, não uma tabela (027).
+export { filaDaGR, linhaDaFilaGR, type LinhaDaFilaGR } from "./trips/gr-fila";

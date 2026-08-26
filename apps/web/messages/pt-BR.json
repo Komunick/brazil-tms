@@ -97,7 +97,10 @@
       "sistema": "Sistema"
     },
     "minhaProgramacao": "Minha Programação",
-    "novidades": "Novidades"
+    "novidades": "Novidades",
+    "preSmRotas": "Rotas da gerenciadora",
+    "preSmCidades": "Cidades da gerenciadora",
+    "gr": "GR — Pré-SM"
   },
   "FreightRates": {
     "screenTitle": "Tabela de Fretes",
@@ -436,7 +439,15 @@
     "vehicle_document_upload": "Documento do veículo enviado",
     "trip_portal_accept": "Aceite enviado ao portal",
     "trip_portal_reject": "Recusa enviada ao portal",
-    "trip_portal_assign": "Atribuição enviada ao portal"
+    "trip_portal_assign": "Atribuição enviada ao portal",
+    "pre_sm_modelo_confirmar": "Correspondência de rota confirmada",
+    "pre_sm_modelo_desconfirmar": "Correspondência de rota desfeita",
+    "pre_sm_cancelar": "Pré-SM cancelada",
+    "driver_block": "Motorista bloqueado",
+    "driver_unblock": "Motorista desbloqueado",
+    "pre_sm_cidade_confirmar": "Correspondência de cidade confirmada",
+    "pre_sm_cidade_desconfirmar": "Correspondência de cidade desfeita",
+    "pre_sm_enviar": "Pré-SM pedida"
   },
   "Documents": {
     "title": "Documentos",
@@ -988,7 +999,27 @@
       "employer": "Empregador",
       "created": "Motorista criado.",
       "updated": "Motorista atualizado.",
-      "archivedMsg": "Motorista arquivado."
+      "archivedMsg": "Motorista arquivado.",
+      "block": {
+        "titulo": "Bloqueio",
+        "tituloBloqueado": "Motorista bloqueado",
+        "badge": "Bloqueado",
+        "explicacao": "Bloquear tira este motorista de circulação: ele não poderá ser escalado em nenhuma viagem enquanto estiver bloqueado.",
+        "bloquear": "Bloquear motorista",
+        "desbloquear": "Desbloquear",
+        "desde": "Bloqueado em {data}",
+        "dialogoTitulo": "Bloquear este motorista?",
+        "dialogoAviso": "Enquanto bloqueado, ele não poderá ser escalado em nenhuma viagem. Escreva o motivo — é o que vai permitir desbloquear com consciência depois.",
+        "motivo": "Motivo do bloqueio",
+        "motivoPlaceholder": "Por que este motorista está sendo bloqueado?",
+        "confirmar": "Bloquear",
+        "voltar": "Voltar",
+        "bloqueado": "Motorista bloqueado.",
+        "desbloqueado": "Motorista desbloqueado.",
+        "falhou": "Não deu para salvar. Tente de novo.",
+        "abaTodos": "Todos",
+        "abaBloqueados": "Bloqueados ({n})"
+      }
     },
     "vehicles": {
       "title": "Veículos",
@@ -1472,7 +1503,8 @@
       "titleEdit": "Editar atribuição",
       "cnhVencida": "CNH VENCIDA em {data}. Confira antes de escalar.",
       "cnhVencendo": "CNH vence em {data}.",
-      "cnhSemData": "Sem data de CNH no cadastro — não dá para conferir."
+      "cnhSemData": "Sem data de CNH no cadastro — não dá para conferir.",
+      "driverBlocked": "bloqueado"
     },
     "melhoresDaRota": {
       "titulo": "Nesta rota",
@@ -1482,6 +1514,11 @@
       "semHistorico": "Ninguém entregou nesta rota ainda. Sem histórico, sem ranking — a escolha é sua.",
       "comoCalcula": "Baseado nas entregas concluídas no destino dentro do horário do cliente. A nota é esse percentual com um crédito de 5 entregas na média da empresa, para quem rodou pouco não aparecer com 100%.",
       "verHistorico": "Ver histórico deste motorista"
+    },
+    "vinculo": {
+      "owned": "Frota",
+      "agregado": "Agregado",
+      "terceiro": "Terceiro"
     }
   },
   "Sla": {
@@ -1772,7 +1809,8 @@
       "carrier_contract_expired": "Contrato da transportadora expirado.",
       "carrier_doc_expired": "Documentação da transportadora vencida.",
       "carrier_doc_pending": "Documentação da transportadora pendente.",
-      "unknown": "Alerta de elegibilidade."
+      "unknown": "Alerta de elegibilidade.",
+      "driver_blocked_here": "Motorista bloqueado no cadastro. Desbloqueie em Motoristas para poder escalá-lo."
     },
     "errors": {
       "INCOMPLETE_ASSIGNMENT": "Atribuição incompleta: informe ao menos motorista e veículo (e transportadora quando subcontratado).",
@@ -2006,7 +2044,32 @@
     "naoDaParaEditar": "Esta viagem já saiu — a atribuição não pode mais ser alterada.",
     "quaisStatus": "Quais status?",
     "verTodosOsStatus": "Ver todos os status",
-    "filtrosAtivos": "{n} filtro(s)"
+    "filtrosAtivos": "{n} filtro(s)",
+    "previsto": "Previsto",
+    "previstoTitulo": "Previsto para esta viagem",
+    "previstoExplicacao": "Isto NÃO vai para o portal do cliente. É só a sua programação — quem você pretende escalar. Some da lista assim que a atribuição de verdade chegar.",
+    "semPrevisto": "ninguém previsto ainda",
+    "definirPrevisto": "Definir previsto",
+    "trocarPrevisto": "Trocar",
+    "salvarPrevisto": "Salvar previsto",
+    "removerPrevisto": "Remover previsto",
+    "previstoPor": "por {nome}",
+    "escolherMotorista": "Escolher motorista",
+    "carregandoMotoristas": "Carregando motoristas…",
+    "nenhumMotorista": "Nenhum motorista encontrado.",
+    "semMotorista": "Sem motorista",
+    "placaPlaceholder": "ABC1D23 ou ABC1D23,XYZ4E56",
+    "salvando": "Salvando…",
+    "cancelar": "Cancelar",
+    "comentarios": "Comentários",
+    "comentar": "Comentar",
+    "comentando": "Enviando…",
+    "comentarioPlaceholder": "Escreva um recado sobre esta viagem…",
+    "comentarioVisivelATodos": "Visível para todos.",
+    "semComentarios": "Nenhum comentário nesta viagem.",
+    "apagarComentario": "Apagar comentário",
+    "autorDesconhecido": "Alguém",
+    "temComentarios": "{n, plural, one {# comentário} other {# comentários}}"
   },
   "HistoricoMotorista": {
     "titulo": "Histórico do motorista",
@@ -2035,5 +2098,132 @@
     "tipoNovidade": "Novidade",
     "tipoCorrecao": "Correção",
     "onde": "Onde:"
+  },
+  "PreSm": {
+    "titulo": "Pré-SM",
+    "status": {
+      "pendente": "Aguardando",
+      "criada": "Criada na gerenciadora",
+      "recusada": "Recusada pela gerenciadora",
+      "sem_dados": "Não criada — falta dado",
+      "cancelada": "Cancelada",
+      "nao_tentada": "Pronta — integração desligada"
+    },
+    "motivo": {
+      "sem_modelo": "A rota desta viagem ainda não tem modelo confirmado na gerenciadora.",
+      "sem_cpf": "O motorista está sem CPF no cadastro.",
+      "sem_placa": "A atribuição não tem placa.",
+      "sem_vinculo_veiculo": "Falta classificar o veículo como frota, agregado ou terceiro.",
+      "sem_vinculo_motorista": "Falta classificar o motorista como frota, agregado ou terceiro.",
+      "sem_janela_coleta": "A viagem está sem a janela de coleta.",
+      "desligado": "Estava tudo pronto. A criação automática de Pré-SM está desligada — nada foi enviado à gerenciadora.",
+      "teto_atingido": "Estava tudo pronto. O teto de Pré-SM do dia foi atingido — nada foi enviado à gerenciadora."
+    },
+    "em": "Em {data}",
+    "pedidaEm": "Pedida em {data}",
+    "cancelar": "Cancelar",
+    "cancelarTitulo": "Cancelar a Pré-SM?",
+    "cancelarAviso": "Ela já foi criada na gerenciadora e já foi cobrada — cancelar não devolve isso. A viagem poderá gerar outra depois.",
+    "cancelarConfirmar": "Cancelar a Pré-SM",
+    "voltar": "Voltar",
+    "cancelamentoPedido": "Cancelamento pedido. O estado muda quando a gerenciadora confirmar.",
+    "cancelamentoFalhou": "Não deu para pedir o cancelamento.",
+    "divergencia": "A atribuição mudou depois da Pré-SM: {o}. A escolta foi contratada com os dados antigos.",
+    "divergencias": {
+      "motorista": "o motorista",
+      "placas": "as placas"
+    }
+  },
+  "PreSmRotas": {
+    "title": "Rotas da gerenciadora",
+    "subtitle": "A correspondência entre as nossas rotas e as rotas cadastradas na gerenciadora. Só rota confirmada gera Pré-SM.",
+    "buscar": "Buscar por estação ou rota",
+    "pendentes": "{n} aguardando conferência",
+    "total": "{n} no total",
+    "vazio": "Nenhuma correspondência ainda. Use “Buscar no cadastro da gerenciadora” para carregar as rotas dela e propor as correspondências.",
+    "origem": "Origem",
+    "destino": "Destino",
+    "modelo": "Rota na gerenciadora",
+    "estado": "Estado",
+    "aguardando": "Aguardando conferência",
+    "confirmadaEm": "Confirmada em {data}",
+    "confirmar": "Confirmar",
+    "desfazer": "Desfazer",
+    "confirmada": "Correspondência confirmada.",
+    "desfeita": "Confirmação desfeita.",
+    "falhou": "Não deu para salvar. Tente de novo.",
+    "carregar": "Buscar no cadastro da gerenciadora",
+    "carregando": "Buscando…",
+    "cargaPedida": "Buscando cidades e rotas na gerenciadora. As correspondências aparecem aqui em instantes.",
+    "cargaChegou": "{n} correspondências novas para conferir.",
+    "cargaSemNovidade": "A busca rodou e não encontrou correspondência nova.",
+    "cargaFalhou": "Não deu para pedir a busca. Tente de novo."
+  },
+  "PreSmCidades": {
+    "title": "Cidades da gerenciadora",
+    "subtitle": "A correspondência entre as nossas estações e as cidades da gerenciadora. Só cidade confirmada vale para criar Pré-SM.",
+    "buscar": "Buscar por estação ou cidade",
+    "pendentes": "{n} aguardando conferência",
+    "total": "{n} no total",
+    "vazio": "Nenhuma correspondência ainda. Use “Buscar no cadastro da gerenciadora” para carregar as cidades e as rotas dela de uma vez.",
+    "estacao": "Nossa estação",
+    "cidade": "Cidade na gerenciadora",
+    "estado": "Estado",
+    "aguardando": "Aguardando conferência",
+    "confirmadaEm": "Confirmada em {data}",
+    "confirmar": "Confirmar",
+    "desfazer": "Desfazer",
+    "confirmada": "Correspondência confirmada.",
+    "desfeita": "Confirmação desfeita.",
+    "falhou": "Não deu para salvar. Tente de novo.",
+    "carregar": "Buscar no cadastro da gerenciadora",
+    "carregando": "Buscando…",
+    "cargaPedida": "Buscando o cadastro da gerenciadora. As correspondências aparecem em instantes.",
+    "cargaChegou": "{n} correspondências novas para conferir.",
+    "cargaSemNovidade": "A busca rodou e não encontrou correspondência nova.",
+    "cargaFalhou": "Não deu para pedir a busca. Tente de novo."
+  },
+  "GR": {
+    "title": "GR — Pré-SM",
+    "subtitle": "As viagens atribuídas esperando pré-solicitação de monitoramento. Envie uma por vez; o que falta aparece na própria linha.",
+    "buscar": "Buscar por LH, estação, motorista ou placa",
+    "prontas": "{n} prontas para enviar",
+    "naFila": "{n} na fila",
+    "jaEnviadas": "Já enviadas ({n})",
+    "filaVazia": "Nenhuma viagem atribuída esperando Pré-SM.",
+    "coletaEm": "coleta {data}",
+    "enviar": "Enviar Pré-SM",
+    "semConfiguracao": "A integração com a gerenciadora não está configurada — faltam o código da filial e o do perfil de segurança. Isso é ajuste de instalação, não de cadastro.",
+    "motivo": {
+      "sem_rota": "A rota desta viagem ainda não tem correspondência confirmada.",
+      "sem_cidade_origem": "A cidade da estação de origem ainda não foi confirmada.",
+      "sem_cidade_destino": "A cidade da estação de destino ainda não foi confirmada.",
+      "sem_cpf": "O motorista está sem CPF no cadastro.",
+      "sem_placa": "A atribuição não tem placa.",
+      "sem_vinculo_veiculo": "Falta classificar o veículo ou a carreta como frota, agregado ou terceiro.",
+      "sem_vinculo_motorista": "Falta classificar o motorista como frota, agregado ou terceiro.",
+      "sem_janela_coleta": "A viagem está sem a janela de coleta.",
+      "sem_janela_entrega": "A viagem está sem a janela de entrega."
+    },
+    "irParaRotas": "conferir rotas",
+    "irParaCidades": "conferir cidades",
+    "irParaMotoristas": "abrir motoristas",
+    "irParaVeiculos": "abrir veículos",
+    "irParaViagem": "abrir a viagem",
+    "pedida": "Pré-SM pedida. O número aparece quando a gerenciadora responder.",
+    "envioFalhou": "Não deu para pedir a Pré-SM. Tente de novo.",
+    "enviando": "Enviando…",
+    "cancelar": "Cancelar",
+    "cancelarTitulo": "Cancelar a Pré-SM?",
+    "cancelarAviso": "Ela já foi criada na gerenciadora e já foi cobrada — cancelar não devolve isso. A viagem poderá gerar outra depois.",
+    "cancelarConfirmar": "Cancelar a Pré-SM",
+    "voltar": "Voltar",
+    "cancelamentoPedido": "Cancelamento pedido. O estado muda quando a gerenciadora confirmar.",
+    "cancelamentoFalhou": "Não deu para pedir o cancelamento.",
+    "divergencia": "A atribuição mudou depois da Pré-SM: {o}. A escolta foi contratada com os dados antigos.",
+    "divergencias": {
+      "motorista": "o motorista",
+      "placas": "as placas"
+    }
   }
 }
