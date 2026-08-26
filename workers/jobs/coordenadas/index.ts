@@ -2,6 +2,7 @@ import { type PgBoss } from "pg-boss";
 import {
   chaveDaCidadeDelas,
   chaveDaEstacao,
+  chavesToleradas,
   pontasDoKML,
   type PontasDaRota,
 } from "@brazil-tms/shared";
@@ -80,7 +81,14 @@ export async function runCarregarCoordenadas(): Promise<ResultadoDaVarredura> {
     rotas = await getRotas(cred);
   } catch (e) {
     if (limiteDeConsulta(e)) {
-      return { ligado: true, limitada: true, candidatas: 0, resolvidas: 0, semRota: 0, semPonta: 0 };
+      return {
+        ligado: true,
+        limitada: true,
+        candidatas: 0,
+        resolvidas: 0,
+        semRota: 0,
+        semPonta: 0,
+      };
     }
     throw e;
   }
@@ -152,9 +160,21 @@ function rotaQueToca(
   rotas: readonly RotaDaGerenciadora[],
   chave: string,
 ): { rota: RotaDaGerenciadora; ponta: "origem" | "destino" } | null {
-  for (const rota of rotas) {
-    if (chaveDaCidadeDelas(rota.CidadeOrigem) === chave) return { rota, ponta: "origem" };
-    if (chaveDaCidadeDelas(rota.CidadeDestino) === chave) return { rota, ponta: "destino" };
+  /**
+   * AS CHAVES TOLERADAS, e não só a exata.
+   *
+   * `SOC_GO_GOIANIA_02 (AEROPORTO)` vira `GO GOIANIA 2`, e a gerenciadora chama aquela cidade de
+   * `GOIANIA/GO`. Só com a chave exata, a estação de maior volume de Goiás não casaria com rota
+   * nenhuma — descoberto simulando o job antes de ligá-lo, em 26/08.
+   *
+   * A ordem importa: tenta a mais específica primeiro e só afrouxa depois. Assim `SAO LUIS 01`
+   * encontra `SAO LUIS` antes de chegar a `SAO`, que casaria com meia dúzia de cidades erradas.
+   */
+  for (const c of chavesToleradas(chave)) {
+    for (const rota of rotas) {
+      if (chaveDaCidadeDelas(rota.CidadeOrigem) === c) return { rota, ponta: "origem" };
+      if (chaveDaCidadeDelas(rota.CidadeDestino) === c) return { rota, ponta: "destino" };
+    }
   }
   return null;
 }
