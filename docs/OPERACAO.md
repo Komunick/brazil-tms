@@ -100,13 +100,15 @@ e-mail: existe para assinar eventos e auditoria do que os robôs fazem.
 
 ### A Integra, da gerenciadora Logae (2026-08-25, fatia 026)
 
-Quatro variáveis, lidas **só no worker**:
+Seis variáveis, lidas **só no worker**:
 
 | variável | some se faltar | nota |
 |---|---|---|
 | `INTEGRA_LOGIN` / `INTEGRA_SENHA` | a Pré-SM não é criada, e o job registra por quê | login de PRODUÇÃO, com escrita no sistema de um fornecedor |
 | `INTEGRA_PRE_SM_ATIVO` | ausente = **desligado**, que é o padrão querido | ver abaixo |
 | `INTEGRA_PRE_SM_TETO_DIARIO` | ausente = `0` = nenhuma criação automática | ver abaixo |
+| `INTEGRA_COD_FILIAL` | a aba GR diz "integração não configurada" e nada é enviado | `9332` — de `getTabela(NomeTabela: "FILIAIS")` |
+| `INTEGRA_COD_PERFIL_SEGURANCA` | idem | `20785` (DDR SHOPEE) — de `getTabela(NomeTabela: "PERFIL_SEGURANCA")` |
 
 **Não existe ambiente de homologação para nós.** Medido em 2026-08-25: `Ambiente: "Homologacao"`
 responde `CodErro 100 — USUARIO INVALIDO`. Toda escrita acontece contra o sistema real, **e a
@@ -119,6 +121,31 @@ sozinhas; começa em zero, e sobe conforme a confiança.
 
 **Desligar a integração NÃO é apagar a credencial**: é pôr `INTEGRA_PRE_SM_ATIVO=false`. Apagar a
 senha faria religar virar uma operação de risco.
+
+### A aba GR, e quem cria a Pré-SM hoje (2026-08-26, fatia 027)
+
+A criação **automática** existe e está desligada. Quem cria no dia a dia é uma pessoa, na aba **GR**:
+a viagem atribuída cai na fila, a linha mostra o que será enviado e o que falta, e o botão só
+destrava quando não falta nada. Uma por vez, sem lote.
+
+O que a fila mostra vem da **mesma função** que o worker usa para montar o corpo — se as duas
+divergissem, a linha ficaria verde e o envio recusaria.
+
+**Quando "não aparece nada na fila"**, a ordem de investigação é:
+
+1. A viagem foi **atribuída** e a ordem voltou `done` do portal? Sem isso ela não entra.
+2. Ela está `completed` ou `cancelled`? Aí sai da fila de propósito.
+3. Já tem Pré-SM `criada` ou `pendente`? Aí está na seção das já enviadas.
+
+**Quando "a linha está travada"**, o motivo está escrito nela, com o caminho para resolver. Os dois
+que dependem de cadastro **na gerenciadora** são `sem_rota` e `sem_cidade_*`: a correspondência
+precisa ser **confirmada** em Cadastros → Rotas/Cidades da gerenciadora. Medido em 25/08: das nossas
+134 rotas, **57 existem no cadastro dela** — as outras são trabalho de cadastro lá, não defeito
+daqui.
+
+**A carga que enche essas telas** é o job `pre_sm.carregar_cadastro`, pedido pelo botão "Buscar no
+cadastro da gerenciadora". É **leitura pura** — não cria nada e não custa —, e por isso **não** olha
+o interruptor: é o preparo que precisa acontecer antes de ligá-lo.
 
 ---
 

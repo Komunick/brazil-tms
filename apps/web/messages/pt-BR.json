@@ -2187,6 +2187,18 @@
     "irParaViagem": "abrir a viagem",
     "pedida": "Pré-SM pedida. O número aparece quando a gerenciadora responder.",
     "envioFalhou": "Não deu para pedir a Pré-SM. Tente de novo.",
-    "enviando": "Enviando…"
+    "enviando": "Enviando…",
+    "cancelar": "Cancelar",
+    "cancelarTitulo": "Cancelar a Pré-SM?",
+    "cancelarAviso": "Ela já foi criada na gerenciadora e já foi cobrada — cancelar não devolve isso. A viagem poderá gerar outra depois.",
+    "cancelarConfirmar": "Cancelar a Pré-SM",
+    "voltar": "Voltar",
+    "cancelamentoPedido": "Cancelamento pedido. O estado muda quando a gerenciadora confirmar.",
+    "cancelamentoFalhou": "Não deu para pedir o cancelamento.",
+    "divergencia": "A atribuição mudou depois da Pré-SM: {o}. A escolta foi contratada com os dados antigos.",
+    "divergencias": {
+      "motorista": "o motorista",
+      "placas": "as placas"
+    }
   }
 }

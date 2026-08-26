@@ -7,7 +7,7 @@
  *
  * ── DUAS ESQUISITICES DA API, MEDIDAS E NÃO LIDAS ─────────────────────────────────────────────
  *
- * O nome do método vai NA URL, ENTRE ASPAS: `/TWebService/"getModelosPreSM"`, que escapado vira
+ * O nome do método vai NA URL, ENTRE ASPAS: `/TWebService/"getRotas"`, que escapado vira
  * `%22`. Não é o corpo que escolhe a operação.
  *
  * E o erro não vem no código HTTP: toda resposta é 200, e o que diz se deu certo é `CodErro` — zero

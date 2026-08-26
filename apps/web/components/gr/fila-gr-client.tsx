@@ -9,6 +9,14 @@ import { formatDateTime } from "@brazil-tms/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { avisar } from "@/lib/ui/avisos";
@@ -57,6 +65,7 @@ interface LinhaGR {
   pronta: boolean;
   preSmStatus: string | null;
   preSmCodigo: string | null;
+  divergencias: string[];
 }
 
 /** Onde cada motivo se resolve. É o que transforma "está travado" em "faça isto". */
@@ -165,6 +174,7 @@ export function FilaGrClient() {
 function LinhaDaFila({ l }: { l: LinhaGR }) {
   const t = useTranslations("GR");
   const qc = useQueryClient();
+  const [confirmando, setConfirmando] = useState(false);
   const criada = l.preSmStatus === "criada";
   const emAndamento = l.preSmStatus === "pendente";
 
@@ -182,6 +192,19 @@ function LinhaDaFila({ l }: { l: LinhaGR }) {
       avisar({ tipo: "ok", texto: t("pedida") });
     },
     onError: () => avisar({ tipo: "erro", texto: t("envioFalhou") }),
+  });
+
+  const cancelar = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/trips/${l.tripId}/pre-sm`, { method: "DELETE" });
+      if (!res.ok) throw new Error(String(res.status));
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["gr-fila"] });
+      setConfirmando(false);
+      avisar({ tipo: "ok", texto: t("cancelamentoPedido") });
+    },
+    onError: () => avisar({ tipo: "erro", texto: t("cancelamentoFalhou") }),
   });
 
   return (
@@ -206,9 +229,24 @@ function LinhaDaFila({ l }: { l: LinhaGR }) {
           ) : null}
 
           {criada && l.preSmCodigo ? (
-            <Badge variant="secondary" className="ml-auto font-mono tabular-nums">
-              {l.preSmCodigo}
-            </Badge>
+            <>
+              <Badge variant="secondary" className="ml-auto font-mono tabular-nums">
+                {l.preSmCodigo}
+              </Badge>
+              {/* O cancelamento PEDE, não cancela: quem cancela de verdade é a gerenciadora, e a
+                  confirmação vem depois. E o aviso diz o que está em jogo — a solicitação JÁ foi
+                  cobrada, e cancelar não devolve isso. É a informação que faz alguém parar e
+                  pensar. */}
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={cancelar.isPending}
+                onClick={() => setConfirmando(true)}
+              >
+                {t("cancelar")}
+              </Button>
+            </>
           ) : emAndamento ? (
             /* O pedido saiu e a gerenciadora ainda não respondeu. Distinguir isso de "falhou" é o
                que impede alguém de apertar de novo e gerar uma segunda solicitação cobrada. */
@@ -254,7 +292,46 @@ function LinhaDaFila({ l }: { l: LinhaGR }) {
             })}
           </ul>
         ) : null}
+
+        {/**
+         * A DIVERGÊNCIA é diferente dos motivos acima, e por isso é vermelha.
+         *
+         * Os motivos descrevem algo que ainda não aconteceu; este descreve algo que JÁ aconteceu e
+         * está errado: a escolta foi contratada com o motorista ou a placa antigos, e o caminhão vai
+         * sair com outro. Alterar a Pré-SM ficou fora de escopo, então o que dá para fazer é dizer.
+         */}
+        {l.divergencias.length > 0 ? (
+          <p role="alert" className="text-xs font-medium text-destructive">
+            {t("divergencia", {
+              o: l.divergencias.map((d) => t(`divergencias.${d}`)).join(" e "),
+            })}
+          </p>
+        ) : null}
       </CardContent>
+
+      {/* O texto diz o que está em jogo — a solicitação JÁ foi cobrada, e cancelar não devolve isso.
+          Um "tem certeza?" genérico não daria essa informação, que é justamente a que faz alguém
+          parar e pensar. */}
+      <Dialog open={confirmando} onOpenChange={setConfirmando}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t("cancelarTitulo")}</DialogTitle>
+            <DialogDescription>{t("cancelarAviso")}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setConfirmando(false)}>
+              {t("voltar")}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={cancelar.isPending}
+              onClick={() => cancelar.mutate()}
+            >
+              {t("cancelarConfirmar")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

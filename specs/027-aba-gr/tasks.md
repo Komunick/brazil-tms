@@ -179,21 +179,21 @@ existe com motorista, placas e horário certos — e que o TMS mostra o número.
 > A maior parte **já existe** na 026: o job `pre_sm.cancelar`, o `setCancelaPreSM` no cliente, e o
 > diálogo que avisa que a solicitação já foi cobrada. Aqui é só trazer para a aba.
 
-- [ ] T051 [US3] Pôr o botão de cancelar na seção das já enviadas, reusando o diálogo de confirmação da 026 — o texto que diz que a cobrança não volta é o que faz alguém parar e pensar
-- [ ] T052 [US3] Depois de cancelada, a viagem volta a aparecer na fila podendo gerar outra — o índice único parcial já permite isso
-- [ ] T053 [US3] Quando a gerenciadora **recusa** cancelar (tipicamente porque a Pré-SM já foi efetivada), a viagem continua marcada como ativa e a mensagem dela aparece inteira
-- [ ] T053b [US3] Mostrar o **aviso de divergência** na seção das já enviadas (FR-016), reusando `divergenciasDaPreSm` da 026. É o requisito que a aba existe para tornar visível: a escolta foi contratada com o motorista ou a placa antigos, e hoje isso só aparece se alguém abrir a viagem. Calculado na leitura, **nunca guardado** — muda a cada reatribuição e uma coluna ficaria velha no instante seguinte
+- [X] T051 [US3] Pôr o botão de cancelar na seção das já enviadas, reusando o diálogo de confirmação da 026 — o texto que diz que a cobrança não volta é o que faz alguém parar e pensar
+- [X] T052 [US3] Depois de cancelada, a viagem volta a aparecer na fila podendo gerar outra — o índice único parcial já permite isso
+- [X] T053 [US3] Quando a gerenciadora **recusa** cancelar (tipicamente porque a Pré-SM já foi efetivada), a viagem continua marcada como ativa e a mensagem dela aparece inteira
+- [X] T053b [US3] Mostrar o **aviso de divergência** na seção das já enviadas (FR-016), reusando `divergenciasDaPreSm` da 026. É o requisito que a aba existe para tornar visível: a escolta foi contratada com o motorista ou a placa antigos, e hoje isso só aparece se alguém abrir a viagem. Calculado na leitura, **nunca guardado** — muda a cada reatribuição e uma coluna ficaria velha no instante seguinte
 
 ---
 
 ## Phase 8 — Fechamento
 
-- [ ] T054 [P] Remover o que morreu: `getModelosPreSM` e `setPreSMdeModelo` do cliente, o job `pre_sm.carregar_modelos`, e os testes deles
-- [ ] T055 [P] Atualizar `docs/OPERACAO.md` com o job novo e o que fazer quando a integração falhar
-- [ ] T056 [P] Acrescentar a entrada em `apps/web/lib/novidades/entradas.ts` — a operação precisa saber que a aba existe
-- [ ] T057 Renumerar a migração para o próximo número livre **no momento do merge**, nunca antes
-- [ ] T058 Rodar `pnpm lint` **da raiz** (`eslint .`), `pnpm -r typecheck` e `pnpm test`. O `pnpm -r lint` **não** cobre `scripts/` e já deixou a CI vermelha
-- [ ] T059 Reiniciar o worker depois do merge — job novo não vale sem restart, e worker velho mascara o conserto
+- [X] T054 [P] Remover o que morreu: `getModelosPreSM` e `setPreSMdeModelo` do cliente, o job `pre_sm.carregar_modelos`, e os testes deles
+- [X] T055 [P] Atualizar `docs/OPERACAO.md` com o job novo e o que fazer quando a integração falhar
+- [X] T056 [P] Acrescentar a entrada em `apps/web/lib/novidades/entradas.ts` — a operação precisa saber que a aba existe
+- [ ] T057 **NO MERGE** Renumerar a migração para o próximo número livre **no momento do merge**, nunca antes
+- [X] T058 Rodar `pnpm lint` **da raiz** (`eslint .`), `pnpm -r typecheck` e `pnpm test`. O `pnpm -r lint` **não** cobre `scripts/` e já deixou a CI vermelha
+- [ ] T059 **DEPOIS DO DEPLOY** Reiniciar o worker depois do merge — job novo não vale sem restart, e worker velho mascara o conserto
 
 ---
 

@@ -56,6 +56,13 @@ export interface LinhaDaFilaGR {
   preSmCodigo: string | null;
   preSmMotivo: string | null;
   preSmEm: string | null;
+  /**
+   * O corpo que FOI enviado, para a aba apontar divergência (FR-016).
+   *
+   * A comparação em si é pura (`divergenciasDaPreSm`) e vive em `packages/shared` — comparar é
+   * regra, e regra se testa. Aqui só se carrega o que ela precisa.
+   */
+  payloadEnviado: Record<string, unknown> | null;
 }
 
 /**
@@ -79,7 +86,8 @@ export async function filaDaGR(limite = 300): Promise<LinhaDaFilaGR[]> {
     viva as (
       -- A linha de Pré-SM que vale: a viva, ou a mais recente quando não há viva.
       select distinct on (tp.trip_id)
-        tp.trip_id, tp.status, tp.codigo, tp.motivo, tp.requested_at, tp.settled_at
+        tp.trip_id, tp.status, tp.codigo, tp.motivo, tp.requested_at, tp.settled_at,
+        tp.payload_enviado
       from trip_pre_sm tp
       order by tp.trip_id,
         case when tp.status in ('pendente','criada') then 0 else 1 end,
@@ -104,6 +112,7 @@ export async function filaDaGR(limite = 300): Promise<LinhaDaFilaGR[]> {
       v.status                            as pre_sm_status,
       v.codigo                            as pre_sm_codigo,
       v.motivo                            as pre_sm_motivo,
+      v.payload_enviado                   as payload_enviado,
       coalesce(v.settled_at, v.requested_at) as pre_sm_em
     from atribuicao a
     join trips t     on t.id = a.trip_id
@@ -179,6 +188,7 @@ export async function filaDaGR(limite = 300): Promise<LinhaDaFilaGR[]> {
       preSmCodigo: (r.pre_sm_codigo as string) ?? null,
       preSmMotivo: (r.pre_sm_motivo as string) ?? null,
       preSmEm: iso(r.pre_sm_em),
+      payloadEnviado: (r.payload_enviado as Record<string, unknown>) ?? null,
     };
   });
 }

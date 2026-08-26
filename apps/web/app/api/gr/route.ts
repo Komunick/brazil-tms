@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { filaDaGR } from "@brazil-tms/db";
-import { montarCorpoDoSetPreSM, motivosDeNaoEnviar } from "@brazil-tms/shared";
+import {
+  divergenciasDaPreSm,
+  montarCorpoDoSetPreSM,
+  motivosDeNaoEnviar,
+} from "@brazil-tms/shared";
 import type { OwnershipType } from "@brazil-tms/shared";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
 import { handleRouteError } from "@/lib/api/respond";
@@ -63,6 +67,25 @@ export async function GET(): Promise<NextResponse> {
          * forma de a tela concordar com o worker em todos os casos.
          */
         pronta: montarCorpoDoSetPreSM(dados) != null,
+        /**
+         * A DIVERGÊNCIA (FR-016): a atribuição mudou depois da Pré-SM criada.
+         *
+         * Calculada na LEITURA, nunca guardada — ela muda a cada reatribuição, e uma coluna ficaria
+         * velha no instante seguinte.
+         *
+         * Só interessa quando a Pré-SM EXISTE de verdade lá: uma que nunca saiu não descreve
+         * ninguém, e dizer que ela diverge seria um aviso sobre nada.
+         */
+        divergencias:
+          l.preSmStatus === "criada"
+            ? divergenciasDaPreSm(
+                (l.payloadEnviado?.PreSM as { Engate?: Record<string, unknown> })?.Engate ?? null,
+                {
+                  cpfMotorista: l.cpfMotorista,
+                  placas: l.placas.map((p) => p.placa),
+                },
+              )
+            : [],
       };
     });
 

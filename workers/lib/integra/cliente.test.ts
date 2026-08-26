@@ -28,7 +28,7 @@ describe("o cliente NÃO efetiva Pré-SM (FR-004)", () => {
   });
 
   it("os três métodos que ele PODE chamar continuam lá", () => {
-    for (const m of ["setPreSMdeModelo", "getStatusPreSM", "setCancelaPreSM"]) {
+    for (const m of ["setPreSM", "getStatusPreSM", "setCancelaPreSM"]) {
       expect(fonte).toContain(m);
     }
   });
