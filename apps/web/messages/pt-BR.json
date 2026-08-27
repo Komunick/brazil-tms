@@ -1457,6 +1457,7 @@
       "grupoPlan": "Plan",
       "grupoOrigem": "Origem",
       "grupoSpot": "Spot",
+    "spotResumo": "{aceitas} aceitas · {naoAceitas} não",
       "grupoTendencia": "Tendência",
       "medidaPendAtribuicao": "Pend atribuição",
       "medidaAtribuida": "Atribuída",
