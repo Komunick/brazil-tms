@@ -18,6 +18,30 @@ export interface NavItem {
    * pontos de parada — e o item continua a um clique, como sempre foi.
    */
   grupo: "operacao" | "faturamento" | "analise" | "importacao" | "cadastros" | "sistema";
+  /**
+   * O item DEPENDE de outro — aparece recuado logo abaixo dele (2026-08-27, a pedido).
+   *
+   * O grupo já dava pontos de parada ao olho; o que ele não dizia é que "Minha Programação" é um
+   * RECORTE da Torre de Controle, e que "Histórico de Importações" é a mesma tela de Importações
+   * olhando para trás. Vinte e nove itens no mesmo nível fazem o olho tratar tudo como assunto
+   * diferente, e a barra passou a rolar.
+   *
+   * ── RECUA, NÃO RECOLHE ──────────────────────────────────────────────────────────────────────
+   *
+   * Nada esconde e nada precisa de clique para abrir. A regra que o grupo já seguia continua
+   * valendo inteira: todo item a um clique, sempre. O que muda é o desenho dizer o que a estrutura
+   * sempre foi.
+   *
+   * Recolher reduziria a altura, e é a tentação óbvia — mas transformaria "achar" em "lembrar onde
+   * estava guardado", que é o problema que os grupos existiam para resolver.
+   *
+   * ── FILHO ÓRFÃO SOBE ────────────────────────────────────────────────────────────────────────
+   *
+   * Se a permissão esconder o pai, o filho volta ao nível de cima em vez de sumir junto. Recuar sob
+   * um item que não está na tela seria um recuo sem referência, e esconder um item que a pessoa PODE
+   * ver por causa de um que ela não pode seria tirar acesso por efeito colateral.
+   */
+  pai?: string;
 }
 
 /** A ordem dos grupos na barra. Do que se usa todo dia para o que se abre uma vez por mês. */
@@ -73,6 +97,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: "Star",
     permission: "view_all_trips",
     grupo: "operacao",
+    // É a Torre de Controle filtrada pelo que ESTA pessoa acompanha — o exemplo que o usuário deu.
+    pai: "trips",
   },
   // 005 — Control Tower board (view_all_trips: all 7 internal roles).
   {
@@ -138,6 +164,13 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: "Gauge",
     permission: "manage_commercial_data",
     grupo: "operacao",
+    /*
+     * As regras são a CONFIGURAÇÃO das exceções: é delas que sai o que vira alerta na fila ao lado.
+     * Quem abre uma para entender por que a outra disparou faz esse caminho o tempo todo — e a
+     * permissão diferente (só quem administra dado comercial) já dizia que uma é o dia a dia e a
+     * outra é o ajuste.
+     */
+    pai: "exceptions",
   },
   // 008 — Documents + Billing (view_all_trips: all 7 internal roles read) + Rates (edit_rates:
   // Admin, Finance).
@@ -161,6 +194,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: "Coins",
     permission: "edit_rates",
     grupo: "faturamento",
+    // O que se cobra do cliente. O Faturamento é onde esse número vira dinheiro.
+    pai: "billing",
   },
   // 016 — Freight rate lookup / "Tabela de Fretes" (view_freight_rates: all 7 internal roles).
   // NOT named "Rotas": that label belongs to the Lanes screen below.
@@ -170,6 +205,8 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: "Table2",
     permission: "view_freight_rates",
     grupo: "faturamento",
+    // O que se paga ao agregado — o outro lado da mesma conta. Mesmo pai, de propósito.
+    pai: "billing",
   },
   // 009 — Reports (view_all_trips: all 7 internal roles, mirroring the 005 dashboard).
   {
@@ -283,6 +320,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
     icon: "History",
     permission: "import_trips",
     grupo: "importacao",
+    pai: "imports",
   },
   // 002 — fleet master data (manage_fleet_data: Admin, Ops Manager, Fleet Coordinator).
   {
@@ -314,3 +352,29 @@ export const NAV_ITEMS: readonly NavItem[] = [
     grupo: "cadastros",
   },
 ];
+
+/**
+ * A ORDEM DE UM GRUPO: cada pai seguido dos seus filhos (2026-08-27).
+ *
+ * `NAV_ITEMS` continua sendo a fonte da ordem — isto só puxa cada filho para logo abaixo do pai,
+ * em vez de exigir que quem edita a lista mantenha os dois juntos à mão. Um filho declarado longe
+ * do pai é um filho que alguém separa sem perceber, e o recuo passaria a apontar para o item errado.
+ *
+ * ── FILHO ÓRFÃO SOBE, EM VEZ DE SUMIR ─────────────────────────────────────────────────────────
+ *
+ * Se a permissão escondeu o pai, o filho aparece no nível de cima. É a regra que evita o pior caso:
+ * esconder uma tela que a pessoa PODE ver por efeito colateral de outra que ela não pode.
+ *
+ * Acontece de verdade — `slaRules` pede `manage_commercial_data` e `exceptions` pede
+ * `view_all_trips`, então há papéis com o filho e sem o pai, e outros com o pai e sem o filho.
+ */
+export function ordenarComFilhos(
+  doGrupo: readonly NavItem[],
+  chavesVisiveis: ReadonlySet<string>,
+): NavItem[] {
+  return doGrupo.flatMap((item) => {
+    // Já vai sair recuado sob o pai — não pode sair duas vezes.
+    if (item.pai && chavesVisiveis.has(item.pai)) return [];
+    return [item, ...doGrupo.filter((f) => f.pai === item.key)];
+  });
+}
