@@ -7,14 +7,14 @@
  *
  * ── TRÊS TABELAS, E POR QUE NÃO DEZESSEIS ─────────────────────────────────────────────────────
  *
- * São 16 seções entre os cinco setores, com colunas diferentes em quase todas. Uma tabela por
- * seção seriam 16 migrações para descrever a mesma coisa — "uma ocorrência que alguém anotou" — e
+ * São 20 seções entre os cinco setores, com colunas diferentes em quase todas. Uma tabela por
+ * seção seriam 20 migrações para descrever a mesma coisa — "uma ocorrência que alguém anotou" — e
  * toda seção nova pedida pela operação viraria outra migração. A regra dos ≥3 de
  * `docs/PRINCIPLES.md` aponta para o outro lado.
  *
  * O preço é real e está anotado: o banco NÃO valida o conteúdo do `jsonb`. Quem valida é
  * `problemasDoItem`, na rota antes de gravar. Um `CHECK` genérico aqui não conseguiria — ele teria
- * de conhecer as 16 seções, e aí seria o catálogo declarado duas vezes, em duas linguagens.
+ * de conhecer as 20 seções, e aí seria o catálogo declarado duas vezes, em duas linguagens.
  */
 
 /*

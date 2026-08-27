@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
  * ── O CONTEÚDO É CONFERIDO CONTRA O CATÁLOGO, NÃO CONTRA UM SCHEMA FIXO ───────────────────────
  *
  * `dados` chega como pares chave/valor de texto e o Zod só garante essa forma. Quem confere os
- * CAMPOS é `problemasDoItem`, dentro de `salvarItem`, porque a resposta depende da seção — e as 16
+ * CAMPOS é `problemasDoItem`, dentro de `salvarItem`, porque a resposta depende da seção — e as 20
  * seções têm colunas diferentes. Um schema por seção aqui seria o catálogo declarado duas vezes,
  * e as duas divergiriam na primeira mudança.
  *

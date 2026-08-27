@@ -106,11 +106,21 @@ já usa**, e não se inventa outra:
 |---|---|
 | OCORRÊNCIA · rotas sem atribuição | `Sem Confirmação` · `Sem Atribuição` |
 | OCORRÊNCIA · rastreamento e PR (GR) | `Checklist não realizado` · `Sem rastreamento` · `Sem SM / motorista acionado` |
-| OCORRÊNCIA · crítica (Monitoring) | `Quebra de Veículo` · `Sem contato com motorista` · `Sinistro` · `Parada Excedida` |
+| ~~OCORRÊNCIA · crítica (Monitoring)~~ | **soltada em 27/08 a pedido do setor** — ver abaixo |
+| STATUS · bonificação | `Recebido` · `Aguardando chave` (a planilha não trava; aqui trava) |
 | ETA DESTINO | `EARLY` · `ON TIME` · `DELAY` |
 | PERFIL | `CARRETA` · `TRUCK` |
 
 Todo o resto da OCORRÊNCIA é texto livre.
+
+**A ocorrência da viagem crítica do Monitoring passou a ser livre (27/08).** O conteúdo real ali é
+prosa — o exemplo de 25/08 tem noventa caracteres — e nenhuma das quatro opções diria aquilo. A trava
+obrigava a escolher um rótulo aproximado e jogava fora o que de fato aconteceu.
+
+As listas do GR **ficam**: lá o campo classifica um MOTIVO de um conjunto fechado, e classificação em
+texto livre vira quatro grafias da mesma coisa. A regra que separa as duas: **relato pede liberdade,
+estado e motivo pedem lista** — e é por isso que o STATUS da bonificação virou lista mesmo a planilha
+não travando.
 
 ### Uma diferença entre T1 e T2 que precisa de resposta
 
@@ -260,3 +270,68 @@ mesmos dados.
 | as rotas | `apps/web/app/api/passagem-de-turno/` |
 | a tela | `apps/web/components/passagem-de-turno/` |
 | a trava automática | `workers/jobs/turno/index.ts` |
+
+---
+
+## 8. O preenchimento automático (27/08)
+
+Digitou a LH e saiu do campo: **origem, destino, ETA da coleta, motorista, placa, rota e perfil**
+aparecem. Na planilha isso são seis campos copiados do portal, um por um.
+
+### De onde sai cada campo
+
+| campo | fonte |
+|---|---|
+| origem · destino | `locations.name` da viagem — ou as duas pontas de `spot_offers.route` |
+| eta_origem | `planned_pickup_window_start`, formatado **em São Paulo pelo Postgres** |
+| motorista | `drivers.name`, pela ordem de atribuição mais recente do portal |
+| placa | `portal_commands.plates` |
+| rota | `ORIGEM X DESTINO`, como a planilha escreve |
+| perfil | `vehicles.vehicle_type` da primeira placa, traduzido por articulação |
+| data_criacao | `spot_offers.created_at_portal` |
+| telefone | `drivers.phone`, a partir do nome — e só quando casa com **um** motorista |
+
+### Onde ele funciona
+
+**Catorze das vinte seções** têm campo de LH e portanto ganham o preenchimento. As **seis** que não
+ganham não são esquecimento: elas não partem de uma viagem.
+
+| seção sem preenchimento | por quê |
+|---|---|
+| Programação · No show | parte do MOTORISTA, e um motorista tem muitas viagens |
+| Programação · Motorista disponível | idem — mas ganha o **telefone** pelo nome |
+| Programação · Bloqueio de motorista | idem |
+| Monitoring · Rotas em acompanhamento | parte da ROTA, não de uma LH |
+| Monitoring · Bloqueio de motorista | parte do motorista |
+| Monitoring · Bonificação | é uma lista de pessoas, não de viagens |
+
+### O que continua digitado, mesmo nas seções que preenchem
+
+`ocorrência` (é o relato — o motivo de a seção existir) · `responsável` · `valor` do acordo de
+frete · `horário do acionamento` · `ETA destino` (é julgamento: EARLY/ON TIME/DELAY).
+
+### As três regras que mantêm isso confiável
+
+**Nunca sobrescreve.** Só preenche campo VAZIO. O campo digitado é o que alguém decidiu, muitas
+vezes de propósito diferente do cadastro — a origem que o motorista relatou, o destino que mudou por
+telefone e ainda não voltou ao portal. Sobrescrever apagaria justamente o que o turno sabia e o
+sistema não, no instante em que a pessoa sai do campo.
+
+**Duas fontes, nesta ordem: viagem, depois oferta de spot.** Boa parte das LHs que o setor SPOT
+registra são ofertas que nunca viraram viagem — a seção "spot perdido / aceito por outra 3PL" é
+exatamente sobre elas. Procurar só em `trips` deixaria mudo o setor que mais digita.
+
+**LH que não existe é dita na hora.** O campo ganha um anel vermelho e explica. Quase sempre é erro
+de digitação, e uma ocorrência registrada na viagem errada é pior que ocorrência nenhuma. Nome de
+motorista que não casa **não** avisa: homônimo é o normal, e a regra é recusar quando dois batem.
+
+### Duas armadilhas que apareceram no caminho
+
+**`unaccent` não existe neste banco.** A comparação de nome de motorista seria
+`unaccent(lower(name)) = unaccent(lower($1))` — e nenhuma migração roda `CREATE EXTENSION`. A
+consulta falharia em produção, no primeiro uso, como a da Programação falhou em 26/08. A dobra de
+acento ficou em JavaScript, com teste.
+
+**A ETA é formatada pelo Postgres, não pela tela.** `to_char(... at time zone 'America/Sao_Paulo')`.
+Formatar no navegador usaria o relógio de quem abriu — e um notebook em UTC gravaria três horas a
+menos numa anotação que outra pessoa vai ler noutro turno.

@@ -156,6 +156,79 @@ describe("o catálogo dos setores", () => {
   });
 });
 
+/**
+ * AS DUAS MUDANÇAS DE 27/08, pedidas pelo Monitoring — e elas puxam em direções OPOSTAS.
+ *
+ * A ocorrência da viagem crítica SOLTOU: o conteúdo real é prosa de noventa caracteres, e as quatro
+ * opções da planilha obrigavam a escolher um rótulo aproximado jogando fora o que aconteceu.
+ *
+ * O status da bonificação TRAVOU, mesmo a planilha não travando: é estado de um processo de duas
+ * pontas, e estado em texto livre vira "recebido"/"Recebido"/"RECEBIDO" sem contagem possível.
+ *
+ * A regra que as duas seguem: relato pede liberdade, estado e motivo pedem lista. Este teste existe
+ * para que ninguém "uniformize" as duas depois.
+ */
+describe("relato é livre, estado é lista", () => {
+  const campo = (setor: Parameters<typeof problemasDoItem>[0], secao: string, chave: string) =>
+    SECOES_DO_SETOR[setor].find((s) => s.chave === secao)?.campos.find((c) => c.chave === chave);
+
+  it("a ocorrência da viagem crítica do Monitoring aceita qualquer texto", () => {
+    expect(campo("MONITORING", "viagens_criticas", "ocorrencia")?.tipo).toBe("texto_longo");
+    expect(
+      problemasDoItem("MONITORING", "viagens_criticas", {
+        lh: "LT0Q8O02ETU61",
+        ocorrencia: "Drive rodou boa parte da viagem em velocidade reduzida devido à chuva na BR",
+      }),
+    ).toEqual([]);
+  });
+
+  /** As listas do GR FICAM: lá o campo classifica um motivo, e classificação livre não agrupa. */
+  it("as ocorrências do GR continuam travadas na lista", () => {
+    expect(campo("GR", "pendencia_de_rastreamento", "ocorrencia")?.tipo).toBe("lista");
+    expect(campo("GR", "pronta_resposta", "ocorrencia")?.tipo).toBe("lista");
+    const p = problemasDoItem("GR", "pendencia_de_rastreamento", {
+      lh: "X",
+      ocorrencia: "inventado",
+    });
+    expect(p.join(" ")).toContain("não está na lista");
+  });
+
+  it("a bonificação existe no Monitoring, com status de lista", () => {
+    const secao = SECOES_DO_SETOR.MONITORING.find((s) => s.chave === "bonificacao");
+    expect(secao?.titulo).toBe("Bonificação rota Simões x Jaboatão");
+    expect(campo("MONITORING", "bonificacao", "status")?.opcoes).toEqual([
+      "Recebido",
+      "Aguardando chave",
+    ]);
+  });
+
+  it("a bonificação aceita os dois estados e recusa um terceiro", () => {
+    for (const status of ["Recebido", "Aguardando chave"]) {
+      expect(
+        problemasDoItem("MONITORING", "bonificacao", { motorista: "Joao vitor fidelis", status }),
+        status,
+      ).toEqual([]);
+    }
+    expect(
+      problemasDoItem("MONITORING", "bonificacao", { motorista: "X", status: "recebido" }).join(
+        " ",
+      ),
+    ).toContain("não está na lista");
+  });
+
+  /**
+   * Ela está nos DOIS turnos, embora a planilha só a tenha no lado do T2 — foi assim que ela
+   * escapou da primeira leitura. Uma seção que só o noturno enxerga obrigaria o diurno a pedir
+   * registro ao noturno, que é o tipo de dependência que a passagem de turno existe para eliminar.
+   */
+  it("a bonificação vale para os dois turnos, e não só para o noturno", () => {
+    for (const turno of TURNOS) {
+      expect(contadoresDo("MONITORING", turno).length, turno).toBeGreaterThan(0);
+    }
+    expect(SECOES_DO_SETOR.MONITORING.map((s) => s.chave)).toContain("bonificacao");
+  });
+});
+
 describe("a conferência do conteúdo de um item", () => {
   it("aceita um item bem preenchido", () => {
     expect(

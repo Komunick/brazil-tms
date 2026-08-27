@@ -3,11 +3,12 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Plus, Trash2 } from "lucide-react";
-import type { Campo, Secao } from "@brazil-tms/shared";
+import type { Campo, Secao, Setor } from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { useSugestao } from "./use-sugestao";
 
 export interface ItemNaTela {
   id: string;
@@ -36,12 +37,14 @@ export interface ItemNaTela {
  * lembrar.
  */
 export function SecaoDoSetor({
+  setor,
   secao,
   itens,
   editavel,
   aoSalvar,
   aoRemover,
 }: {
+  setor: Setor;
   secao: Secao;
   itens: ItemNaTela[];
   editavel: boolean;
@@ -107,6 +110,7 @@ export function SecaoDoSetor({
               {itens.map((item) => (
                 <LinhaDaTabela
                   key={item.id}
+                  setor={setor}
                   secao={secao}
                   dados={item.dados}
                   editavel={editavel}
@@ -117,6 +121,7 @@ export function SecaoDoSetor({
               {novos.map((dados, i) => (
                 <LinhaDaTabela
                   key={`novo-${i}`}
+                  setor={setor}
                   secao={secao}
                   dados={dados}
                   editavel
@@ -133,6 +138,7 @@ export function SecaoDoSetor({
           {itens.map((item) => (
             <Cartao
               key={item.id}
+              setor={setor}
               secao={secao}
               dados={item.dados}
               editavel={editavel}
@@ -143,6 +149,7 @@ export function SecaoDoSetor({
           {novos.map((dados, i) => (
             <Cartao
               key={`novo-${i}`}
+              setor={setor}
               secao={secao}
               dados={dados}
               editavel
@@ -157,7 +164,71 @@ export function SecaoDoSetor({
   );
 }
 
+/**
+ * O RASCUNHO DE UM ITEM — estado, gravação e preenchimento automático (2026-08-27).
+ *
+ * Um hook porque a linha de tabela e o cartão fazem exatamente a mesma coisa e sempre fizeram: o
+ * rascunho e a gravação já viviam duplicados nos dois. Ao acrescentar o preenchimento automático a
+ * duplicação passaria de três linhas para trinta — e o dia em que uma das cópias fosse corrigida
+ * produziria uma tela onde a tabela preenche e o cartão não, sem que nada acusasse.
+ */
+function useRascunho(args: {
+  setor: Setor;
+  secao: Secao;
+  dados: Record<string, string>;
+  aoSalvar: (dados: Record<string, string>) => void;
+}) {
+  const { setor, secao, dados, aoSalvar } = args;
+  const [rascunho, setRascunho] = useState(dados);
+  const [preenchidos, setPreenchidos] = useState<string[]>([]);
+  const [naoAchou, setNaoAchou] = useState(false);
+  const { buscar, buscando } = useSugestao(setor, secao.chave);
+
+  const temCampo = (chave: string) => secao.campos.some((c) => c.chave === chave);
+  /**
+   * QUAIS CAMPOS DISPARAM A BUSCA.
+   *
+   * A LH, onde ela existe. E o nome do motorista SÓ onde a seção tem telefone — ou seja, na lista
+   * de disponíveis. Nas outras, buscar o motorista gastaria uma requisição para descobrir um
+   * telefone que a seção não desenha.
+   */
+  const gatilho = (chave: string): "lh" | "motorista" | null => {
+    if (chave === "lh" && temCampo("lh")) return "lh";
+    if (chave === "motorista" && temCampo("telefone")) return "motorista";
+    return null;
+  };
+
+  const mudar = (chave: string, valor: string) => {
+    setRascunho((r) => ({ ...r, [chave]: valor }));
+    // Digitar de novo apaga o aviso e o destaque: eles descrevem a busca ANTERIOR.
+    setPreenchidos([]);
+    setNaoAchou(false);
+  };
+
+  const aoSair = async (chave: string) => {
+    let atual = rascunho;
+
+    const tipo = gatilho(chave);
+    if (tipo) {
+      const r = await buscar(tipo, rascunho[chave] ?? "", rascunho);
+      if (r) {
+        atual = r.dados;
+        setRascunho(r.dados);
+        setPreenchidos(r.preenchidos);
+        setNaoAchou(r.naoAchou);
+      }
+    }
+
+    // Grava o resultado da MESCLA, não o estado — `setRascunho` é assíncrono e o item sairia sem o
+    // que a busca acabou de preencher.
+    if (mudou(atual, dados) && temConteudo(atual)) aoSalvar(atual);
+  };
+
+  return { rascunho, mudar, aoSair, preenchidos, naoAchou, buscando };
+}
+
 function LinhaDaTabela({
+  setor,
   secao,
   dados,
   editavel,
@@ -165,6 +236,7 @@ function LinhaDaTabela({
   aoSalvar,
   aoRemover,
 }: {
+  setor: Setor;
   secao: Secao;
   dados: Record<string, string>;
   editavel: boolean;
@@ -173,11 +245,12 @@ function LinhaDaTabela({
   aoRemover: () => void;
 }) {
   const t = useTranslations("PassagemTurno");
-  const [rascunho, setRascunho] = useState(dados);
-  const mudar = (chave: string, valor: string) => setRascunho((r) => ({ ...r, [chave]: valor }));
-  const gravar = () => {
-    if (mudou(rascunho, dados) && temConteudo(rascunho)) aoSalvar(rascunho);
-  };
+  const { rascunho, mudar, aoSair, preenchidos, naoAchou, buscando } = useRascunho({
+    setor,
+    secao,
+    dados,
+    aoSalvar,
+  });
 
   return (
     <tr className={cn(novo && "bg-accent/30")}>
@@ -188,8 +261,11 @@ function LinhaDaTabela({
             valor={rascunho[campo.chave] ?? ""}
             editavel={editavel}
             compacto
+            destacado={preenchidos.includes(campo.chave)}
+            aviso={campo.chave === "lh" && naoAchou ? t("lhNaoEncontrada") : undefined}
+            ocupado={campo.chave === "lh" && buscando}
             aoMudar={(v) => mudar(campo.chave, v)}
-            aoSair={gravar}
+            aoSair={() => void aoSair(campo.chave)}
           />
         </td>
       ))}
@@ -217,6 +293,7 @@ function LinhaDaTabela({
  * campos são a etiqueta que diz de qual viagem se está falando.
  */
 function Cartao({
+  setor,
   secao,
   dados,
   editavel,
@@ -224,6 +301,7 @@ function Cartao({
   aoSalvar,
   aoRemover,
 }: {
+  setor: Setor;
   secao: Secao;
   dados: Record<string, string>;
   editavel: boolean;
@@ -232,11 +310,12 @@ function Cartao({
   aoRemover: () => void;
 }) {
   const t = useTranslations("PassagemTurno");
-  const [rascunho, setRascunho] = useState(dados);
-  const mudar = (chave: string, valor: string) => setRascunho((r) => ({ ...r, [chave]: valor }));
-  const gravar = () => {
-    if (mudou(rascunho, dados) && temConteudo(rascunho)) aoSalvar(rascunho);
-  };
+  const { rascunho, mudar, aoSair, preenchidos, naoAchou, buscando } = useRascunho({
+    setor,
+    secao,
+    dados,
+    aoSalvar,
+  });
 
   const ocorrencia = secao.campos.find((c) => c.chave === "ocorrencia");
   const demais = secao.campos.filter((c) => c.chave !== "ocorrencia");
@@ -253,8 +332,11 @@ function Cartao({
                 valor={rascunho[campo.chave] ?? ""}
                 editavel={editavel}
                 compacto
+                destacado={preenchidos.includes(campo.chave)}
+                aviso={campo.chave === "lh" && naoAchou ? t("lhNaoEncontrada") : undefined}
+                ocupado={campo.chave === "lh" && buscando}
                 aoMudar={(v) => mudar(campo.chave, v)}
-                aoSair={gravar}
+                aoSair={() => void aoSair(campo.chave)}
               />
             </dd>
           </div>
@@ -268,7 +350,7 @@ function Cartao({
             valor={rascunho[ocorrencia.chave] ?? ""}
             editavel={editavel}
             aoMudar={(v) => mudar(ocorrencia.chave, v)}
-            aoSair={gravar}
+            aoSair={() => void aoSair(ocorrencia.chave)}
           />
         </div>
       ) : null}
@@ -300,6 +382,9 @@ function CampoEditavel({
   valor,
   editavel,
   compacto,
+  destacado,
+  aviso,
+  ocupado,
   aoMudar,
   aoSair,
 }: {
@@ -307,6 +392,18 @@ function CampoEditavel({
   valor: string;
   editavel: boolean;
   compacto?: boolean;
+  /**
+   * O campo acabou de ser preenchido pela busca, e não pela pessoa.
+   *
+   * O destaque some ao primeiro toque em qualquer campo do item. Ele não existe para enfeitar: um
+   * valor que aparece sozinho num campo que estava vazio precisa ser distinguível do que a pessoa
+   * escreveu, senão ela não sabe o que conferir — e é justamente o preenchido pelo sistema que
+   * merece um segundo olhar.
+   */
+  destacado?: boolean;
+  /** "Essa LH não existe" — quase sempre erro de digitação, e vale dizer na hora. */
+  aviso?: string;
+  ocupado?: boolean;
   aoMudar: (v: string) => void;
   aoSair: () => void;
 }) {
@@ -362,8 +459,21 @@ function CampoEditavel({
       onChange={(e) => aoMudar(e.target.value)}
       onBlur={aoSair}
       placeholder={campo.rotulo}
-      className="h-7 text-sm"
-      aria-label={campo.rotulo}
+      className={cn(
+        "h-7 text-sm",
+        // O anel de preenchido é discreto e temporário; o de aviso fica até a pessoa corrigir.
+        destacado && "ring-1 ring-primary/50",
+        aviso && "ring-1 ring-destructive",
+        ocupado && "opacity-70",
+      )}
+      /*
+       * O aviso vai no `title` E no `aria-describedby` implícito do `title`, e não num texto solto
+       * embaixo: o campo mora numa célula de tabela, e uma linha extra ali empurraria a tabela
+       * inteira a cada LH errada — que é justamente quando a pessoa está com pressa.
+       */
+      title={aviso}
+      aria-invalid={aviso ? true : undefined}
+      aria-label={aviso ? `${campo.rotulo} — ${aviso}` : campo.rotulo}
     />
   );
 }

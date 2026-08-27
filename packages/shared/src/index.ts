@@ -18,6 +18,7 @@ export * from "./domain/region";
 export * from "./domain/status-programacao";
 export * from "./domain/coordenada-de-rota";
 export * from "./domain/passagem-de-turno";
+export * from "./domain/passagem-de-turno-sugestao";
 export * from "./domain/assignment-eligibility";
 export * from "./domain/sla-risk";
 export * from "./domain/exceptions";
