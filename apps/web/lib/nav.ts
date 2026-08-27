@@ -107,6 +107,22 @@ export const NAV_ITEMS: readonly NavItem[] = [
     permission: "assign_resources",
     grupo: "operacao",
   },
+  /**
+   * A passagem de turno (2026-08-26) — o diário de cada setor.
+   *
+   * Fica no fim do bloco de operação porque é o que se abre no COMEÇO e no FIM do turno, não
+   * durante ele. Permissão de LEITURA (`view_all_trips`, os sete papéis internos): quem escreve é
+   * decidido pelo SETOR da conta, dentro da tela, e o servidor confere em toda escrita. Esconder o
+   * item de quem não tem setor seria errado — ler o diário do turno anterior é justamente para
+   * quem não escreveu nele.
+   */
+  {
+    key: "passagemDeTurno",
+    href: "/passagem-de-turno",
+    icon: "ClipboardList",
+    permission: "view_all_trips",
+    grupo: "operacao",
+  },
   // 007 — Exception Management queue (view_all_trips: all 7 internal roles read) + per-customer SLA
   // rules admin (manage_commercial_data: Admin, Ops Manager).
   {

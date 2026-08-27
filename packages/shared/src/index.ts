@@ -17,12 +17,15 @@ export * from "./domain/pre-sm-corpo";
 export * from "./domain/region";
 export * from "./domain/status-programacao";
 export * from "./domain/coordenada-de-rota";
+export * from "./domain/passagem-de-turno";
+export * from "./domain/passagem-de-turno-sugestao";
 export * from "./domain/assignment-eligibility";
 export * from "./domain/sla-risk";
 export * from "./domain/exceptions";
 export * from "./domain/operational-fields";
 export * from "./sla/jobs";
 export * from "./import/portal-jobs";
+export * from "./import/turno-jobs";
 // feature 008 — documents, completion, billing readiness, rates & export.
 export * from "./domain/documents";
 export * from "./domain/billing";

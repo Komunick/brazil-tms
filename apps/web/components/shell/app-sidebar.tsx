@@ -29,6 +29,7 @@ import {
   Users,
   type LucideIcon,
   Activity,
+  ClipboardList,
 } from "lucide-react";
 import { can, type Role } from "@brazil-tms/shared";
 import { NAV_GRUPOS, NAV_ITEMS } from "@/lib/nav";
@@ -57,6 +58,7 @@ const ICONS: Record<string, LucideIcon> = {
   History,
   Activity,
   Sparkles,
+  ClipboardList,
 };
 
 /**

@@ -309,3 +309,29 @@ export {
 
 // A fila da aba GR — uma consulta, não uma tabela (027).
 export { filaDaGR, linhaDaFilaGR, type LinhaDaFilaGR } from "./trips/gr-fila";
+
+// A passagem de turno — o diário de cada setor (2026-08-26).
+export {
+  garantirBloco,
+  lerBloco,
+  salvarItem,
+  removerItem,
+  salvarContador,
+  salvarNomes,
+  fecharBloco,
+  fecharAtrasados,
+  linhaDoTempo,
+  contadoresApurados,
+  CONTADORES_APURADOS,
+  chavesCalculadasNoCatalogo,
+  setorDoUsuario,
+} from "./passagem-de-turno/bloco";
+export type {
+  Bloco,
+  BlocoCompleto,
+  ItemDoBloco,
+  LinhaDoTempoItem,
+} from "./passagem-de-turno/bloco";
+
+// A sugestão que preenche o item da passagem de turno a partir da LH (2026-08-27).
+export { sugestaoPelaLH, sugestaoPeloMotorista, dobrarAcento } from "./passagem-de-turno/sugestao";

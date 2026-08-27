@@ -35,6 +35,18 @@ export const users = pgTable(
     role: appRole("role").notNull(),
     // 'pending' | 'active' | 'disabled' — enforced by the CHECK below and the shared Zod schemas.
     status: text("status").notNull(),
+    /**
+     * O SETOR DA PASSAGEM DE TURNO — e ele NÃO é um papel (2026-08-26).
+     *
+     * `role` diz o que a pessoa pode FAZER no TMS e alimenta a matriz de permissões. `setor` diz
+     * qual FAIXA do diário de turno ela responde. Um `dispatcher` pode estar em PROGRAMAÇÃO ou em
+     * SPOT; um `control_tower` em GR ou em Monitoring. Somar as duas coisas num enum só
+     * multiplicaria os oito papéis por cinco e quebraria a matriz inteira.
+     *
+     * NULO É O NORMAL: a maioria dos usuários não faz passagem de turno. Quem não tem setor lê
+     * tudo e não edita nada, que é o certo para quem só acompanha.
+     */
+    setor: text("setor"),
     mustChangePassword: boolean("must_change_password").notNull().default(false),
     lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -43,5 +55,9 @@ export const users = pgTable(
   (table) => [
     index("users_role_idx").on(table.role),
     check("users_status_check", sql`${table.status} in ('pending', 'active', 'disabled')`),
+    check(
+      "users_setor_ck",
+      sql`${table.setor} is null or ${table.setor} in ('PROGRAMACAO', 'SPOT', 'EMISSAO', 'GR', 'MONITORING')`,
+    ),
   ],
 );
