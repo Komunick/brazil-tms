@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { SETORES, TURNOS } from "@brazil-tms/shared";
-import { CONTADORES_APURADOS, chavesCalculadasNoCatalogo } from "./bloco";
+import {
+  CONTADORES_APURADOS,
+  chavesCalculadasNoCatalogo,
+  horasDaJanela,
+  janelaDoTurno,
+} from "./bloco";
 
 /**
  * O CATÁLOGO NÃO PODE PROMETER O QUE O CÓDIGO NÃO APURA (2026-08-26).
@@ -71,5 +77,82 @@ describe("todo contador `calculado` tem apuração de verdade", () => {
         expect(chavesCalculadasNoCatalogo(setor, turno), setor).toEqual([]);
       }
     }
+  });
+});
+
+/**
+ * A JANELA DO TURNO EM SQL — o defeito que só a Programação mostrava (2026-08-27).
+ *
+ * ── O QUE ACONTECEU ───────────────────────────────────────────────────────────────────────────
+ *
+ * A janela do T2 era montada como `data::date + 1 + '7 hours'::interval`, para dizer "sete da manhã
+ * do dia seguinte". Aquele `+ 1` vira um PARÂMETRO SEM TIPO no SQL gerado, e `date + $n` é ambíguo
+ * para o Postgres — existem `date + integer`, `date + interval`, `date + time` e `date + timetz`.
+ * Ele não escolhe: recusa a consulta.
+ *
+ * Falhava nos DOIS turnos, sempre. Mas como a apuração só existe para a PROGRAMAÇÃO — os outros
+ * quatro setores devolvem `{}` sem consultar —, só aquela aba quebrava. Parecia defeito de tela.
+ *
+ * ── POR QUE ESTE TESTE NÃO PRECISA DE BANCO ───────────────────────────────────────────────────
+ *
+ * O erro está no TEXTO da consulta, e o `PgDialect` monta esse texto sem conexão nenhuma. É o mesmo
+ * caminho que já pegou a serialização de `Date` em `logae-positions`: defeito de SQL gerado se prova
+ * offline, e o teste roda na CI, que não tem Postgres.
+ */
+describe("a janela do turno em SQL", () => {
+  const d = new PgDialect();
+
+  /**
+   * A INVARIANTE QUE PEGA O DEFEITO: nenhum parâmetro solto.
+   *
+   * Todo `$n` desta expressão alimenta aritmética de data, onde o Postgres não infere tipo sozinho.
+   * Exigir que cada um venha seguido de `::` é a regra mais simples que descreve isso — e é
+   * exatamente o que faltava no `+ 1`. Conferido contra a expressão antiga: ela acusa `$2`.
+   */
+  for (const turno of TURNOS) {
+    it(`${turno}: todo parâmetro carrega cast explícito`, () => {
+      for (const ponta of ["inicio", "fim"] as const) {
+        const { sql: texto } = d.sqlToQuery(janelaDoTurno("2026-08-26", turno)[ponta]);
+        const semCast = texto.match(/\$\d+(?!::)/g) ?? [];
+        expect(semCast, `${turno}/${ponta}: ${texto}`).toEqual([]);
+      }
+    });
+  }
+
+  /**
+   * E a aritmética continua certa depois da troca — que é o risco de dobrar o dia dentro das horas:
+   * ficaria fácil somar 24 no turno errado, e aí a janela do diurno pegaria doze horas do noturno
+   * sem que nada acusasse.
+   */
+  it("o T1 vai das 7h às 19h do mesmo dia", () => {
+    expect(horasDaJanela("T1")).toEqual({ inicio: 7, fim: 19 });
+  });
+
+  it("o T2 vai das 19h às 7h do DIA SEGUINTE — 31 horas da meia-noite", () => {
+    expect(horasDaJanela("T2")).toEqual({ inicio: 19, fim: 31 });
+  });
+
+  /** Janela invertida ou vazia não selecionaria viagem nenhuma, e o contador daria zero calado. */
+  it("o fim vem sempre depois do início, nos dois turnos", () => {
+    for (const turno of TURNOS) {
+      const { inicio, fim } = horasDaJanela(turno);
+      expect(fim, turno).toBeGreaterThan(inicio);
+    }
+  });
+
+  /** As doze horas de cada turno, que somadas fecham o dia — se uma encolher, algo se perdeu. */
+  it("cada turno cobre doze horas, e os dois somam o dia inteiro", () => {
+    const duracoes = TURNOS.map((t) => {
+      const { inicio, fim } = horasDaJanela(t);
+      return fim - inicio;
+    });
+    expect(duracoes).toEqual([12, 12]);
+  });
+
+  /** A data viaja como TEXTO até o Postgres — virar `Date` no caminho traz o fuso de volta. */
+  it("a data vai como AAAA-MM-DD, nunca como Date", () => {
+    const { params } = d.sqlToQuery(janelaDoTurno("2026-08-26", "T2").inicio);
+    expect(params).toContain("2026-08-26");
+    for (const p of params) expect(p).not.toBeInstanceOf(Date);
   });
 });
