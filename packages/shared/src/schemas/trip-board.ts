@@ -125,6 +125,13 @@ export const tripBoardQuerySchema = z.object({
   lateToAssign: optParam(z.enum(["true", "false"])),
   origemAtrasada: optParam(z.enum(["true", "false"])),
   /**
+   * A JANELA DE AVISO da origem (2026-08-27): passou de "duas horas antes" e a hora da coleta
+   * ainda não chegou. Existe como filtro pela mesma razão que a de cima: o número no painel e a
+   * lista no quadro têm de ser a MESMA coisa, e um número que abre uma lista diferente do que
+   * contou é o erro em que nenhum dos dois lados parece errado sozinho.
+   */
+  origemRisco: optParam(z.enum(["true", "false"])),
+  /**
    * SÓ O EIXO DA ACEITAÇÃO, sem dizer nada sobre motorista (2026-08-22).
    *
    * As três filas são exaustivas e EXCLUSIVAS — foi o que as fez boas para rotular o quadro, e é
@@ -199,6 +206,7 @@ const PARAM_KEYS = [
   "rotaNossa",
   "lateToAssign",
   "origemAtrasada",
+  "origemRisco",
   "portalAccepted",
   "q",
   "scope",
