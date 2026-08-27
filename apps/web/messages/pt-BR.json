@@ -100,7 +100,8 @@
     "novidades": "Novidades",
     "preSmRotas": "Rotas da gerenciadora",
     "preSmCidades": "Cidades da gerenciadora",
-    "gr": "GR — Pré-SM"
+    "gr": "GR — Pré-SM",
+    "passagemDeTurno": "Passagem de Turno"
   },
   "FreightRates": {
     "screenTitle": "Tabela de Fretes",
@@ -205,7 +206,11 @@
     "empty": "Nenhum usuário encontrado.",
     "searchPlaceholder": "Buscar por nome ou e-mail",
     "loadError": "Não foi possível carregar os usuários.",
-    "saveError": "Não foi possível salvar. Tente novamente."
+    "saveError": "Não foi possível salvar. Tente novamente.",
+    "setor": "Setor (passagem de turno)",
+    "changeSetor": "Alterar setor",
+    "semSetor": "Sem setor",
+    "setorAjuda": "Define qual faixa da passagem de turno esta pessoa pode editar. Sem setor, ela lê o diário inteiro e não edita nada."
   },
   "Audit": {
     "title": "Auditoria",
@@ -373,6 +378,7 @@
     "user_create": "Usuário criado",
     "user_role_change": "Perfil alterado",
     "user_status_change": "Status alterado",
+    "user_setor_change": "Setor alterado",
     "user_invite_sent": "Convite enviado",
     "user_delete": "Usuário excluído",
     "customer_create": "Cliente criado",
@@ -2246,5 +2252,48 @@
       "motorista": "o motorista",
       "placas": "as placas"
     }
+  },
+  "PassagemTurno": {
+    "titulo": "Passagem de turno",
+    "subtitulo": "O diário de cada setor — o que o turno registrou, e o que fica para o próximo.",
+    "data": "Data",
+    "turno": "Turno",
+    "setor": "Setor",
+    "turnoAtual": "Turno atual",
+    "oSeuSetor": "O seu setor",
+    "carregando": "Carregando…",
+    "naoCarregou": "Não foi possível carregar este turno.",
+    "naoGravou": "Não foi possível gravar.",
+    "turnoEntregue": "Turno entregue.",
+    "entregueEm": "Turno entregue em {quando}",
+    "entregueSemData": "Turno entregue",
+    "pelaTrava": " — pela trava automática, sem entrega registrada.",
+    "soLeitura": "Só leitura.",
+    "faixaDeOutroSetor": "Esta faixa é do setor {setor}.",
+    "suaContaResponde": "A sua conta responde por {setor}.",
+    "semSetor": "A sua conta não tem setor na passagem de turno.",
+    "assistente": "Assistente",
+    "supervisor": "Supervisor",
+    "quemEstaNoTurno": "Quem está no turno",
+    "entregarTurno": "Entregar turno",
+    "entregar": "Entregar",
+    "cancelar": "Cancelar",
+    "avisoDaEntrega": "Entregar o turno fecha esta faixa para edição. Não há como reabrir.",
+    "resumoDaOperacao": "Resumo da operação",
+    "aindaNaoApura": "Ainda não dá para apurar: {motivo}",
+    "oQueOTmsApurou": "O que o TMS apurou",
+    "valorDe": "Valor de {chave}",
+    "adicionar": "Adicionar",
+    "nadaRegistrado": "Nada registrado.",
+    "remover": "Remover",
+    "descartar": "Descartar",
+    "turnosAnteriores": "Turnos anteriores",
+    "linhaDoTempo": "Linha do tempo",
+    "semNomes": "sem nomes",
+    "vazio": "vazio",
+    "registros": "{n, plural, one {# registro} other {# registros}}",
+    "entregue": "Entregue",
+    "fechadoPelaTrava": "Fechado pela trava",
+    "aberto": "aberto"
   }
 }

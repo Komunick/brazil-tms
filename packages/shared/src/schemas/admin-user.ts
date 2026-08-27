@@ -1,5 +1,23 @@
 import { z } from "zod";
 import { ASSIGNABLE_ROLES, type Role } from "../auth/permissions";
+import { SETORES, type Setor } from "../domain/passagem-de-turno";
+
+/**
+ * O SETOR DA PASSAGEM DE TURNO — e ele NÃO é um perfil (2026-08-26).
+ *
+ * `role` diz o que a pessoa pode FAZER no TMS; `setor` diz qual FAIXA do diário de turno ela
+ * responde. São dimensões independentes: um `dispatcher` pode estar em PROGRAMAÇÃO ou em SPOT, e um
+ * `control_tower` em GR ou em Monitoring. Somar as duas num enum só multiplicaria os oito perfis
+ * por cinco e quebraria a matriz de permissões inteira.
+ *
+ * `null` TIRA o setor, e é o valor da maioria das contas — não é pendência de cadastro. Quem não
+ * tem setor lê o diário inteiro e não edita nada, que é o certo para quem só acompanha.
+ */
+export const setorSchema = z
+  .enum(SETORES as unknown as [Setor, ...Setor[]], {
+    errorMap: () => ({ message: "Setor inválido." }),
+  })
+  .nullable();
 
 /**
  * Assignable roles as a Zod enum. `customer_viewer` is intentionally absent (FR-007) so any
@@ -57,9 +75,11 @@ export const updateUserSchema = z
   .object({
     role: roleSchema.optional(),
     status: z.enum(["active", "disabled"]).optional(),
+    setor: setorSchema.optional(),
     reason: z.string().trim().max(500, "Motivo muito longo.").optional(),
   })
-  .refine((data) => data.role !== undefined || data.status !== undefined, {
-    message: "Nada para atualizar.",
-  });
+  .refine(
+    (data) => data.role !== undefined || data.status !== undefined || data.setor !== undefined,
+    { message: "Nada para atualizar." },
+  );
 export type UpdateUserInput = z.infer<typeof updateUserSchema>;

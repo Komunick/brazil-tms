@@ -1,7 +1,8 @@
 import "server-only";
 import { and, desc, eq, ilike, ne, or } from "drizzle-orm";
 import { db, users } from "@brazil-tms/db";
-import type { CreateUserInput, Role, UpdateUserInput } from "@brazil-tms/shared";
+import type { CreateUserInput, Role, Setor, UpdateUserInput } from "@brazil-tms/shared";
+import { setorValido } from "@brazil-tms/shared";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { writeAudit } from "@/lib/audit/write-audit";
 import { Conflict, NotFound } from "@/lib/api/respond";
@@ -13,6 +14,8 @@ export interface UserProfile {
   email: string;
   role: Role;
   status: string;
+  /** O setor da passagem de turno. Nulo é o normal — a maioria das contas não faz turno. */
+  setor: Setor | null;
   mustChangePassword: boolean;
   lastLoginAt: string | null;
   createdAt: string;
@@ -26,6 +29,7 @@ interface UserRow {
   email: string;
   role: string;
   status: string;
+  setor: string | null;
   mustChangePassword: boolean;
   lastLoginAt: Date | null;
   createdAt: Date;
@@ -40,6 +44,7 @@ function toProfile(row: UserRow): UserProfile {
     email: row.email,
     role: row.role as Role,
     status: row.status,
+    setor: setorValido(row.setor),
     mustChangePassword: row.mustChangePassword,
     lastLoginAt: row.lastLoginAt ? row.lastLoginAt.toISOString() : null,
     createdAt: row.createdAt.toISOString(),
@@ -198,6 +203,15 @@ export async function updateUser(
 
   const roleChanged = input.role !== undefined && input.role !== current.role;
   const statusChanged = input.status !== undefined && input.status !== current.status;
+  /**
+   * O SETOR NÃO ENTRA NA GUARDA DO ÚLTIMO ADMINISTRADOR, de propósito.
+   *
+   * Aquela guarda existe para impedir que o sistema fique sem ninguém capaz de administrá-lo. Setor
+   * não administra nada — tirar o setor de alguém não fecha porta nenhuma além da faixa do diário.
+   * Enfiá-lo ali só tornaria a guarda mais difícil de entender sem proteger mais nada.
+   */
+  const nextSetor = input.setor !== undefined ? input.setor : (current.setor ?? null);
+  const setorChanged = input.setor !== undefined && input.setor !== (current.setor ?? null);
 
   // Does this change remove the last active admin? (disabling an admin, or moving an admin off admin)
   const removesAdmin =
@@ -224,7 +238,7 @@ export async function updateUser(
 
     const updated = await tx
       .update(users)
-      .set({ role: nextRole, status: nextStatus, updatedAt: new Date() })
+      .set({ role: nextRole, status: nextStatus, setor: nextSetor, updatedAt: new Date() })
       .where(eq(users.id, id))
       .returning();
     const row = updated[0];
@@ -237,6 +251,25 @@ export async function updateUser(
         action: "user.role_change",
         previousValue: { role: current.role },
         newValue: { role: nextRole },
+        actorUserId,
+        reason: input.reason ?? null,
+      });
+    }
+
+    /**
+     * A troca de setor é AUDITADA como as outras duas.
+     *
+     * Ela decide quem pode escrever no diário de turno, e o diário é o registro que alguém lê de
+     * madrugada para decidir o que fazer. "Quem passou a poder escrever nisto, e quando" é
+     * exatamente o tipo de pergunta que a auditoria existe para responder.
+     */
+    if (setorChanged) {
+      await writeAudit(tx, {
+        entityType: "user",
+        entityId: id,
+        action: "user.setor_change",
+        previousValue: { setor: current.setor ?? null },
+        newValue: { setor: nextSetor },
         actorUserId,
         reason: input.reason ?? null,
       });

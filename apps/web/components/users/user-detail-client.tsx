@@ -4,7 +4,14 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { ASSIGNABLE_ROLES, formatDateTime, type Role } from "@brazil-tms/shared";
+import {
+  ASSIGNABLE_ROLES,
+  ROTULO_DO_SETOR,
+  SETORES,
+  formatDateTime,
+  type Role,
+  type Setor,
+} from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -38,7 +45,21 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
   disabled: "destructive",
 };
 
-type UpdatePayload = { role?: Role; status?: "active" | "disabled" };
+type UpdatePayload = {
+  role?: Role;
+  status?: "active" | "disabled";
+  /**
+   * `null` TIRA o setor, e por isso o tipo não é `Setor | undefined`.
+   *
+   * `undefined` significa "não mexi neste campo" e `null` significa "esta pessoa não responde por
+   * setor nenhum". Colapsar os dois faria a única forma de REMOVER um setor virar impossível — e o
+   * jeito de contornar seria trocar a pessoa de setor para um qualquer, que é pior que não ter.
+   */
+  setor?: Setor | null;
+};
+
+/** O valor que o `Select` usa para "sem setor" — vazio não é aceito como value pelo Radix. */
+const SEM_SETOR = "__sem_setor__";
 
 /** Single-user detail + role/status editing (US3). Reuses the same BFF + i18n as the list view. */
 export function UserDetailClient({ userId }: { userId: string }) {
@@ -162,6 +183,39 @@ export function UserDetailClient({ userId }: { userId: string }) {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/*
+            O SETOR DA PASSAGEM DE TURNO — ao lado do perfil, e separado dele.
+
+            São duas dimensões independentes: o perfil diz o que a pessoa pode FAZER no TMS, o setor
+            diz qual FAIXA do diário de turno ela responde. Ficam lado a lado porque se decide os
+            dois no mesmo momento — ao cadastrar alguém —, mas nunca no mesmo controle.
+          */}
+          <div className="space-y-2">
+            <Label htmlFor="detail-setor">{t("setor")}</Label>
+            <Select
+              value={user.setor ?? SEM_SETOR}
+              onValueChange={(v) =>
+                updateMutation.mutate({ setor: v === SEM_SETOR ? null : (v as Setor) })
+              }
+              disabled={updateMutation.isPending}
+            >
+              <SelectTrigger id="detail-setor" className="w-64" aria-label={t("changeSetor")}>
+                <SelectValue>
+                  {user.setor ? ROTULO_DO_SETOR[user.setor] : t("semSetor")}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={SEM_SETOR}>{t("semSetor")}</SelectItem>
+                {SETORES.map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {ROTULO_DO_SETOR[s]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">{t("setorAjuda")}</p>
           </div>
 
           <div className="flex gap-2">
