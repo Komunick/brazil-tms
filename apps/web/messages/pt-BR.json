@@ -1938,12 +1938,7 @@
   "Spot": {
     "dismiss": "Fechar aviso",
     "vehicle": "Veículo",
-    "todayTitle": "Ofertas de spot hoje",
-    "todayEmpty": "Nenhuma oferta hoje.",
-    "todayMore": "e mais {count}",
     "originArrival": "STA",
-    "openList": "Ver as ofertas de hoje",
-    "listHint": "O que o aviso mostrou, pelo resto do dia.",
     "queued": "+{count} esperando na fila",
     "systemTitle": "Nova oferta de spot",
     "systemHeading": "Aviso na área de trabalho",
