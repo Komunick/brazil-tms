@@ -1451,7 +1451,16 @@
       "personalizarAjuda": "Desligue o que não é da sua frente. Vale só para você, e cartão novo sempre nasce ligado.",
       "restaurarPadrao": "Mostrar todos",
       "spotRotulo": "Spot",
-      "spotNumeros": "{aceito} aceita(s) · {passou} passou"
+      "spotNumeros": "{aceito} aceita(s) · {passou} passou",
+      "blocoPlan": "Plan",
+      "blocoD1": "D1 · amanhã",
+      "blocoD2": "D2",
+      "blocoSpot": "Spot",
+      "blocoOrigem": "Origem",
+      "semAtraso": "Nada atrasado.",
+      "spotVazio": "Sem leilão nas últimas 24h.",
+      "spotAceita": "Aceita",
+      "spotPassou": "Passou"
     },
     "portalDecision": {
       "title": "Decisão da proposta",

@@ -23,6 +23,7 @@ import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { BOARD_ANCHOR } from "@/components/trips/control-tower-table";
 import { BscCard } from "@/components/trips/dashboard/bsc-card";
 import { OfertasDoDia } from "@/components/spot/ofertas-do-dia";
+import { LinhaDaFrente } from "@/components/trips/dashboard/frente";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -249,164 +250,6 @@ function StatusCard({
   );
 }
 
-/**
- * Um quadro de status recortado por REGIÃO, no dia de hoje (2026-08-20, a pedido).
- *
- * A operação é dividida em três frentes, e quem cuida de uma não consegue ler o número somado: doze
- * viagens em análise não dizem se o problema é seu ou de outra frente. Cada cartão responde a mesma
- * pergunta do cartão de hoje, só que para uma frente.
- *
- * Reaproveita `StatusList`, e isso é o ponto: a lista, a ordem dos status, o que fica oculto e o
- * formato do link são exatamente os do cartão de hoje. Um componente próprio divergiria no primeiro
- * ajuste de estilo, e aí duas listas que respondem a mesma pergunta pareceriam responder a duas.
- *
- * O link carrega `region=` — o MESMO filtro que a consulta agrupou. É o que garante que o número do
- * cartão e o total da lista sejam o mesmo número.
- */
-function RegionCard({
-  region,
-  byStatus,
-  dateFilter,
-  diaKey,
-  atrasadas = 0,
-  origemAtrasada = 0,
-  spot,
-}: {
-  region: string | null;
-  byStatus: DashboardSummary["tripsTodayByStatus"];
-  dateFilter: string;
-  /** `hoje`, `d1` ou `d2` — entra no título e decide se o prazo já pode ter vencido. */
-  diaKey: "regionToday" | "regionD1" | "regionD2";
-  /**
-   * Quantas viagens deste cartão passaram do prazo de atribuição. Só o cartão de HOJE recebe número
-   * aqui: D1 e D2 têm o prazo inteiro pela frente, e pintar de vermelho o que tem um dia de folga
-   * ensina a operação a ignorar vermelho.
-   */
-  atrasadas?: number;
-  /**
-   * Quantas viagens deste cartão já passaram do prazo de CHEGADA NA ORIGEM — coleta menos duas
-   * horas. Vizinha de `atrasadas` e diferente dela: aquela é "ninguém foi escalado", esta é "foi
-   * escalado e não chegou". Duas falhas, duas ações — atribuir contra ligar para o motorista.
-   *
-   * Só o cartão de HOJE recebe: uma viagem de amanhã tem o prazo inteiro pela frente.
-   */
-  origemAtrasada?: number;
-  /** O leilão de spot da frente nas últimas 24h, para o rodapé do cartão. */
-  spot?: { aceito: number; naoAceito: number };
-}) {
-  const t = useTranslations("Trips.dashboard");
-  const total = byStatus.reduce((n, s) => n + s.count, 0);
-  /**
-   * Estação sem região não tem para onde o link apontar — `region=` vazio traria o país inteiro, e um
-   * cartão que abre uma lista maior que ele próprio é pior do que um que não abre. Esse grupo existe
-   * para ser visto e resolvido no cadastro, não para ser navegado.
-   */
-  const extraFilter = region ? `&region=${encodeURIComponent(region)}` : "";
-
-  /**
-   * HOJE PESA MAIS QUE AMANHÃ (2026-08-23, a pedido).
-   *
-   * Os nove cartões eram idênticos, e não são a mesma coisa: hoje é o que se resolve agora; D1 e
-   * D2 são planejamento, e olhar para eles é uma decisão, não o padrão. Com o mesmo peso, os três
-   * disputavam a mesma atenção e a linha inteira virava uma parede uniforme.
-   *
-   * A diferença é de SUPERFÍCIE, não de cor: os de amanhã e depois recuam para o fundo cinza e o
-   * título fica apagado; o de hoje continua sendo um cartão branco, com o título em tinta cheia e o
-   * total um degrau maior. Nada foi escondido e nenhuma cor nova entrou — o vermelho e o laranja
-   * continuam significando só o que significavam.
-   */
-  const eHoje = diaKey === "regionToday";
-
-  return (
-    <Card className={cn("p-2.5", !eHoje && "border-transparent bg-muted/40 shadow-none")}>
-      <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <CardTitle
-          className={cn(
-            "text-[0.68rem] font-medium uppercase leading-tight tracking-wide",
-            eHoje ? "text-foreground" : "text-muted-foreground",
-          )}
-        >
-          {region ? t(diaKey, { region }) : t("regionUnassigned")}
-        </CardTitle>
-        <Numero
-          valor={total}
-          className={cn("font-semibold", eHoje ? "text-base" : "text-sm text-muted-foreground")}
-        />
-      </div>
-      {/**
-       * A LH ATRASADA, piscando (2026-08-20, a pedido).
-       *
-       * A regra da operação: a viagem pode ser atribuída até o MEIO-DIA do próprio dia da coleta.
-       * Depois disso, sem ninguém escalado, é atraso — e numa TV isso precisa ser visto sem
-       * procurar. Falta ACEITAR e falta ESCALAR contam as duas (2026-08-23): são duas pendências
-       * nossas, com ações diferentes e a mesma consequência.
-       *
-       * VERMELHO CHEIO, com brilho (2026-08-20, a pedido): fundo sólido em vez de tinta clara, e um
-       * halo em volta. Numa TV vista de longe, borda fina com fundo pálido some entre doze cartões —
-       * e um aviso que só é visto por quem já está procurando não é aviso.
-       *
-       * `motion-safe:` no pisca, e não animação crua: quem configurou o sistema para reduzir
-       * movimento continua vendo a faixa vermelha, só que parada. O aviso é a COR e o número; o
-       * pisca é reforço, e reforço não pode ser a única forma de perceber.
-       */}
-      {atrasadas > 0 ? (
-        <Link
-          href={`/trips?lateToAssign=true${extraFilter}&scope=all#${BOARD_ANCHOR}`}
-          className="mb-1.5 flex items-center justify-between gap-2 rounded bg-destructive px-1.5 py-1 text-xs font-bold uppercase tracking-wide text-destructive-foreground shadow-[0_0_10px_2px_hsl(var(--destructive)/0.75)] motion-safe:animate-pulse"
-        >
-          <span>{t("lateToAssign")}</span>
-          <Numero valor={atrasadas} />
-        </Link>
-      ) : null}
-      {/**
-       * A ORIGEM ATRASADA, na MESMA faixa vermelha da de cima (2026-08-22, a pedido).
-       *
-       * Chegou a existir uma tela própria para isto, com desenho novo, e foi descartada: o cartão
-       * já tinha o formato certo e a operação já sabia lê-lo. Reaproveitar a faixa é o oposto de
-       * inventar linguagem — duas faixas iguais, uma embaixo da outra, se leem sem aprender nada.
-       *
-       * O atalho leva à lista pelo MESMO predicado que contou o número (`origemAtrasada=true`),
-       * e SEM recorte de data: a regra já traz a sua própria janela. Passar a data do cartão por
-       * cima faria a lista mostrar menos do que o cartão diz — foi o que acontecia antes, quando
-       * o atalho mandava a fila inteira do dia.
-       */}
-      {origemAtrasada > 0 ? (
-        <Link
-          href={`/trips?origemAtrasada=true${extraFilter}&scope=all#${BOARD_ANCHOR}`}
-          className="mb-1.5 flex items-center justify-between gap-2 rounded bg-destructive px-1.5 py-1 text-xs font-bold uppercase tracking-wide text-destructive-foreground shadow-[0_0_10px_2px_hsl(var(--destructive)/0.75)] motion-safe:animate-pulse"
-        >
-          <span>{t("origemAtrasada")}</span>
-          <Numero valor={origemAtrasada} />
-        </Link>
-      ) : null}
-      <StatusList
-        byStatus={byStatus}
-        emptyKey="emptyRegion"
-        dateFilter={dateFilter}
-        extraFilter={extraFilter}
-      />
-      {/**
-       * O SPOT EM LARANJA, no rodapé do cartão (2026-08-23, a pedido).
-       *
-       * Nasceu como uma linha de texto cinza, com o argumento de que é oportunidade e não pendência
-       * — ninguém PRECISA agir por causa dela. O argumento continua de pé e é justamente por isso
-       * que ela é laranja e não vermelha: chama sem cobrar, e não pisca. As duas faixas que piscam
-       * continuam sendo as únicas que exigem alguém.
-       *
-       * Some quando não houve leilão nenhum na frente: uma linha de zeros repetida em quatro
-       * cartões é ruído que ensina a não ler o rodapé.
-       */}
-      {spot && spot.aceito + spot.naoAceito > 0 ? (
-        <div className="mt-1.5 flex items-center justify-between gap-2 rounded border border-[hsl(28_75%_78%)] bg-[hsl(30_95%_93%)] px-1.5 py-1 text-[0.68rem] font-semibold uppercase tracking-wide text-[hsl(22_80%_34%)] dark:border-[hsl(28_50%_34%)] dark:bg-[hsl(26_55%_18%)] dark:text-[hsl(30_90%_72%)]">
-          <span>{t("spotRotulo")}</span>
-          <span className="tabular-nums">
-            {t("spotNumeros", { aceito: spot.aceito, passou: spot.naoAceito })}
-          </span>
-        </div>
-      ) : null}
-    </Card>
-  );
-}
 /**
  * O PAINEL DE CADA UM (2026-08-23, a pedido).
  *
@@ -791,25 +634,40 @@ export function DashboardWidgets() {
          * e por isso mesmo desfazia o "NONE em cima, SULCO embaixo" que a operação pediu no mesmo dia.
          * Empilhado vale mais do que preenchido.
          */}
-        {frentesVisiveis.map(({ region, dias }) => (
-          <div
-            key={region ?? "__sem_regiao__"}
-            className="col-span-full grid grid-cols-1 gap-2.5 sm:grid-cols-3 xl:grid-cols-4"
-          >
-            {dias.map(({ diaKey, byStatus, dateFilter, atrasadas, origemAtrasada, spot }) => (
-              <RegionCard
-                key={diaKey}
-                region={region}
-                byStatus={byStatus}
-                dateFilter={dateFilter}
-                diaKey={diaKey}
-                atrasadas={atrasadas}
-                origemAtrasada={origemAtrasada}
-                spot={spot}
+        {/**
+         * AS FRENTES, COM AS COLUNAS DO QUADRO BRANCO (2026-08-27, a pedido).
+         *
+         * Eram nove cartões — três frentes × três dias —, e cada célula respondia "como está esta
+         * frente neste dia". Agora são três linhas com as colunas do quadro que a operação já
+         * desenha: PLAN, SPOT, ORIGEM. Cada coluna faz uma pergunta só, e a mesma em toda frente —
+         * que é como se lê um quadro: descendo a coluna, não varrendo a linha.
+         *
+         * O detalhe de HOJE saiu junto (ETA Origem, Em trânsito, Concluída, Cancelada). Foi o custo
+         * declarado da troca, e ele está escrito em `frente.tsx` com o caminho de volta.
+         */}
+        {frentesVisiveis.map(({ region, dias }) => {
+          const de = (chave: string) => dias.find((d) => d.diaKey === chave);
+          const d1 = de("regionD1");
+          const d2 = de("regionD2");
+          // As três faixas de hoje: o alarme e o spot moram no recorte de hoje, e é de lá que saem.
+          const hoje = de("regionToday");
+          return (
+            <div key={region ?? "__sem_regiao__"} className="col-span-full">
+              <LinhaDaFrente
+                dados={{
+                  region,
+                  d1: d1?.byStatus ?? [],
+                  d2: d2?.byStatus ?? [],
+                  filtroD1: d1?.dateFilter ?? "",
+                  filtroD2: d2?.dateFilter ?? "",
+                  atrasadas: hoje?.atrasadas ?? 0,
+                  origemAtrasada: hoje?.origemAtrasada ?? 0,
+                  spot: hoje?.spot,
+                }}
               />
-            ))}
-          </div>
-        ))}
+            </div>
+          );
+        })}
         {/**
          * OS TRÊS RECORTES DE STATUS JUNTOS — hoje, amanhã, mês (2026-08-20, a pedido).
          *

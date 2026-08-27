@@ -36,6 +36,18 @@ export interface SpotDaRegiao {
   region: string | null;
   aceito: number;
   naoAceito: number;
+  /**
+   * AS ROTAS POR TRÁS DO NÚMERO (2026-08-27, a pedido).
+   *
+   * O quadro branco pede "aceitos + nome da rota ao clicar", e a razão é concreta: `4 aceitas` não
+   * diz se a frente pegou as quatro que importavam ou quatro que ninguém queria. Quem cuida da
+   * frente reconhece a rota pelo nome, e é isso que transforma o número em informação.
+   *
+   * Vem JUNTO com a contagem, na mesma consulta e no mesmo payload. Uma rota por clique seria uma
+   * segunda ida ao servidor para trazer quatro linhas de texto — e o painel recarrega de minuto em
+   * minuto de qualquer forma.
+   */
+  rotas: { rota: string; aceito: boolean }[];
 }
 
 /**
@@ -105,6 +117,7 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
     region: string | null;
     aceito: string;
     nao_aceito: string;
+    rotas: { rota: string; aceito: boolean }[] | null;
   }>(sql`
     with estacao as (
       -- UM local por NOME DOBRADO, e o distinct on não é enfeite: o cadastro tem TRÊS pares de
@@ -122,6 +135,8 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
     oferta as (
       select
         s.portal_trip_id,
+        s.route,
+        s.received_at,
         ${chaveDaEstacao(sql`trim(split_part(s.route, '->', 1))`)} as chave
       from spot_offers s
       where s.received_at > now() - interval '24 hours'
@@ -129,7 +144,24 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
     select
       e.region::text as region,
       count(*) filter (where t.id is not null) as aceito,
-      count(*) filter (where t.id is null) as nao_aceito
+      count(*) filter (where t.id is null) as nao_aceito,
+      /*
+       * AS ROTAS, agregadas na mesma passada.
+       *
+       * O quadro branco pede "aceitos + nome da rota ao clicar", e a razao e concreta: "4 aceitas"
+       * nao diz se a frente pegou as quatro que importavam ou quatro que ninguem queria. Quem cuida
+       * da frente reconhece a rota pelo nome.
+       *
+       * Da MAIS RECENTE para a mais antiga: quem abre a lista quer o que acabou de acontecer, e a
+       * oferta de vinte horas atras ja foi decidida ha muito.
+       */
+      coalesce(
+        jsonb_agg(
+          jsonb_build_object('rota', o.route, 'aceito', t.id is not null)
+          order by o.received_at desc
+        ) filter (where o.route is not null),
+        '[]'::jsonb
+      ) as rotas
     from oferta o
     join estacao e on e.chave = o.chave
     left join trips t on (t.customer_fields ->> 'ID (portal)') = o.portal_trip_id
@@ -141,6 +173,15 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
       region: r.region ?? null,
       aceito: Number(r.aceito),
       naoAceito: Number(r.nao_aceito),
+      /*
+       * TETO DE VINTE, porque isto viaja no payload do painel inteiro — que recarrega de minuto em
+       * minuto, numa TV que fica ligada o dia todo.
+       *
+       * Vinte cobre folgado o pior dia medido. O corte é aqui e não no SQL de propósito: a CONTAGEM
+       * acima continua sendo do total, e um número que discordasse da lista embaixo dele seria pior
+       * que lista nenhuma.
+       */
+      rotas: (Array.isArray(r.rotas) ? r.rotas : []).slice(0, 20),
     }))
     .sort((a, b) => regionPosition(a.region) - regionPosition(b.region));
 }
