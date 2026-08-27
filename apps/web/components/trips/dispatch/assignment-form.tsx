@@ -265,6 +265,14 @@ export function AssignmentForm({
             value={form.driverId}
             options={resourceOptions.drivers}
             onChange={(v) => set("driverId", v)}
+            /*
+              TRÊS LETRAS ANTES DE LISTAR (2026-08-27, a pedido).
+
+              Mesma razão do diálogo do portal: são centenas de nomes, e "só de apertar em motorista
+              vai todos". Veículo e reboque NÃO ganham o mínimo — a frota é pequena o bastante para
+              folhear, e ali a lista é a forma natural de escolher.
+            */
+            minChars={3}
           />
           <ResourceSelect
             id={`vehicle-${tripId}`}
@@ -438,6 +446,7 @@ function ResourceSelect({
   mode,
   clearable,
   clearLabel,
+  minChars,
 }: {
   id: string;
   label: string;
@@ -448,6 +457,8 @@ function ResourceSelect({
   mode?: SearchMode;
   clearable?: boolean;
   clearLabel?: string;
+  /** Quantas letras antes de listar. Só o motorista usa — ver a chamada. */
+  minChars?: number;
 }) {
   const t = useTranslations("Dispatch");
   return (
@@ -463,6 +474,8 @@ function ResourceSelect({
         mode={mode}
         clearable={clearable}
         clearLabel={clearLabel}
+        minChars={minChars}
+        minCharsText={minChars ? t("typeToSearch", { n: String(minChars) }) : undefined}
       />
     </div>
   );

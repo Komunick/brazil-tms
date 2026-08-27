@@ -272,6 +272,19 @@ export function PortalAssignDialog({
                 options={opcoes}
                 placeholder={motoristas.isLoading ? t("loadingDrivers") : t("driverPlaceholder")}
                 emptyText={t("noDriver")}
+                /*
+                  TRÊS LETRAS ANTES DE MOSTRAR NOME (2026-08-27, a pedido).
+
+                  São ~600 motoristas, e o usuário descreveu o efeito: "hoje só de você apertar em
+                  motorista, vai todos os nomes". Com seiscentas linhas nenhuma ordem ajuda — o que
+                  a pessoa vai fazer é digitar, e o mínimo só para de mostrar ruído enquanto ela não
+                  digitou.
+
+                  A placa NÃO ganha o mesmo: lá folhear é uso legítimo, e a sugestão do histórico do
+                  motorista já resolve o caso comum.
+                */
+                minChars={3}
+                minCharsText={t("typeToSearch", { n: "3" })}
               />
               <AvisoDaCnh driverId={driverId} motoristas={motoristas.data?.items} />
               {driverId ? (
@@ -295,6 +308,10 @@ export function PortalAssignDialog({
                 emptyText={t("noDriver")}
                 clearable
                 clearLabel={t("noSecondDriver")}
+                /* Mesma lista, mesmo tamanho, mesmo mínimo. O "sem segundo motorista" continua
+                   visível antes das três letras — é ação fixa, não resultado de busca. */
+                minChars={3}
+                minCharsText={t("typeToSearch", { n: "3" })}
               />
               <AvisoDaCnh driverId={secondDriverId} motoristas={motoristas.data?.items} />
               {secondDriverId ? (

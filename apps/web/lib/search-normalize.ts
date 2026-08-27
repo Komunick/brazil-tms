@@ -22,3 +22,27 @@ export function normalizeForSearch(text: string, mode: SearchMode = "text"): str
   if (mode === "digits") return base.replace(/\D/g, "");
   return base;
 }
+
+/**
+ * AINDA FALTAM LETRAS PARA BUSCAR? (2026-08-27, a pedido)
+ *
+ * O campo de motorista lista ~600 nomes, e o usuário descreveu o efeito: *"hoje só de você apertar
+ * em motorista, vai todos os nomes"*. Com seiscentas linhas nenhuma ordem ajuda — o que a pessoa
+ * vai fazer é digitar, e o mínimo apenas para de mostrar ruído enquanto ela não digitou.
+ *
+ * ── CONTA SOBRE O TEXTO NORMALIZADO, E ESSA É A DECISÃO ───────────────────────────────────────
+ *
+ * `"jo "` e `"joã"` têm o mesmo tanto de letra útil. Contar `query.length` cru faria o mínimo
+ * disparar em momentos diferentes para a mesma intenção: um espaço a mais liberaria a busca sem
+ * que nada tivesse sido digitado de fato, e o acento contaria como caractere em algumas telas e não
+ * em outras.
+ *
+ * ── `minChars = 0` DESLIGA ────────────────────────────────────────────────────────────────────
+ *
+ * É o padrão, e mantém o comportamento de sempre para os campos de poucas opções — veículo,
+ * reboque, transportadora — onde folhear a lista É a forma natural de escolher.
+ */
+export function faltamLetras(query: string, mode: SearchMode, minChars: number): boolean {
+  if (minChars <= 0) return false;
+  return normalizeForSearch(query, mode).length < minChars;
+}
