@@ -55,3 +55,5 @@ export * from "./trip-comments";
 export * from "./logae-positions";
 export * from "./pre-sm-route-links";
 export * from "./pre-sm-city-links";
+// A passagem de turno — o diário de cada setor (2026-08-26).
+export * from "./passagem-de-turno";

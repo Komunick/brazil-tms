@@ -13,6 +13,7 @@ import { registerPreSmCancelar } from "./pre-sm/cancelar";
 import { registerPreSmCarregarCadastro } from "./pre-sm/carregar-cadastro";
 import { registerCarregarPosicoes } from "./posicoes";
 import { registerCarregarCoordenadas } from "./coordenadas";
+import { registerTurnoFecharAtrasados } from "./turno";
 
 /**
  * Registry of import job handlers (feature 004, research R3). The bootstrap (`workers/index.ts`)
@@ -72,4 +73,12 @@ export async function registerJobHandlers(boss: PgBoss): Promise<void> {
   await registerPreSmCarregarCadastro(boss);
   await registerCarregarPosicoes(boss);
   await registerCarregarCoordenadas(boss);
+  /**
+   * 2026-08-26: a trava de segurança da passagem de turno.
+   *
+   * Agendado, e o único job desta lista que não fala com sistema nenhum de fora — ele só fecha o
+   * que ninguém entregou. Ver `turno/index.ts` para por que a trava existe apesar de o fechamento
+   * ser botão.
+   */
+  await registerTurnoFecharAtrasados(boss);
 }

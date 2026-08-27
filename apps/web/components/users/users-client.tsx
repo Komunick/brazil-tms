@@ -8,6 +8,7 @@ import {
   formatDateTime,
   type CreateUserInput,
   type Role,
+  type Setor,
 } from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +43,8 @@ export interface UserProfile {
   email: string;
   role: Role;
   status: string;
+  /** O setor da passagem de turno. Nulo é o normal — a maioria das contas não faz turno. */
+  setor: Setor | null;
   mustChangePassword: boolean;
   lastLoginAt: string | null;
   createdAt: string;

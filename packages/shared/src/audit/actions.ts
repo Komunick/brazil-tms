@@ -6,6 +6,9 @@ export type AuditAction =
   | "user.create"
   | "user.role_change"
   | "user.status_change"
+  // 2026-08-26: o setor da passagem de turno. Ele decide quem escreve no diário de turno, e "quem
+  // passou a poder escrever nisto, e quando" é exatamente o que a auditoria existe para responder.
+  | "user.setor_change"
   | "user.invite_sent"
   // feature 002 — master data (data-model.md §Audit actions). `<entity>.create|update|archive` for
   // all seven entities; `+ .status_change` for the three operational resources.
@@ -137,6 +140,7 @@ export const ALL_AUDIT_ACTIONS = [
   "user.create",
   "user.role_change",
   "user.status_change",
+  "user.setor_change",
   "user.invite_sent",
   "user.delete",
   "customer.create",
