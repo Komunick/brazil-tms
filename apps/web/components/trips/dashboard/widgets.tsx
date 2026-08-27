@@ -329,6 +329,14 @@ export function DashboardWidgets({ papel }: { papel: Role }) {
     return {
       region,
       plano: [...plano.entries()].map(([status, count]) => ({ status, count })),
+      /*
+       * A ATRASADA vem do SERVIDOR, e sem recorte de dia.
+       *
+       * O mapa é `lateToAssignByRegion`, que já existia e estava sendo transportado sem ninguém
+       * desenhar — o card novo tinha ficado sem a coluna. Ela conta hoje e os dias anteriores, ao
+       * contrário das duas medidas do PLAN ao lado dela.
+       */
+      atrasadas: atrasadasDe.get(region) ?? 0,
       origemRisco: origemRiscoDe.get(region) ?? 0,
       origemFora: hoje?.origemAtrasada ?? 0,
       spot: hoje?.spot,

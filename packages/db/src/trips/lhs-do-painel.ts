@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull, sql, type SQL } from "drizzle-orm";
 import { db } from "../client";
 import { locations, trips } from "../../schema";
-import { origemAtrasadaSql, origemRiscoSql } from "./atrasos";
+import { lateToAssignSql, origemAtrasadaSql, origemRiscoSql } from "./atrasos";
 
 /**
  * QUAIS LH ESTÃO POR TRÁS DO NÚMERO (2026-08-27, a pedido).
@@ -24,8 +24,13 @@ import { origemAtrasadaSql, origemRiscoSql } from "./atrasos";
  * garantir isso é uma escrita só.
  */
 
-/** As medidas que abrem lista. O spot não entra: lá o clique já mostra as ROTAS, que é o que serve. */
-export type MedidaDoPainel = "pend" | "atribuida" | "risco" | "fora";
+/**
+ * As medidas que abrem lista.
+ *
+ * O spot não entra: ele deixou de ser coluna e virou card próprio, onde as rotas já estão à vista
+ * sem clique nenhum.
+ */
+export type MedidaDoPainel = "pend" | "atribuida" | "atrasada" | "risco" | "fora";
 
 export interface LhDoPainel {
   lh: string | null;
@@ -70,6 +75,17 @@ const janelaDoPlano = sql<boolean>`(
 function predicado(medida: MedidaDoPainel): SQL<boolean> {
   if (medida === "pend") return sql<boolean>`(${ehPendente} AND ${janelaDoPlano})`;
   if (medida === "atribuida") return sql<boolean>`(${ehAtribuida} AND ${janelaDoPlano})`;
+  /*
+   * A ATRASADA NÃO LEVA `janelaDoPlano`, e isso não é esquecimento.
+   *
+   * Ela mora na mesma faixa das outras duas na tela, mas conta OUTRA janela: hoje e todos os dias
+   * anteriores, sem recorte. O prazo é que define — a viagem de ontem que ninguém atribuiu é a que
+   * mais precisa aparecer. Somar a janela do plano aqui a esconderia justamente.
+   *
+   * É o mesmo predicado do filtro do quadro (`lateToAssign=true`), então o número, esta lista e
+   * aquele filtro não têm como divergir.
+   */
+  if (medida === "atrasada") return lateToAssignSql();
   if (medida === "risco") return origemRiscoSql();
   return origemAtrasadaSql();
 }
