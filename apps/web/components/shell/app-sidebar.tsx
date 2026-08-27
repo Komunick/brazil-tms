@@ -32,7 +32,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { can, type Role } from "@brazil-tms/shared";
-import { NAV_GRUPOS, NAV_ITEMS } from "@/lib/nav";
+import { NAV_GRUPOS, NAV_ITEMS, ordenarComFilhos } from "@/lib/nav";
 import { gravarMenuRecolhido } from "@/lib/ui/menu-recolhido";
 import { cn } from "@/lib/utils";
 
@@ -110,8 +110,13 @@ export function AppSidebar({
           recolhido ? "justify-center px-0" : "justify-between px-4",
         )}
       >
-        {/* Recolhido, o nome sai e sobra o botão: escrever "Brazil Transports" em dezesseis pixels
-            daria três letras e uma reticência, que não é nome nem ícone. */}
+        {/* Recolhido, o nome sai e sobra o botão: escrever "Brazil TMS" em dezesseis pixels daria
+            três letras e uma reticência, que não é nome nem ícone.
+
+            O nome encurtou em 27/08, a pedido — era "Brazil Transports TMS" e ocupava a largura
+            inteira do cabeçalho, empurrando o botão de recolher contra a borda. A empresa continua
+            escrita por extenso onde ela é PARTE (motivo de cancelamento, responsável por exceção);
+            aqui era só o rótulo do produto. */}
         {recolhido ? null : <span className="truncate">{tCommon("appName")}</span>}
         <button
           type="button"
@@ -148,7 +153,24 @@ export function AppSidebar({
          * senão sobraria uma etiqueta anunciando o vazio.
          */}
         {NAV_GRUPOS.map((grupo, i) => {
-          const doGrupo = visibleItems.filter((item) => item.grupo === grupo);
+          /**
+           * A ORDEM DO GRUPO: cada pai seguido dos seus filhos (2026-08-27).
+           *
+           * A lista de `NAV_ITEMS` continua sendo a fonte da ordem — isto só puxa cada filho para
+           * logo abaixo do pai dele, em vez de exigir que quem edita `nav.ts` mantenha os dois
+           * juntos à mão. Um filho declarado longe do pai é um filho que um dia alguém separa sem
+           * perceber, e o recuo passaria a apontar para o item errado.
+           *
+           * ── FILHO ÓRFÃO SOBE, EM VEZ DE SUMIR ─────────────────────────────────────────────
+           *
+           * Se a permissão escondeu o pai, o filho aparece no nível de cima. Recuá-lo sob um item
+           * que não está na tela seria um recuo sem referência; escondê-lo junto tiraria acesso a
+           * uma tela que a pessoa PODE ver, por efeito colateral de outra que ela não pode.
+           */
+          const doGrupo = ordenarComFilhos(
+            visibleItems.filter((item) => item.grupo === grupo),
+            new Set(visibleItems.map((x) => x.key)),
+          );
           if (doGrupo.length === 0) return null;
           return (
             <div key={grupo} className={cn("flex flex-col gap-1", i > 0 && "mt-3")}>
@@ -165,6 +187,16 @@ export function AppSidebar({
                 const Icon = ICONS[item.icon] ?? LayoutDashboard;
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
                 const rotulo = t(item.key);
+                /**
+                 * O RECUO SÓ EXISTE COM O MENU ABERTO.
+                 *
+                 * Recolhido, a barra é uma coluna de ícones centralizados e não há largura para
+                 * hierarquia: recuar ali só desalinharia os ícones, e o desalinho leria como defeito
+                 * em vez de estrutura.
+                 *
+                 * O filho é filho porque o pai está logo acima — a posição já carrega a relação.
+                 */
+                const filho = Boolean(item.pai) && !recolhido;
                 return (
                   <Link
                     key={item.href}
@@ -175,8 +207,17 @@ export function AppSidebar({
                     className={cn(
                       // A marca da esquerda é o que diz onde você está sem precisar comparar tons de
                       // fundo — de relance, a linha aparece antes da cor.
-                      "flex items-center rounded-md border-l-2 py-2 text-sm font-medium transition-colors",
+                      "flex items-center rounded-md border-l-2 py-2 transition-colors",
                       recolhido ? "justify-center px-0" : "gap-3 px-3",
+                      /*
+                        O filho é MENOR e mais claro que o pai, além de recuado.
+
+                        Só o recuo não bastaria: numa lista onde todo item tem a mesma força
+                        tipográfica, quatro pixels de margem leem como desalinho, não como
+                        hierarquia. O peso menor diz "isto pertence ao de cima" antes de o olho
+                        medir distância.
+                      */
+                      filho ? "ml-4 text-[0.8rem] font-normal" : "text-sm font-medium",
                       active
                         ? "border-sidebar-primary bg-sidebar-accent text-sidebar-accent-foreground"
                         : "border-transparent text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
@@ -184,7 +225,10 @@ export function AppSidebar({
                   >
                     <Icon
                       className={cn(
-                        "h-4 w-4 shrink-0",
+                        "shrink-0",
+                        // O ícone acompanha o texto: um desenho de tamanho cheio ao lado de um
+                        // rótulo menor desfaria o recuo que ele deveria reforçar.
+                        filho ? "h-3.5 w-3.5" : "h-4 w-4",
                         active ? "text-sidebar-primary" : "opacity-70",
                       )}
                       aria-hidden
