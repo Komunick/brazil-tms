@@ -55,8 +55,29 @@ export interface SpotDaRegiao {
    * Vem JUNTO com a contagem, na mesma consulta e no mesmo payload. Uma rota por clique seria uma
    * segunda ida ao servidor para trazer quatro linhas de texto — e o painel recarrega de minuto em
    * minuto de qualquer forma.
+   *
+   * ── E TRAZ O QUE O CARTÃO SEPARADO TRAZIA (2026-08-27, a pedido) ─────────────────────────────
+   *
+   * O painel tinha um cartão "Ofertas de spot hoje" à parte, com a hora, o preço e os campos da
+   * oferta. Ele foi dobrado para dentro deste grupo, e por isso a rota deixou de viajar sozinha: a
+   * lista que abre aqui precisa dizer o MESMO que aquele cartão dizia, senão dobrar teria sido
+   * perder informação com passos a mais.
+   *
+   * Campo vazio vem nulo e a tela o omite. A maioria das ofertas chega sem preço, e uma coluna de
+   * travessões ocuparia a linha inteira para dizer que não há nada a dizer.
    */
-  rotas: { rota: string; aceito: boolean }[];
+  rotas: {
+    rota: string;
+    aceito: boolean;
+    /** O número da LH no portal, para quem for atrás dela. */
+    lh: string | null;
+    /** Quando a oferta chegou, em ISO. É por ela que se cruza com o Telegram. */
+    hora: string;
+    preco: string | null;
+    /** O STA da origem: a hora de o caminhão ESTAR lá. É o que decide se dá para pegar. */
+    sta: string | null;
+    veiculo: string | null;
+  }[];
 }
 
 /**
@@ -129,8 +150,22 @@ const chaveDaEstacao = (col: SQL) => sql`
  * O leilão de spot da frente nas últimas 24 horas.
  *
  * A oferta guarda a rota como texto (`SoC_BA_Simoes Filho  ->  LM Hub_BA_Simões Filho`), então a
- * frente sai do NOME da estação de origem casado com o cadastro. Oferta de estação que não é nossa
- * fica de fora, e isso é correto: rota que a empresa não roda não é trabalho dela.
+ * frente sai do NOME da estação de origem casado com o cadastro.
+ *
+ * ── A OFERTA QUE NÃO CASA COM ESTAÇÃO NOSSA NÃO SOME MAIS (2026-08-27, a pedido) ──────────────
+ *
+ * Aqui havia um join fechado, com o argumento de que rota que a empresa não roda não é trabalho
+ * dela. O argumento vale para a CONTAGEM e deixou de valer para a LISTA: o cartão separado que
+ * mostrava todas as ofertas do dia foi dobrado para dentro deste grupo, e com o join fechado
+ * dobrar teria escondido metade delas.
+ *
+ * Não é figura de linguagem — MEDIDO em PRODUÇÃO: 40 de 95 ofertas (42%) não casam com nenhuma
+ * estação do cadastro. Elas apitam na TV e vão para o Telegram; faltar só no painel seria a pior
+ * das três telas para elas sumirem, porque é a única em que se olha o dia inteiro de uma vez.
+ *
+ * Com o left join elas caem na frente NULA — a mesma de "estação sem região cadastrada". As duas
+ * coisas são diferentes na origem e IGUAIS no que a operação faz com elas: não se sabe de qual
+ * frente é. O cartão "Sem região" é onde essa resposta mora.
  *
  * "ACEITA" É A OFERTA QUE VIROU VIAGEM. Não existe campo de aceite na oferta, e não precisa existir:
  * quando alguém pega no portal, ela reaparece na leitura seguinte com o mesmo id. A existência da
@@ -142,7 +177,7 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
     region: string | null;
     aceito: string;
     nao_aceito: string;
-    rotas: { rota: string; aceito: boolean }[] | null;
+    rotas: SpotDaRegiao["rotas"] | null;
   }>(sql`
     with estacao as (
       -- UM local por NOME DOBRADO, e o distinct on não é enfeite: o cadastro tem TRÊS pares de
@@ -162,6 +197,10 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
         s.portal_trip_id,
         s.route,
         s.received_at,
+        s.trip_number,
+        s.price,
+        s.origin_arrival,
+        s.vehicle,
         ${chaveDaEstacao(sql`trim(split_part(s.route, '->', 1))`)} as chave
       from spot_offers s
       where s.received_at > now() - interval '24 hours'
@@ -179,16 +218,28 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
        *
        * Da MAIS RECENTE para a mais antiga: quem abre a lista quer o que acabou de acontecer, e a
        * oferta de vinte horas atras ja foi decidida ha muito.
+       *
+       * OS OUTROS CAMPOS chegaram com o cartao separado, que foi dobrado para dentro deste grupo
+       * (2026-08-27). Eles nao custam consulta nova: a linha da oferta ja esta aqui, e trazer cinco
+       * textos curtos dela e mais barato que a segunda ida ao servidor que a lista pediria.
        */
       coalesce(
         jsonb_agg(
-          jsonb_build_object('rota', o.route, 'aceito', t.id is not null)
+          jsonb_build_object(
+            'rota', o.route,
+            'aceito', t.id is not null,
+            'lh', o.trip_number,
+            'hora', o.received_at,
+            'preco', o.price,
+            'sta', o.origin_arrival,
+            'veiculo', o.vehicle
+          )
           order by o.received_at desc
         ) filter (where o.route is not null),
         '[]'::jsonb
       ) as rotas
     from oferta o
-    join estacao e on e.chave = o.chave
+    left join estacao e on e.chave = o.chave
     left join trips t on (t.customer_fields ->> 'ID (portal)') = o.portal_trip_id
     group by 1
   `);

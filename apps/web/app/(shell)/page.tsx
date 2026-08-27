@@ -27,5 +27,9 @@ export default async function HomePage() {
 
   // O título e o subtítulo mudaram de casa (2026-08-23): moram no `DashboardWidgets`, para o botão
   // de personalizar poder sentar na mesma linha deles. Ver o comentário lá.
-  return <DashboardWidgets />;
+  //
+  // O CARGO VAI JUNTO (2026-08-27, a pedido): a frente "Sem região" é card de administração, e quem
+  // decide isso é o servidor. Mandar o papel inteiro em vez de um `ehAdmin` já resolvido deixa a
+  // regra visível no componente, que é onde ela vale — e não escondida numa linha desta página.
+  return <DashboardWidgets papel={session.user.role} />;
 }

@@ -6,7 +6,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { ChevronDown } from "lucide-react";
 import type { TripDisplayStatus } from "@brazil-tms/shared";
-import type { MedidaDoPainel } from "@brazil-tms/db";
+import type { MedidaDoPainel, SpotDaRegiao } from "@brazil-tms/db";
+import { formatTime } from "@brazil-tms/shared";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +34,21 @@ import { cn } from "@/lib/utils";
  *
  * Azul no PLAN, rosa na ORIGEM, âmbar no SPOT, verde na TENDÊNCIA. Elas AGRUPAM, não classificam:
  * nenhuma delas quer dizer bom ou ruim. Quem diz isso continua sendo o vermelho do número, que é a
- * única cor com significado nesta tela — e é por isso que os tons de grupo são pálidos.
+ * única cor com significado nesta tela.
+ *
+ * OS TONS SUBIRAM UM DEGRAU (2026-08-27, a pedido): de 100 para 200 no claro, e de 950 para 900 no
+ * escuro. Nasceram pálidos para não competir com o vermelho, e ficaram pálidos DEMAIS — numa TV
+ * vista do outro lado da sala, as quatro faixas se pareciam entre si e o cabeçalho parava de
+ * agrupar, que é a única coisa que ele faz.
+ *
+ * O vermelho continua ganhando: ele mora no NÚMERO, não no fundo, e um número vermelho sobre
+ * qualquer um destes quatro tons continua sendo a coisa mais forte da linha.
+ *
+ * ── E A CAIXA DA FRENTE FICOU MAIS CINZA, no mesmo pedido ─────────────────────────────────────
+ *
+ * Ela é rótulo, não medida: diz de quem é a linha e não responde nenhuma pergunta. Com as faixas
+ * mais fortes ao lado, um cinza mais firme e a letra em tom secundário devolvem a hierarquia —
+ * a cor puxa o olho para os números, e o nome fica onde se procura por ele, não onde ele salta.
  */
 
 interface PorStatus {
@@ -53,7 +68,14 @@ export interface DadosDaFrente {
   plano: PorStatus[];
   origemRisco: number;
   origemFora: number;
-  spot?: { aceito: number; naoAceito: number; rotas: { rota: string; aceito: boolean }[] };
+  /**
+   * O SPOT traz as OFERTAS inteiras, não só os nomes das rotas (2026-08-27, a pedido).
+   *
+   * O painel tinha um cartão "Ofertas de spot hoje" à parte com a hora, o preço e os campos da
+   * oferta. Ele foi dobrado para dentro deste grupo — e dobrar teria sido perder informação se a
+   * lista daqui continuasse mostrando só o nome da rota.
+   */
+  spot?: Pick<SpotDaRegiao, "aceito" | "naoAceito" | "rotas">;
 }
 
 export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
@@ -85,7 +107,7 @@ export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
     <Card className="overflow-hidden p-0">
       <div className="flex items-stretch">
         {/* A FRENTE, na lateral — como na planilha, onde o nome fica na coluna A. */}
-        <div className="flex w-24 shrink-0 items-center justify-center border-r bg-muted/40 px-2 py-3 text-center text-xs font-bold uppercase tracking-wide">
+        <div className="flex w-24 shrink-0 items-center justify-center border-r bg-muted px-2 py-3 text-center text-xs font-bold uppercase tracking-wide text-muted-foreground">
           {region ?? t("regionUnassigned")}
         </div>
 
@@ -93,16 +115,16 @@ export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
           <table className="w-full border-collapse text-center">
             <thead>
               <tr>
-                <Grupo cols={2} cor="bg-sky-100 dark:bg-sky-950/60">
+                <Grupo cols={2} cor="bg-sky-200 dark:bg-sky-900/60">
                   {t("grupoPlan")}
                 </Grupo>
-                <Grupo cols={2} cor="bg-rose-100 dark:bg-rose-950/50">
+                <Grupo cols={2} cor="bg-rose-200 dark:bg-rose-900/50">
                   {t("grupoOrigem")}
                 </Grupo>
-                <Grupo cols={2} cor="bg-amber-100 dark:bg-amber-950/50">
+                <Grupo cols={2} cor="bg-amber-200 dark:bg-amber-900/50">
                   {t("grupoSpot")}
                 </Grupo>
-                <Grupo cols={2} cor="bg-emerald-100 dark:bg-emerald-950/50">
+                <Grupo cols={2} cor="bg-emerald-200 dark:bg-emerald-900/50">
                   {t("grupoTendencia")}
                 </Grupo>
               </tr>
@@ -172,35 +194,7 @@ export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
           {medidaAberta ? <ListaDeLhs region={region} medida={medidaAberta} /> : null}
 
           {spotAberto && dados.spot && dados.spot.rotas.length > 0 ? (
-            <div className="border-t bg-amber-50/60 px-3 py-2 dark:bg-amber-950/20">
-              <p className="mb-1 flex items-center gap-1 text-[0.62rem] font-semibold uppercase tracking-wider text-muted-foreground">
-                <ChevronDown className="h-3 w-3" aria-hidden />
-                {t("grupoSpot")}
-              </p>
-              <ul className="space-y-0.5">
-                {dados.spot.rotas.map((r, i) => (
-                  <li key={`${r.rota}-${i}`} className="flex items-start gap-1.5 text-[0.7rem]">
-                    {/*
-                      O ponto diz se pegamos, e a cor sozinha não bastaria: quem não distingue verde
-                      de cinza precisa do título.
-                    */}
-                    <span
-                      className={cn(
-                        "mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full",
-                        r.aceito ? "bg-emerald-500" : "bg-muted-foreground/40",
-                      )}
-                      title={r.aceito ? t("medidaAceita") : t("medidaNaoAceita")}
-                      aria-label={r.aceito ? t("medidaAceita") : t("medidaNaoAceita")}
-                    />
-                    <span
-                      className={cn("min-w-0 break-words", !r.aceito && "text-muted-foreground")}
-                    >
-                      {r.rota}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <ListaDeOfertas ofertas={dados.spot.rotas} />
           ) : null}
         </div>
       </div>
@@ -294,6 +288,103 @@ function Valor({
 }
 
 /**
+ * AS OFERTAS DE SPOT DA FRENTE — o cartão de baixo, dobrado para cá (2026-08-27, a pedido).
+ *
+ * O painel tinha um cartão "Ofertas de spot hoje" separado, com a hora, o preço e os campos da
+ * oferta. Ele some, e o que ele mostrava passa a abrir AQUI, no grupo SPOT do card da frente.
+ *
+ * ── POR QUE ISSO É MAIS DO QUE MUDAR DE LUGAR ─────────────────────────────────────────────────
+ *
+ * O cartão antigo listava as ofertas do dia INTEIRO, misturando as três frentes: para saber de
+ * quem era cada uma, era preciso ler o nome da estação na rota. Aqui cada lista já está dentro da
+ * frente que a recebeu, e o número que a abriu diz quantas foram.
+ *
+ * ── E POR QUE ELA VEM DO PAYLOAD, sem busca própria ───────────────────────────────────────────
+ *
+ * Diferente da lista de LH, que busca ao abrir: são no máximo vinte linhas por frente, o teto já
+ * está no servidor, e elas já vinham no payload como nomes de rota. Trazer cinco textos curtos a
+ * mais em cada uma é mais barato que a segunda ida ao servidor que uma busca própria custaria.
+ *
+ * ── O QUE CADA LINHA MOSTRA, E EM QUE ORDEM ───────────────────────────────────────────────────
+ *
+ * A ordem é a da decisão, a mesma do aviso que sobe na TV: a LH para achar no portal, a rota
+ * porque é ela que decide se vale, e só então STA, veículo e preço. A hora de chegada fica à
+ * direita porque é por ela que se cruza com o Telegram.
+ *
+ * CAMPO AUSENTE NÃO VIRA "—": a maioria das ofertas chega sem preço, e uma coluna de travessões
+ * repetidos ocuparia a linha inteira para dizer que não há nada a dizer.
+ */
+function ListaDeOfertas({ ofertas }: { ofertas: SpotDaRegiao["rotas"] }) {
+  const t = useTranslations("Trips.dashboard");
+  const tSpot = useTranslations("Spot");
+
+  return (
+    <div className="border-t bg-amber-50/60 px-3 py-2 dark:bg-amber-950/20">
+      <p className="mb-1 flex items-center gap-1 text-[0.62rem] font-semibold uppercase tracking-wider text-muted-foreground">
+        <ChevronDown className="h-3 w-3" aria-hidden />
+        {t("grupoSpot")}
+      </p>
+      <ul className="grid gap-x-4 gap-y-1 xl:grid-cols-2">
+        {ofertas.map((o, i) => {
+          // Os três campos secundários numa linha só, separados por ponto. Os ausentes somem.
+          const detalhes = [
+            o.sta ? `${tSpot("originArrival")} ${o.sta}` : null,
+            o.veiculo,
+            o.preco,
+          ].filter(Boolean);
+
+          return (
+            <li key={`${o.rota}-${i}`} className="flex items-start gap-1.5 text-[0.7rem]">
+              {/*
+                O ponto diz se pegamos, e a cor sozinha não bastaria: quem não distingue verde de
+                cinza precisa do título.
+              */}
+              <span
+                className={cn(
+                  "mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full",
+                  o.aceito ? "bg-emerald-500" : "bg-muted-foreground/40",
+                )}
+                title={o.aceito ? t("medidaAceita") : t("medidaNaoAceita")}
+                aria-label={o.aceito ? t("medidaAceita") : t("medidaNaoAceita")}
+              />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className={cn("min-w-0 break-words", !o.aceito && "text-muted-foreground")}>
+                    {/* A LH leva ao detalhe da viagem — quando ela existe. Oferta não aceita não
+                        virou viagem nenhuma, e um link para lista vazia é promessa quebrada. */}
+                    {o.lh ? (
+                      o.aceito ? (
+                        <Link
+                          href={`/trips?q=${encodeURIComponent(o.lh)}&scope=all`}
+                          className="mr-1.5 font-mono font-semibold hover:underline"
+                        >
+                          {o.lh}
+                        </Link>
+                      ) : (
+                        <span className="mr-1.5 font-mono font-semibold">{o.lh}</span>
+                      )
+                    ) : null}
+                    {o.rota}
+                  </span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground">
+                    {formatTime(o.hora)}
+                  </span>
+                </span>
+                {detalhes.length > 0 ? (
+                  <span className="block text-[0.65rem] text-muted-foreground">
+                    {detalhes.join(" · ")}
+                  </span>
+                ) : null}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/**
  * AS LH POR TRÁS DE UM NÚMERO (2026-08-27, a pedido).
  *
  * "3 pendentes de atribuição" não diz QUAIS — quem opera reconhece a viagem pelo código, e é o
@@ -378,20 +469,20 @@ export function TotaisDoQuadro({ frentes }: { frentes: DadosDaFrente[] }) {
   const doPlano = (d: DadosDaFrente) => d.plano.reduce((n, s) => n + s.count, 0);
 
   const totais = [
-    { chave: "totalPlan", valor: soma(doPlano), cor: "bg-sky-100 dark:bg-sky-950/60" },
+    { chave: "totalPlan", valor: soma(doPlano), cor: "bg-sky-200 dark:bg-sky-900/60" },
     {
       chave: "totalOrigem",
       valor: soma((d) => d.origemRisco + d.origemFora),
-      cor: "bg-rose-100 dark:bg-rose-950/50",
+      cor: "bg-rose-200 dark:bg-rose-900/50",
       alerta: true,
     },
     {
       chave: "totalSpot",
       valor: soma((d) => (d.spot?.aceito ?? 0) + (d.spot?.naoAceito ?? 0)),
-      cor: "bg-amber-100 dark:bg-amber-950/50",
+      cor: "bg-amber-200 dark:bg-amber-900/50",
     },
     // Sem dado, o total é tão desconhecido quanto as parcelas. Zero aqui seria a soma de dois "não sei".
-    { chave: "totalTendencia", valor: null, cor: "bg-emerald-100 dark:bg-emerald-950/50" },
+    { chave: "totalTendencia", valor: null, cor: "bg-emerald-200 dark:bg-emerald-900/50" },
   ];
 
   return (

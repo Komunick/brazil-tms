@@ -15,8 +15,16 @@ import {
 /**
  * LIGAR O AVISO DA ÁREA DE TRABALHO, e provar que ele chega (2026-08-22, a pedido).
  *
- * Mora na tela de ofertas porque é aqui que a pessoa está quando pensa no assunto — e não numa tela
- * de configurações onde ninguém entra. São duas ações e nada mais: permitir, e testar.
+ * MORA NA TELA DE STATUS (mudou em 2026-08-27), ao lado do teste do Telegram. Nasceu dentro do
+ * cartão de ofertas do painel, com o argumento de que era ali que a pessoa pensava no assunto; o
+ * cartão foi dobrado para dentro do card da frente e levaria estes dois botões para dentro de uma
+ * lista de ofertas por frente — três cópias do mesmo interruptor, uma por card.
+ *
+ * O Status é o lugar que sobrou e é o certo: é onde se vem quando se desconfia de que algo parou,
+ * e a pergunta destes botões é exatamente essa. Ao lado do teste do Telegram ficam os dois
+ * caminhos do mesmo aviso — o que vai para o celular e o que aparece na área de trabalho.
+ *
+ * São duas ações e nada mais: permitir, e testar.
  *
  * ── POR QUE O BOTÃO DE TESTE NÃO É SUPÉRFLUO ───────────────────────────────────────────────────
  *

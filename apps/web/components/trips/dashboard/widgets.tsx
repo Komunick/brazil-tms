@@ -10,12 +10,12 @@ import {
   type TripDisplayStatus,
 } from "@brazil-tms/shared";
 import type { RegionSlice } from "@brazil-tms/db";
+import { Role } from "@brazil-tms/shared";
 import { useDashboardSummary } from "@/lib/trips/client";
 import { useReconexao } from "@/lib/ui/reconexao";
 import { usePainelDoUsuario } from "@/lib/ui/painel-do-usuario";
 import { cn } from "@/lib/utils";
 import { BscCard } from "@/components/trips/dashboard/bsc-card";
-import { OfertasDoDia } from "@/components/spot/ofertas-do-dia";
 import {
   CardDaFrente,
   TotaisDoQuadro,
@@ -126,11 +126,28 @@ function PainelPersonalizar({
   );
 }
 
-export function DashboardWidgets() {
+/**
+ * A FRENTE "SEM REGIÃO" É CARD DE ADMINISTRAÇÃO (2026-08-27, a pedido).
+ *
+ * Ela não é uma frente: é o balde de tudo que não casou com o cadastro — estação sem região
+ * preenchida, e oferta de spot cuja estação não está no cadastro. Para quem opera, é ruído com
+ * cara de frente; para quem administra, é a lista de trabalho de cadastro.
+ *
+ * ── O QUE ISSO CUSTA, DITO EM VOZ ALTA ────────────────────────────────────────────────────────
+ *
+ * As ofertas de spot de estação fora do cadastro caem nesta frente, e são MUITAS: medido em
+ * produção, 40 de 95 ofertas (42%) não casam com nenhuma estação. Escondendo o card, quem não é
+ * admin deixa de vê-las no painel. Elas continuam apitando na TV e indo para o Telegram — a perda
+ * é só aqui, e foi decisão consciente de quem pediu.
+ *
+ * O caminho para reduzir isso não é a tela: é cadastrar a estação, e aí a oferta passa a cair na
+ * frente certa e aparece para todo mundo. Por isso o card sobra justamente para quem cadastra.
+ */
+export function DashboardWidgets({ papel }: { papel: Role }) {
+  const ehAdmin = papel === Role.Admin;
   const t = useTranslations("Trips.dashboard");
   const tCommon = useTranslations("Common");
   const tBsc = useTranslations("Bsc");
-  const tSpot = useTranslations("Spot");
   const { data, isLoading, isError } = useDashboardSummary();
   // O painel de cada um: quais cartões esta pessoa escondeu. Ver `usePainelDoUsuario`.
   const { escondidos, minimizados, alternar, alternarMinimizado, restaurarPadrao } =
@@ -217,6 +234,19 @@ export function DashboardWidgets() {
       porRegiao.set(region, atual);
     }
   }
+  /**
+   * A FRENTE QUE SÓ TEM SPOT TAMBÉM GANHA CARD (2026-08-27).
+   *
+   * A união acima vem dos três dias de VIAGEM. Bastava enquanto o spot tinha cartão próprio; com
+   * ele dobrado para dentro do card da frente, uma frente com oferta e sem viagem nenhuma no
+   * horizonte não teria onde aparecer — e a oferta sumiria da tela sem nada explicando.
+   *
+   * O caso não é hipotético: a oferta cuja estação não está no cadastro cai na frente NULA, e num
+   * dia sem viagem de frente nula esse card não existiria.
+   */
+  for (const { region } of summary.spotByRegion) {
+    if (!porRegiao.has(region)) porRegiao.set(region, {});
+  }
   const filtroDe: Record<string, string> = {
     regionToday: `&pickupFrom=${hoje}&pickupTo=${hoje}`,
     regionD1: `&pickupFrom=${amanha}&pickupTo=${amanha}`,
@@ -250,6 +280,15 @@ export function DashboardWidgets() {
     }));
 
   /**
+   * A frente nula sai da lista inteira quando quem olha não administra — ver o cabeçalho do
+   * componente. Sai ANTES do catálogo de propósito: um cartão desligável que a pessoa não pode
+   * ver seria um interruptor para nada.
+   */
+  const regioesComCard = ehAdmin
+    ? regioesDosTresDias
+    : regioesDosTresDias.filter((r) => r.region !== null);
+
+  /**
    * O CATÁLOGO DE CARTÕES do editor — montado do que esta tela REALMENTE desenhou.
    *
    * Não é uma lista fixa em outro arquivo, e isso é o que impede a divergência: um cartão que sai
@@ -259,14 +298,13 @@ export function DashboardWidgets() {
    */
   const itensDoPainel: { chave: string; rotulo: string }[] = [
     ...(bsc.length > 0 ? [{ chave: "bsc", rotulo: tBsc("source") }] : []),
-    ...regioesDosTresDias.map(({ region }) => ({
+    ...regioesComCard.map(({ region }) => ({
       chave: chaveDaFrente(region),
       rotulo: region ?? t("regionUnassigned"),
     })),
-    { chave: "spot", rotulo: tSpot("todayTitle") },
   ];
   const escondido = (chave: string) => escondidos.has(chave);
-  const frentesVisiveis = regioesDosTresDias.filter((r) => !escondido(chaveDaFrente(r.region)));
+  const frentesVisiveis = regioesComCard.filter((r) => !escondido(chaveDaFrente(r.region)));
 
   /**
    * OS DADOS DE CADA FRENTE, montados UMA vez.
@@ -367,58 +405,41 @@ export function DashboardWidgets() {
             onAlternarMinimizado={() => alternarMinimizado("bsc")}
           />
         ) : null}
+
         {/**
-         * A ORDEM É A DO TEMPO: hoje, amanhã, o mês (2026-08-19, a pedido).
+         * A FAIXA DE TOTAIS, LOGO ABAIXO DO BSC (2026-08-27, a pedido — subiu no mesmo dia).
          *
-         * Os dois números avulsos abriam a fila e empurravam os três quadros para o meio da grade,
-         * onde a comparação entre eles — que é a leitura principal desta tela — exigia pular por cima
-         * de um cartão de spot no meio do caminho. Agora os três ficam lado a lado, na sequência em
-         * que a operação pensa, e o que é avulso vai para o fim.
+         * Ela nasceu no PÉ do quadro, embaixo das frentes, pela ordem natural de uma planilha: as
+         * parcelas e então a soma. Subiu porque esta tela não é uma planilha que se confere de baixo
+         * para cima — é um painel que se olha de longe e de relance, e a primeira pergunta de quem
+         * levanta a cabeça é "como está a operação hoje", não "como está a frente SULCO".
+         *
+         * Com o total em cima, a leitura vira do todo para a parte: o número da operação primeiro, e
+         * as frentes embaixo explicando de onde ele veio. Quem quer só o resumo para de ler na
+         * primeira linha.
+         *
+         * ELA SOMA O QUE OS CARDS MOSTRAM — o mesmo array, não uma segunda conta sobre o payload.
+         * Somar por fora abriria a porta clássica: o total dizendo um número e as parcelas outro, com
+         * nenhum dos dois parecendo errado sozinho.
+         *
+         * Some quando não há frente nenhuma: um total de zeros sozinho na tela é ruído.
          */}
-        {/**
-         * As frentes, logo DEPOIS do total de hoje e antes de amanhã.
-         *
-         * A ordem conta uma leitura: o número do dia, a quebra desse mesmo número por frente, e só
-         * então o dia seguinte. Pôr as regiões no fim obrigaria a voltar à primeira coluna para
-         * comparar a parte com o todo.
-         *
-         * A ordem entre elas vem do servidor (`REGION_ORDER`), não do alfabeto: num painel de parede a
-         * posição do cartão é como as pessoas o encontram.
-         */}
-        {/**
-         * TRÊS CARTÕES POR REGIÃO, agrupados por FRENTE e não por dia (2026-08-20, a pedido).
-         *
-         * Quem cuida de uma frente vê os três dias dela lado a lado — hoje, amanhã, depois. Agrupar
-         * por dia espalharia a mesma frente em três lugares da grade e obrigaria a caçar.
-         *
-         * A ordem das frentes vem do servidor; a dos dias é fixa aqui, porque é a do tempo.
-         */}
-        {/**
-         * UMA LINHA POR FRENTE (2026-08-20, a pedido): NONE em cima, SULCO embaixo, SUDESTE por
-         * último — e os três dias de cada uma lado a lado, dentro da faixa dela. A ordem das frentes
-         * é a de `REGION_ORDER`, e mudou junto com esta faixa (2026-08-23, a pedido).
-         *
-         * Uma grade por frente, em vez de deixar os nove cartões fluírem na grade de fora. Fluindo,
-         * eles se acomodavam pelo espaço que sobrava e a mesma frente quebrava no meio da tela — quem
-         * cuida de uma região perdia a comparação entre os dias dela, que é justamente a leitura que
-         * estes cartões existem para dar.
-         *
-         * QUATRO COLUNAS NA TELA LARGA (2026-08-23, a pedido: "estão meio largos"). A faixa continua
-         * sendo da frente inteira, mas os três cartões param de dividir a largura em três: dividem em
-         * quatro, e o último quarto fica vazio. É uma diminuição, não um redesenho — e o quarto vazio
-         * é o preço de manter a frente empilhada.
-         *
-         * Chegou a existir aqui uma versão de SEIS colunas com duas frentes por faixa: enchia a tela,
-         * e por isso mesmo desfazia o "NONE em cima, SULCO embaixo" que a operação pediu no mesmo dia.
-         * Empilhado vale mais do que preenchido.
-         */}
+        {dadosDasFrentes.length > 0 ? (
+          <div className="col-span-full">
+            <TotaisDoQuadro frentes={dadosDasFrentes} />
+          </div>
+        ) : null}
+
         {/**
          * AS FRENTES, COM AS COLUNAS DO QUADRO BRANCO (2026-08-27, a pedido).
          *
          * Eram nove cartões — três frentes × três dias —, e cada célula respondia "como está esta
-         * frente neste dia". Agora são três linhas com as colunas do quadro que a operação já
-         * desenha: PLAN, SPOT, ORIGEM. Cada coluna faz uma pergunta só, e a mesma em toda frente —
-         * que é como se lê um quadro: descendo a coluna, não varrendo a linha.
+         * frente neste dia". Agora é uma linha por frente com as colunas do quadro que a operação já
+         * desenha: PLAN, ORIGEM, SPOT, TENDÊNCIA. Cada coluna faz uma pergunta só, e a mesma em toda
+         * frente — que é como se lê um quadro: descendo a coluna, não varrendo a linha.
+         *
+         * A ordem entre elas vem do servidor (`REGION_ORDER`), não do alfabeto: num painel de parede a
+         * posição da linha é como as pessoas a encontram.
          *
          * O detalhe de HOJE saiu junto (ETA Origem, Em trânsito, Concluída, Cancelada). Foi o custo
          * declarado da troca, e ele está escrito em `frente.tsx` com o caminho de volta.
@@ -428,49 +449,22 @@ export function DashboardWidgets() {
             <CardDaFrente dados={dados} />
           </div>
         ))}
-        {/**
-         * A FAIXA DE TOTAIS (2026-08-27, a pedido).
-         *
-         * Ela soma O QUE OS CARDS MOSTRAM — o mesmo array, não uma segunda conta sobre o payload.
-         * Somar por fora abriria a porta clássica: o total dizendo um número e as parcelas outro, com
-         * nenhum dos dois parecendo errado sozinho.
-         *
-         * Some quando não há frente nenhuma: um total de zeros embaixo de nada é ruído.
-         */}
-        {dadosDasFrentes.length > 0 ? (
-          <div className="col-span-full">
-            <TotaisDoQuadro frentes={dadosDasFrentes} />
-          </div>
-        ) : null}
-        {/**
-         * OS TRÊS RECORTES DE STATUS JUNTOS — hoje, amanhã, mês (2026-08-20, a pedido).
-         *
-         * O de hoje abria o painel, sozinho, com as linhas das frentes logo abaixo; e aí a comparação
-         * entre hoje, amanhã e o mês — que é a leitura destes três — exigia pular por cima de nove
-         * cartões de região. Juntos, eles voltam a ser lidos de uma vez.
-         */}
+
         {/*
-          NÃO HÁ MAIS os quadros de hoje / amanhã / mês, nem os dois números soltos (risco de SLA e
-          aguardando atribuição). Saíram a pedido, em 27/08, junto com a chegada da faixa de totais.
+          E MAIS NADA. Saíram daqui, em 27/08 e a pedido, os três quadros por status (hoje, amanhã,
+          mês), os dois números soltos (risco de SLA e aguardando atribuição) e o cartão "Ofertas de
+          spot hoje" — este último não foi apagado: virou a lista que abre no grupo SPOT de cada
+          frente, com hora, preço, STA e veículo.
 
           A razão é a mesma que já tinha tirado a superfície de alertas daqui: o painel do dia é o
           quadro da OPERAÇÃO, e os cards de baixo respondiam perguntas de outra escala — o mês inteiro,
-          o país inteiro. Com o quadro por frente e o total embaixo, eles viraram uma terceira leitura
-          competindo com as duas que a operação de fato usa.
+          o país inteiro. Com o total em cima e o quadro por frente embaixo, eles viravam uma terceira
+          leitura competindo com as duas que a operação de fato usa.
 
-          Nada foi apagado: os três recortes por status continuam vindo do servidor e vivem na Torre de
-          Controle, que é onde se age sobre eles. Voltar é descomentar — mas a decisão é do usuário, e
-          ele viu a tela sem eles antes de escolher.
+          Nada deixou de ser medido: os três recortes por status continuam vindo do servidor e vivem
+          na Torre de Controle, que é onde se age sobre eles.
         */}
-        {/*
-          A LISTA DE OFERTAS DE SPOT FICA — foi o único dos cards de baixo que o usuário pediu para
-          manter ("o único que não vai alterar é os spots").
 
-          E faz sentido junto do resto: as colunas de spot do quadro contam quantas; esta lista diz
-          QUAIS, com preço e horário. É a mesma relação entre número e detalhe que o clique nas
-          outras colunas passou a ter — só que esta já existia e a operação já a usa.
-        */}
-        {!escondido("spot") ? <OfertasDoDia /> : null}
       </div>
     </div>
   );
