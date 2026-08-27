@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { BscCard } from "@/components/trips/dashboard/bsc-card";
 import {
   CardDaFrente,
+  CardsDeSpot,
   TotaisDoQuadro,
   type DadosDaFrente,
 } from "@/components/trips/dashboard/frente";
@@ -449,6 +450,20 @@ export function DashboardWidgets({ papel }: { papel: Role }) {
             <CardDaFrente dados={dados} />
           </div>
         ))}
+
+        {/**
+         * O SPOT, NUMA FAIXA PRÓPRIA EMBAIXO (2026-08-27, a pedido, sobre um desenho).
+         *
+         * Ele era um grupo de duas colunas dentro de cada card de frente. Saiu de lá: as outras
+         * colunas contam VIAGEM e o número basta; o spot conta LEILÃO, e o que decide nele é o NOME
+         * DA ROTA — que ficava escondido atrás de um clique.
+         *
+         * Aqui embaixo, um card por frente, a rota está à vista. A faixa inteira some nos dias sem
+         * oferta nenhuma: leilão é evento, não fluxo. Ver `CardsDeSpot`.
+         */}
+        <div className="col-span-full">
+          <CardsDeSpot frentes={dadosDasFrentes} />
+        </div>
 
         {/*
           E MAIS NADA. Saíram daqui, em 27/08 e a pedido, os três quadros por status (hoje, amanhã,

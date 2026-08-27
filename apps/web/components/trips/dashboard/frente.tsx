@@ -4,7 +4,6 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
-import { ChevronDown } from "lucide-react";
 import type { TripDisplayStatus } from "@brazil-tms/shared";
 import type { MedidaDoPainel, SpotDaRegiao } from "@brazil-tms/db";
 import { formatTime } from "@brazil-tms/shared";
@@ -80,7 +79,7 @@ export interface DadosDaFrente {
 
 export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
   const t = useTranslations("Trips.dashboard");
-  const [spotAberto, setSpotAberto] = useState(false);
+
   /**
    * UMA MEDIDA ABERTA POR VEZ, e clicar de novo fecha.
    *
@@ -88,20 +87,11 @@ export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
    * pergunta que o clique responde é "quais LH estão NESTE número", não "quais estão no card".
    */
   const [medidaAberta, setMedidaAberta] = useState<MedidaDoPainel | null>(null);
-  const abrir = (m: MedidaDoPainel) => {
-    setSpotAberto(false);
-    setMedidaAberta((atual) => (atual === m ? null : m));
-  };
-  // O spot fecha a lista de LH pelo mesmo motivo: uma coisa aberta por vez dentro do card.
-  const abrirSpot = () => {
-    setMedidaAberta(null);
-    setSpotAberto((x) => !x);
-  };
+  const abrir = (m: MedidaDoPainel) => setMedidaAberta((atual) => (atual === m ? null : m));
   const { region } = dados;
 
   const doPlano = new Map(dados.plano.map((s) => [s.status, s.count]));
 
-  const houveSpot = dados.spot && dados.spot.aceito + dados.spot.naoAceito > 0;
 
   return (
     <Card className="overflow-hidden p-0">
@@ -115,16 +105,27 @@ export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
           <table className="w-full border-collapse text-center">
             <thead>
               <tr>
-                <Grupo cols={2} cor="bg-sky-200 dark:bg-sky-900/60">
+                <Grupo cols={2} cor="bg-sky-300 dark:bg-sky-800/70">
                   {t("grupoPlan")}
                 </Grupo>
-                <Grupo cols={2} cor="bg-rose-200 dark:bg-rose-900/50">
+                <Grupo cols={2} cor="bg-rose-300 dark:bg-rose-800/60">
                   {t("grupoOrigem")}
                 </Grupo>
-                <Grupo cols={2} cor="bg-amber-200 dark:bg-amber-900/50">
-                  {t("grupoSpot")}
-                </Grupo>
-                <Grupo cols={2} cor="bg-emerald-200 dark:bg-emerald-900/50">
+                {/*
+                  O SPOT NÃO É COLUNA AQUI (2026-08-27, a pedido, sobre um desenho).
+
+                  Ele saiu da tabela e virou card próprio embaixo das frentes. As outras três
+                  colunas contam VIAGEM — o que foi planejado, o que atrasou, o que se espera. O
+                  spot conta LEILÃO, que é outra coisa: chega por fora, tem prazo próprio e o que
+                  interessa nele é o NOME DA ROTA, não a contagem.
+
+                  Espremido em duas colunas de número, ele obrigava um clique para dizer a única
+                  coisa que alguém quer saber. Embaixo, num card por frente, a rota está à vista.
+
+                  O TOTAL SPOT continua na faixa de totais: lá a pergunta é "quantas hoje", e essa
+                  a contagem responde sozinha.
+                */}
+                <Grupo cols={2} cor="bg-emerald-300 dark:bg-emerald-800/60">
                   {t("grupoTendencia")}
                 </Grupo>
               </tr>
@@ -133,8 +134,6 @@ export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
                 <Medida>{t("medidaAtribuida")}</Medida>
                 <Medida>{t("medidaAtrasado2h")}</Medida>
                 <Medida>{t("medidaForaDoPrazo")}</Medida>
-                <Medida>{t("medidaAceita")}</Medida>
-                <Medida>{t("medidaNaoAceita")}</Medida>
                 <Medida>{t("medidaAceita")}</Medida>
                 <Medida>{t("medidaNaoAceita")}</Medida>
               </tr>
@@ -170,15 +169,6 @@ export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
                   onClick={() => abrir("fora")}
                   ativo={medidaAberta === "fora"}
                 />
-                {/* O SPOT abre a lista de rotas — ver o painel embaixo da tabela. */}
-                <Valor
-                  valor={dados.spot?.aceito ?? 0}
-                  onClick={houveSpot ? abrirSpot : undefined}
-                />
-                <Valor
-                  valor={dados.spot?.naoAceito ?? 0}
-                  onClick={houveSpot ? abrirSpot : undefined}
-                />
                 {/*
                   TENDÊNCIA ainda não tem dado. As colunas ficam desenhadas mostrando "—", e isso é
                   deliberado: o quadro da operação as tem, e uma tabela que muda de forma quando o
@@ -193,9 +183,7 @@ export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
 
           {medidaAberta ? <ListaDeLhs region={region} medida={medidaAberta} /> : null}
 
-          {spotAberto && dados.spot && dados.spot.rotas.length > 0 ? (
-            <ListaDeOfertas ofertas={dados.spot.rotas} />
-          ) : null}
+
         </div>
       </div>
     </Card>
@@ -319,12 +307,7 @@ function ListaDeOfertas({ ofertas }: { ofertas: SpotDaRegiao["rotas"] }) {
   const tSpot = useTranslations("Spot");
 
   return (
-    <div className="border-t bg-amber-50/60 px-3 py-2 dark:bg-amber-950/20">
-      <p className="mb-1 flex items-center gap-1 text-[0.62rem] font-semibold uppercase tracking-wider text-muted-foreground">
-        <ChevronDown className="h-3 w-3" aria-hidden />
-        {t("grupoSpot")}
-      </p>
-      <ul className="grid gap-x-4 gap-y-1 xl:grid-cols-2">
+    <ul className="flex flex-col gap-1.5">
         {ofertas.map((o, i) => {
           // Os três campos secundários numa linha só, separados por ponto. Os ausentes somem.
           const detalhes = [
@@ -379,7 +362,80 @@ function ListaDeOfertas({ ofertas }: { ofertas: SpotDaRegiao["rotas"] }) {
             </li>
           );
         })}
-      </ul>
+    </ul>
+  );
+}
+
+/**
+ * OS CARDS DE SPOT, EMBAIXO DAS FRENTES (2026-08-27, a pedido, sobre um desenho).
+ *
+ * O spot era um grupo de duas colunas dentro do card da frente, e o clique nele abria as rotas.
+ * Saiu de lá e virou UM CARD POR FRENTE, numa faixa própria embaixo do quadro.
+ *
+ * ── POR QUE ELE NÃO ERA COLUNA ────────────────────────────────────────────────────────────────
+ *
+ * As outras três colunas contam VIAGEM: o que foi planejado, o que atrasou, o que se espera. Elas
+ * respondem com número, e o número basta — "31 pendentes" é uma informação completa.
+ *
+ * O spot conta LEILÃO, e não se comporta assim. Chega por fora, tem prazo curto e o que decide é o
+ * NOME DA ROTA: "4 aceitas" não diz se a frente pegou as quatro que importavam ou quatro que
+ * ninguém queria. Espremido em duas colunas de número, ele escondia atrás de um clique a única
+ * coisa que alguém quer saber. Aqui a rota está à vista.
+ *
+ * ── E POR QUE UM CARD POR FRENTE, E NÃO UM SÓ COM TUDO ────────────────────────────────────────
+ *
+ * Era assim que o cartão antigo fazia — uma lista do dia inteiro, misturando as três frentes — e
+ * para saber de quem era cada oferta era preciso ler o nome da estação dentro da rota. Lado a lado,
+ * cada frente responde por si e a comparação entre elas se faz de relance.
+ *
+ * ── O TOTAL SPOT FICA ONDE ESTAVA ─────────────────────────────────────────────────────────────
+ *
+ * Na faixa de totais, em cima. Lá a pergunta é "quantas hoje", e essa a contagem responde sozinha.
+ *
+ * ── A FRENTE SEM OFERTA NÃO GANHA CARD ────────────────────────────────────────────────────────
+ *
+ * Leilão é evento, não fluxo: há dias sem nenhum. Um card vazio por frente encheria um terço da
+ * tela para dizer que não houve nada — e a faixa inteira some quando nenhuma frente teve oferta.
+ */
+export function CardsDeSpot({ frentes }: { frentes: DadosDaFrente[] }) {
+  const t = useTranslations("Trips.dashboard");
+  const comOferta = frentes.filter((f) => (f.spot?.rotas.length ?? 0) > 0);
+  if (comOferta.length === 0) return null;
+
+  return (
+    <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+      {comOferta.map((f) => (
+        <Card key={f.region ?? "__sem_regiao__"} className="overflow-hidden p-0">
+          {/*
+            O cabeçalho é a faixa âmbar do grupo que saiu da tabela: é a mesma informação, e a cor
+            é como quem já conhece o quadro reconhece que este card é a coluna SPOT.
+          */}
+          <div className="flex items-baseline justify-between gap-2 bg-amber-300 px-3 py-1.5 dark:bg-amber-800/60">
+            <span className="text-[0.68rem] font-bold uppercase tracking-wider">
+              {t("grupoSpot")} · {f.region ?? t("regionUnassigned")}
+            </span>
+            {/*
+              As duas contagens que eram as colunas Aceita / N Aceita. Aqui elas cabem no cabeçalho
+              porque o corpo do card já é a lista — o número deixou de ser o conteúdo e virou resumo.
+            */}
+            <span className="shrink-0 text-[0.68rem] font-semibold tabular-nums">
+              {t("spotResumo", {
+                aceitas: f.spot?.aceito ?? 0,
+                naoAceitas: f.spot?.naoAceito ?? 0,
+              })}
+            </span>
+          </div>
+
+          {/*
+            ALTURA COM TETO E ROLAGEM PRÓPRIA. Vinte ofertas numa frente movimentada empurrariam o
+            resto da tela para baixo, e este card fica no PÉ do painel: o que ele empurra é o que
+            ninguém mais vê. Com o teto, a faixa das três frentes mantém a mesma altura.
+          */}
+          <div className="max-h-52 overflow-y-auto px-3 py-2">
+            <ListaDeOfertas ofertas={f.spot?.rotas ?? []} />
+          </div>
+        </Card>
+      ))}
     </div>
   );
 }
@@ -469,20 +525,20 @@ export function TotaisDoQuadro({ frentes }: { frentes: DadosDaFrente[] }) {
   const doPlano = (d: DadosDaFrente) => d.plano.reduce((n, s) => n + s.count, 0);
 
   const totais = [
-    { chave: "totalPlan", valor: soma(doPlano), cor: "bg-sky-200 dark:bg-sky-900/60" },
+    { chave: "totalPlan", valor: soma(doPlano), cor: "bg-sky-300 dark:bg-sky-800/70" },
     {
       chave: "totalOrigem",
       valor: soma((d) => d.origemRisco + d.origemFora),
-      cor: "bg-rose-200 dark:bg-rose-900/50",
+      cor: "bg-rose-300 dark:bg-rose-800/60",
       alerta: true,
     },
     {
       chave: "totalSpot",
       valor: soma((d) => (d.spot?.aceito ?? 0) + (d.spot?.naoAceito ?? 0)),
-      cor: "bg-amber-200 dark:bg-amber-900/50",
+      cor: "bg-amber-300 dark:bg-amber-800/60",
     },
     // Sem dado, o total é tão desconhecido quanto as parcelas. Zero aqui seria a soma de dois "não sei".
-    { chave: "totalTendencia", valor: null, cor: "bg-emerald-200 dark:bg-emerald-900/50" },
+    { chave: "totalTendencia", valor: null, cor: "bg-emerald-300 dark:bg-emerald-800/60" },
   ];
 
   return (
