@@ -1,254 +1,48 @@
 "use client";
 
-import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { useState, type ReactNode } from "react";
+import { useState } from "react";
 import { Eye, EyeOff, SlidersHorizontal } from "lucide-react";
 import {
-  boardQueryForDisplayStatus,
   saoPauloDate,
-  saoPauloMonthBounds,
   regionPosition,
   chaveDaFrente,
-  TRIP_DISPLAY_ORDER,
   type TripDisplayStatus,
 } from "@brazil-tms/shared";
-import type { DashboardSummary, RegionSlice } from "@brazil-tms/db";
+import type { RegionSlice } from "@brazil-tms/db";
 import { useDashboardSummary } from "@/lib/trips/client";
 import { useReconexao } from "@/lib/ui/reconexao";
 import { usePainelDoUsuario } from "@/lib/ui/painel-do-usuario";
-import { useMudou } from "@/lib/ui/mudou";
 import { cn } from "@/lib/utils";
-import { TripStatusBadge } from "@/components/trips/trip-status-badge";
-import { BOARD_ANCHOR } from "@/components/trips/control-tower-table";
 import { BscCard } from "@/components/trips/dashboard/bsc-card";
 import { OfertasDoDia } from "@/components/spot/ofertas-do-dia";
-import { CardDaFrente } from "@/components/trips/dashboard/frente";
+import {
+  CardDaFrente,
+  TotaisDoQuadro,
+  type DadosDaFrente,
+} from "@/components/trips/dashboard/frente";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
- * Home daily dashboard widgets (US4, §15.2). Read-first: data comes from `useDashboardSummary`
- * (60s polling via TanStack Query — NO Realtime). Renders the eight §15.2 widgets as a responsive
- * grid of Cards. The COMPUTED widgets (trips-today-by-status, billing-pending, and — since 006 — the
- * unassigned-trips count) deep-link into the filtered Control Tower board; the remaining later-slice
- * metrics (SLA risk → 007, exceptions/on-time → 007, missing docs → 008) arrive as `null` from the
- * read model and render a labelled placeholder — numbers are NEVER invented here.
+ * O PAINEL DO DIA — um cartão por frente, e mais nada (2026-08-27, a pedido).
+ *
+ * Os dados vêm do `useDashboardSummary` (recarga de 60s pelo TanStack Query — NUNCA Realtime, é
+ * restrição da constituição). Cada frente desenha UM cartão com os quatro grupos da planilha da
+ * operação — PLAN, ORIGEM, SPOT e TENDÊNCIA —, e embaixo deles a faixa que os soma.
+ *
+ * ── O QUE SAIU DAQUI, E POR QUÊ ───────────────────────────────────────────────────────────────
+ *
+ * Havia mais três quadros por status (hoje, amanhã e o mês) e dois números soltos (risco de SLA e
+ * aguardando atribuição). Saíram inteiros nesta data: eles respondiam perguntas de OUTRA escala —
+ * o mês, o país — e viravam uma terceira leitura competindo com as duas que a operação usa.
+ *
+ * Nada disso deixou de ser medido: os recortes continuam vindo do servidor e vivem na Torre de
+ * Controle, que é onde se AGE sobre eles. Aqui só se olha.
+ *
+ * NÚMERO NENHUM É INVENTADO — o que o read model não mede não aparece. É por isso que TENDÊNCIA
+ * mostra travessão em vez de zero: zero é uma afirmação, e não há de onde tirá-la ainda.
  */
-
-type MetricCardProps = {
-  /** i18n key under `Trips.dashboard` for the card title. */
-  titleKey: string;
-  /** The metric value to display (already formatted, e.g. "12" or "87%"); ignored when placeholder. */
-  value?: ReactNode;
-  /** Board deep-link for a computed (non-null) metric; omitted → no "view in board" affordance. */
-  href?: string;
-  /** When true, render the "available in a later step" placeholder instead of a value/link. */
-  placeholder?: boolean;
-};
-
-/**
- * O painel inteiro é COMPACTO (2026-08-17).
- *
- * Cada cartão ocupava a altura de um parágrafo para mostrar um número de duas casas, e com doze
- * deles o painel virava rolagem. Um painel que não cabe na tela deixa de ser painel: a pessoa lê os
- * quatro primeiros e para.
- *
- * O aperto veio em três rodadas, todas a pedido. Na segunda, o que sobrava era espaço VAZIO dentro do
- * cartão: o "ver no quadro" ocupava uma terceira linha só para repetir, em todos eles, a mesma frase.
- * O cartão INTEIRO virou o link — a área clicável cresce e a frase some.
- *
- * Na terceira, o que restava não era altura demais: era ESTICAMENTO. Estes cartões dividem a linha do
- * grid com os quadros de status, que são altos por natureza (uma linha por status), e o item de grid
- * cresce até a altura da linha. Um número de três dígitos ficava boiando num retângulo do tamanho de
- * uma lista de dez status.
- *
- * Duas mudanças resolvem, e nenhuma delas é diminuir a fonte:
- *
- *   NÃO ESTICAR — o cartão passa a ter a altura do próprio conteúdo. É a correção de verdade; o
- *   resto seria maquiagem em cima de um retângulo que continuaria grande. Quem segura isso hoje é o
- *   `self-start` da COLUNA que os empilha (ver `DashboardWidgets`), e não cada cartão: dentro de uma
- *   coluna flex, `self-start` no cartão encolheria a LARGURA dele, que é o eixo errado.
- *
- *   Rótulo e número na MESMA linha. Com o cartão livre para encolher, empilhar os dois em duas linhas
- *   só desperdiçava a largura que sobra ao lado de um número curto.
- */
-/**
- * UM NÚMERO QUE ACENDE QUANDO MUDA (2026-08-23, a pedido).
- *
- * O painel se recarrega sozinho e as contagens trocavam em silêncio — numa TV, a mudança
- * acontecia enquanto ninguém olhava, e o que mudou não se distinguia do que sempre esteve ali.
- *
- * O brilho herda a COR DO PRÓPRIO NÚMERO (ver `.realce-aceso`): a atrasada pisca vermelho, o em
- * trânsito pisca verde. Nenhuma cor nova entra na tela — a que já existe é que ganha um instante
- * de ênfase.
- */
-function Numero({ valor, className }: { valor: number; className?: string }) {
-  const aceso = useMudou(valor);
-  return <span className={cn("tabular-nums", aceso && "realce-aceso", className)}>{valor}</span>;
-}
-
-function MetricCard({ titleKey, value, href, placeholder }: MetricCardProps) {
-  const t = useTranslations("Trips.dashboard");
-
-  const conteudo = (
-    <div className="flex items-center justify-between gap-2">
-      <CardTitle className="text-[0.68rem] font-medium uppercase leading-tight tracking-wide text-muted-foreground">
-        {t(titleKey)}
-      </CardTitle>
-      {placeholder ? (
-        <span className="shrink-0 text-xs text-muted-foreground">{t("placeholder")}</span>
-      ) : (
-        <span className="shrink-0 text-xl font-semibold leading-none tabular-nums">{value}</span>
-      )}
-    </div>
-  );
-
-  if (href && !placeholder) {
-    return (
-      <Card className="p-0 transition-colors hover:bg-muted/60">
-        <Link href={href} className="block px-2.5 py-2" title={t("viewInBoard")}>
-          {conteudo}
-        </Link>
-      </Card>
-    );
-  }
-  return <Card className="px-2.5 py-2">{conteudo}</Card>;
-}
-
-/**
- * Etapas que NÃO entram no quadro do painel (2026-08-17, a pedido).
- *
- * Carregando, Carregada, Descarregando e Descarregada são passagens de minutos dentro de uma parada
- * — aparecem e somem, e cada uma custava uma linha permanente num cartão que precisa caber na tela.
- * Na origem e No destino saíram na mesma lógica, na segunda rodada: são o "chegou e está parado ali",
- * que a torre acompanha viagem a viagem e não por contagem. Faturamento pendente sai por outro
- * motivo: é assunto da tela de Faturamento, não da operação.
- *
- * Elas continuam existindo, contando e valendo em todo o resto do sistema — inclusive no total do
- * cartão, que segue sendo o número real. O que muda é só quais linhas ocupam espaço aqui.
- */
-const STATUS_OCULTOS = new Set<TripDisplayStatus>([
-  "at_origin",
-  "loading",
-  "loaded",
-  "at_destination",
-  "unloading",
-  "unloaded",
-  "billing_pending",
-]);
-
-/**
- * A lista de status de um cartão, cada linha levando ao quadro já filtrado.
- *
- * Serve os TRÊS cartões — hoje, amanhã e mês — porque a única diferença entre eles é o recorte de
- * data no link. Três cópias divergiriam no primeiro ajuste de estilo, e a pessoa veria três quadros
- * que se comportam diferente sem motivo.
- */
-function StatusList({
-  byStatus,
-  emptyKey,
-  dateFilter,
-  extraFilter = "",
-}: {
-  byStatus: DashboardSummary["tripsTodayByStatus"];
-  emptyKey: string;
-  /** O trecho de data do link — o MESMO recorte que o cartão contou. */
-  dateFilter: string;
-  /** Recorte extra do link (hoje, a região). Vazio no cartão que conta o país inteiro. */
-  extraFilter?: string;
-}) {
-  const t = useTranslations("Trips.dashboard");
-  // A ordem é a do ciclo de vida, não a do banco: quem lê espera Recebida antes de Em trânsito, e
-  // um quadro que reordena a cada atualização obriga a procurar de novo o que já se sabia onde era.
-  const ordenadas = byStatus
-    .filter((s) => !STATUS_OCULTOS.has(s.status))
-    .sort((a, b) => TRIP_DISPLAY_ORDER.indexOf(a.status) - TRIP_DISPLAY_ORDER.indexOf(b.status));
-
-  if (ordenadas.length === 0) {
-    return <p className="text-xs text-muted-foreground">{t(emptyKey)}</p>;
-  }
-
-  /**
-   * A BARRA DE PROPORÇÃO ATRÁS DE CADA LINHA (2026-08-23, a pedido).
-   *
-   * A linha era `[etiqueta] .......... 39`: o olho viajava o cartão inteiro e ainda tinha de
-   * comparar de cabeça. Num cartão de 39 viagens, "11 canceladas" e "9 em trânsito" pareciam a
-   * mesma coisa até alguém ler os dois números.
-   *
-   * A barra é a FATIA DO TOTAL do cartão, e não a fatia do maior status. Comparar com o maior
-   * encheria uma barra sempre até o fim e diria só quem é o campeão; com o total, a barra responde
-   * a pergunta que a operação faz — quanto do dia está parado nisto.
-   *
-   * Ela não tem cor própria: é uma sombra do texto, e a cor semântica continua onde já estava, na
-   * etiqueta. Duas coisas coloridas na mesma linha competiriam, e a etiqueta já ganhou essa
-   * disputa quando as cores foram escolhidas.
-   *
-   * O denominador é o do CARTÃO, não o do painel: cada cartão é um dia, e comparar a fatia de hoje
-   * com a fatia do mês seria comparar réguas diferentes desenhadas do mesmo jeito.
-   */
-  const total = ordenadas.reduce((n, s) => n + s.count, 0);
-
-  return (
-    <ul className="space-y-1">
-      {ordenadas.map(({ status, count }) => (
-        <li key={status}>
-          <Link
-            href={`/trips?${boardQueryForDisplayStatus(status)}${dateFilter}${extraFilter}&scope=all#${BOARD_ANCHOR}`}
-            className="relative flex items-center justify-between gap-2 overflow-hidden rounded px-1 py-0.5 hover:bg-muted"
-          >
-            <span
-              aria-hidden
-              className="absolute inset-y-0 left-0 rounded bg-foreground/[0.07]"
-              style={{ width: total === 0 ? 0 : `${(count / total) * 100}%` }}
-            />
-            <span className="relative">
-              <TripStatusBadge status={status} />
-            </span>
-            <Numero valor={count} className="relative text-sm font-semibold" />
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-/**
- * Um quadro de viagens por status, num recorte de data.
- *
- * Nasceu como dois componentes quase idênticos (hoje e mês); com a chegada de AMANHÃ virou um só —
- * a regra dos três do `PRINCIPLES.md`. A única diferença entre eles sempre foi o título, o recorte e
- * a frase de vazio; o resto era cópia esperando divergir no primeiro ajuste de estilo.
- *
- * O link de cada linha carrega o MESMO recorte que o cartão contou. Um cartão que abre um quadro com
- * outro número é pior do que um cartão que não abre nada.
- */
-function StatusCard({
-  titleKey,
-  emptyKey,
-  byStatus,
-  dateFilter,
-}: {
-  titleKey: string;
-  emptyKey: string;
-  byStatus: DashboardSummary["tripsTodayByStatus"];
-  dateFilter: string;
-}) {
-  const t = useTranslations("Trips.dashboard");
-  const total = byStatus.reduce((n, s) => n + s.count, 0);
-
-  return (
-    <Card className="p-2.5">
-      <div className="mb-1.5 flex items-baseline justify-between gap-2">
-        <CardTitle className="text-[0.68rem] font-medium uppercase leading-tight tracking-wide text-muted-foreground">
-          {t(titleKey)}
-        </CardTitle>
-        <Numero valor={total} className="text-sm font-semibold" />
-      </div>
-      <StatusList byStatus={byStatus} emptyKey={emptyKey} dateFilter={dateFilter} />
-    </Card>
-  );
-}
 
 /**
  * O PAINEL DE CADA UM (2026-08-23, a pedido).
@@ -388,50 +182,9 @@ export function DashboardWidgets() {
 
   const { summary, bsc } = data;
 
-  /**
-   * Um número do painel: valor + atalho para o quadro; `null` → o aviso de "ainda não medido", nunca
-   * um número inventado. O atalho é sempre o filtro EXATO que produziu a contagem.
-   */
-  function metric(
-    titleKey: string,
-    value: number | null,
-    format: (n: number) => ReactNode = (n) => n,
-    href = "/trips?scope=all",
-  ): MetricCardProps {
-    if (value === null) return { titleKey, placeholder: true };
-    // A âncora vai em TODO atalho do painel, não só nos status: quem clica num número daqui quer ver
-    // as viagens dele, e não o topo de uma página com a lista de avisos na frente.
-    const alvo = href.startsWith("/trips") ? `${href}#${BOARD_ANCHOR}` : href;
-    return { titleKey, value: format(value), href: alvo };
-  }
-
-  // 007 — the "At risk" view deep-link (matches the DEFAULT_TRIP_VIEWS "atRisk" preset).
-  const atRiskHref = "/trips?atRisk=true&scope=active&sort=pickupStart";
-
-  /**
-   * A fila do despacho, agora COM atalho para o quadro (2026-08-17, a pedido).
-   *
-   * Antes ela era um número sem destino, e por um motivo bom: o quadro não tinha filtro para o eixo
-   * de aceitação, e o `assigned=false` que existia responde outra pergunta — se o TMS tem atribuição,
-   * não se o PORTAL tem motorista. Os totais divergem, e mandar o clique para a lista errada teria
-   * sido pior do que não mandar.
-   *
-   * O filtro certo passou a existir (`awaitingAssignment=true`), montado sobre o MESMO predicado que
-   * conta este cartão. É isso que garante que o número aqui e o total de lá sejam o mesmo número.
-   */
-  const awaitingAssignmentHref = "/trips?awaitingAssignment=true&scope=active&sort=pickupStart";
-
-  // Risco de SLA em cima, fila do despacho embaixo (2026-08-19, a pedido). É a ordem da urgência: o
-  // risco tem hora marcada, a fila espera decisão.
-  const cartoes: MetricCardProps[] = [
-    metric("tripsAtRisk", summary.tripsAtRisk, (n) => n, atRiskHref),
-    metric("awaitingAssignment", summary.awaitingAssignment, (n) => n, awaitingAssignmentHref),
-  ];
-
   const hoje = saoPauloDate();
   const amanha = saoPauloDate(1);
   const depoisDeAmanha = saoPauloDate(2);
-  const mes = saoPauloMonthBounds();
 
   /**
    * As três frentes com os três dias de cada uma, na ordem que o servidor mandou.
@@ -510,15 +263,38 @@ export function DashboardWidgets() {
       chave: chaveDaFrente(region),
       rotulo: region ?? t("regionUnassigned"),
     })),
-    { chave: "hoje", rotulo: t("tripsToday") },
-    { chave: "amanha", rotulo: t("tripsTomorrow") },
-    { chave: "mes", rotulo: t("tripsMonth") },
     { chave: "spot", rotulo: tSpot("todayTitle") },
-    ...cartoes.map((m) => ({ chave: m.titleKey, rotulo: t(m.titleKey) })),
   ];
   const escondido = (chave: string) => escondidos.has(chave);
   const frentesVisiveis = regioesDosTresDias.filter((r) => !escondido(chaveDaFrente(r.region)));
-  const numerosVisiveis = cartoes.filter((m) => !escondido(m.titleKey));
+
+  /**
+   * OS DADOS DE CADA FRENTE, montados UMA vez.
+   *
+   * Os cards desenham a partir deste array e a faixa de totais soma ELE — não o payload de novo.
+   * Duas contas sobre a mesma pergunta é a porta clássica para o total dizer um número e as parcelas
+   * outro, com nenhum dos dois parecendo errado sozinho.
+   *
+   * O PLAN soma D1 e D2: a planilha tem dois números, não quatro. Os dois dias continuam chegando
+   * separados do servidor — separar de novo é outra soma aqui, não uma consulta nova.
+   */
+  const dadosDasFrentes: DadosDaFrente[] = frentesVisiveis.map(({ region, dias }) => {
+    const de = (chave: string) => dias.find((d) => d.diaKey === chave);
+    const hoje = de("regionToday");
+    const plano = new Map<TripDisplayStatus, number>();
+    for (const dia of [de("regionD1"), de("regionD2")]) {
+      for (const s of dia?.byStatus ?? []) {
+        plano.set(s.status, (plano.get(s.status) ?? 0) + s.count);
+      }
+    }
+    return {
+      region,
+      plano: [...plano.entries()].map(([status, count]) => ({ status, count })),
+      origemRisco: origemRiscoDe.get(region) ?? 0,
+      origemFora: hoje?.origemAtrasada ?? 0,
+      spot: hoje?.spot,
+    };
+  });
 
   return (
     <div className="space-y-2.5">
@@ -647,47 +423,25 @@ export function DashboardWidgets() {
          * O detalhe de HOJE saiu junto (ETA Origem, Em trânsito, Concluída, Cancelada). Foi o custo
          * declarado da troca, e ele está escrito em `frente.tsx` com o caminho de volta.
          */}
-        {frentesVisiveis.map(({ region, dias }) => {
-          const de = (chave: string) => dias.find((d) => d.diaKey === chave);
-          const d1 = de("regionD1");
-          const d2 = de("regionD2");
-          // O alarme e o spot moram no recorte de hoje, e é de lá que saem.
-          const hoje = de("regionToday");
-
-          /**
-           * O PLAN SOMA D1 E D2.
-           *
-           * A planilha tem dois números, não quatro: o horizonte de planejamento é "o que vem", não
-           * "o que vem amanhã contra depois". Os dois dias continuam chegando separados do servidor
-           * — separar de novo não precisa de consulta nova, só de outra soma aqui.
-           */
-          const plano = new Map<TripDisplayStatus, number>();
-          for (const dia of [d1, d2]) {
-            for (const s of dia?.byStatus ?? []) {
-              plano.set(s.status, (plano.get(s.status) ?? 0) + s.count);
-            }
-          }
-
-          return (
-            <div key={region ?? "__sem_regiao__"} className="col-span-full">
-              <CardDaFrente
-                dados={{
-                  region,
-                  plano: [...plano.entries()].map(([status, count]) => ({ status, count })),
-                  /*
-                   * O filtro cobre os DOIS dias, para o atalho abrir exatamente o que o número
-                   * contou. Passar só o de D1 mostraria metade — e uma lista menor que o número que
-                   * a abriu é o tipo de erro que ninguém liga ao filtro.
-                   */
-                  filtroPlano: `&pickupFrom=${amanha}&pickupTo=${depoisDeAmanha}`,
-                  origemRisco: origemRiscoDe.get(region) ?? 0,
-                  origemFora: hoje?.origemAtrasada ?? 0,
-                  spot: hoje?.spot,
-                }}
-              />
-            </div>
-          );
-        })}
+        {dadosDasFrentes.map((dados) => (
+          <div key={dados.region ?? "__sem_regiao__"} className="col-span-full">
+            <CardDaFrente dados={dados} />
+          </div>
+        ))}
+        {/**
+         * A FAIXA DE TOTAIS (2026-08-27, a pedido).
+         *
+         * Ela soma O QUE OS CARDS MOSTRAM — o mesmo array, não uma segunda conta sobre o payload.
+         * Somar por fora abriria a porta clássica: o total dizendo um número e as parcelas outro, com
+         * nenhum dos dois parecendo errado sozinho.
+         *
+         * Some quando não há frente nenhuma: um total de zeros embaixo de nada é ruído.
+         */}
+        {dadosDasFrentes.length > 0 ? (
+          <div className="col-span-full">
+            <TotaisDoQuadro frentes={dadosDasFrentes} />
+          </div>
+        ) : null}
         {/**
          * OS TRÊS RECORTES DE STATUS JUNTOS — hoje, amanhã, mês (2026-08-20, a pedido).
          *
@@ -695,54 +449,28 @@ export function DashboardWidgets() {
          * entre hoje, amanhã e o mês — que é a leitura destes três — exigia pular por cima de nove
          * cartões de região. Juntos, eles voltam a ser lidos de uma vez.
          */}
-        {!escondido("hoje") ? (
-          <StatusCard
-            titleKey="tripsToday"
-            emptyKey="empty"
-            byStatus={summary.tripsTodayByStatus}
-            dateFilter={`&pickupFrom=${hoje}&pickupTo=${hoje}`}
-          />
-        ) : null}
-        {/* Amanhã (2026-08-17, a pedido): numa TV no meio da sala, de tarde, a pergunta que ainda tem
-          resposta é a do dia seguinte. */}
-        {!escondido("amanha") ? (
-          <StatusCard
-            titleKey="tripsTomorrow"
-            emptyKey="emptyTomorrow"
-            byStatus={summary.tripsTomorrowByStatus}
-            dateFilter={`&pickupFrom=${amanha}&pickupTo=${amanha}`}
-          />
-        ) : null}
-        {/* Trocou o cartão de "Faturamento pendente" (2026-08-17, a pedido): o número do faturamento
-          vive na tela de Faturamento, e aqui a pergunta é sobre a operação. */}
-        {!escondido("mes") ? (
-          <StatusCard
-            titleKey="tripsMonth"
-            emptyKey="emptyMonth"
-            byStatus={summary.tripsByStatus}
-            dateFilter={`&pickupFrom=${mes.first}&pickupTo=${mes.last}`}
-          />
-        ) : null}
-        {/* O destino do aviso depois que ele sai do meio da tela: mesma consulta, tamanho de cartão. */}
+        {/*
+          NÃO HÁ MAIS os quadros de hoje / amanhã / mês, nem os dois números soltos (risco de SLA e
+          aguardando atribuição). Saíram a pedido, em 27/08, junto com a chegada da faixa de totais.
+
+          A razão é a mesma que já tinha tirado a superfície de alertas daqui: o painel do dia é o
+          quadro da OPERAÇÃO, e os cards de baixo respondiam perguntas de outra escala — o mês inteiro,
+          o país inteiro. Com o quadro por frente e o total embaixo, eles viraram uma terceira leitura
+          competindo com as duas que a operação de fato usa.
+
+          Nada foi apagado: os três recortes por status continuam vindo do servidor e vivem na Torre de
+          Controle, que é onde se age sobre eles. Voltar é descomentar — mas a decisão é do usuário, e
+          ele viu a tela sem eles antes de escolher.
+        */}
+        {/*
+          A LISTA DE OFERTAS DE SPOT FICA — foi o único dos cards de baixo que o usuário pediu para
+          manter ("o único que não vai alterar é os spots").
+
+          E faz sentido junto do resto: as colunas de spot do quadro contam quantas; esta lista diz
+          QUAIS, com preço e horário. É a mesma relação entre número e detalhe que o clique nas
+          outras colunas passou a ter — só que esta já existia e a operação já a usa.
+        */}
         {!escondido("spot") ? <OfertasDoDia /> : null}
-        {/**
-         * OS DOIS NÚMEROS EMPILHADOS numa coluna só (2026-08-19, a pedido), risco de SLA em cima.
-         *
-         * Eles são cartões de uma linha ao lado de quadros de dez, e enfileirados na horizontal cada um
-         * gastava uma coluna inteira da grade para mostrar dois dígitos. Empilhados, os dois ocupam uma
-         * coluna e sobra a sexta — que o usuário previu e aceitou: espaço vazio na borda incomoda menos
-         * do que um quadro de status espremido.
-         *
-         * O `self-start` mora AQUI, e não nos cartões: é este item da grade que não pode esticar até a
-         * altura da linha. Dentro da coluna, os dois já têm a altura do próprio conteúdo.
-         */}
-        {numerosVisiveis.length > 0 ? (
-          <div className="flex flex-col gap-2.5 self-start">
-            {numerosVisiveis.map((m) => (
-              <MetricCard key={m.titleKey} {...m} />
-            ))}
-          </div>
-        ) : null}
       </div>
     </div>
   );

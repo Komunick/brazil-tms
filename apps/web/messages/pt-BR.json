@@ -1463,7 +1463,17 @@
       "medidaAtrasado2h": "Atrasado < 2hs",
       "medidaForaDoPrazo": "Fora do prazo",
       "medidaAceita": "Aceita",
-      "medidaNaoAceita": "N aceita"
+      "medidaNaoAceita": "N aceita",
+      "medida_pend": "Pend atribuição",
+      "medida_atribuida": "Atribuída",
+      "medida_risco": "Atrasado < 2hs",
+      "medida_fora": "Fora do prazo",
+      "carregandoLhs": "Carregando…",
+      "semLhs": "Nenhuma viagem aqui.",
+      "totalPlan": "Total pend atribuição e atribuída",
+      "totalOrigem": "Total atrasado e fora do prazo",
+      "totalSpot": "Total spot",
+      "totalTendencia": "Total tendência"
     },
     "portalDecision": {
       "title": "Decisão da proposta",
