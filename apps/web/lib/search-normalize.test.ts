@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeForSearch } from "./search-normalize";
+import { faltamLetras, normalizeForSearch } from "./search-normalize";
 
 /** Pure unit tests for the 018 picker-search normalization (spec FR-002). */
 describe("normalizeForSearch — text mode (names)", () => {
@@ -47,5 +47,47 @@ describe("normalizeForSearch — plate mode", () => {
 
   it("distinguishes plates that differ by one character (SC-002)", () => {
     expect(normalizeForSearch("RTA1B23", "plate")).not.toBe(normalizeForSearch("RTA1B24", "plate"));
+  });
+});
+
+/**
+ * O MÍNIMO DE LETRAS antes de listar (2026-08-27).
+ *
+ * A regra é curta e o valor dela está em contar sobre o texto NORMALIZADO — é isso que faz "jo " e
+ * "joã" se comportarem igual. Contar o texto cru foi a primeira ideia, e ela liberaria a busca com
+ * um espaço a mais sem que nada tivesse sido digitado.
+ */
+describe("faltamLetras", () => {
+  it("desligado por padrão — minChars 0 nunca segura nada", () => {
+    expect(faltamLetras("", "text", 0)).toBe(false);
+    expect(faltamLetras("a", "text", 0)).toBe(false);
+  });
+
+  it("segura enquanto faltam letras e libera na terceira", () => {
+    expect(faltamLetras("", "text", 3)).toBe(true);
+    expect(faltamLetras("jo", "text", 3)).toBe(true);
+    expect(faltamLetras("joa", "text", 3)).toBe(false);
+    expect(faltamLetras("joao", "text", 3)).toBe(false);
+  });
+
+  /** Espaço nas pontas e repetido não conta como letra — é o ponto da normalização. */
+  it("não deixa espaço passar por letra", () => {
+    expect(faltamLetras("jo ", "text", 3)).toBe(true);
+    expect(faltamLetras("  jo  ", "text", 3)).toBe(true);
+  });
+
+  /** Acento também não muda a conta: "joã" tem três letras como "joa". */
+  it("acento conta como uma letra só", () => {
+    expect(faltamLetras("joã", "text", 3)).toBe(false);
+    expect(faltamLetras("joão", "text", 3)).toBe(false);
+  });
+
+  /**
+   * No modo placa, hífen e espaço somem — "ab-" tem duas letras úteis, não três. Sem isso um
+   * campo de placa com mínimo liberaria a busca com um traço digitado por engano.
+   */
+  it("no modo placa, hífen não conta", () => {
+    expect(faltamLetras("ab-", "plate", 3)).toBe(true);
+    expect(faltamLetras("abc", "plate", 3)).toBe(false);
   });
 });

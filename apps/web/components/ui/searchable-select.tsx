@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { normalizeForSearch, type SearchMode } from "@/lib/search-normalize";
+import { faltamLetras, normalizeForSearch, type SearchMode } from "@/lib/search-normalize";
 
 /**
  * A searchable single-select over a bounded, pre-loaded option list (018, issue #25) — the shared
@@ -55,6 +55,27 @@ export interface SearchableSelectProps {
    * no Enter, e passa a ser exibido como se fosse uma opção.
    */
   livre?: boolean;
+  /**
+   * QUANTAS LETRAS ANTES DE MOSTRAR ALGUMA COISA (2026-08-27, a pedido).
+   *
+   * Zero — o padrão — é o comportamento de sempre: clicar abre a lista inteira. Serve bem para
+   * campos de poucas dezenas de opções, onde folhear É a forma natural de escolher.
+   *
+   * O motorista não é assim. São ~600 nomes, e o usuário descreveu o efeito: *"hoje só de você
+   * apertar em motorista, vai todos os nomes"*. Uma lista que despeja seiscentas linhas não ajuda
+   * a achar ninguém — ela obriga a digitar de qualquer jeito, depois de atrapalhar.
+   *
+   * ── POR QUE UM MÍNIMO, E NÃO SÓ ORDENAR MELHOR ─────────────────────────────────────────────
+   *
+   * Porque com seiscentos nomes NENHUMA ordem é útil: a chance de o nome procurado estar nas
+   * primeiras linhas é desprezível. O que a pessoa vai fazer é digitar — e o mínimo apenas para de
+   * mostrar ruído enquanto ela não digitou.
+   *
+   * Três letras é o número que ela pediu, e é o que separa: com duas, "sil" ainda traz meia lista.
+   */
+  minChars?: number;
+  /** O que dizer enquanto faltam letras. Só é lido quando `minChars` > 0. */
+  minCharsText?: string;
 }
 
 const CLEAR = "__clear__";
@@ -71,6 +92,8 @@ export function SearchableSelect({
   clearLabel,
   disabled,
   livre,
+  minChars = 0,
+  minCharsText,
 }: SearchableSelectProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -89,13 +112,32 @@ export function SearchableSelect({
     [options, value, livre],
   );
 
+  /**
+   * Ainda faltam letras para buscar.
+   *
+   * Medido sobre o texto NORMALIZADO, não sobre o cru: "jo " e "joã" têm o mesmo tanto de letra
+   * útil, e contar espaço ou acento como caractere faria o mínimo disparar em momentos diferentes
+   * para a mesma intenção.
+   */
+  const abaixoDoMinimo = useMemo(
+    () => faltamLetras(query, mode, minChars),
+    [query, mode, minChars],
+  );
+
   const filtered = useMemo(() => {
+    if (abaixoDoMinimo) return [];
     const q = normalizeForSearch(query, mode);
     if (!q) return options;
     return options.filter((o) => normalizeForSearch(o.label, mode).includes(q));
-  }, [options, query, mode]);
+  }, [options, query, mode, abaixoDoMinimo]);
 
-  // The rendered rows: the pinned clear item (when clearable) + the filtered options (FR-006).
+  /**
+   * The rendered rows: the pinned clear item (when clearable) + the filtered options (FR-006).
+   *
+   * O item de LIMPAR sobrevive ao mínimo de letras, de propósito: ele não é resultado de busca, é
+   * uma ação fixa ("sem reboque"). Escondê-lo enquanto ninguém digitou tiraria da pessoa a única
+   * coisa que ela poderia querer fazer sem procurar nada.
+   */
   const rows = useMemo(
     () => (clearable && clearLabel ? [{ id: CLEAR, label: clearLabel }, ...filtered] : filtered),
     [clearable, clearLabel, filtered],
@@ -218,7 +260,17 @@ export function SearchableSelect({
         >
           {rows.length === 0 ? (
             <li className="px-2 py-1.5 text-sm text-muted-foreground" role="presentation">
-              {emptyText}
+              {/*
+                DUAS AUSÊNCIAS DIFERENTES, e confundi-las custaria caro.
+
+                "Nenhum resultado" diz que a busca terminou e não achou — quem lê vai conferir a
+                grafia, ou concluir que o motorista não está cadastrado. "Digite 3 letras" diz que a
+                busca nem começou.
+
+                Mostrar a primeira no lugar da segunda faria alguém desistir de procurar um nome que
+                está lá, esperando ser digitado.
+              */}
+              {abaixoDoMinimo && minCharsText ? minCharsText : emptyText}
             </li>
           ) : (
             rows.map((row, index) => (

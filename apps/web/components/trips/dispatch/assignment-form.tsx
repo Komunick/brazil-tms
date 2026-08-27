@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useTranslations } from "next-intl";
-import type { Finding, TripStatus } from "@brazil-tms/shared";
+import { normalizarPlaca, type Finding, type TripStatus } from "@brazil-tms/shared";
 import type { TripAssignmentDto, TripFilterOptions } from "@brazil-tms/db";
+import { PlacasDoMotorista } from "@/components/trips/placas-do-motorista";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -264,6 +265,14 @@ export function AssignmentForm({
             value={form.driverId}
             options={resourceOptions.drivers}
             onChange={(v) => set("driverId", v)}
+            /*
+              TRÊS LETRAS ANTES DE LISTAR (2026-08-27, a pedido).
+
+              Mesma razão do diálogo do portal: são centenas de nomes, e "só de apertar em motorista
+              vai todos". Veículo e reboque NÃO ganham o mínimo — a frota é pequena o bastante para
+              folhear, e ali a lista é a forma natural de escolher.
+            */
+            minChars={3}
           />
           <ResourceSelect
             id={`vehicle-${tripId}`}
@@ -274,6 +283,39 @@ export function AssignmentForm({
             mode="plate"
             onChange={(v) => set("vehicleId", v)}
           />
+          {/*
+            AS PLACAS QUE ESTE MOTORISTA JÁ RODOU (2026-08-27, a pedido).
+
+            Ocupa a largura das duas colunas, logo abaixo de motorista e veículo — a dúvida aparece
+            entre os dois campos, e é ali que a resposta tem de estar.
+
+            ── AQUI O CLIQUE ESCOLHE UM VEÍCULO DO CADASTRO, NÃO UMA PLACA ────────────────────
+
+            Este formulário grava a escala INTERNA e trabalha com `vehicleId`; o diálogo do portal
+            trabalha com placa em texto. O mesmo painel serve os dois porque o rótulo da opção de
+            veículo É a placa — então casar por rótulo devolve o id.
+
+            Placa sugerida que não está no cadastro de frota não vira botão clicável: ela apareceu
+            numa ordem do portal, e o portal aceita placa que nós não temos. Sugerir o que este
+            formulário não consegue selecionar seria oferecer um clique que não faz nada.
+          */}
+          <div className="sm:col-span-2">
+            <PlacasDoMotorista
+              driverId={form.driverId}
+              aoEscolher={(placa) => {
+                const opcao = resourceOptions.vehicles.find(
+                  (v) => normalizarPlaca(v.label) === normalizarPlaca(placa),
+                );
+                if (opcao) set("vehicleId", opcao.id);
+              }}
+              /*
+                Só oferece o que dá para escolher — ver o comentário acima. A lista de placas
+                conhecidas vem do mesmo `resourceOptions` que o campo usa, então as duas nunca
+                divergem.
+              */
+              apenas={resourceOptions.vehicles.map((v) => v.label)}
+            />
+          </div>
           <ResourceSelect
             id={`trailer-${tripId}`}
             label={t("trailer")}
@@ -404,6 +446,7 @@ function ResourceSelect({
   mode,
   clearable,
   clearLabel,
+  minChars,
 }: {
   id: string;
   label: string;
@@ -414,6 +457,8 @@ function ResourceSelect({
   mode?: SearchMode;
   clearable?: boolean;
   clearLabel?: string;
+  /** Quantas letras antes de listar. Só o motorista usa — ver a chamada. */
+  minChars?: number;
 }) {
   const t = useTranslations("Dispatch");
   return (
@@ -429,6 +474,8 @@ function ResourceSelect({
         mode={mode}
         clearable={clearable}
         clearLabel={clearLabel}
+        minChars={minChars}
+        minCharsText={minChars ? t("typeToSearch", { n: String(minChars) }) : undefined}
       />
     </div>
   );
