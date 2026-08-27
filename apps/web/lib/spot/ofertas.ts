@@ -43,53 +43,39 @@ export function novasOfertas(estado: EstadoOfertas, recebidas: SpotOfferView[]):
 }
 
 /**
- * UM AVISO POR RAJADA (2026-08-21, a pedido, depois de um teste com 30 ofertas).
+ * TODA OFERTA APITA, UMA DE CADA VEZ (2026-08-27, a pedido).
  *
- * Toda sexta chegam mais de cinquenta ofertas em sequência, uma a uma. O aviso ocupa o meio da tela
- * por trinta segundos, e a primeira versão desta regra só evitava a FILA — passados os trinta
- * segundos, a oferta seguinte encontrava a tela livre e virava aviso de novo. No teste, 30 ofertas em
- * 89 segundos viraram três cartões. O pedido era um.
+ * ── O QUE HAVIA AQUI, E POR QUE SAIU ──────────────────────────────────────────────────────────
  *
- * ── A PERGUNTA CERTA ───────────────────────────────────────────────────────────────────────────
+ * Havia a REGRA DA RAJADA: a primeira oferta depois de três minutos de silêncio subia à tela, e
+ * tudo o que viesse na esteira dela ia calado para a caixa. Ela nasceu de um teste com 30 ofertas
+ * e da sexta-feira que traz cinquenta.
  *
- * Não é "tem cartão na tela?" — é "isto é o COMEÇO de uma rajada, ou a continuação de uma?".
+ * O que ela custava só apareceu na tela de verdade: três ofertas chegaram seguidas e a sala ouviu
+ * UM apito. As outras duas existiam na caixa, mas ninguém abre a caixa por conta própria — o apito
+ * é o que faz alguém olhar, e sem ele a oferta passou como se não tivesse chegado.
  *
- * Uma oferta começa rajada quando vem depois de um silêncio. Vindo na esteira de outra, é
- * continuação: entra na caixa e não interrompe. O silêncio é o que separa os dois, e é a única
- * medida que não precisa saber quantas ofertas virão nem que dia é hoje.
+ * ── A REGRA AGORA ─────────────────────────────────────────────────────────────────────────────
  *
- * ── POR QUE NÃO É INTERVALO FIXO ENTRE AVISOS ──────────────────────────────────────────────────
+ * Toda oferta nova entra na FILA. Uma fica na tela por vez, com som e aviso de sistema próprios;
+ * quando os trinta segundos dela acabam, a seguinte sobe e apita também. Nenhuma é engolida.
  *
- * "No máximo um aviso a cada dez minutos" resolveria a sexta e estragaria a terça: duas ofertas
- * legítimas separadas por oito minutos são dois avisos legítimos. O silêncio antes da oferta
- * descreve o que está acontecendo; o relógio desde o último aviso, não.
- *
- * ── NADA SE PERDE ──────────────────────────────────────────────────────────────────────────────
- *
- * A caixa de ofertas do dia mostra TODAS, com a lista completa e clicável. E o cartão diz quantas
- * absorveu — sem isso o corte seria invisível, e quem sabe que a sexta traz cinquenta veria uma só e
- * concluiria que está perdendo as outras.
+ * O CUSTO É CONHECIDO e foi aceito: numa rajada de cinquenta, a última sobe vinte e cinco minutos
+ * depois de chegar. É por isso que o cartão mostra quantas ainda esperam — quem vê "+12" sabe que
+ * a fila é longa e pode ir direto à caixa de ofertas do dia, que continua tendo todas.
  */
 
-/** O silêncio que separa uma rajada da seguinte. Três minutos: mais que o aviso, menos que um café. */
-export const SILENCIO_ENTRE_RAJADAS_MS = 3 * 60_000;
-
-export interface DecisaoDeAviso {
-  /** A oferta que vai para a tela, ou `null` quando é continuação de rajada. */
-  anunciar: SpotOfferView | null;
-  /** Quantas foram para a caixa sem passar pela tela. */
-  absorvidas: number;
-}
-
-export function decidirAviso(
-  temCartaoNaTela: boolean,
+/**
+ * Põe as novas no FIM da fila, sem repetir o que já está nela.
+ *
+ * A guarda de id não é teórica: o ensaio entra pela frente da fila e a busca continua correndo por
+ * baixo. Sem ela, uma oferta que chegasse duas vezes apitaria duas vezes — que é exatamente o
+ * defeito oposto ao que este arquivo acabou de consertar.
+ */
+export function enfileirar(
+  fila: readonly SpotOfferView[],
   novas: readonly SpotOfferView[],
-  msDesdeAUltimaOferta: number,
-): DecisaoDeAviso {
-  if (novas.length === 0) return { anunciar: null, absorvidas: 0 };
-  const comecaRajada = msDesdeAUltimaOferta >= SILENCIO_ENTRE_RAJADAS_MS;
-  // Cartão na tela OU continuação de rajada: tudo vai para a caixa, sem interromper.
-  if (temCartaoNaTela || !comecaRajada) return { anunciar: null, absorvidas: novas.length };
-  // Começo de rajada com a tela livre: a mais antiga sobe, as outras acumulam.
-  return { anunciar: novas[0] ?? null, absorvidas: Math.max(0, novas.length - 1) };
+): SpotOfferView[] {
+  const jaNaFila = new Set(fila.map((o) => o.id));
+  return [...fila, ...novas.filter((o) => !jaNaFila.has(o.id))];
 }

@@ -1944,7 +1944,7 @@
     "originArrival": "STA",
     "openList": "Ver as ofertas de hoje",
     "listHint": "O que o aviso mostrou, pelo resto do dia.",
-    "absorbed": "+{count} na caixa de ofertas",
+    "queued": "+{count} esperando na fila",
     "systemTitle": "Nova oferta de spot",
     "systemHeading": "Aviso na área de trabalho",
     "systemHint": "Recebe o aviso mesmo com o TMS numa aba de fundo ou minimizado. Aba fechada não alcança — aí quem avisa é o Telegram.",
