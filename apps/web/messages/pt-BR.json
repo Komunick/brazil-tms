@@ -1530,7 +1530,8 @@
       "emViagemNa": "Em viagem na {lh}",
       "semPosicaoNenhuma": "Nenhuma posição de veículo carregada. O mapa aparece quando a integração com a gerenciadora estiver ligada neste ambiente.",
       "platesUsedBefore": "Placas que este motorista já rodou",
-      "timesUsed": "{n} viagens"
+      "timesUsed": "{n} viagens",
+      "typeToSearch": "Digite {n} letras para buscar"
     },
     "melhoresDaRota": {
       "titulo": "Nesta rota",
@@ -1859,7 +1860,8 @@
     },
     "disabledBlock": "Há um impedimento acima que precisa ser resolvido antes de salvar.",
     "disabledFields": "Escolha o motorista e o veículo para poder salvar.",
-    "disabledOverride": "Escreva o motivo da exceção acima para prosseguir apesar dos alertas."
+    "disabledOverride": "Escreva o motivo da exceção acima para prosseguir apesar dos alertas.",
+    "typeToSearch": "Digite {n} letras para buscar"
   },
   "Fleet": {
     "title": "Rastreamento da frota",
