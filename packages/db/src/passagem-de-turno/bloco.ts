@@ -135,8 +135,47 @@ export async function lerBloco(data: string, turno: Turno, setor: Setor): Promis
     fechadoAutomaticamente: cabecalho.fechadoAutomaticamente,
     itens: itens.map((i) => ({ ...i, dados: i.dados ?? {} })),
     digitados,
-    apurados: await contadoresApurados(data, turno, setor),
+    apurados: await apuradosOuVazio(data, turno, setor),
   };
+}
+
+/**
+ * A APURAÇÃO NÃO PODE DERRUBAR O BLOCO (2026-08-27, depois de derrubar).
+ *
+ * Em 26/08 a consulta dos contadores tinha um parâmetro sem tipo e o Postgres a recusava. Como ela
+ * é a última coisa que `lerBloco` faz, a aba inteira da PROGRAMAÇÃO parou de abrir — ninguém
+ * conseguia nem LER o que o turno anterior tinha escrito, por causa de quatro números auxiliares.
+ * Os outros quatro setores, que não apuram nada, carregavam normalmente.
+ *
+ * A proporção estava errada. O diário é o que a operação precisa às três da manhã; o resumo apurado
+ * é conveniência. Então a falha vira ausência: os contadores aparecem como "—", que é o mesmo que a
+ * tela já mostra para o que ninguém preencheu.
+ *
+ * ── MAS ELA NÃO PODE VIRAR SILÊNCIO ───────────────────────────────────────────────────────────
+ *
+ * Engolir exceção é o começo do defeito que ninguém acha. O erro vai INTEIRO para o log do
+ * servidor, com o bloco que o produziu — e um contador que devia ter número aparecendo vazio é
+ * visível na tela, ao contrário de um zero, que ninguém questiona.
+ */
+async function apuradosOuVazio(
+  data: string,
+  turno: Turno,
+  setor: Setor,
+): Promise<Record<string, number>> {
+  try {
+    return await contadoresApurados(data, turno, setor);
+  } catch (erro) {
+    console.error(
+      JSON.stringify({
+        erro: "passagem_de_turno.apuracao_falhou",
+        data,
+        turno,
+        setor,
+        detalhe: erro instanceof Error ? erro.message : String(erro),
+      }),
+    );
+    return {};
+  }
 }
 
 // ── A escrita ───────────────────────────────────────────────────────────────────────────────────
@@ -383,11 +422,7 @@ export async function contadoresApurados(
 ): Promise<Record<string, number>> {
   if (setor !== "PROGRAMACAO") return {};
 
-  const def = DEFINICAO_DO_TURNO[turno];
-  const inicio = sql`((${data}::date + ${horaSql(def.inicioHora)}) at time zone 'America/Sao_Paulo')`;
-  // O T2 termina no dia seguinte — `fimHora < inicioHora` é o sinal de que cruza a meia-noite.
-  const diasAteOFim = def.fimHora <= def.inicioHora ? 1 : 0;
-  const fim = sql`((${data}::date + ${diasAteOFim} + ${horaSql(def.fimHora)}) at time zone 'America/Sao_Paulo')`;
+  const { inicio, fim } = janelaDoTurno(data, turno);
 
   const linhas = await db.execute<{
     no_show: string;
@@ -417,11 +452,59 @@ export async function contadoresApurados(
 }
 
 /**
+ * AS HORAS DA JANELA DE UM TURNO, contadas a partir da meia-noite do dia do bloco.
+ *
+ * ── O DIA SEGUINTE ENTRA NAS HORAS, E NÃO COMO UMA PARCELA PRÓPRIA ────────────────────────────
+ *
+ * O T2 termina no dia seguinte — `fimHora <= inicioHora` é o sinal de que cruza a meia-noite —, e a
+ * forma óbvia de escrever isso em SQL seria `data::date + 1 + '7 hours'::interval`.
+ *
+ * **Isso não funciona, e falha sempre.** Aquele `+ 1` vira um PARÂMETRO SEM TIPO (`$4`), e
+ * `date + $4` é ambíguo para o Postgres: existem `date + integer`, `date + interval`, `date + time`
+ * e `date + timetz`. Sem cast ele não escolhe — recusa a consulta inteira, nos dois turnos.
+ *
+ * Somar 24 às horas faz o parâmetro sumir: `'31 hours'::interval` diz a mesma coisa com um cast só.
+ *
+ * ── O MODO COMO ISSO APARECEU ENGANOU ─────────────────────────────────────────────────────────
+ *
+ * Como a apuração só existe para a PROGRAMAÇÃO, os outros quatro setores carregavam normalmente e
+ * só aquela aba quebrava. Parece defeito de tela, e está no SQL.
+ */
+export function horasDaJanela(turno: Turno): { inicio: number; fim: number } {
+  const def = DEFINICAO_DO_TURNO[turno];
+  return {
+    inicio: def.inicioHora,
+    fim: def.fimHora <= def.inicioHora ? def.fimHora + 24 : def.fimHora,
+  };
+}
+
+/**
+ * As duas pontas da janela, em hora de São Paulo.
+ *
+ * `(data + horas) at time zone 'America/Sao_Paulo'` devolve o instante UTC daquela parede de
+ * relógio. Montar a janela em UTC deslocaria todo turno em três horas: o T1 pegaria das 4h às 16h
+ * locais, e as coletas do fim da tarde cairiam no turno errado.
+ *
+ * Exportada para o teste, que confere o SQL gerado sem precisar de banco — é o único jeito de
+ * provar a ausência do parâmetro sem tipo antes de a consulta chegar ao Postgres.
+ */
+export function janelaDoTurno(data: string, turno: Turno) {
+  const horas = horasDaJanela(turno);
+  return {
+    inicio: sql`((${data}::date + ${horaSql(horas.inicio)}) at time zone 'America/Sao_Paulo')`,
+    fim: sql`((${data}::date + ${horaSql(horas.fim)}) at time zone 'America/Sao_Paulo')`,
+  };
+}
+
+/**
  * A hora como intervalo, para somar a uma data.
  *
  * Vai como texto parametrizado (`'7 hours'::interval`) e não interpolado na consulta — a hora vem
  * de um catálogo nosso e não de entrada de usuário, mas a diferença some no dia em que alguém
  * tornar o turno configurável, e aí o hábito é que protege.
+ *
+ * O `::interval` NÃO é enfeite: sem ele o parâmetro fica sem tipo e `date + $n` vira ambíguo. Ver
+ * `horasDaJanela`.
  */
 function horaSql(hora: number) {
   return sql`${`${hora} hours`}::interval`;
