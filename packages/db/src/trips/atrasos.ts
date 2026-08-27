@@ -144,3 +144,39 @@ export function origemAtrasadaSql(): SQL<boolean> {
     AND ${trips.plannedPickupWindowStart} > now() - make_interval(days => ${DIAS_QUE_O_ALARME_DURA})
   )`;
 }
+
+/**
+ * A JANELA DE AVISO: deveria ter chegado e ainda dá tempo (2026-08-27, a pedido).
+ *
+ * ── A REGRA DA OPERAÇÃO ───────────────────────────────────────────────────────────────────────
+ *
+ * O motorista tem de dar entrada na origem DUAS HORAS ANTES da hora da coleta. Passado esse ponto
+ * sem ele aparecer, a viagem já está atrasada aos olhos de quem opera — mesmo que a hora da coleta
+ * ainda não tenha chegado.
+ *
+ * É por isso que esta coluna e a de cima são DUAS, e não uma com dois tons:
+ *
+ *   ATRASADO < 2HS   passou de "duas horas antes" e a hora da coleta ainda não chegou → dá para ligar
+ *   FORA DO PRAZO    a hora da coleta passou e ele não chegou                          → já perdeu
+ *
+ * A primeira é a única das duas em que alguém ainda consegue mudar o desfecho. Somá-las num número
+ * só apagaria exatamente essa diferença — e o número somado não diria a quem ligar primeiro.
+ *
+ * ── AS DUAS NÃO SE SOBREPÕEM ──────────────────────────────────────────────────────────────────
+ *
+ * `now() <= plannedPickupWindowStart` fecha a janela no instante em que a outra abre. Sem esse
+ * limite a viagem contaria nas duas colunas ao mesmo tempo, e a soma das duas passaria a ser maior
+ * que o total de viagens atrasadas — um total que não fecha é o tipo de erro que ninguém consegue
+ * explicar olhando a tela.
+ *
+ * O resto das condições é idêntico ao de cima de propósito: mesmo status, mesma exigência de haver
+ * motorista escalado. O que separa as duas é SÓ o instante.
+ */
+export function origemRiscoSql(): SQL<boolean> {
+  return sql<boolean>`(
+    ${trips.currentStatus} IN ('received', 'assigned')
+    AND nullif(trim(${trips.customerFields} ->> 'Motorista (portal)'), '') IS NOT NULL
+    AND now() > ${trips.plannedPickupWindowStart} - interval '2 hours'
+    AND now() <= ${trips.plannedPickupWindowStart}
+  )`;
+}

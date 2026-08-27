@@ -66,7 +66,7 @@ import { loadTripDetail, type TripDetail } from "./trip-dto";
 import { onTimeExpr } from "./on-time";
 import { tripQueueSql } from "./portal-withdrawn";
 import { readOrigemAtrasadaPorRegiao, readSpotPorRegiao } from "./programacao";
-import { lateToAssignSql, origemAtrasadaSql, rotaNossaSql } from "./atrasos";
+import { lateToAssignSql, origemAtrasadaSql, origemRiscoSql, rotaNossaSql } from "./atrasos";
 
 /**
  * Feature 005 — Control Tower read models (board / detail / dashboard / export). These are the
@@ -229,7 +229,13 @@ export interface DashboardSummary {
    * "foi escalado e não chegou". São duas falhas distintas, com ações distintas — atribuir contra
    * ligar para o motorista —, e somá-las esconderia qual das duas está acontecendo.
    */
-  origemAtrasadaByRegion: { region: string | null; count: number }[];
+  /**
+   * O atraso na origem da frente, nas DUAS janelas que a operação distingue (2026-08-27).
+   *
+   * `count` é FORA DO PRAZO (a hora da coleta passou e ele não chegou); `risco` é ATRASADO < 2HS
+   * (passou de "duas horas antes" e ainda dá para ligar). As duas não se sobrepõem.
+   */
+  origemAtrasadaByRegion: { region: string | null; count: number; risco: number }[];
   /**
    * O leilão de spot da frente nas últimas 24h: o que a empresa pegou e o que passou.
    *
@@ -592,6 +598,7 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
   if (query.rotaNossa === "false") conditions.push(not(rotaNossaSql));
   if (query.lateToAssign === "true") conditions.push(lateToAssignSql());
   if (query.origemAtrasada === "true") conditions.push(origemAtrasadaSql());
+  if (query.origemRisco === "true") conditions.push(origemRiscoSql());
   // A fila do despacho — o MESMO predicado que o cartão do painel conta. Ver `awaitingAssignmentSql`.
   if (query.awaitingAssignment === "true") {
     conditions.push(inArray(trips.currentStatus, [...ACTIVE_TRIP_STATUSES]));

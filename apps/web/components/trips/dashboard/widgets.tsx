@@ -23,7 +23,7 @@ import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { BOARD_ANCHOR } from "@/components/trips/control-tower-table";
 import { BscCard } from "@/components/trips/dashboard/bsc-card";
 import { OfertasDoDia } from "@/components/spot/ofertas-do-dia";
-import { LinhaDaFrente } from "@/components/trips/dashboard/frente";
+import { CardDaFrente } from "@/components/trips/dashboard/frente";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -449,6 +449,8 @@ export function DashboardWidgets() {
    */
   const atrasadasDe = new Map(summary.lateToAssignByRegion.map((r) => [r.region, r.count]));
   const origemAtrasadaDe = new Map(summary.origemAtrasadaByRegion.map((r) => [r.region, r.count]));
+  // A janela de aviso — "deveria ter chegado e ainda dá tempo". Ver `origemRiscoSql`.
+  const origemRiscoDe = new Map(summary.origemAtrasadaByRegion.map((r) => [r.region, r.risco]));
   const spotDe = new Map(summary.spotByRegion.map((r) => [r.region, r]));
   const porRegiao = new Map<string | null, Record<string, RegionSlice["byStatus"]>>();
   for (const [chave, lista] of [
@@ -649,19 +651,37 @@ export function DashboardWidgets() {
           const de = (chave: string) => dias.find((d) => d.diaKey === chave);
           const d1 = de("regionD1");
           const d2 = de("regionD2");
-          // As três faixas de hoje: o alarme e o spot moram no recorte de hoje, e é de lá que saem.
+          // O alarme e o spot moram no recorte de hoje, e é de lá que saem.
           const hoje = de("regionToday");
+
+          /**
+           * O PLAN SOMA D1 E D2.
+           *
+           * A planilha tem dois números, não quatro: o horizonte de planejamento é "o que vem", não
+           * "o que vem amanhã contra depois". Os dois dias continuam chegando separados do servidor
+           * — separar de novo não precisa de consulta nova, só de outra soma aqui.
+           */
+          const plano = new Map<TripDisplayStatus, number>();
+          for (const dia of [d1, d2]) {
+            for (const s of dia?.byStatus ?? []) {
+              plano.set(s.status, (plano.get(s.status) ?? 0) + s.count);
+            }
+          }
+
           return (
             <div key={region ?? "__sem_regiao__"} className="col-span-full">
-              <LinhaDaFrente
+              <CardDaFrente
                 dados={{
                   region,
-                  d1: d1?.byStatus ?? [],
-                  d2: d2?.byStatus ?? [],
-                  filtroD1: d1?.dateFilter ?? "",
-                  filtroD2: d2?.dateFilter ?? "",
-                  atrasadas: hoje?.atrasadas ?? 0,
-                  origemAtrasada: hoje?.origemAtrasada ?? 0,
+                  plano: [...plano.entries()].map(([status, count]) => ({ status, count })),
+                  /*
+                   * O filtro cobre os DOIS dias, para o atalho abrir exatamente o que o número
+                   * contou. Passar só o de D1 mostraria metade — e uma lista menor que o número que
+                   * a abriu é o tipo de erro que ninguém liga ao filtro.
+                   */
+                  filtroPlano: `&pickupFrom=${amanha}&pickupTo=${depoisDeAmanha}`,
+                  origemRisco: origemRiscoDe.get(region) ?? 0,
+                  origemFora: hoje?.origemAtrasada ?? 0,
                   spot: hoje?.spot,
                 }}
               />

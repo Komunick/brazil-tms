@@ -1,8 +1,8 @@
-import { count, eq, sql, type SQL } from "drizzle-orm";
+import { eq, or, sql, type SQL } from "drizzle-orm";
 import { regionPosition } from "@brazil-tms/shared";
 import { db } from "../client";
 import { locations, trips } from "../../schema";
-import { origemAtrasadaSql } from "./atrasos";
+import { origemAtrasadaSql, origemRiscoSql } from "./atrasos";
 
 /**
  * O QUE FALTAVA NO CARTÃO DA REGIÃO: origem atrasada e spot (2026-08-22, a pedido).
@@ -24,11 +24,20 @@ import { origemAtrasadaSql } from "./atrasos";
  * estação sem região. Um terço do alarme desapareceria da tela sem ninguém desconfiar.
  */
 
-/** Quantas viagens desta frente já passaram do prazo de chegada na origem. */
+/**
+ * O atraso na origem desta frente, nas DUAS janelas que a operação distingue (2026-08-27).
+ *
+ * O motorista tem de dar entrada na origem duas horas antes da coleta. Daí as duas colunas do
+ * quadro: uma é onde ainda dá para ligar, a outra é onde já perdeu. A regra de cada uma mora em
+ * `atrasos.ts`; aqui só a contagem.
+ */
 export interface OrigemAtrasadaDaRegiao {
   /** `null` = estação ainda sem região cadastrada. */
   region: string | null;
+  /** FORA DO PRAZO: a hora da coleta passou e ele não chegou. */
   count: number;
+  /** ATRASADO < 2HS: passou de "duas horas antes" e a hora da coleta ainda não chegou. */
+  risco: number;
 }
 
 /** O leilão de spot desta frente nas últimas 24h: o que a empresa pegou e o que passou. */
@@ -58,15 +67,31 @@ export interface SpotDaRegiao {
  * o que este número conta.
  */
 export async function readOrigemAtrasadaPorRegiao(): Promise<OrigemAtrasadaDaRegiao[]> {
+  /**
+   * As duas janelas numa passada só, com `filter`.
+   *
+   * Duas consultas dariam a mesma resposta e abririam a porta para elas divergirem: uma varreria a
+   * tabela num instante e a outra no seguinte, e "agora" muda entre as duas. Numa regra cujo
+   * predicado inteiro é sobre `now()`, isso não é teórico — é a viagem que cruza o limite entre uma
+   * consulta e outra, e some das duas colunas.
+   */
   const linhas = await db
-    .select({ region: locations.region, value: count() })
+    .select({
+      region: locations.region,
+      fora: sql<number>`count(*) filter (where ${origemAtrasadaSql()})`,
+      risco: sql<number>`count(*) filter (where ${origemRiscoSql()})`,
+    })
     .from(trips)
     .leftJoin(locations, eq(locations.id, trips.originLocationId))
-    .where(origemAtrasadaSql())
+    .where(or(origemAtrasadaSql(), origemRiscoSql()))
     .groupBy(locations.region);
 
   return linhas
-    .map((r) => ({ region: r.region ?? null, count: r.value }))
+    .map((r) => ({
+      region: r.region ?? null,
+      count: Number(r.fora ?? 0),
+      risco: Number(r.risco ?? 0),
+    }))
     .sort((a, b) => regionPosition(a.region) - regionPosition(b.region));
 }
 
