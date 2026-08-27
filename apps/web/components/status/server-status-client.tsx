@@ -13,6 +13,7 @@ import {
 } from "@/lib/status/saude";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
 import { TesteDoTelegram } from "@/components/status/teste-do-telegram";
+import { AvisosDoSistema } from "@/components/spot/avisos-do-sistema";
 import { Skeleton } from "@/components/ui/skeleton";
 
 /**
@@ -77,6 +78,8 @@ function segundos(ms: number | null): string {
 
 export function ServerStatusClient() {
   const t = useTranslations("ServerStatus");
+  // O cartão de avisos da área de trabalho fala a língua do spot, não a do status.
+  const tSpot = useTranslations("Spot");
   const { data, isLoading, isError } = useStatus();
 
   if (isLoading) {
@@ -299,6 +302,24 @@ export function ServerStatusClient() {
       {/* O teste do aviso fica junto das fontes e do ritmo: são as três perguntas do mesmo tipo,
           "isto ainda está funcionando?", e quem desconfia de uma desconfia das outras. */}
       <TesteDoTelegram />
+
+      {/**
+       * O OUTRO CAMINHO DO MESMO AVISO (2026-08-27).
+       *
+       * A oferta de spot avisa por dois caminhos: o Telegram, no celular de quem não está na tela, e
+       * a notificação da área de trabalho, para quem está com o TMS numa aba de fundo. Testar um e
+       * não o outro responde metade da pergunta.
+       *
+       * Estes botões moravam no cartão de ofertas do painel, que foi dobrado para dentro do card da
+       * frente. Aqui eles ficam uma vez só, e ao lado da pergunta que os motiva.
+       */}
+      <Card className="p-4">
+        <CardTitle className="text-sm font-semibold uppercase tracking-wide">
+          {tSpot("systemHeading")}
+        </CardTitle>
+        <p className="mb-3 mt-0.5 text-xs text-muted-foreground">{tSpot("systemHint")}</p>
+        <AvisosDoSistema />
+      </Card>
 
       <p className="text-xs text-muted-foreground">
         {t("measuredAt", {

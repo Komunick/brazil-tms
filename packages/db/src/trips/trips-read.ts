@@ -65,7 +65,11 @@ import { Conflict } from "../errors";
 import { loadTripDetail, type TripDetail } from "./trip-dto";
 import { onTimeExpr } from "./on-time";
 import { tripQueueSql } from "./portal-withdrawn";
-import { readOrigemAtrasadaPorRegiao, readSpotPorRegiao } from "./programacao";
+import {
+  readOrigemAtrasadaPorRegiao,
+  readSpotPorRegiao,
+  type SpotDaRegiao,
+} from "./programacao";
 import { lateToAssignSql, origemAtrasadaSql, origemRiscoSql, rotaNossaSql } from "./atrasos";
 
 /**
@@ -239,17 +243,15 @@ export interface DashboardSummary {
   /**
    * O leilão de spot da frente nas últimas 24h: o que a empresa pegou e o que passou.
    *
-   * `rotas` traz os NOMES por trás do número (2026-08-27, a pedido). "4 aceitas" não diz se a
+   * `rotas` traz as OFERTAS por trás do número (2026-08-27, a pedido). "4 aceitas" não diz se a
    * frente pegou as quatro que importavam ou quatro que ninguém queria; quem cuida da frente
    * reconhece a rota pelo nome. Vai no mesmo payload porque são poucas linhas de texto e o painel
    * recarrega de minuto em minuto de qualquer forma.
+   *
+   * Cada linha traz também LH, hora, preço, STA e veículo: é o que o cartão "Ofertas de spot hoje"
+   * mostrava antes de ser dobrado para dentro deste grupo. A forma exata mora em `SpotDaRegiao`.
    */
-  spotByRegion: {
-    region: string | null;
-    aceito: number;
-    naoAceito: number;
-    rotas: { rota: string; aceito: boolean }[];
-  }[];
+  spotByRegion: SpotDaRegiao[];
   /**
    * A fila do DESPACHO: aceita pelo cliente e ainda sem motorista no portal (2026-08-17).
    *
