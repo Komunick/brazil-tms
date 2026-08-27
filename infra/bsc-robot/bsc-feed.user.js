@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.16.0
+// @version      1.20.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -454,6 +454,41 @@
   }
 
   /**
+   * ESPERAR PELO IDIOMA, EM VEZ DE DESISTIR NA HORA (2026-08-27).
+   *
+   * ── O DEFEITO ───────────────────────────────────────────────────────────────────────────────
+   *
+   * `estaEmPortugues` lê `document.body.innerText`, e o Looker pinta o relatório muito depois do
+   * `document-idle` em que o script acorda. Perguntar uma vez só, no instante do ciclo, dava
+   * "false" numa tela que ESTAVA em português — e o ciclo inteiro era descartado.
+   *
+   * Medido na tela em 27/08, com o relatório visível e `?hl=pt-BR` na URL: o script gritou "o
+   * relatório não está em português — nada será lido", enquanto uma sondagem no console mostrava
+   * `innerText` com 1.255 caracteres contendo "Dados atualizados" no índice 1.130.
+   *
+   * ── POR QUE ISSO É PIOR DO QUE PARECE ───────────────────────────────────────────────────────
+   *
+   * A mensagem manda REABRIR A ABA com `?hl=pt-BR` — uma instrução que não conserta nada, porque o
+   * problema nunca foi o idioma. Quem lesse o console iria mexer na URL, ver que já estava certa, e
+   * concluir que o robô está confuso. Diagnóstico falso custa mais que erro nenhum.
+   *
+   * ── A ESPERA NÃO AFROUXA A GUARDA ───────────────────────────────────────────────────────────
+   *
+   * O motivo da guarda continua valendo inteiro: em inglês o relatório escreve "100.00%" e o TMS
+   * leria mil vezes maior. O que muda é só QUANDO se decide — depois de dar à página o tempo de
+   * aparecer, em vez de no primeiro instante. Uma tela genuinamente em inglês espera vinte segundos
+   * e é recusada do mesmo jeito.
+   */
+  async function esperarPortugues(limiteMs = 20000) {
+    const ate = Date.now() + limiteMs;
+    while (Date.now() < ate) {
+      if (estaEmPortugues()) return true;
+      await dormir(500);
+    }
+    return false;
+  }
+
+  /**
    * O carimbo do relatório — a idade real do dado, e o que o TMS mostra na tela em vez de fingir
    * frescor. Sem ele o script não manda nada.
    *
@@ -629,7 +664,24 @@
    * vencer o do próprio medidor, mas a distância máxima existe para garantir isso.
    */
   const EH_FAIXA = /^(Zona (de )?.+|Fora da faixa)$/;
-  const EH_NOTA = /^d{1,3}(,d{1,2})?$/;
+  /**
+   * ⚠ AS BARRAS INVERTIDAS SÃO O PADRÃO INTEIRO (consertado em 2026-08-27).
+   *
+   * Este padrão entrou na 1.16.0 escrito `/^d{1,3}(,d{1,2})?$/` — sem as barras. Assim ele não casa
+   * número nenhum: casa a LETRA "d" repetida. `numeros` ficava sempre vazio, `notaEZona` devolvia
+   * `{score: null}`, e todo envio saía com nota nula.
+   *
+   * O modo de falhar foi o pior possível: não houve erro em lugar nenhum. Os indicadores continuavam
+   * chegando (19, 20 por recorte), o robô registrava "enviado" no console, e só o velocímetro do
+   * painel ficava vazio — o que parece problema de tela, não de leitura. Durou dois dias.
+   *
+   * A corrupção veio de uma edição feita por script de shell, onde `\d` virou `d` na passagem. É a
+   * mesma armadilha que exige escrever `[̀-ͯ]` e não a faixa literal em `dobrarAcento`.
+   *
+   * Se for editar este arquivo por script, confira ESTA linha depois — e o teste que prova que ela
+   * funciona é olhar o console: "nota (não lida)" em todo recorte significa que ela quebrou de novo.
+   */
+  const EH_NOTA = /^\d{1,3}(,\d{1,2})?$/;
 
   /**
    * O quão perto o número precisa estar da faixa, em pixels.
@@ -939,7 +991,36 @@
    */
   let ultimoCarimboDoCiclo = null;
 
+  /**
+   * Lê e envia UM recorte. Devolve o que aconteceu, e é isso que decide se o ciclo se dá por
+   * concluído — ver `ciclo`.
+   *
+   *   "enviado"      entregou dado novo
+   *   "sem_mudanca"  o carimbo deste recorte já tinha sido entregue; não há o que fazer
+   *   "falhou"       não entregou, e precisa de outra chance
+   */
   async function lerEEnviar(recorte) {
+    /**
+     * A PORTEIRA BARATA: já entreguei ESTE recorte com ESTE carimbo?
+     *
+     * O carimbo do rodapé está visível sem tocar em nada, e é o mesmo para os três recortes — é o
+     * "quando o relatório recalculou", não "quando este período mudou". Então dá para responder
+     * antes de mexer no filtro.
+     *
+     * Isso importa por causa da RETENTATIVA. Sem esta porteira, o ciclo que volta para insistir num
+     * recorte que falhou arrastaria os outros dois junto: três trocas de filtro para refazer uma. Com
+     * ela, os que já foram entregues saem na porta e só o que falta é tocado — que é a diferença
+     * entre retentar de hora em hora e retentar sem custo.
+     *
+     * A mesma comparação continua sendo feita DEPOIS da leitura estável, contra o carimbo lido junto
+     * com os números. Esta aqui é conservadora de propósito: só pula quando é igual.
+     */
+    const carimboNaTela = carimbo();
+    if (carimboNaTela && ultimo[recorte.period] === carimboNaTela) {
+      log(`${recorte.period}: já entregue com o carimbo ${carimboNaTela} — filtro não tocado.`);
+      return "sem_mudanca";
+    }
+
     // Guardado ANTES de mexer no filtro: é contra isto que se sabe se o relatório recalculou.
     const antes = assinatura(lerTela());
     await escolherPeriodo(recorte);
@@ -949,7 +1030,7 @@
     const rotulo = rotuloPeriodo();
     if (!rotulo || /^Selecionar per/i.test(rotulo) || !/\d/.test(rotulo)) {
       erro(`${recorte.period}: o filtro não confirmou (rótulo "${rotulo}") — nada enviado.`);
-      return;
+      return "falhou";
     }
 
     const estavel = await lerEstavel(antes);
@@ -969,19 +1050,72 @@
             : `${recorte.period}: a tela continuou sendo a do recorte anterior por ${limiteS}s ` +
               `(mesmos números E mesmo carimbo) — nada enviado. O relatório não recalculou.`,
       );
-      return;
+      return "falhou";
     }
 
     // Vem da leitura estável, e não de uma consulta nova: entre uma coisa e outra o Looker pode ter
     // republicado, e aí o carimbo seria de uma tela que não é a que foi lida.
     const at = estavel.leitura.at;
     if (!at) {
-      erro(`${recorte.period}: sem "Dados atualizados pela última vez" na tela — nada enviado.`);
-      return;
+      const texto = document.body?.innerText ?? "";
+      const temFrase = /Dados atualizados pela última vez|Data Last Updated/i.test(texto);
+
+      /**
+       * PERÍODO SEM DADOS NÃO É FALHA — é resposta (2026-08-27, medido na tela).
+       *
+       * ── O QUE A EVIDÊNCIA MOSTROU ───────────────────────────────────────────────────────────
+       *
+       * O `day` falhava aqui em todo ciclo enquanto semana e mês passavam, e o aviso instrumentado
+       * respondeu: `frase presente: não; carimbo no início do ciclo: 2026-08-27T00:13:31`. Ou seja,
+       * o rodapé existia trinta segundos antes e SOME ao trocar o filtro para "Ontem".
+       *
+       * Some porque não há o que carimbar: a tela do dia vinha com "Não há dados" no velocímetro e
+       * na maioria dos cartões. O Looker não põe "Dados atualizados pela última vez" numa tela
+       * vazia.
+       *
+       * ── E POR QUE ELA ESTAVA VAZIA ──────────────────────────────────────────────────────────
+       *
+       * O relatório republicou às 00h13. O BSC fecha às 04h com os dados até o dia anterior — então
+       * às 00h13 o fechamento de "ontem" ainda não tinha acontecido. O período estava legitimamente
+       * vazio, e o robô estava certo em não mandar nada.
+       *
+       * ── POR QUE A CLASSIFICAÇÃO IMPORTA ─────────────────────────────────────────────────────
+       *
+       * Desde a 1.17.0 um recorte "falhou" impede o ciclo de se dar por concluído, para que a
+       * cadência de hora em hora vire retentativa. Isso é certo para defeito e ERRADO para ausência
+       * de dado: insistir de hora em hora num período que só terá números depois das 04h é troca de
+       * filtro à toa, para sempre, com um erro vermelho por hora dizendo que algo quebrou.
+       *
+       * Então "sem dados" volta como `sem_mudanca` — não bloqueia o ciclo — e é registrado como
+       * aviso comum, não como erro. Continua VISÍVEL: se o dia sumir por semanas, o console diz
+       * isso todo ciclo, e a pergunta que sobra é de operação (o recorte deveria ser anteontem?),
+       * não de código.
+       */
+      if (/Não há dados/i.test(texto)) {
+        log(
+          `${recorte.period}: o relatório respondeu "Não há dados" para este período — nada a ` +
+            `enviar. (O BSC fecha às 04h com os dados do dia anterior; o último carimbo é ` +
+            `${carimboNaTela ?? "ilegível"}.)`,
+        );
+        return "sem_mudanca";
+      }
+
+      /**
+       * Aqui é falha de verdade: há conteúdo na tela e o carimbo não foi lido.
+       *
+       * O aviso carrega a evidência porque "não achei" sozinho não diz onde procurar — foi
+       * exatamente ela que separou o caso acima deste.
+       */
+      erro(
+        `${recorte.period}: sem "Dados atualizados pela última vez" na tela — nada enviado. ` +
+          `(frase presente: ${temFrase ? "SIM, só a data não casou" : "não"}; ` +
+          `carimbo no início do ciclo: ${carimboNaTela ?? "ilegível"})`,
+      );
+      return "falhou";
     }
     if (ultimo[recorte.period] === at) {
       log(`${recorte.period}: mesmo carimbo (${at}) — nada mudou.`);
-      return;
+      return "sem_mudanca";
     }
 
     // Nota e indicadores existem por construção: `lerEstavel` só devolve leitura com conteúdo.
@@ -1066,10 +1200,12 @@
   }
 
   async function ciclo() {
-    if (!estaEmPortugues()) {
+    if (!(await esperarPortugues())) {
       erro(
-        "o relatório não está em português — nada será lido. Reabra esta aba com ?hl=pt-BR no fim da " +
-          "URL. (Em inglês o ponto é decimal e os números seriam lidos mil vezes maiores.)",
+        "esperei 20s e o relatório não apareceu em português — nada será lido. Se a tela ESTÁ em " +
+          "português, o problema é de carregamento, não de idioma: veja se o relatório pintou. " +
+          "Se estiver mesmo em inglês, reabra a aba com ?hl=pt-BR no fim da URL (lá o ponto é " +
+          "decimal e os números seriam lidos mil vezes maiores).",
       );
       return;
     }
@@ -1103,14 +1239,54 @@
       return;
     }
 
+    let algumFalhou = false;
     for (const recorte of RECORTES) {
       try {
-        await lerEEnviar(recorte);
+        if ((await lerEEnviar(recorte)) === "falhou") algumFalhou = true;
       } catch (e) {
+        algumFalhou = true;
         erro(`${recorte.period} falhou (tenta de novo no próximo ciclo):`, e?.message ?? e);
         // Limpa o que a falha deixou aberto para o próximo recorte não herdar a bagunça.
         await fecharPopups();
       }
+    }
+
+    /**
+     * O CICLO SÓ SE DÁ POR CONCLUÍDO SE TODOS OS RECORTES FECHARAM (1.17.0, 2026-08-27).
+     *
+     * ── O DEFEITO QUE ISTO CONSERTA ─────────────────────────────────────────────────────────────
+     *
+     * Antes, este carimbo era gravado no fim do ciclo INCONDICIONALMENTE — inclusive quando um
+     * recorte tinha falhado. E como o ciclo seguinte pula tudo enquanto o carimbo não muda, um
+     * recorte que falhasse só ganhava outra chance na próxima publicação do relatório: VINTE E
+     * QUATRO HORAS depois.
+     *
+     * Uma falha isolada virava um dia inteiro de atraso. Se ela se repetisse no dia seguinte — e a
+     * semana é o recorte mais frágil, o único que abre o diálogo "Avançado" e digita dois campos —,
+     * o número ficava preso indefinidamente, com dia e mês em volta perfeitamente atuais.
+     *
+     * Foi exatamente isso que aconteceu com a semana entre 25 e 27/08.
+     *
+     * ── POR QUE ISSO NÃO DESFAZ A ECONOMIA QUE ESTE CARIMBO EXISTE PARA FAZER ────────────────────
+     *
+     * O comentário lá em cima conta que o ponto era reduzir 72 trocas de filtro por dia para três,
+     * porque cada troca é uma chance de ler a tela errada. Retentar de hora em hora parece devolver
+     * as 72 — e não devolve: a porteira no topo de `lerEEnviar` faz o recorte JÁ ENTREGUE com este
+     * carimbo sair sem tocar em nada.
+     *
+     * Então um ciclo de retentativa custa uma troca de filtro, não três, e só enquanto algo está
+     * de fato quebrado — que é precisamente quando se quer insistir.
+     *
+     * ── E POR QUE NÃO CONTAR TENTATIVAS ─────────────────────────────────────────────────────────
+     *
+     * Seria a proteção óbvia contra insistir para sempre. Mas "para sempre" aqui é uma troca de
+     * filtro por hora num recorte que não está chegando — e um teto transformaria isso em silêncio,
+     * que é a forma como este robô já falhou duas vezes. Insistir e registrar é mais barato que
+     * desistir e calar.
+     */
+    if (algumFalhou) {
+      log("algum recorte não fechou — o carimbo do ciclo NÃO avança, e o próximo ciclo insiste.");
+      return;
     }
 
     // Gravado no FIM e relido da tela, não copiado do começo: o que interessa é o carimbo do estado
