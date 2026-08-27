@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.19.0
+// @version      1.20.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -1057,21 +1057,55 @@
     // republicado, e aí o carimbo seria de uma tela que não é a que foi lida.
     const at = estavel.leitura.at;
     if (!at) {
-      /**
-       * O AVISO CARREGA A EVIDÊNCIA, porque "não achei" sozinho não diz onde procurar.
-       *
-       * Em 27/08 o `day` falhava aqui em todo ciclo enquanto semana e mês passavam — e o carimbo é
-       * do RELATÓRIO, não do período, então ele deveria ser o mesmo para os três. Sem saber se a
-       * frase está na tela e o formato da data mudou, ou se a frase sumiu junto com o rodapé, não
-       * dá para consertar sem adivinhar.
-       *
-       * Duas perguntas, respondidas na própria mensagem:
-       *   - a frase aparece em algum lugar do texto da página?
-       *   - o carimbo do INÍCIO do ciclo estava legível? (se sim, o rodapé existia trinta segundos
-       *     antes, e some ao trocar o filtro)
-       */
       const texto = document.body?.innerText ?? "";
       const temFrase = /Dados atualizados pela última vez|Data Last Updated/i.test(texto);
+
+      /**
+       * PERÍODO SEM DADOS NÃO É FALHA — é resposta (2026-08-27, medido na tela).
+       *
+       * ── O QUE A EVIDÊNCIA MOSTROU ───────────────────────────────────────────────────────────
+       *
+       * O `day` falhava aqui em todo ciclo enquanto semana e mês passavam, e o aviso instrumentado
+       * respondeu: `frase presente: não; carimbo no início do ciclo: 2026-08-27T00:13:31`. Ou seja,
+       * o rodapé existia trinta segundos antes e SOME ao trocar o filtro para "Ontem".
+       *
+       * Some porque não há o que carimbar: a tela do dia vinha com "Não há dados" no velocímetro e
+       * na maioria dos cartões. O Looker não põe "Dados atualizados pela última vez" numa tela
+       * vazia.
+       *
+       * ── E POR QUE ELA ESTAVA VAZIA ──────────────────────────────────────────────────────────
+       *
+       * O relatório republicou às 00h13. O BSC fecha às 04h com os dados até o dia anterior — então
+       * às 00h13 o fechamento de "ontem" ainda não tinha acontecido. O período estava legitimamente
+       * vazio, e o robô estava certo em não mandar nada.
+       *
+       * ── POR QUE A CLASSIFICAÇÃO IMPORTA ─────────────────────────────────────────────────────
+       *
+       * Desde a 1.17.0 um recorte "falhou" impede o ciclo de se dar por concluído, para que a
+       * cadência de hora em hora vire retentativa. Isso é certo para defeito e ERRADO para ausência
+       * de dado: insistir de hora em hora num período que só terá números depois das 04h é troca de
+       * filtro à toa, para sempre, com um erro vermelho por hora dizendo que algo quebrou.
+       *
+       * Então "sem dados" volta como `sem_mudanca` — não bloqueia o ciclo — e é registrado como
+       * aviso comum, não como erro. Continua VISÍVEL: se o dia sumir por semanas, o console diz
+       * isso todo ciclo, e a pergunta que sobra é de operação (o recorte deveria ser anteontem?),
+       * não de código.
+       */
+      if (/Não há dados/i.test(texto)) {
+        log(
+          `${recorte.period}: o relatório respondeu "Não há dados" para este período — nada a ` +
+            `enviar. (O BSC fecha às 04h com os dados do dia anterior; o último carimbo é ` +
+            `${carimboNaTela ?? "ilegível"}.)`,
+        );
+        return "sem_mudanca";
+      }
+
+      /**
+       * Aqui é falha de verdade: há conteúdo na tela e o carimbo não foi lido.
+       *
+       * O aviso carrega a evidência porque "não achei" sozinho não diz onde procurar — foi
+       * exatamente ela que separou o caso acima deste.
+       */
       erro(
         `${recorte.period}: sem "Dados atualizados pela última vez" na tela — nada enviado. ` +
           `(frase presente: ${temFrase ? "SIM, só a data não casou" : "não"}; ` +
