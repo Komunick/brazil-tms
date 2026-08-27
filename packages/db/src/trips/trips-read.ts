@@ -230,8 +230,20 @@ export interface DashboardSummary {
    * ligar para o motorista —, e somá-las esconderia qual das duas está acontecendo.
    */
   origemAtrasadaByRegion: { region: string | null; count: number }[];
-  /** O leilão de spot da frente nas últimas 24h: o que a empresa pegou e o que passou. */
-  spotByRegion: { region: string | null; aceito: number; naoAceito: number }[];
+  /**
+   * O leilão de spot da frente nas últimas 24h: o que a empresa pegou e o que passou.
+   *
+   * `rotas` traz os NOMES por trás do número (2026-08-27, a pedido). "4 aceitas" não diz se a
+   * frente pegou as quatro que importavam ou quatro que ninguém queria; quem cuida da frente
+   * reconhece a rota pelo nome. Vai no mesmo payload porque são poucas linhas de texto e o painel
+   * recarrega de minuto em minuto de qualquer forma.
+   */
+  spotByRegion: {
+    region: string | null;
+    aceito: number;
+    naoAceito: number;
+    rotas: { rota: string; aceito: boolean }[];
+  }[];
   /**
    * A fila do DESPACHO: aceita pelo cliente e ainda sem motorista no portal (2026-08-17).
    *
