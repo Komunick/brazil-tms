@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.18.0
+// @version      1.19.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -451,6 +451,41 @@
   function estaEmPortugues() {
     const t = document.body.innerText || "";
     return /Selecionar per[ií]odo/.test(t) || /Dados atualizados pela última vez/.test(t);
+  }
+
+  /**
+   * ESPERAR PELO IDIOMA, EM VEZ DE DESISTIR NA HORA (2026-08-27).
+   *
+   * ── O DEFEITO ───────────────────────────────────────────────────────────────────────────────
+   *
+   * `estaEmPortugues` lê `document.body.innerText`, e o Looker pinta o relatório muito depois do
+   * `document-idle` em que o script acorda. Perguntar uma vez só, no instante do ciclo, dava
+   * "false" numa tela que ESTAVA em português — e o ciclo inteiro era descartado.
+   *
+   * Medido na tela em 27/08, com o relatório visível e `?hl=pt-BR` na URL: o script gritou "o
+   * relatório não está em português — nada será lido", enquanto uma sondagem no console mostrava
+   * `innerText` com 1.255 caracteres contendo "Dados atualizados" no índice 1.130.
+   *
+   * ── POR QUE ISSO É PIOR DO QUE PARECE ───────────────────────────────────────────────────────
+   *
+   * A mensagem manda REABRIR A ABA com `?hl=pt-BR` — uma instrução que não conserta nada, porque o
+   * problema nunca foi o idioma. Quem lesse o console iria mexer na URL, ver que já estava certa, e
+   * concluir que o robô está confuso. Diagnóstico falso custa mais que erro nenhum.
+   *
+   * ── A ESPERA NÃO AFROUXA A GUARDA ───────────────────────────────────────────────────────────
+   *
+   * O motivo da guarda continua valendo inteiro: em inglês o relatório escreve "100.00%" e o TMS
+   * leria mil vezes maior. O que muda é só QUANDO se decide — depois de dar à página o tempo de
+   * aparecer, em vez de no primeiro instante. Uma tela genuinamente em inglês espera vinte segundos
+   * e é recusada do mesmo jeito.
+   */
+  async function esperarPortugues(limiteMs = 20000) {
+    const ate = Date.now() + limiteMs;
+    while (Date.now() < ate) {
+      if (estaEmPortugues()) return true;
+      await dormir(500);
+    }
+    return false;
   }
 
   /**
@@ -1131,10 +1166,12 @@
   }
 
   async function ciclo() {
-    if (!estaEmPortugues()) {
+    if (!(await esperarPortugues())) {
       erro(
-        "o relatório não está em português — nada será lido. Reabra esta aba com ?hl=pt-BR no fim da " +
-          "URL. (Em inglês o ponto é decimal e os números seriam lidos mil vezes maiores.)",
+        "esperei 20s e o relatório não apareceu em português — nada será lido. Se a tela ESTÁ em " +
+          "português, o problema é de carregamento, não de idioma: veja se o relatório pintou. " +
+          "Se estiver mesmo em inglês, reabra a aba com ?hl=pt-BR no fim da URL (lá o ponto é " +
+          "decimal e os números seriam lidos mil vezes maiores).",
       );
       return;
     }
