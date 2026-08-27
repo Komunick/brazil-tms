@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SpotOfferView } from "@brazil-tms/db";
-import { decidirAviso, estadoInicial, novasOfertas } from "./ofertas";
+import { enfileirar, estadoInicial, novasOfertas } from "./ofertas";
 
 const oferta = (id: string): SpotOfertaTeste => ({
   id,
@@ -59,89 +59,36 @@ describe("novasOfertas", () => {
   });
 });
 
-const SILENCIO = 3 * 60_000;
-/** Muito silêncio antes: esta oferta COMEÇA uma rajada. */
-const DEPOIS_DE_SILENCIO = SILENCIO + 1;
-/** Chegou na esteira da anterior: é continuação. */
-const NA_ESTEIRA = 3_000;
-
 /**
- * A SEXTA-FEIRA (2026-08-21, a pedido, e corrigido depois de um teste com 30 ofertas reais).
+ * A FILA (2026-08-27, a pedido).
  *
- * Toda sexta chegam mais de cinquenta ofertas em sequência, uma a uma — o monitor manda assim. Com
- * um aviso de trinta segundos por oferta, são vinte e cinco minutos de tela ocupada.
+ * Aqui viviam os testes da REGRA DA RAJADA — a que deixava subir só a primeira oferta depois de um
+ * silêncio e mandava as outras caladas para a caixa. Ela saiu inteira: na tela de verdade, três
+ * ofertas seguidas produziram um apito só, e as duas que ficaram na caixa passaram sem ninguém ver.
  *
- * A PRIMEIRA versão desta regra só evitava a fila: passados os trinta segundos do cartão, a oferta
- * seguinte encontrava a tela livre e virava aviso de novo. O teste com 30 ofertas em 89 segundos
- * produziu TRÊS cartões. O pedido era um.
- *
- * A pergunta certa não é "tem cartão na tela?" — é "isto começa uma rajada ou continua uma?". Uma
- * oferta começa rajada quando vem depois de um silêncio; vindo na esteira de outra, é continuação.
+ * O que sobra é uma fila simples, e o que ela precisa garantir é uma coisa só: nada entra duas
+ * vezes. Cada linha da fila vira um apito, então um id repetido é um apito repetido.
  */
-describe("decidirAviso", () => {
-  it("depois de um silêncio, a oferta sobe: começa uma rajada", () => {
-    const d = decidirAviso(false, [oferta("a")], DEPOIS_DE_SILENCIO);
-    expect(d.anunciar?.id).toBe("a");
-    expect(d.absorvidas).toBe(0);
+describe("enfileirar", () => {
+  it("as novas entram no fim, preservando a ordem", () => {
+    const fila = enfileirar([oferta("a")], [oferta("b"), oferta("c")]);
+    expect(fila.map((o) => o.id)).toEqual(["a", "b", "c"]);
   });
 
-  /** O caso que a primeira versão errava: tela livre, mas a rajada continua. */
-  it("na esteira da anterior NÃO sobe, mesmo com a tela livre", () => {
-    const d = decidirAviso(false, [oferta("b")], NA_ESTEIRA);
-    expect(d.anunciar).toBeNull();
-    expect(d.absorvidas).toBe(1);
+  it("id que já está na fila não entra de novo", () => {
+    const fila = enfileirar([oferta("a"), oferta("b")], [oferta("b"), oferta("c")]);
+    expect(fila.map((o) => o.id)).toEqual(["a", "b", "c"]);
   });
 
-  it("com um cartão na tela, nada sobe", () => {
-    const d = decidirAviso(true, [oferta("c")], DEPOIS_DE_SILENCIO);
-    expect(d.anunciar).toBeNull();
-    expect(d.absorvidas).toBe(1);
+  /** A rajada de sexta agora entra INTEIRA — é o pedido, e é o que mudou. */
+  it("trinta ofertas seguidas viram trinta lugares na fila", () => {
+    let fila = enfileirar([], []);
+    for (let i = 0; i < 30; i++) fila = enfileirar(fila, [oferta(`o${i}`)]);
+    expect(fila).toHaveLength(30);
   });
 
-  /**
-   * A SEXTA INTEIRA: 30 ofertas de 3 em 3 segundos produzem UM aviso. É o teste que reproduz o
-   * disparo real feito no dev — 30 ofertas em 89 segundos.
-   */
-  it("trinta ofertas em sequência produzem UM aviso", () => {
-    let avisos = 0;
-    let naCaixa = 0;
-    let temCartao = false;
-    for (let i = 0; i < 30; i++) {
-      // A primeira vem depois do silêncio da madrugada; as outras, de 3 em 3 segundos.
-      const silencio = i === 0 ? DEPOIS_DE_SILENCIO : NA_ESTEIRA;
-      const d = decidirAviso(temCartao, [oferta(`o${i}`)], silencio);
-      if (d.anunciar) {
-        avisos += 1;
-        temCartao = true;
-      }
-      naCaixa += d.absorvidas;
-      // O cartão sai depois de 30s — dez ofertas de 3 em 3. A rajada continua depois disso.
-      if (i === 10) temCartao = false;
-    }
-    expect(avisos).toBe(1);
-    expect(naCaixa).toBe(29);
-  });
-
-  it("a rajada com a tela ocupada vai inteira para a caixa", () => {
-    expect(decidirAviso(true, [oferta("a"), oferta("b"), oferta("c")], NA_ESTEIRA)).toEqual({
-      anunciar: null,
-      absorvidas: 3,
-    });
-  });
-
-  it("sem oferta nova, não decide nada", () => {
-    expect(decidirAviso(false, [], DEPOIS_DE_SILENCIO)).toEqual({ anunciar: null, absorvidas: 0 });
-  });
-
-  /**
-   * O DIA NORMAL NÃO MUDA. Ofertas espaçadas vêm sempre depois de silêncio, então cada uma começa
-   * a própria rajada e sobe — quem opera numa terça não percebe que esta regra existe.
-   */
-  it("num dia espaçado, toda oferta continua subindo", () => {
-    for (const id of ["a", "b", "c"]) {
-      const d = decidirAviso(false, [oferta(id)], DEPOIS_DE_SILENCIO);
-      expect(d.anunciar?.id).toBe(id);
-      expect(d.absorvidas).toBe(0);
-    }
+  it("sem oferta nova, a fila fica como estava", () => {
+    const antes = [oferta("a")];
+    expect(enfileirar(antes, []).map((o) => o.id)).toEqual(["a"]);
   });
 });
