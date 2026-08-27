@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { PlacasDoMotorista } from "@/components/trips/placas-do-motorista";
 import { MelhoresDaRota } from "@/components/trips/melhores-da-rota";
 import {
   TripsError,
@@ -188,6 +189,24 @@ export function PortalAssignDialog({
   const [vinculoMotorista, setVinculoMotorista] = useState<VinculoEscolhido | null>(null);
   const [vinculoSegundo, setVinculoSegundo] = useState<VinculoEscolhido | null>(null);
 
+  /**
+   * O clique numa placa sugerida vai para o PRIMEIRO CAMPO VAZIO.
+   *
+   * Sobrescrever o campo 1 seria pior: quem já digitou o cavalo e clica numa sugestao esta querendo
+   * a CARRETA, e perderia o que acabou de escrever. Se nao houver campo vazio, a sugestao nao faz
+   * nada visivel — e isso e melhor que apagar algo em silencio.
+   *
+   * Placa repetida e ignorada: o portal recusaria o par duplicado, e recusar aqui poupa uma ordem.
+   */
+  const preencherPrimeiroVazio = (nova: string) => {
+    setPlacas((atual) => {
+      if (atual.some((p) => normalizarPlaca(p) === normalizarPlaca(nova))) return atual;
+      const vazio = atual.findIndex((p) => normalizarPlaca(p) === "");
+      if (vazio < 0) return atual;
+      return atual.map((p, i) => (i === vazio ? normalizarPlaca(nova) : p));
+    });
+  };
+
   const preenchidas = placas.map(normalizarPlaca).filter(Boolean);
   const jaClassificados = useVinculosDasPlacas(preenchidas, open);
 
@@ -287,6 +306,17 @@ export function PortalAssignDialog({
                 />
               ) : null}
             </div>
+
+            {/*
+              AS PLACAS QUE ESTE MOTORISTA JÁ RODOU — logo acima dos campos (2026-08-27, a pedido).
+
+              A posição é a mensagem: ela aparece DEPOIS de escolher o motorista e ANTES de mexer na
+              placa, que é exatamente a ordem em que a dúvida acontece. Embaixo dos campos seria uma
+              resposta chegando tarde; ao lado, num diálogo estreito, empurraria os campos.
+
+              O clique preenche o PRIMEIRO campo vazio — ver `preencherPrimeiroVazio`.
+            */}
+            <PlacasDoMotorista driverId={driverId} aoEscolher={preencherPrimeiroVazio} />
 
             {placas.map((placa, i) => (
               <div key={i} className="space-y-1.5">

@@ -1528,7 +1528,9 @@
       "soLivres": "Só os livres",
       "emViagem": "em viagem",
       "emViagemNa": "Em viagem na {lh}",
-      "semPosicaoNenhuma": "Nenhuma posição de veículo carregada. O mapa aparece quando a integração com a gerenciadora estiver ligada neste ambiente."
+      "semPosicaoNenhuma": "Nenhuma posição de veículo carregada. O mapa aparece quando a integração com a gerenciadora estiver ligada neste ambiente.",
+      "platesUsedBefore": "Placas que este motorista já rodou",
+      "timesUsed": "{n} viagens"
     },
     "melhoresDaRota": {
       "titulo": "Nesta rota",
