@@ -16,11 +16,12 @@
  * do seu setor pronto para escrever. O que se cria à mão na planilha — a aba do dia — é justamente
  * o motivo de só existirem oito dias lá.
  *
- * ── POR QUE O CATÁLOGO É DADO, E NÃO QUINZE TABELAS ───────────────────────────────────────────
+ * ── POR QUE O CATÁLOGO É DADO, E NÃO VINTE TABELAS ────────────────────────────────────────────
  *
- * São 16 seções entre os cinco setores, com colunas diferentes em quase todas. Uma tabela por
- * seção seriam 16 migrações para descrever a mesma coisa — "uma ocorrência que alguém anotou" —, e
- * cada seção nova pedida pela operação viraria migração. A regra dos ≥3 de `docs/PRINCIPLES.md`
+ * São 20 seções entre os cinco setores, com colunas diferentes em quase todas. Uma tabela por
+ * seção seriam 20 migrações para descrever a mesma coisa — "uma ocorrência que alguém anotou" —, e
+ * cada seção nova pedida pela operação viraria migração. Aconteceu já: a bonificação do Monitoring
+ * entrou em 27/08 sem tocar no banco, que é o retorno concreto desta decisão. A regra dos ≥3 de `docs/PRINCIPLES.md`
  * aponta para o outro lado: uma tabela de item com o conteúdo em `jsonb`, e a FORMA declarada aqui.
  *
  * O preço é conhecido e aceito: o banco não valida os campos de dentro do `jsonb`. Quem valida é
@@ -107,14 +108,16 @@ export const OCORRENCIA_RASTREAMENTO = [
   "Sem SM / motorista acionado",
 ] as const;
 
-export const OCORRENCIA_CRITICA = [
-  "Quebra de Veículo",
-  "Sem contato com motorista",
-  "Sinistro",
-  "Parada Excedida",
-] as const;
-
 export const ETA_DESTINO = ["EARLY", "ON TIME", "DELAY"] as const;
+
+/**
+ * O estado da bonificação. A planilha NÃO trava este campo e mesmo assim só tem estes dois.
+ *
+ * Vira lista aqui porque é ESTADO, não relato: em texto livre conviveriam "recebido", "Recebido" e
+ * "RECEBIDO", e nenhuma contagem funcionaria depois. É a distinção oposta à da ocorrência do
+ * Monitoring, que soltou justamente por ser relato — ver a nota lá.
+ */
+export const STATUS_DA_BONIFICACAO = ["Recebido", "Aguardando chave"] as const;
 
 export const PERFIL_DE_VEICULO = ["CARRETA", "TRUCK"] as const;
 
@@ -339,7 +342,27 @@ export const SECOES_DO_SETOR: Record<Setor, readonly Secao[]> = {
         ORIGEM,
         DESTINO,
         MOTORISTA,
-        { chave: "ocorrencia", rotulo: "Ocorrência", tipo: "lista", opcoes: OCORRENCIA_CRITICA },
+        /**
+         * TEXTO LIVRE, e não a lista de quatro (2026-08-27, a pedido).
+         *
+         * A planilha trava este campo em `Quebra de Veículo`, `Sem contato com motorista`,
+         * `Sinistro` e `Parada Excedida`. O Monitoring pediu para soltar, e tem razão: o conteúdo
+         * REAL desta seção é prosa, não rótulo. O exemplo de 25/08 tem noventa caracteres —
+         * *"Drive rodou boa parte da viagem em velocidade reduzida devido…"* — e nenhuma das quatro
+         * opções diria isso.
+         *
+         * A trava produzia o pior dos dois mundos: obrigava a escolher um rótulo aproximado e
+         * jogava fora o que de fato aconteceu.
+         *
+         * ── ONDE A LISTA CONTINUA, E POR QUÊ ────────────────────────────────────────────────────
+         *
+         * As listas do GR (rastreamento e pronta resposta) FICAM. Lá o campo é um MOTIVO de um
+         * conjunto fechado — "checklist não realizado" é uma classificação, e classificação em texto
+         * livre vira quatro grafias da mesma coisa e nenhum agrupamento funciona depois.
+         *
+         * A divisão é essa: estado e motivo pedem lista; relato pede liberdade.
+         */
+        OCORRENCIA_LIVRE,
       ],
     },
     {
@@ -358,6 +381,36 @@ export const SECOES_DO_SETOR: Record<Setor, readonly Secao[]> = {
       titulo: "Solicitação de bloqueio de motorista",
       forma: "cartao",
       campos: [MOTORISTA, ROTA, OCORRENCIA_LIVRE],
+    },
+    /**
+     * A BONIFICAÇÃO — a seção que eu tinha perdido (2026-08-27, apontada pelo usuário).
+     *
+     * Ela existe na planilha, na linha 326, e escapou da primeira leitura por um motivo específico:
+     * está **só no lado do T2** (coluna L). Eu tinha varrido o lado do T1 até o fim e assumido que
+     * os dois turnos tinham as mesmas seções — o que vale para as outras dezenove e não vale para
+     * esta.
+     *
+     * Ela entra para os DOIS turnos mesmo assim. Uma seção que só o noturno enxerga seria uma
+     * armadilha: o diurno precisaria pedir ao noturno para registrar o que viu, e é exatamente esse
+     * tipo de dependência que a passagem de turno existe para eliminar.
+     *
+     * ── O STATUS É LISTA, E A OCORRÊNCIA DA SEÇÃO ACIMA NÃO É ───────────────────────────────────
+     *
+     * A planilha não trava este campo, e mesmo assim só há dois valores nela: `Recebido` e
+     * `Aguardando chave`. É um ESTADO de um processo com duas pontas, não um relato — e estado em
+     * texto livre vira "recebido", "Recebido" e "RECEBIDO" convivendo, o que impede qualquer
+     * contagem depois.
+     *
+     * Se um terceiro estado aparecer, é uma linha aqui.
+     */
+    {
+      chave: "bonificacao",
+      titulo: "Bonificação rota Simões x Jaboatão",
+      forma: "tabela",
+      campos: [
+        MOTORISTA,
+        { chave: "status", rotulo: "Status", tipo: "lista", opcoes: STATUS_DA_BONIFICACAO },
+      ],
     },
   ],
 };
@@ -590,7 +643,7 @@ function diaAnterior(data: string): string {
 /**
  * O `jsonb` do item conferido contra a seção que o declarou.
  *
- * O banco não pode fazer isto — é o preço de ter uma tabela de item em vez de dezesseis. Então
+ * O banco não pode fazer isto — é o preço de ter uma tabela de item em vez de vinte. Então
  * quem faz é esta função, e ela roda dos DOIS lados: na rota antes de gravar, e na tela antes de
  * habilitar o botão. Devolve TODOS os problemas, não o primeiro: quem preencheu um cartão de seis
  * campos merece saber os três que faltam de uma vez.

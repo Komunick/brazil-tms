@@ -2294,6 +2294,7 @@
     "registros": "{n, plural, one {# registro} other {# registros}}",
     "entregue": "Entregue",
     "fechadoPelaTrava": "Fechado pela trava",
-    "aberto": "aberto"
+    "aberto": "aberto",
+    "lhNaoEncontrada": "Não encontrei essa LH em viagem nem em oferta de spot — confira o código."
   }
 }

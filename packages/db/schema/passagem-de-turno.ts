@@ -99,7 +99,7 @@ export const passagemDeTurno = pgTable(
  * Uma ocorrência anotada. `secao` é a chave declarada em `SECOES_DO_SETOR` — sem chave estrangeira,
  * porque o catálogo é código e não tabela.
  *
- * O conteúdo em `dados` NÃO é validado pelo banco: é o preço de ter uma tabela em vez de dezesseis.
+ * O conteúdo em `dados` NÃO é validado pelo banco: é o preço de ter uma tabela em vez de vinte.
  * Quem valida é `problemasDoItem`, na rota, antes de gravar.
  */
 export const passagemDeTurnoItem = pgTable(

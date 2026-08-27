@@ -320,6 +320,7 @@ export function PassagemDeTurnoClient({
               {SECOES_DO_SETOR[setor].map((secao) => (
                 <SecaoDoSetor
                   key={secao.chave}
+                  setor={setor}
                   secao={secao}
                   itens={porSecao.get(secao.chave) ?? []}
                   editavel={editavel}

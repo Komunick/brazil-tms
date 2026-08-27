@@ -332,3 +332,6 @@ export type {
   ItemDoBloco,
   LinhaDoTempoItem,
 } from "./passagem-de-turno/bloco";
+
+// A sugestão que preenche o item da passagem de turno a partir da LH (2026-08-27).
+export { sugestaoPelaLH, sugestaoPeloMotorista, dobrarAcento } from "./passagem-de-turno/sugestao";
