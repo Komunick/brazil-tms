@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.17.0
+// @version      1.18.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -629,7 +629,24 @@
    * vencer o do próprio medidor, mas a distância máxima existe para garantir isso.
    */
   const EH_FAIXA = /^(Zona (de )?.+|Fora da faixa)$/;
-  const EH_NOTA = /^d{1,3}(,d{1,2})?$/;
+  /**
+   * ⚠ AS BARRAS INVERTIDAS SÃO O PADRÃO INTEIRO (consertado em 2026-08-27).
+   *
+   * Este padrão entrou na 1.16.0 escrito `/^d{1,3}(,d{1,2})?$/` — sem as barras. Assim ele não casa
+   * número nenhum: casa a LETRA "d" repetida. `numeros` ficava sempre vazio, `notaEZona` devolvia
+   * `{score: null}`, e todo envio saía com nota nula.
+   *
+   * O modo de falhar foi o pior possível: não houve erro em lugar nenhum. Os indicadores continuavam
+   * chegando (19, 20 por recorte), o robô registrava "enviado" no console, e só o velocímetro do
+   * painel ficava vazio — o que parece problema de tela, não de leitura. Durou dois dias.
+   *
+   * A corrupção veio de uma edição feita por script de shell, onde `\d` virou `d` na passagem. É a
+   * mesma armadilha que exige escrever `[̀-ͯ]` e não a faixa literal em `dobrarAcento`.
+   *
+   * Se for editar este arquivo por script, confira ESTA linha depois — e o teste que prova que ela
+   * funciona é olhar o console: "nota (não lida)" em todo recorte significa que ela quebrou de novo.
+   */
+  const EH_NOTA = /^\d{1,3}(,\d{1,2})?$/;
 
   /**
    * O quão perto o número precisa estar da faixa, em pixels.
@@ -1005,7 +1022,26 @@
     // republicado, e aí o carimbo seria de uma tela que não é a que foi lida.
     const at = estavel.leitura.at;
     if (!at) {
-      erro(`${recorte.period}: sem "Dados atualizados pela última vez" na tela — nada enviado.`);
+      /**
+       * O AVISO CARREGA A EVIDÊNCIA, porque "não achei" sozinho não diz onde procurar.
+       *
+       * Em 27/08 o `day` falhava aqui em todo ciclo enquanto semana e mês passavam — e o carimbo é
+       * do RELATÓRIO, não do período, então ele deveria ser o mesmo para os três. Sem saber se a
+       * frase está na tela e o formato da data mudou, ou se a frase sumiu junto com o rodapé, não
+       * dá para consertar sem adivinhar.
+       *
+       * Duas perguntas, respondidas na própria mensagem:
+       *   - a frase aparece em algum lugar do texto da página?
+       *   - o carimbo do INÍCIO do ciclo estava legível? (se sim, o rodapé existia trinta segundos
+       *     antes, e some ao trocar o filtro)
+       */
+      const texto = document.body?.innerText ?? "";
+      const temFrase = /Dados atualizados pela última vez|Data Last Updated/i.test(texto);
+      erro(
+        `${recorte.period}: sem "Dados atualizados pela última vez" na tela — nada enviado. ` +
+          `(frase presente: ${temFrase ? "SIM, só a data não casou" : "não"}; ` +
+          `carimbo no início do ciclo: ${carimboNaTela ?? "ilegível"})`,
+      );
       return "falhou";
     }
     if (ultimo[recorte.period] === at) {
