@@ -65,6 +65,26 @@ export interface DadosDaFrente {
    * quiser voltar a separar não precisa de consulta nova.
    */
   plano: PorStatus[];
+  /**
+   * LH ATRASADA — passou do meio-dia do dia da coleta e não há ninguém escalado.
+   *
+   * Mora no PLAN (2026-08-27, a pedido) porque é o MESMO EIXO das outras duas: pend atribuição,
+   * atribuída e atrasada são os três estados da atribuição, e atrasada é literalmente "pend
+   * atribuição cujo prazo venceu".
+   *
+   * ── MAS A JANELA É OUTRA, e a tela precisa dizer isso ─────────────────────────────────────
+   *
+   * PEND e ATRIBUÍDA contam D1+D2 — amanhã e depois. Esta não tem recorte de data: conta hoje e
+   * todos os dias anteriores, de propósito, porque a viagem de ontem que ninguém atribuiu é a que
+   * mais precisa aparecer.
+   *
+   * Coladas sem aviso, alguém lê "65 · 46 · 7" e entende que as 7 são parte das 65. Não são. Por
+   * isso a coluna entra com um FILETE antes dela e a janela escrita no rótulo — a mesma solução
+   * que a ORIGEM já usa para separar "ainda dá tempo" de "já perdeu".
+   *
+   * A regra inteira mora em `lateToAssignSql`, que é o MESMO predicado do filtro do quadro.
+   */
+  atrasadas: number;
   origemRisco: number;
   origemFora: number;
   /**
@@ -105,7 +125,7 @@ export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
           <table className="w-full border-collapse text-center">
             <thead>
               <tr>
-                <Grupo cols={2} cor="bg-sky-300 dark:bg-sky-800/70">
+                <Grupo cols={3} cor="bg-sky-300 dark:bg-sky-800/70">
                   {t("grupoPlan")}
                 </Grupo>
                 <Grupo cols={2} cor="bg-rose-300 dark:bg-rose-800/60">
@@ -130,8 +150,15 @@ export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
                 </Grupo>
               </tr>
               <tr>
-                <Medida>{t("medidaPendAtribuicao")}</Medida>
-                <Medida>{t("medidaAtribuida")}</Medida>
+                <Medida janela={t("janelaD1D2")}>{t("medidaPendAtribuicao")}</Medida>
+                <Medida janela={t("janelaD1D2")}>{t("medidaAtribuida")}</Medida>
+                {/*
+                  O FILETE ANTES DELA não é enfeite: ele diz que a janela muda aqui. Ver o
+                  comentário de `atrasadas` em `DadosDaFrente`.
+                */}
+                <Medida janela={t("janelaHojeEAntes")} separa>
+                  {t("medidaLhAtrasada")}
+                </Medida>
                 <Medida>{t("medidaAtrasado2h")}</Medida>
                 <Medida>{t("medidaForaDoPrazo")}</Medida>
                 <Medida>{t("medidaAceita")}</Medida>
@@ -149,6 +176,13 @@ export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
                   valor={doPlano.get("assigned") ?? 0}
                   onClick={() => abrir("atribuida")}
                   ativo={medidaAberta === "atribuida"}
+                />
+                <Valor
+                  valor={dados.atrasadas}
+                  alerta={dados.atrasadas > 0}
+                  separa
+                  onClick={() => abrir("atrasada")}
+                  ativo={medidaAberta === "atrasada"}
                 />
                 {/*
                   As duas da ORIGEM ficam VERMELHAS quando têm número — é a única cor com significado
@@ -206,10 +240,32 @@ function Grupo({ cols, cor, children }: { cols: number; cor: string; children: R
 }
 
 /** O andar de baixo: o nome da medida. */
-function Medida({ children }: { children: React.ReactNode }) {
+/**
+ * O andar de baixo do cabeçalho: o nome da medida.
+ *
+ * `janela` é a linha miúda que diz o RECORTE DE TEMPO da coluna, e ela só aparece onde as
+ * colunas vizinhas contam janelas diferentes — hoje, só no PLAN. Pôr em todas seria repetir
+ * "hoje" seis vezes para avisar de uma diferença que existe em uma.
+ */
+function Medida({
+  children,
+  janela,
+  separa,
+}: {
+  children: React.ReactNode;
+  janela?: string;
+  /** O filete que marca a troca de janela dentro do mesmo grupo. */
+  separa?: boolean;
+}) {
   return (
-    <th className="border-b border-l px-1.5 py-1 text-[0.58rem] font-medium uppercase leading-tight tracking-wide text-muted-foreground first:border-l-0">
+    <th
+      className={cn(
+        "border-b border-l px-1.5 py-1 text-[0.58rem] font-medium uppercase leading-tight tracking-wide text-muted-foreground first:border-l-0",
+        separa && "border-l-2 border-l-border/90",
+      )}
+    >
       {children}
+      {janela ? <span className="block text-[0.52rem] opacity-70">{janela}</span> : null}
     </th>
   );
 }
@@ -225,12 +281,25 @@ function Valor({
   href,
   onClick,
   alerta,
+  separa,
   ativo,
 }: {
   valor: number | null;
   href?: string;
   onClick?: () => void;
+  /**
+   * O número está em ALARME: há coisa atrasada.
+   *
+   * Ele fica vermelho E PISCA (2026-08-27, a pedido), e o piscar não é enfeite: esta tela vive
+   * numa TV que ninguém toca. Um vermelho parado se confunde com qualquer outro vermelho depois
+   * de meia hora na sala, e quem entrou agora não distingue "atrasou" de "está assim desde cedo".
+   *
+   * Pisca ENQUANTO houver o que resolver, e para sozinho quando o número volta a zero — é o
+   * contrário do `.realce-aceso`, que acende uma vez quando o número muda. Ver `globals.css`.
+   */
   alerta?: boolean;
+  /** O filete que marca a troca de janela dentro do mesmo grupo. Ver `Medida`. */
+  separa?: boolean;
   /**
    * A lista DESTE número está aberta embaixo.
    *
@@ -246,14 +315,20 @@ function Valor({
         valor === null && "text-muted-foreground/50",
         // Zero fica apagado: um zero em tinta cheia disputa atenção com os números que importam.
         valor === 0 && "text-muted-foreground/50",
-        alerta && "text-destructive",
+        // O alarme pinta o número e acende a faixa atrás dele. A faixa é o que pulsa: piscar a
+        // cor da LETRA deixaria o número ilegível no vale da animação, que é o oposto do ponto.
+        alerta && "text-destructive alarme-piscando",
       )}
     >
       {valor === null ? "—" : valor}
     </span>
   );
 
-  const classe = cn("border-l first:border-l-0", ativo && "bg-accent");
+  const classe = cn(
+    "border-l first:border-l-0",
+    separa && "border-l-2 border-l-border/90",
+    ativo && "bg-accent",
+  );
   if (href) {
     return (
       <td className={cn(classe, "p-0 transition-colors hover:bg-accent")}>
@@ -526,6 +601,19 @@ export function TotaisDoQuadro({ frentes }: { frentes: DadosDaFrente[] }) {
 
   const totais = [
     { chave: "totalPlan", valor: soma(doPlano), cor: "bg-sky-300 dark:bg-sky-800/70" },
+    /*
+     * O TOTAL ATRASADA é coluna própria, e não entra no total do PLAN.
+     *
+     * Somá-lo ao total de pend + atribuída daria um número que não quer dizer nada: são janelas
+     * diferentes, e a mesma viagem poderia ser contada duas vezes se atrasasse dentro do horizonte.
+     * Aqui, como no card, ela fica ao lado — mesma cor de grupo, coluna separada.
+     */
+    {
+      chave: "totalAtrasada",
+      valor: soma((d) => d.atrasadas),
+      cor: "bg-sky-300 dark:bg-sky-800/70",
+      alerta: true,
+    },
     {
       chave: "totalOrigem",
       valor: soma((d) => d.origemRisco + d.origemFora),
@@ -543,7 +631,7 @@ export function TotaisDoQuadro({ frentes }: { frentes: DadosDaFrente[] }) {
 
   return (
     <Card className="overflow-hidden p-0">
-      <div className="grid grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5">
         {totais.map((x) => (
           <div key={x.chave} className="border-b border-l first:border-l-0 lg:border-b-0">
             <p
@@ -559,10 +647,15 @@ export function TotaisDoQuadro({ frentes }: { frentes: DadosDaFrente[] }) {
                 "py-2 text-center text-2xl font-semibold tabular-nums",
                 x.valor === null && "text-muted-foreground/50",
                 x.valor === 0 && "text-muted-foreground/50",
+                // O alarme pisca aqui pela mesma razão que pisca no card: numa TV, vermelho
+                // parado vira paisagem em meia hora. A faixa é inline para não pegar a largura
+                // inteira da coluna — o alarme é do número, não da célula.
                 x.alerta && (x.valor ?? 0) > 0 && "text-destructive",
               )}
             >
-              {x.valor === null ? "—" : x.valor}
+              <span className={cn(x.alerta && (x.valor ?? 0) > 0 && "alarme-piscando px-2")}>
+                {x.valor === null ? "—" : x.valor}
+              </span>
             </p>
           </div>
         ))}
