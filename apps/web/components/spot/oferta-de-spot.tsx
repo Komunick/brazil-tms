@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Gavel, X } from "lucide-react";
 import type { SpotOfferView } from "@brazil-tms/db";
 import { useSpotOffers } from "@/lib/trips/client";
-import { decidirAviso, estadoInicial, novasOfertas } from "@/lib/spot/ofertas";
+import { enfileirar, estadoInicial, novasOfertas } from "@/lib/spot/ofertas";
 import { tocarAviso } from "@/lib/spot/som";
 import { avisarNoSistema } from "@/lib/spot/aviso-do-sistema";
 import { EVENTO_ENSAIO } from "@/lib/spot/ensaio";
@@ -72,89 +72,87 @@ export function OfertaDeSpot() {
   // render faria a mesma oferta voltar a ser novidade. Ver `novasOfertas`.
   const memoria = useRef(estadoInicial());
   /**
-   * QUANDO chegou a última oferta nova — o que separa uma rajada da seguinte.
+   * O id do último cartão que JÁ apitou, e o do que veio do botão de ensaio.
    *
-   * Em `useRef` e não em estado: mudá-la não deve redesenhar nada, e ela precisa sobreviver entre
-   * buscas sem virar dependência de efeito. Começa em zero, então a primeira oferta da sessão sempre
-   * começa rajada — que é o certo: depois de um recarregamento, a próxima oferta é novidade.
+   * Os dois são `useRef` porque nenhum deles muda o desenho da tela: são memória de "isto já
+   * aconteceu". Em estado, cada um deles provocaria um render a mais e o primeiro deles voltaria a
+   * apitar o cartão que já estava lá.
    */
-  const ultimaOfertaEm = useRef(0);
+  const ultimoAnunciado = useRef<string | null>(null);
+  const ensaiada = useRef<string | null>(null);
   const [fila, setFila] = useState<SpotOfferView[]>([]);
   const [saindo, setSaindo] = useState(false);
-  /**
-   * Quantas foram para a caixa sem passar pela tela, desde este cartão.
-   *
-   * Existe para o cartão poder DIZER que absorveu — sem o número, quem viu uma oferta e sabe que a
-   * sexta tem cinquenta ficaria desconfiado de estar perdendo as outras. Zera quando o cartão sai:
-   * ele conta o que aconteceu enquanto ele estava lá, não o dia inteiro.
-   */
-  const [absorvidas, setAbsorvidas] = useState(0);
 
   /**
-   * UM AVISO POR RAJADA; o resto vai para a caixa (2026-08-21, a pedido). Ver `decidirAviso`.
+   * TODA OFERTA NOVA ENTRA NA FILA (2026-08-27, a pedido). Ver `enfileirar`.
    *
-   * O SILÊNCIO é medido FORA do `setFila`: ele descreve quando a oferta chegou, e o `setFila` pode ser
-   * reexecutado pelo React — recalcular o relógio lá dentro daria uma medida diferente a cada vez.
+   * Aqui morava a regra da rajada, que deixava subir só a primeira depois de um silêncio. Três
+   * ofertas seguidas produziram UM apito na tela de verdade, e as outras duas passaram sem ninguém
+   * ver: quem faz alguém olhar é o som, e sem som a oferta existe só na caixa.
    *
-   * O resto da decisão fica DENTRO dele: é o único lugar onde se sabe, sem correr risco de
-   * estado velho, se já existe um cartão na tela. Ler `fila` de fora do `setFila` traria o valor do
-   * render anterior — e numa TV que busca a cada poucos segundos, isso erra na hora exata em que
-   * mais importa acertar, que é durante a rajada.
+   * ESTE EFEITO NÃO APITA MAIS. Ele só empilha. Quem apita é o efeito de baixo, quando o cartão
+   * SOBE — e é essa separação que faz a segunda oferta soar trinta segundos depois da primeira, em
+   * vez de soar junto com ela e ser esquecida.
    */
   useEffect(() => {
     if (!ofertas) return;
     const novas = novasOfertas(memoria.current, ofertas);
     if (novas.length === 0) return;
-    const agora = Date.now();
-    const silencio = agora - ultimaOfertaEm.current;
-    ultimaOfertaEm.current = agora;
-    setFila((atual) => {
-      const decisao = decidirAviso(atual.length > 0, novas, silencio);
-      if (decisao.absorvidas > 0) setAbsorvidas((n) => n + decisao.absorvidas);
-      if (!decisao.anunciar) return atual;
-      // O som acompanha o cartão, não a oferta: o que foi para a caixa não faz barulho.
-      tocarAviso();
-      /**
-       * E o aviso do SISTEMA, para quem não está com o TMS na frente (2026-08-22, a pedido).
-       *
-       * Sai no mesmo ponto do som e do cartão, e não num efeito à parte: os três respondem à mesma
-       * decisão, e a regra da rajada — só a primeira anuncia — vale para os três de uma vez. Um aviso
-       * de sistema com regra própria acabaria disparando cinquenta vezes numa sexta-feira.
-       *
-       * Ele mesmo se cala quando a aba está visível: ver `aviso-do-sistema.ts`.
-       */
-      avisarNoSistema(
-        t("systemTitle"),
-        [decisao.anunciar.route, decisao.anunciar.price].filter(Boolean).join(" · "),
-      );
-      return [decisao.anunciar];
-    });
+    setFila((atual) => enfileirar(atual, novas));
   }, [ofertas]);
 
   /**
    * O ENSAIO — o mesmo cartão, o mesmo som, o mesmo aviso, com uma oferta de mentira (2026-08-24).
    *
-   * Ele entra pela porta da frente de propósito: `setFila` direto, como a oferta de verdade faz. Um
-   * ensaio que desenhasse o cartão por outro caminho provaria que o outro caminho funciona.
+   * Ele entra pela porta da frente de propósito: a MESMA fila da oferta de verdade. Um ensaio que
+   * desenhasse o cartão por outro caminho provaria que o outro caminho funciona.
    *
-   * Não passa por `novasOfertas` nem por `decidirAviso`: a oferta de ensaio não está na resposta do
-   * servidor, e registrá-la na memória de vistos faria a próxima oferta REAL com aquele id ser
-   * tratada como já anunciada. O preço é que o ensaio ignora a regra de rajada — o que é correto:
-   * quem apertou o botão quer ver o cartão agora, mesmo que já haja um na tela.
+   * ENTRA PELA FRENTE, e não pelo fim: quem apertou o botão quer ver o cartão agora, não depois de
+   * a fila esvaziar. O que já estava na fila continua lá e sobe em seguida — antes disto o ensaio
+   * SUBSTITUÍA a fila, e testar o aviso jogava fora as ofertas que esperavam.
+   *
+   * Não passa por `novasOfertas`: a oferta de ensaio não está na resposta do servidor, e registrá-la
+   * na memória de vistos faria a próxima oferta REAL com aquele id ser tratada como já anunciada.
    */
   useEffect(() => {
     const aoEnsaiar = (e: Event) => {
       const oferta = (e as CustomEvent<SpotOfferView>).detail;
       if (!oferta) return;
-      tocarAviso();
-      avisarNoSistema(t("systemTitle"), oferta.route, { somenteSeEscondido: false });
-      setFila([oferta]);
+      ensaiada.current = oferta.id;
+      setFila((f) => [oferta, ...f.filter((o) => o.id !== oferta.id)]);
     };
     window.addEventListener(EVENTO_ENSAIO, aoEnsaiar);
     return () => window.removeEventListener(EVENTO_ENSAIO, aoEnsaiar);
-  }, [t]);
+  }, []);
 
   const atual = fila[0];
+
+  /**
+   * O APITO ACOMPANHA O CARTÃO QUE SOBE (2026-08-27, a pedido).
+   *
+   * Antes ele saía na CHEGADA da oferta, junto com a decisão de enfileirar. Dava no mesmo enquanto
+   * só a primeira de cada rajada subia; com a fila, daria tudo errado — cinquenta apitos em rajada
+   * e nenhum quando o quadragésimo cartão finalmente aparecesse.
+   *
+   * A GUARDA É POR `id`, e não pela identidade do objeto: a busca refaz a lista a cada ciclo, e um
+   * objeto novo com o mesmo id faria o cartão que já está na tela apitar de novo a cada poucos
+   * segundos — o cartão parado apitando sem parar é pior do que o apito que faltava.
+   */
+  useEffect(() => {
+    if (!atual || ultimoAnunciado.current === atual.id) return;
+    ultimoAnunciado.current = atual.id;
+    tocarAviso();
+    /**
+     * E o aviso do SISTEMA, para quem não está com o TMS na frente (2026-08-22, a pedido).
+     *
+     * Sai no mesmo ponto do som: os dois respondem à mesma coisa — um cartão subiu. Ele mesmo se
+     * cala quando a aba está visível (ver `aviso-do-sistema.ts`), MENOS no ensaio: ali o ponto é
+     * justamente ver a notificação aparecer com o TMS aberto na frente.
+     */
+    avisarNoSistema(t("systemTitle"), [atual.route, atual.price].filter(Boolean).join(" · "), {
+      somenteSeEscondido: ensaiada.current !== atual.id,
+    });
+  }, [atual, t]);
 
   /**
    * A saída passa pela animação antes de tirar da fila.
@@ -166,7 +164,6 @@ export function OfertaDeSpot() {
     setSaindo(true);
     setTimeout(() => {
       setSaindo(false);
-      setAbsorvidas(0);
       setFila((f) => f.slice(1));
     }, 220);
   }, []);
@@ -309,17 +306,20 @@ export function OfertaDeSpot() {
           ) : null}
 
           {/**
-           * "+N na caixa" — o que chegou enquanto este cartão estava na tela (2026-08-21).
+           * "+N esperando" — o tamanho da fila atrás deste cartão (2026-08-27).
            *
-           * Sem esta linha, o corte seria invisível: quem sabe que a sexta traz cinquenta ofertas e vê
-           * uma só na tela conclui que está perdendo as outras, e passa a desconfiar da tela inteira.
-           * Com ela, o cartão diz o que fez — e diz onde as outras estão.
+           * Ela dizia "+N na caixa", das que tinham sido engolidas pela regra da rajada. Agora nada é
+           * engolido, e o que a linha informa é OUTRA coisa: quantas ainda vão subir depois desta.
            *
-           * Só aparece quando houve absorção. Num dia normal ninguém vê esta linha.
+           * É a informação que o pedido de apitar todas torna necessária. Trinta segundos por oferta
+           * significa que a décima sobe cinco minutos depois de chegar; quem vê "+9" sabe que a fila é
+           * longa e pode ir direto à caixa de ofertas do dia, em vez de esperar a tela contar.
+           *
+           * Só aparece quando há fila. Num dia espaçado ninguém vê esta linha.
            */}
-          {absorvidas > 0 ? (
+          {fila.length > 1 ? (
             <p className="text-center text-[0.8rem] font-medium" style={{ color: MARCA.amarelo }}>
-              {t("absorbed", { count: absorvidas })}
+              {t("queued", { count: fila.length - 1 })}
             </p>
           ) : null}
         </div>

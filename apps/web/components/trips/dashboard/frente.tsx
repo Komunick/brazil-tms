@@ -2,39 +2,38 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import { ChevronDown } from "lucide-react";
-import { boardQueryForDisplayStatus, type TripDisplayStatus } from "@brazil-tms/shared";
-import { Card, CardTitle } from "@/components/ui/card";
-import { BOARD_ANCHOR } from "@/components/trips/control-tower-table";
+import type { TripDisplayStatus } from "@brazil-tms/shared";
+import type { MedidaDoPainel } from "@brazil-tms/db";
+import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
 /**
- * A LINHA DA FRENTE — o quadro branco, com as colunas por assunto (2026-08-27, a pedido).
+ * O CARD DA FRENTE — o quadro da operação, uma linha por frente (2026-08-27, a pedido).
  *
- * ── O QUE MUDOU, E POR QUE ────────────────────────────────────────────────────────────────────
+ * Veio de uma foto da planilha que a operação já mantém: quatro grupos, dois números cada, tudo
+ * dentro de UM card por frente.
  *
- * As colunas eram os DIAS (hoje · D1 · D2), e cada célula respondia "como está esta frente neste
- * dia" — a lista inteira de status, mais spot e origem atrasada no cartão de hoje.
+ *   ┌──── PLAN ────┬───── ORIGEM ─────┬─── SPOT ───┬─ TENDÊNCIA ─┐
+ *   │ PEND │ ATRIB │ ATRAS<2H │ FORA  │ Aceita│N Ac│ Aceita│N Ac │
+ *   │  31  │  18   │    4     │   8   │   4   │ 0  │   —   │  —  │
  *
- * Agora são os ASSUNTOS do quadro branco da operação: PLAN, SPOT, ORIGEM. Cada coluna responde uma
- * pergunta só, e a mesma pergunta em todas as frentes — que é como se lê um quadro: descendo a
- * coluna, não varrendo a linha.
+ * ── POR QUE UM CARD, E NÃO QUATRO ─────────────────────────────────────────────────────────────
  *
- * ── O QUE SAIU DA TELA, E ISSO PRECISA ESTAR DITO ─────────────────────────────────────────────
+ * Foi o pedido, e a planilha explica: a frente é UMA coisa, e os quatro grupos são recortes dela.
+ * Quatro cards lado a lado leriam como quatro assuntos — e o olho teria de reconstruir, a cada
+ * linha, que aquilo tudo é a mesma frente.
  *
- * A visão "como está HOJE inteiro" saiu junto: ETA Origem, Em trânsito, Concluída e Cancelada não
- * aparecem mais aqui. O PLAN mostra só Atribuída e P/Atribuir, que é o que o quadro pede — o resto
- * dessa leitura vive na Torre de Controle.
+ * O cabeçalho em dois andares é o que carrega isso: o grupo em cima, colorido; as medidas embaixo.
+ * É o desenho da própria planilha, e copiá-lo poupa a operação de aprender uma linguagem nova.
  *
- * Foi decisão do usuário em 27/08, com o custo declarado antes. Voltar é trocar as colunas de volta:
- * o dado dos três dias continua vindo inteiro do servidor.
+ * ── AS CORES SÃO AS DA PLANILHA ───────────────────────────────────────────────────────────────
  *
- * ── O QUE **NÃO** SAIU, E NÃO PODIA SAIR ──────────────────────────────────────────────────────
- *
- * A faixa vermelha de LH ATRASADA. Ela não está no quadro branco, e sumir com ela seria trocar um
- * alarme por um desenho: é a única coisa nesta tela que diz "alguém precisa agir AGORA". Ficou na
- * coluna ORIGEM, junto da origem atrasada — as duas respondem "o que está atrasado nesta frente".
+ * Azul no PLAN, rosa na ORIGEM, âmbar no SPOT, verde na TENDÊNCIA. Elas AGRUPAM, não classificam:
+ * nenhuma delas quer dizer bom ou ruim. Quem diz isso continua sendo o vermelho do número, que é a
+ * única cor com significado nesta tela — e é por isso que os tons de grupo são pálidos.
  */
 
 interface PorStatus {
@@ -44,232 +43,383 @@ interface PorStatus {
 
 export interface DadosDaFrente {
   region: string | null;
-  /** D1 e D2 — o horizonte de planejamento do quadro (H+12 / H+24). */
-  d1: PorStatus[];
-  d2: PorStatus[];
-  /** Filtros de data prontos, para o atalho abrir a lista exatamente do dia mostrado. */
-  filtroD1: string;
-  filtroD2: string;
-  atrasadas: number;
-  origemAtrasada: number;
+  /**
+   * O PLAN soma D1 e D2.
+   *
+   * A planilha tem dois números, não quatro: o horizonte de planejamento é "o que vem", não "o que
+   * vem amanhã contra depois". O dado dos dois dias continua chegando separado do servidor — quem
+   * quiser voltar a separar não precisa de consulta nova.
+   */
+  plano: PorStatus[];
+  origemRisco: number;
+  origemFora: number;
   spot?: { aceito: number; naoAceito: number; rotas: { rota: string; aceito: boolean }[] };
 }
 
-/** Os dois status que o PLAN mostra. O quadro escreve "ATRIBUIDO E P/ATRIBUIR", e é literal. */
-const DO_PLAN: TripDisplayStatus[] = ["to_assign", "assigned"];
-
-export function LinhaDaFrente({ dados }: { dados: DadosDaFrente }) {
+export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
   const t = useTranslations("Trips.dashboard");
-  const tStatus = useTranslations("Trips.status");
+  const [spotAberto, setSpotAberto] = useState(false);
+  /**
+   * UMA MEDIDA ABERTA POR VEZ, e clicar de novo fecha.
+   *
+   * Duas listas abertas no mesmo card empilhariam códigos sem dizer de qual número vieram — e a
+   * pergunta que o clique responde é "quais LH estão NESTE número", não "quais estão no card".
+   */
+  const [medidaAberta, setMedidaAberta] = useState<MedidaDoPainel | null>(null);
+  const abrir = (m: MedidaDoPainel) => {
+    setSpotAberto(false);
+    setMedidaAberta((atual) => (atual === m ? null : m));
+  };
+  // O spot fecha a lista de LH pelo mesmo motivo: uma coisa aberta por vez dentro do card.
+  const abrirSpot = () => {
+    setMedidaAberta(null);
+    setSpotAberto((x) => !x);
+  };
   const { region } = dados;
 
-  /**
-   * Estação sem região não tem para onde o link apontar — `region=` vazio traria o país inteiro, e
-   * um cartão que abre uma lista maior que ele próprio é pior que um que não abre.
-   */
-  const filtroRegiao = region ? `&region=${encodeURIComponent(region)}` : "";
+  const doPlano = new Map(dados.plano.map((s) => [s.status, s.count]));
+
+  const houveSpot = dados.spot && dados.spot.aceito + dados.spot.naoAceito > 0;
 
   return (
-    <section className="space-y-1.5">
-      <h3 className="text-[0.7rem] font-semibold uppercase tracking-wider text-muted-foreground">
-        {region ?? t("regionUnassigned")}
-      </h3>
-      <div className="grid gap-2 lg:grid-cols-[2fr_1fr_1fr]">
-        {/* PLAN — os dois dias lado a lado, cada um com os dois status que importam para planejar. */}
-        <Card className="p-2.5">
-          <CardTitle className="mb-1.5 text-[0.68rem] font-medium uppercase tracking-wide text-muted-foreground">
-            {t("blocoPlan")}
-          </CardTitle>
-          <div className="grid grid-cols-2 gap-2">
-            <Dia
-              rotulo={t("blocoD1")}
-              porStatus={dados.d1}
-              filtroData={dados.filtroD1}
-              filtroRegiao={filtroRegiao}
-              tStatus={tStatus}
-            />
-            <Dia
-              rotulo={t("blocoD2")}
-              porStatus={dados.d2}
-              filtroData={dados.filtroD2}
-              filtroRegiao={filtroRegiao}
-              tStatus={tStatus}
-            />
-          </div>
-        </Card>
+    <Card className="overflow-hidden p-0">
+      <div className="flex items-stretch">
+        {/* A FRENTE, na lateral — como na planilha, onde o nome fica na coluna A. */}
+        <div className="flex w-24 shrink-0 items-center justify-center border-r bg-muted/40 px-2 py-3 text-center text-xs font-bold uppercase tracking-wide">
+          {region ?? t("regionUnassigned")}
+        </div>
 
-        <BlocoSpot spot={dados.spot} rotulo={t("blocoSpot")} vazio={t("spotVazio")} t={t} />
+        <div className="min-w-0 flex-1 overflow-x-auto">
+          <table className="w-full border-collapse text-center">
+            <thead>
+              <tr>
+                <Grupo cols={2} cor="bg-sky-100 dark:bg-sky-950/60">
+                  {t("grupoPlan")}
+                </Grupo>
+                <Grupo cols={2} cor="bg-rose-100 dark:bg-rose-950/50">
+                  {t("grupoOrigem")}
+                </Grupo>
+                <Grupo cols={2} cor="bg-amber-100 dark:bg-amber-950/50">
+                  {t("grupoSpot")}
+                </Grupo>
+                <Grupo cols={2} cor="bg-emerald-100 dark:bg-emerald-950/50">
+                  {t("grupoTendencia")}
+                </Grupo>
+              </tr>
+              <tr>
+                <Medida>{t("medidaPendAtribuicao")}</Medida>
+                <Medida>{t("medidaAtribuida")}</Medida>
+                <Medida>{t("medidaAtrasado2h")}</Medida>
+                <Medida>{t("medidaForaDoPrazo")}</Medida>
+                <Medida>{t("medidaAceita")}</Medida>
+                <Medida>{t("medidaNaoAceita")}</Medida>
+                <Medida>{t("medidaAceita")}</Medida>
+                <Medida>{t("medidaNaoAceita")}</Medida>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <Valor
+                  valor={doPlano.get("to_assign") ?? 0}
+                  onClick={() => abrir("pend")}
+                  ativo={medidaAberta === "pend"}
+                />
+                <Valor
+                  valor={doPlano.get("assigned") ?? 0}
+                  onClick={() => abrir("atribuida")}
+                  ativo={medidaAberta === "atribuida"}
+                />
+                {/*
+                  As duas da ORIGEM ficam VERMELHAS quando têm número — é a única cor com significado
+                  nesta tela, e as duas colunas são as únicas em que alguém precisa agir.
 
-        {/* ORIGEM — o que está atrasado nesta frente. As duas faixas, na mesma coluna. */}
-        <Card className="p-2.5">
-          <CardTitle className="mb-1.5 text-[0.68rem] font-medium uppercase tracking-wide text-muted-foreground">
-            {t("blocoOrigem")}
-          </CardTitle>
-          {dados.atrasadas === 0 && dados.origemAtrasada === 0 ? (
-            <p className="text-xs text-muted-foreground">{t("semAtraso")}</p>
-          ) : null}
-          {/*
-            A LH ATRASADA, piscando. A regra da operação: a viagem pode ser atribuída até o MEIO-DIA
-            do dia da coleta; depois disso, sem ninguém escalado, é atraso.
+                  O atalho vai SEM recorte de data: a regra já traz a sua própria janela, e passar a
+                  data por cima faria a lista mostrar menos do que o card diz.
+                */}
+                <Valor
+                  valor={dados.origemRisco}
+                  alerta={dados.origemRisco > 0}
+                  onClick={() => abrir("risco")}
+                  ativo={medidaAberta === "risco"}
+                />
+                <Valor
+                  valor={dados.origemFora}
+                  alerta={dados.origemFora > 0}
+                  onClick={() => abrir("fora")}
+                  ativo={medidaAberta === "fora"}
+                />
+                {/* O SPOT abre a lista de rotas — ver o painel embaixo da tabela. */}
+                <Valor
+                  valor={dados.spot?.aceito ?? 0}
+                  onClick={houveSpot ? abrirSpot : undefined}
+                />
+                <Valor
+                  valor={dados.spot?.naoAceito ?? 0}
+                  onClick={houveSpot ? abrirSpot : undefined}
+                />
+                {/*
+                  TENDÊNCIA ainda não tem dado. As colunas ficam desenhadas mostrando "—", e isso é
+                  deliberado: o quadro da operação as tem, e uma tabela que muda de forma quando o
+                  dado chegar obrigaria a reaprender a tela. "—" diz "não sei", que é a verdade;
+                  zero diria "não houve", que seria mentira.
+                */}
+                <Valor valor={null} />
+                <Valor valor={null} />
+              </tr>
+            </tbody>
+          </table>
 
-            `motion-safe:` no pisca, e não animação crua: quem reduziu movimento no sistema continua
-            vendo a faixa vermelha, parada. O aviso é a COR e o número; o pisca é reforço, e reforço
-            não pode ser a única forma de perceber.
-          */}
-          {dados.atrasadas > 0 ? (
-            <Link
-              href={`/trips?lateToAssign=true${filtroRegiao}&scope=all#${BOARD_ANCHOR}`}
-              className="mb-1.5 flex items-center justify-between gap-2 rounded bg-destructive px-1.5 py-1 text-xs font-bold uppercase tracking-wide text-destructive-foreground shadow-[0_0_10px_2px_hsl(var(--destructive)/0.75)] motion-safe:animate-pulse"
-            >
-              <span>{t("lateToAssign")}</span>
-              <span className="tabular-nums">{dados.atrasadas}</span>
-            </Link>
+          {medidaAberta ? <ListaDeLhs region={region} medida={medidaAberta} /> : null}
+
+          {spotAberto && dados.spot && dados.spot.rotas.length > 0 ? (
+            <div className="border-t bg-amber-50/60 px-3 py-2 dark:bg-amber-950/20">
+              <p className="mb-1 flex items-center gap-1 text-[0.62rem] font-semibold uppercase tracking-wider text-muted-foreground">
+                <ChevronDown className="h-3 w-3" aria-hidden />
+                {t("grupoSpot")}
+              </p>
+              <ul className="space-y-0.5">
+                {dados.spot.rotas.map((r, i) => (
+                  <li key={`${r.rota}-${i}`} className="flex items-start gap-1.5 text-[0.7rem]">
+                    {/*
+                      O ponto diz se pegamos, e a cor sozinha não bastaria: quem não distingue verde
+                      de cinza precisa do título.
+                    */}
+                    <span
+                      className={cn(
+                        "mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full",
+                        r.aceito ? "bg-emerald-500" : "bg-muted-foreground/40",
+                      )}
+                      title={r.aceito ? t("medidaAceita") : t("medidaNaoAceita")}
+                      aria-label={r.aceito ? t("medidaAceita") : t("medidaNaoAceita")}
+                    />
+                    <span
+                      className={cn("min-w-0 break-words", !r.aceito && "text-muted-foreground")}
+                    >
+                      {r.rota}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           ) : null}
-          {/*
-            O atalho leva à lista pelo MESMO predicado que contou o número, e SEM recorte de data: a
-            regra já traz a sua própria janela. Passar a data por cima faria a lista mostrar menos do
-            que o cartão diz.
-          */}
-          {dados.origemAtrasada > 0 ? (
-            <Link
-              href={`/trips?origemAtrasada=true${filtroRegiao}&scope=all#${BOARD_ANCHOR}`}
-              className="flex items-center justify-between gap-2 rounded bg-destructive px-1.5 py-1 text-xs font-bold uppercase tracking-wide text-destructive-foreground shadow-[0_0_10px_2px_hsl(var(--destructive)/0.75)] motion-safe:animate-pulse"
-            >
-              <span>{t("origemAtrasada")}</span>
-              <span className="tabular-nums">{dados.origemAtrasada}</span>
-            </Link>
-          ) : null}
-        </Card>
+        </div>
       </div>
-    </section>
+    </Card>
   );
 }
 
-/** Um dia dentro do PLAN: só Atribuída e P/Atribuir, cada um levando à lista daquele dia. */
-function Dia({
-  rotulo,
-  porStatus,
-  filtroData,
-  filtroRegiao,
-  tStatus,
-}: {
-  rotulo: string;
-  porStatus: PorStatus[];
-  filtroData: string;
-  filtroRegiao: string;
-  tStatus: (k: string) => string;
-}) {
-  const de = new Map(porStatus.map((s) => [s.status, s.count]));
+/** O andar de cima do cabeçalho: o nome do grupo, com a cor da planilha. */
+function Grupo({ cols, cor, children }: { cols: number; cor: string; children: React.ReactNode }) {
   return (
-    <div className="rounded border bg-muted/30 p-1.5">
+    <th
+      colSpan={cols}
+      className={cn(
+        "border-b border-l px-2 py-1 text-[0.62rem] font-bold uppercase tracking-wider first:border-l-0",
+        cor,
+      )}
+    >
+      {children}
+    </th>
+  );
+}
+
+/** O andar de baixo: o nome da medida. */
+function Medida({ children }: { children: React.ReactNode }) {
+  return (
+    <th className="border-b border-l px-1.5 py-1 text-[0.58rem] font-medium uppercase leading-tight tracking-wide text-muted-foreground first:border-l-0">
+      {children}
+    </th>
+  );
+}
+
+/**
+ * Uma célula de número.
+ *
+ * `null` mostra "—", que é diferente de zero: zero afirma que não houve, o traço admite que não se
+ * sabe. É a distinção que mantém a TENDÊNCIA honesta enquanto o dado não existe.
+ */
+function Valor({
+  valor,
+  href,
+  onClick,
+  alerta,
+  ativo,
+}: {
+  valor: number | null;
+  href?: string;
+  onClick?: () => void;
+  alerta?: boolean;
+  /**
+   * A lista DESTE número está aberta embaixo.
+   *
+   * Sem a marca, com quatro números clicáveis lado a lado, a lista aberta não diz de qual deles
+   * veio — e quem clicou em dois seguidos perde a referência do que está lendo.
+   */
+  ativo?: boolean;
+}) {
+  const conteudo = (
+    <span
+      className={cn(
+        "block px-1.5 py-2 text-base font-semibold tabular-nums",
+        valor === null && "text-muted-foreground/50",
+        // Zero fica apagado: um zero em tinta cheia disputa atenção com os números que importam.
+        valor === 0 && "text-muted-foreground/50",
+        alerta && "text-destructive",
+      )}
+    >
+      {valor === null ? "—" : valor}
+    </span>
+  );
+
+  const classe = cn("border-l first:border-l-0", ativo && "bg-accent");
+  if (href) {
+    return (
+      <td className={cn(classe, "p-0 transition-colors hover:bg-accent")}>
+        <Link href={href} className="block">
+          {conteudo}
+        </Link>
+      </td>
+    );
+  }
+  if (onClick) {
+    return (
+      <td className={cn(classe, "p-0 transition-colors hover:bg-accent")}>
+        <button type="button" onClick={onClick} className="block w-full">
+          {conteudo}
+        </button>
+      </td>
+    );
+  }
+  return <td className={classe}>{conteudo}</td>;
+}
+
+/**
+ * AS LH POR TRÁS DE UM NÚMERO (2026-08-27, a pedido).
+ *
+ * "3 pendentes de atribuição" não diz QUAIS — quem opera reconhece a viagem pelo código, e é o
+ * código que permite ir atrás dela.
+ *
+ * ── BUSCA SÓ QUANDO ABRE ──────────────────────────────────────────────────────────────────────
+ *
+ * As rotas do spot viajam no payload do painel porque são poucas por frente. As LH não: uma frente
+ * movimentada traria centenas de códigos, em três frentes, a cada minuto de recarga — para uma
+ * lista que quase sempre ninguém abre.
+ *
+ * `staleTime` alto porque a lista é do instante em que se clicou: recarregá-la sozinha faria linhas
+ * sumirem sob o olho de quem está lendo, e o painel atrás já mostra o número vivo.
+ */
+function ListaDeLhs({ region, medida }: { region: string | null; medida: MedidaDoPainel }) {
+  const t = useTranslations("Trips.dashboard");
+  const consulta = useQuery({
+    queryKey: ["painel-lhs", region, medida],
+    queryFn: async () => {
+      const p = new URLSearchParams({ medida, region: region ?? "" });
+      const res = await fetch(`/api/painel/lhs?${p}`);
+      if (!res.ok) throw new Error(String(res.status));
+      return (await res.json()) as {
+        lhs: { lh: string | null; origem: string | null; destino: string | null; quando: string | null }[];
+      };
+    },
+    staleTime: 60_000,
+  });
+
+  const lhs = consulta.data?.lhs ?? [];
+
+  return (
+    <div className="border-t bg-muted/30 px-3 py-2">
       <p className="mb-1 text-[0.62rem] font-semibold uppercase tracking-wider text-muted-foreground">
-        {rotulo}
+        {t(`medida_${medida}`)}
       </p>
-      {DO_PLAN.map((status) => {
-        const valor = de.get(status) ?? 0;
-        return (
-          <Link
-            key={status}
-            href={`/trips?${boardQueryForDisplayStatus(status)}${filtroData}${filtroRegiao}&scope=all#${BOARD_ANCHOR}`}
-            className={cn(
-              "flex items-center justify-between gap-2 rounded px-1 py-0.5 text-xs hover:bg-accent",
-              // Zero fica apagado em vez de sumir: a ausência da linha faria parecer que o status
-              // não existe naquele dia, e a pessoa procuraria o número em outro lugar.
-              valor === 0 && "text-muted-foreground/50",
-            )}
-          >
-            <span className="truncate">{tStatus(status)}</span>
-            <span className="shrink-0 font-semibold tabular-nums">{valor}</span>
-          </Link>
-        );
-      })}
+      {consulta.isPending ? (
+        <p className="text-[0.7rem] text-muted-foreground">{t("carregandoLhs")}</p>
+      ) : lhs.length === 0 ? (
+        <p className="text-[0.7rem] text-muted-foreground">{t("semLhs")}</p>
+      ) : (
+        <ul className="grid gap-x-4 gap-y-0.5 sm:grid-cols-2 xl:grid-cols-3">
+          {lhs.map((v, i) => (
+            <li key={`${v.lh}-${i}`} className="flex items-baseline gap-1.5 text-[0.7rem]">
+              {/*
+                A LH leva ao detalhe da viagem, não ao quadro filtrado: quem clicou num código já
+                sabe qual viagem quer — mandá-lo para uma lista seria devolver o trabalho que ele
+                acabou de fazer.
+              */}
+              <Link
+                href={`/trips?q=${encodeURIComponent(v.lh ?? "")}&scope=all`}
+                className="shrink-0 font-mono font-semibold hover:underline"
+              >
+                {v.lh ?? "—"}
+              </Link>
+              <span className="min-w-0 truncate text-muted-foreground">
+                {[v.origem, v.destino].filter(Boolean).join(" → ")}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
 
 /**
- * SPOT — o número e, ao clicar, os nomes das rotas.
+ * A FAIXA DE TOTAIS, no pé do quadro (2026-08-27, a pedido).
  *
- * "4 aceitas" não diz se a frente pegou as quatro que importavam ou quatro que ninguém queria. Quem
- * cuida da frente reconhece a rota pelo nome, e é isso que transforma o número em informação.
+ * Cada frente responde por si; o total responde pela operação. Quem olha o painel de manhã quer os
+ * dois — e sem a soma, ler "3 + 3 + 3" em três cards é uma conta que a tela obriga a pessoa a fazer.
  *
- * FECHADO POR PADRÃO. Aberto sempre, as rotas de três frentes empurrariam o resto do painel para
- * fora da tela — e na maior parte do tempo o número basta. O quadro branco pede exatamente isso:
- * "aceitos + nome da rota AO CLICAR".
+ * ── OS TOTAIS SOMAM O GRUPO, NÃO A MEDIDA ─────────────────────────────────────────────────────
+ *
+ * "Total pend atribuição E atribuída" é um número só, como a planilha escreve. É a pergunta do
+ * total: quanto há para planejar, e quanto está atrasado — não a repartição, que já está em cima.
  */
-function BlocoSpot({
-  spot,
-  rotulo,
-  vazio,
-  t,
-}: {
-  spot?: { aceito: number; naoAceito: number; rotas: { rota: string; aceito: boolean }[] };
-  rotulo: string;
-  vazio: string;
-  t: (k: string, v?: Record<string, string | number>) => string;
-}) {
-  const [aberto, setAberto] = useState(false);
-  const houve = spot && spot.aceito + spot.naoAceito > 0;
+export function TotaisDoQuadro({ frentes }: { frentes: DadosDaFrente[] }) {
+  const t = useTranslations("Trips.dashboard");
+
+  const soma = (f: (d: DadosDaFrente) => number) => frentes.reduce((n, d) => n + f(d), 0);
+  const doPlano = (d: DadosDaFrente) => d.plano.reduce((n, s) => n + s.count, 0);
+
+  const totais = [
+    { chave: "totalPlan", valor: soma(doPlano), cor: "bg-sky-100 dark:bg-sky-950/60" },
+    {
+      chave: "totalOrigem",
+      valor: soma((d) => d.origemRisco + d.origemFora),
+      cor: "bg-rose-100 dark:bg-rose-950/50",
+      alerta: true,
+    },
+    {
+      chave: "totalSpot",
+      valor: soma((d) => (d.spot?.aceito ?? 0) + (d.spot?.naoAceito ?? 0)),
+      cor: "bg-amber-100 dark:bg-amber-950/50",
+    },
+    // Sem dado, o total é tão desconhecido quanto as parcelas. Zero aqui seria a soma de dois "não sei".
+    { chave: "totalTendencia", valor: null, cor: "bg-emerald-100 dark:bg-emerald-950/50" },
+  ];
 
   return (
-    <Card className="p-2.5">
-      <CardTitle className="mb-1.5 text-[0.68rem] font-medium uppercase tracking-wide text-muted-foreground">
-        {rotulo}
-      </CardTitle>
-      {!houve ? (
-        <p className="text-xs text-muted-foreground">{vazio}</p>
-      ) : (
-        <>
-          <button
-            type="button"
-            onClick={() => setAberto((x) => !x)}
-            aria-expanded={aberto}
-            // Sem rota nenhuma não há o que abrir — o botão vira texto, em vez de prometer um clique
-            // que não responde.
-            disabled={spot.rotas.length === 0}
-            className={cn(
-              "flex w-full items-center justify-between gap-2 rounded border border-[hsl(28_75%_78%)] bg-[hsl(30_95%_93%)] px-1.5 py-1 text-[0.68rem] font-semibold uppercase tracking-wide text-[hsl(22_80%_34%)] dark:border-[hsl(28_50%_34%)] dark:bg-[hsl(26_55%_18%)] dark:text-[hsl(30_90%_72%)]",
-              spot.rotas.length > 0 && "hover:brightness-95",
-            )}
-          >
-            <span className="tabular-nums">
-              {t("spotNumeros", { aceito: spot.aceito, passou: spot.naoAceito })}
-            </span>
-            {spot.rotas.length > 0 ? (
-              <ChevronDown
-                className={cn("h-3.5 w-3.5 transition-transform", aberto && "rotate-180")}
-                aria-hidden
-              />
-            ) : null}
-          </button>
-          {aberto ? (
-            <ul className="mt-1.5 space-y-0.5">
-              {spot.rotas.map((r, i) => (
-                <li
-                  key={`${r.rota}-${i}`}
-                  className="flex items-start gap-1.5 text-[0.7rem] leading-snug"
-                >
-                  {/*
-                    O PONTO DIZ SE PEGAMOS, e a cor sozinha não bastaria: quem não distingue verde de
-                    cinza precisa do título. Verde é aceita, cinza é passou.
-                  */}
-                  <span
-                    className={cn(
-                      "mt-1 inline-block h-1.5 w-1.5 shrink-0 rounded-full",
-                      r.aceito ? "bg-emerald-500" : "bg-muted-foreground/40",
-                    )}
-                    title={r.aceito ? t("spotAceita") : t("spotPassou")}
-                    aria-label={r.aceito ? t("spotAceita") : t("spotPassou")}
-                  />
-                  <span className={cn("min-w-0 break-words", !r.aceito && "text-muted-foreground")}>
-                    {r.rota}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </>
-      )}
+    <Card className="overflow-hidden p-0">
+      <div className="grid grid-cols-2 lg:grid-cols-4">
+        {totais.map((x) => (
+          <div key={x.chave} className="border-b border-l first:border-l-0 lg:border-b-0">
+            <p
+              className={cn(
+                "px-2 py-1 text-center text-[0.62rem] font-bold uppercase tracking-wider",
+                x.cor,
+              )}
+            >
+              {t(x.chave)}
+            </p>
+            <p
+              className={cn(
+                "py-2 text-center text-2xl font-semibold tabular-nums",
+                x.valor === null && "text-muted-foreground/50",
+                x.valor === 0 && "text-muted-foreground/50",
+                x.alerta && (x.valor ?? 0) > 0 && "text-destructive",
+              )}
+            >
+              {x.valor === null ? "—" : x.valor}
+            </p>
+          </div>
+        ))}
+      </div>
     </Card>
   );
 }
