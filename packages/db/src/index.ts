@@ -338,3 +338,6 @@ export { sugestaoPelaLH, sugestaoPeloMotorista, dobrarAcento } from "./passagem-
 
 // As placas que um motorista já rodou — sugestão no diálogo de atribuição (2026-08-27).
 export { placasDoMotorista, type PlacaDoMotorista } from "./trips/placas-do-motorista";
+
+// As LH por trás de cada número do card da frente (2026-08-27).
+export { lhsDoPainel, type LhDoPainel, type MedidaDoPainel } from "./trips/lhs-do-painel";
