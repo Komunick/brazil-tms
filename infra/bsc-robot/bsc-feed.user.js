@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — leitor do BSC
 // @namespace    braziltransports.com.br
-// @version      1.16.0
+// @version      1.17.0
 // @description  Lê o scorecard que a Shopee publica no Looker Studio e entrega ao TMS. Somente leitura.
 // @match        https://datastudio.google.com/*/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
 // @match        https://datastudio.google.com/reporting/5122833b-f83e-4786-b6fb-3cb9cd8f84e8/*
@@ -939,7 +939,36 @@
    */
   let ultimoCarimboDoCiclo = null;
 
+  /**
+   * Lê e envia UM recorte. Devolve o que aconteceu, e é isso que decide se o ciclo se dá por
+   * concluído — ver `ciclo`.
+   *
+   *   "enviado"      entregou dado novo
+   *   "sem_mudanca"  o carimbo deste recorte já tinha sido entregue; não há o que fazer
+   *   "falhou"       não entregou, e precisa de outra chance
+   */
   async function lerEEnviar(recorte) {
+    /**
+     * A PORTEIRA BARATA: já entreguei ESTE recorte com ESTE carimbo?
+     *
+     * O carimbo do rodapé está visível sem tocar em nada, e é o mesmo para os três recortes — é o
+     * "quando o relatório recalculou", não "quando este período mudou". Então dá para responder
+     * antes de mexer no filtro.
+     *
+     * Isso importa por causa da RETENTATIVA. Sem esta porteira, o ciclo que volta para insistir num
+     * recorte que falhou arrastaria os outros dois junto: três trocas de filtro para refazer uma. Com
+     * ela, os que já foram entregues saem na porta e só o que falta é tocado — que é a diferença
+     * entre retentar de hora em hora e retentar sem custo.
+     *
+     * A mesma comparação continua sendo feita DEPOIS da leitura estável, contra o carimbo lido junto
+     * com os números. Esta aqui é conservadora de propósito: só pula quando é igual.
+     */
+    const carimboNaTela = carimbo();
+    if (carimboNaTela && ultimo[recorte.period] === carimboNaTela) {
+      log(`${recorte.period}: já entregue com o carimbo ${carimboNaTela} — filtro não tocado.`);
+      return "sem_mudanca";
+    }
+
     // Guardado ANTES de mexer no filtro: é contra isto que se sabe se o relatório recalculou.
     const antes = assinatura(lerTela());
     await escolherPeriodo(recorte);
@@ -949,7 +978,7 @@
     const rotulo = rotuloPeriodo();
     if (!rotulo || /^Selecionar per/i.test(rotulo) || !/\d/.test(rotulo)) {
       erro(`${recorte.period}: o filtro não confirmou (rótulo "${rotulo}") — nada enviado.`);
-      return;
+      return "falhou";
     }
 
     const estavel = await lerEstavel(antes);
@@ -969,7 +998,7 @@
             : `${recorte.period}: a tela continuou sendo a do recorte anterior por ${limiteS}s ` +
               `(mesmos números E mesmo carimbo) — nada enviado. O relatório não recalculou.`,
       );
-      return;
+      return "falhou";
     }
 
     // Vem da leitura estável, e não de uma consulta nova: entre uma coisa e outra o Looker pode ter
@@ -977,11 +1006,11 @@
     const at = estavel.leitura.at;
     if (!at) {
       erro(`${recorte.period}: sem "Dados atualizados pela última vez" na tela — nada enviado.`);
-      return;
+      return "falhou";
     }
     if (ultimo[recorte.period] === at) {
       log(`${recorte.period}: mesmo carimbo (${at}) — nada mudou.`);
-      return;
+      return "sem_mudanca";
     }
 
     // Nota e indicadores existem por construção: `lerEstavel` só devolve leitura com conteúdo.
@@ -1103,14 +1132,54 @@
       return;
     }
 
+    let algumFalhou = false;
     for (const recorte of RECORTES) {
       try {
-        await lerEEnviar(recorte);
+        if ((await lerEEnviar(recorte)) === "falhou") algumFalhou = true;
       } catch (e) {
+        algumFalhou = true;
         erro(`${recorte.period} falhou (tenta de novo no próximo ciclo):`, e?.message ?? e);
         // Limpa o que a falha deixou aberto para o próximo recorte não herdar a bagunça.
         await fecharPopups();
       }
+    }
+
+    /**
+     * O CICLO SÓ SE DÁ POR CONCLUÍDO SE TODOS OS RECORTES FECHARAM (1.17.0, 2026-08-27).
+     *
+     * ── O DEFEITO QUE ISTO CONSERTA ─────────────────────────────────────────────────────────────
+     *
+     * Antes, este carimbo era gravado no fim do ciclo INCONDICIONALMENTE — inclusive quando um
+     * recorte tinha falhado. E como o ciclo seguinte pula tudo enquanto o carimbo não muda, um
+     * recorte que falhasse só ganhava outra chance na próxima publicação do relatório: VINTE E
+     * QUATRO HORAS depois.
+     *
+     * Uma falha isolada virava um dia inteiro de atraso. Se ela se repetisse no dia seguinte — e a
+     * semana é o recorte mais frágil, o único que abre o diálogo "Avançado" e digita dois campos —,
+     * o número ficava preso indefinidamente, com dia e mês em volta perfeitamente atuais.
+     *
+     * Foi exatamente isso que aconteceu com a semana entre 25 e 27/08.
+     *
+     * ── POR QUE ISSO NÃO DESFAZ A ECONOMIA QUE ESTE CARIMBO EXISTE PARA FAZER ────────────────────
+     *
+     * O comentário lá em cima conta que o ponto era reduzir 72 trocas de filtro por dia para três,
+     * porque cada troca é uma chance de ler a tela errada. Retentar de hora em hora parece devolver
+     * as 72 — e não devolve: a porteira no topo de `lerEEnviar` faz o recorte JÁ ENTREGUE com este
+     * carimbo sair sem tocar em nada.
+     *
+     * Então um ciclo de retentativa custa uma troca de filtro, não três, e só enquanto algo está
+     * de fato quebrado — que é precisamente quando se quer insistir.
+     *
+     * ── E POR QUE NÃO CONTAR TENTATIVAS ─────────────────────────────────────────────────────────
+     *
+     * Seria a proteção óbvia contra insistir para sempre. Mas "para sempre" aqui é uma troca de
+     * filtro por hora num recorte que não está chegando — e um teto transformaria isso em silêncio,
+     * que é a forma como este robô já falhou duas vezes. Insistir e registrar é mais barato que
+     * desistir e calar.
+     */
+    if (algumFalhou) {
+      log("algum recorte não fechou — o carimbo do ciclo NÃO avança, e o próximo ciclo insiste.");
+      return;
     }
 
     // Gravado no FIM e relido da tela, não copiado do começo: o que interessa é o carimbo do estado
