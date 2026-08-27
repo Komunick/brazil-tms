@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useTranslations } from "next-intl";
-import type { Finding, TripStatus } from "@brazil-tms/shared";
+import { normalizarPlaca, type Finding, type TripStatus } from "@brazil-tms/shared";
 import type { TripAssignmentDto, TripFilterOptions } from "@brazil-tms/db";
+import { PlacasDoMotorista } from "@/components/trips/placas-do-motorista";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -274,6 +275,39 @@ export function AssignmentForm({
             mode="plate"
             onChange={(v) => set("vehicleId", v)}
           />
+          {/*
+            AS PLACAS QUE ESTE MOTORISTA JÁ RODOU (2026-08-27, a pedido).
+
+            Ocupa a largura das duas colunas, logo abaixo de motorista e veículo — a dúvida aparece
+            entre os dois campos, e é ali que a resposta tem de estar.
+
+            ── AQUI O CLIQUE ESCOLHE UM VEÍCULO DO CADASTRO, NÃO UMA PLACA ────────────────────
+
+            Este formulário grava a escala INTERNA e trabalha com `vehicleId`; o diálogo do portal
+            trabalha com placa em texto. O mesmo painel serve os dois porque o rótulo da opção de
+            veículo É a placa — então casar por rótulo devolve o id.
+
+            Placa sugerida que não está no cadastro de frota não vira botão clicável: ela apareceu
+            numa ordem do portal, e o portal aceita placa que nós não temos. Sugerir o que este
+            formulário não consegue selecionar seria oferecer um clique que não faz nada.
+          */}
+          <div className="sm:col-span-2">
+            <PlacasDoMotorista
+              driverId={form.driverId}
+              aoEscolher={(placa) => {
+                const opcao = resourceOptions.vehicles.find(
+                  (v) => normalizarPlaca(v.label) === normalizarPlaca(placa),
+                );
+                if (opcao) set("vehicleId", opcao.id);
+              }}
+              /*
+                Só oferece o que dá para escolher — ver o comentário acima. A lista de placas
+                conhecidas vem do mesmo `resourceOptions` que o campo usa, então as duas nunca
+                divergem.
+              */
+              apenas={resourceOptions.vehicles.map((v) => v.label)}
+            />
+          </div>
           <ResourceSelect
             id={`trailer-${tripId}`}
             label={t("trailer")}

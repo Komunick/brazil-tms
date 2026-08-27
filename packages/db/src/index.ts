@@ -335,3 +335,6 @@ export type {
 
 // A sugestão que preenche o item da passagem de turno a partir da LH (2026-08-27).
 export { sugestaoPelaLH, sugestaoPeloMotorista, dobrarAcento } from "./passagem-de-turno/sugestao";
+
+// As placas que um motorista já rodou — sugestão no diálogo de atribuição (2026-08-27).
+export { placasDoMotorista, type PlacaDoMotorista } from "./trips/placas-do-motorista";
