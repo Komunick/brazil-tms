@@ -5,6 +5,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
 import {
   ASSIGNABLE_ROLES,
+  ROTULO_DO_SETOR,
+  SETORES,
   formatDateTime,
   type CreateUserInput,
   type Role,
@@ -72,7 +74,15 @@ const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive" | "
   disabled: "destructive",
 };
 
-type UpdatePayload = { role?: Role; status?: "active" | "disabled" };
+/** O valor do Select para "sem setor" — o Radix nao aceita item com value vazio. */
+const SEM_SETOR = "__sem_setor__";
+
+type UpdatePayload = {
+  role?: Role;
+  status?: "active" | "disabled";
+  /** `null` TIRA o setor; `undefined` significa "nao mexi neste campo". Os dois sao necessarios. */
+  setor?: Setor | null;
+};
 
 export function UsersClient() {
   const t = useTranslations("AdminUsers");
@@ -276,6 +286,18 @@ export function UsersClient() {
               <TableHead>{t("name")}</TableHead>
               <TableHead>{t("email")}</TableHead>
               <TableHead>{t("role")}</TableHead>
+              {/*
+                O SETOR AO LADO DO PERFIL, e não numa página de detalhe (2026-08-27).
+
+                Ele nasceu em `/admin/users/[id]` — uma tela que EXISTE e para a qual esta lista não
+                tem link nenhum. O campo estava inalcançável desde que subiu: dava para gravá-lo pela
+                rota, e por lugar nenhum da interface.
+
+                Aqui ele fica onde a decisão de fato acontece. Perfil e setor se escolhem no mesmo
+                momento — ao cadastrar alguém — e são as duas únicas coisas desta tela que mudam o
+                que a pessoa pode fazer.
+              */}
+              <TableHead>{t("setor")}</TableHead>
               <TableHead>{t("status")}</TableHead>
               <TableHead>{t("lastLogin")}</TableHead>
               <TableHead>{tCommon("actions")}</TableHead>
@@ -284,11 +306,11 @@ export function UsersClient() {
           <TableBody>
             {usersQuery.isLoading ? (
               <TableRow>
-                <TableCell colSpan={6}>{tCommon("loading")}</TableCell>
+                <TableCell colSpan={7}>{tCommon("loading")}</TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground">
+                <TableCell colSpan={7} className="text-muted-foreground">
                   {t("empty")}
                 </TableCell>
               </TableRow>
@@ -312,6 +334,38 @@ export function UsersClient() {
                         {ASSIGNABLE_ROLES.map((r) => (
                           <SelectItem key={r} value={r}>
                             {tRoles(r)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      /*
+                        `SEM_SETOR` existe porque o Radix não aceita `value=""` num item — e a
+                        ausência de setor precisa ser ESCOLHÍVEL, não só o estado inicial. Sem ela,
+                        tirar o setor de alguém seria impossível pela tela, e o contorno seria
+                        trocá-lo por um qualquer, que é pior: silencioso e fácil de esquecer.
+                      */
+                      value={user.setor ?? SEM_SETOR}
+                      onValueChange={(v) =>
+                        updateMutation.mutate({
+                          id: user.id,
+                          payload: { setor: v === SEM_SETOR ? null : (v as Setor) },
+                        })
+                      }
+                      disabled={pending}
+                    >
+                      <SelectTrigger className="w-44" aria-label={t("changeSetor")}>
+                        <SelectValue>
+                          {user.setor ? ROTULO_DO_SETOR[user.setor] : t("semSetor")}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={SEM_SETOR}>{t("semSetor")}</SelectItem>
+                        {SETORES.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {ROTULO_DO_SETOR[s]}
                           </SelectItem>
                         ))}
                       </SelectContent>
