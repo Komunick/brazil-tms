@@ -44,6 +44,13 @@ export type AuditAction =
   | "trip.portal_accept"
   | "trip.portal_reject"
   | "trip.portal_assign"
+  // 2026-08-28 — o PAR de cada uma: o que o PORTAL respondeu, gravado quando ele responde.
+  // As de cima provam a decisão; estas provam o desfecho, com o `retcode` e a mensagem como
+  // vieram. Sem elas a prova existia só em `portal_commands.response`, invisível sem SQL — e
+  // uma tarde inteira foi gasta em 28/08 achando que aceites não chegavam ao portal.
+  | "trip.portal_accept_result"
+  | "trip.portal_reject_result"
+  | "trip.portal_assign_result"
   // 026 — a ponte rota → modelo de Pré-SM. Confirmar AUTORIZA GASTO: a gerenciadora cobra por
   // solicitação, e uma rota confirmada passa a gerar Pré-SM sozinha. Quem confirmou fica registrado.
   | "pre_sm.modelo.confirmar"
@@ -210,6 +217,9 @@ export const ALL_AUDIT_ACTIONS = [
   "trip.portal_accept",
   "trip.portal_reject",
   "trip.portal_assign",
+  "trip.portal_accept_result",
+  "trip.portal_reject_result",
+  "trip.portal_assign_result",
   "pre_sm.modelo.confirmar",
   "pre_sm.modelo.desconfirmar",
   "pre_sm.enviar",
