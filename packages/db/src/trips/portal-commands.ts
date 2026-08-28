@@ -1,8 +1,10 @@
 import { and, asc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import {
+  confirmarAcaoNoPortal,
   impedimentoDaAcao,
   impedimentoDaAtribuicao,
   impedimentoParaAtribuir,
+  mapPortalApiTrips,
   motivoValido,
   normalizarPlaca,
   placasEsperadas,
@@ -10,6 +12,7 @@ import {
   type ImpedimentoDaAtribuicao,
   type ImpedimentoParaAtribuir,
   type PortalAction,
+  type Veredito,
 } from "@brazil-tms/shared";
 import { db } from "../client";
 import { drivers, portalCommands, trips } from "../../schema";
@@ -413,20 +416,86 @@ export async function encerrarOrdemDoPortal(entrada: {
   ok: boolean;
   response?: unknown;
   error?: string | null;
-}): Promise<boolean> {
+  /** O corpo cru do `/trip/detail`, relido pelo robô logo depois da ação. Ver o bloco abaixo. */
+  confirmacao?: unknown;
+}): Promise<{ encerrada: boolean; confirmada: boolean }> {
   const agora = new Date();
+
+  // Lida ANTES do `update` porque a comparação precisa do que foi ENVIADO — placas, ação e o id do
+  // portal —, e o `update` devolve a linha já encerrada. Ler antes também não muda nada se a ordem
+  // não estiver mais em `sent`: o `where` do update é que decide, e ele continua sendo a trava.
+  const ordemPrevia = (
+    await db
+      .select({
+        action: portalCommands.action,
+        portalTripId: portalCommands.portalTripId,
+        plates: portalCommands.plates,
+      })
+      .from(portalCommands)
+      .where(eq(portalCommands.id, entrada.id))
+      .limit(1)
+  )[0];
+
+  /**
+   * A SEGUNDA PERGUNTA: "e aí, mudou?" (2026-08-28, a pedido).
+   *
+   * `retcode: 0` é o portal dizendo que RECEBEU a chamada. O `done` significava isso e o popup
+   * fechava dizendo "deu certo" — sem ninguém ter conferido se a viagem mudou de estado lá.
+   *
+   * Agora o robô relê a viagem pelo `/trip/detail` logo depois da ação e manda o corpo cru junto.
+   * Aqui ele é traduzido pelo MESMO mapeador da importação (nunca um segundo parser: dois
+   * divergem em silêncio) e comparado com o que saiu daqui.
+   *
+   * `done` passou a significar "o portal atendeu E mostra o estado novo". Não houve estado nem
+   * coluna nova: o popup já esperava `done`, e o que mudou foi a exigência por trás dele.
+   *
+   * ── ROBÔ ANTIGO NÃO VIRA FALHA ────────────────────────────────────────────────────────────
+   *
+   * O userscript se publica à mão e vai ficar atrás do servidor por um tempo. Sem `confirmacao`, a
+   * ordem fecha como antes e a auditoria registra `nao_verificado` — que é diferente de registrar
+   * que foi verificada. Tratar ausência como falha derrubaria a operação inteira no deploy.
+   */
+  const veredito = ((): Veredito | null => {
+    if (!entrada.ok || entrada.confirmacao == null) return null;
+    const acao = ordemPrevia?.action;
+    if (acao !== "accept" && acao !== "reject" && acao !== "assign") return null;
+    const viagens = mapPortalApiTrips(entrada.confirmacao).trips;
+    const alvo = viagens.find((v) => v.portalTripId === ordemPrevia?.portalTripId) ?? viagens[0];
+    if (!alvo) {
+      return { confirmado: false, motivo: "a releitura do portal não trouxe a viagem" };
+    }
+    return confirmarAcaoNoPortal({
+      acao,
+      enviadas: (ordemPrevia?.plates ?? "").split(",").map((p) => p.trim()).filter(Boolean),
+      // `?? null` porque o mapeador omite campo ausente e a regra distingue "veio vazio" de
+      // "não veio" — as duas viram `null` aqui, e a regra trata as duas como não confirmável.
+      portal: {
+        acceptanceStatus: alvo.acceptanceStatus ?? null,
+        status: alvo.status ?? null,
+        plateLabel: alvo.plateLabel ?? null,
+        driverLabel: alvo.driverLabel ?? null,
+      },
+    });
+  })();
+
+  // O portal atendeu, mas a releitura desmentiu: isso é falha, e a mensagem diz por quê.
+  const deuCerto = entrada.ok && veredito?.confirmado !== false;
   const linhas = await db
     .update(portalCommands)
     .set({
-      status: entrada.ok ? "done" : "failed",
+      status: deuCerto ? "done" : "failed",
       response: (entrada.response ?? null) as never,
-      lastError: entrada.ok ? null : (entrada.error?.slice(0, 500) ?? "sem detalhe"),
+      lastError: deuCerto
+        ? null
+        : veredito && !veredito.confirmado
+          ? `o portal respondeu OK mas não confirmou: ${veredito.motivo}`
+          : (entrada.error?.slice(0, 500) ?? "sem detalhe"),
       settledAt: agora,
     })
     .where(and(eq(portalCommands.id, entrada.id), eq(portalCommands.status, "sent")))
     .returning();
   const ordem = linhas[0];
-  if (!ordem) return false;
+  if (!ordem) return { encerrada: false, confirmada: false };
 
   /**
    * A PROVA, gravada fora da transação do clique.
@@ -453,7 +522,25 @@ export async function encerrarOrdemDoPortal(entrada: {
         commandId: ordem.id,
         portalTripId: ordem.portalTripId,
         externalTripId: ordem.externalTripId,
-        desfecho: entrada.ok ? "aceito pelo portal" : "recusado pelo portal",
+        desfecho: deuCerto
+          ? veredito?.confirmado
+            ? "confirmado no portal"
+            : "aceito pelo portal, NÃO VERIFICADO"
+          : veredito && !veredito.confirmado
+            ? "o portal respondeu OK e a releitura desmentiu"
+            : "recusado pelo portal",
+        /**
+         * A CONFERÊNCIA, e o `nao_verificado` é informação, não lacuna.
+         *
+         * Enquanto o userscript não for republicado ele não manda a releitura, e a ordem fecha na
+         * palavra do `retcode` como sempre fez. Registrar isso como "não verificado" é o que
+         * impede alguém, meses depois, de ler uma linha antiga e achar que ela foi conferida.
+         */
+        conferencia: veredito
+          ? veredito.confirmado
+            ? { confirmado: true, detalhe: veredito.detalhe, placasConferidas: veredito.placasConferidas }
+            : { confirmado: false, motivo: veredito.motivo }
+          : { confirmado: null, motivo: "nao_verificado: o robô não enviou releitura" },
         // A palavra do portal, sem tradução nossa.
         respostaDoPortal: (entrada.response ?? null) as never,
         erro: entrada.ok ? null : (entrada.error?.slice(0, 500) ?? "sem detalhe"),
@@ -467,7 +554,7 @@ export async function encerrarOrdemDoPortal(entrada: {
       },
     });
   }
-  return true;
+  return { encerrada: true, confirmada: deuCerto };
 }
 
 /** As ordens desta viagem, da mais nova para a mais velha — é o que a tela mostra ao lado do botão. */

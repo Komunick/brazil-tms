@@ -49,11 +49,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     if ("id" in (json as Record<string, unknown>)) {
       const body = portalCommandResultSchema.parse(json);
       assertToken(request, body.token);
-      const encerrada = await encerrarOrdemDoPortal({
+      const { encerrada, confirmada } = await encerrarOrdemDoPortal({
         id: body.id,
         ok: body.ok,
         response: body.response,
         error: body.error ?? null,
+        // A releitura da viagem, feita pelo robô logo depois da ação. Ver `encerrarOrdemDoPortal`.
+        confirmacao: body.confirmacao,
       });
       /**
        * A PRÉ-SM É PEDIDA AQUI, e só quando `encerrada` é `true` (2026-08-25, fatia 026).
@@ -72,7 +74,17 @@ export async function POST(request: Request): Promise<NextResponse> {
        * `void` e `catch` vazio: a fila não pode derrubar o relato do robô. Se ele receber erro,
        * repete o relato — e aí é a ordem do portal que fica em risco, não a Pré-SM.
        */
-      if (encerrada && body.ok) {
+      /**
+       * `confirmada`, e NÃO `body.ok` (2026-08-28).
+       *
+       * O comentário acima já dizia a intenção — "o único momento em que a atribuição existe dos
+       * DOIS lados" — mas `body.ok` só provava que o portal atendeu a chamada. Agora a releitura
+       * é o que decide, e a frase virou verdade literal.
+       *
+       * O que estava em risco é caro: escolta contratada, cobrada por solicitação, para uma
+       * atribuição que o portal respondeu OK e não efetivou.
+       */
+      if (encerrada && confirmada) {
         void enfileirarPreSmSePrecisar(body.id).catch(() => {});
       }
 

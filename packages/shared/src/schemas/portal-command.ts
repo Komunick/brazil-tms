@@ -81,6 +81,14 @@ export const portalCommandResultSchema = z.object({
   ok: z.boolean(),
   response: z.unknown().optional(),
   error: z.string().trim().max(500).nullish(),
+  /**
+   * A RELEITURA DA VIAGEM, feita pelo robô logo depois da ação (2026-08-28).
+   *
+   * É o corpo cru do `/trip/detail` do portal. Opcional de propósito: o userscript se publica à
+   * mão e vai ficar atrás do servidor por um tempo. Ausente, a ordem fecha como antes e a
+   * auditoria diz que NÃO foi verificada — o que é diferente de dizer que foi.
+   */
+  confirmacao: z.unknown().optional(),
 });
 
 export type PortalCommandResult = z.infer<typeof portalCommandResultSchema>;
