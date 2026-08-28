@@ -284,28 +284,45 @@ export function PortalAssignDialog({
       Só o FECHAR é barrado. Abrir continua livre, e o efeito do desfecho fecha normalmente.
     */
     <Dialog open={open} onOpenChange={(v) => (emVoo && !v ? undefined : onOpenChange(v))}>
-      <DialogContent className="relative max-h-[88vh] overflow-y-auto sm:max-w-3xl">
+      {/*
+        NADA DE `relative` AQUI (2026-08-28, defeito e conserto no mesmo dia).
+
+        Eu tinha posto `relative` para a cobertura de carregamento se ancorar neste elemento. O
+        `DialogContent` do Radix se posiciona com `fixed left-1/2 top-1/2` e dois `translate` — a
+        classe nova venceu a do componente, o diálogo perdeu a centralização e passou a abrir no
+        fluxo da página, descendo para fora da tela. O botão de confirmar ficava inalcançável.
+
+        A cobertura não precisa disso: ela é `fixed inset-0`, cobre a viewport inteira e fica acima
+        de tudo. Ver o comentário dela.
+      */}
+      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-3xl">
         {/**
           A COBERTURA DE CARREGAMENTO (2026-08-28, a pedido).
 
           Era um texto no rodapé, e o pedido foi um popup no meio — para a pessoa não fechar sem
-          querer. Aqui ele é uma camada SOBRE o formulário, e não outro diálogo: um segundo modal em
-          cima do primeiro empilha duas camadas de foco, e o leitor de tela passa a anunciar duas
-          janelas para uma coisa só.
+          querer. É uma camada, e não outro diálogo: um segundo modal em cima do primeiro empilha
+          duas armadilhas de foco, e o leitor de tela passa a anunciar duas janelas para uma coisa só.
 
-          `absolute inset-0` cobre o conteúdo inteiro, então nada embaixo recebe clique — a proteção
-          é física, não só visual. `sticky` no cartão o mantém no meio mesmo com o formulário rolado.
+          ── `fixed`, E NÃO `absolute` ──────────────────────────────────────────────────────────
+
+          A primeira versão era `absolute inset-0`, e para isso eu tinha posto `relative` no
+          `DialogContent` — que se posiciona com `fixed` e dois `translate`. A classe nova venceu, o
+          diálogo perdeu a centralização e abriu no fluxo da página, descendo para fora da tela.
+
+          Sendo `fixed inset-0`, a cobertura toma a viewport inteira sem pedir nada ao elemento pai.
+          Nada embaixo recebe clique — a proteção é física, não só visual — e o `z-[60]` a põe acima
+          do `z-50` do próprio diálogo, que é o teto do Radix aqui.
 
           `aria-live="assertive"` porque isto interrompe o que a pessoa estava fazendo: ela precisa
           ouvir, não descobrir depois.
         */}
         {emVoo ? (
           <div
-            className="absolute inset-0 z-50 flex items-center justify-center rounded-lg bg-background/80 backdrop-blur-[2px]"
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-background/80 backdrop-blur-[2px]"
             role="status"
             aria-live="assertive"
           >
-            <div className="sticky top-1/2 flex flex-col items-center gap-3 rounded-xl border bg-card px-8 py-6 shadow-lg">
+            <div className="flex flex-col items-center gap-3 rounded-xl border bg-card px-8 py-6 shadow-lg">
               <CaminhaoNaEstrada />
               <p className="text-sm font-medium">{t("efetuando")}</p>
               <p className="max-w-[22rem] text-center text-xs text-muted-foreground">
