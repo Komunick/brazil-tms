@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — executor de decisões no portal
 // @namespace    braziltransports.com.br
-// @version      0.4.3
+// @version      0.5.0
 // @description  Executa no portal as decisões tomadas no TMS: aceitar e rejeitar viagem. NÃO decide nada.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -109,6 +109,14 @@
      */
     atribuir: "/api/line_haul/agency/trip/assign",
     atribuirDois: "/api/line_haul/agency/trip/accept/assign_multiple_driver",
+    /**
+     * A CONFERÊNCIA (2026-08-28, a pedido).
+     *
+     * `retcode: 0` é o portal dizendo que RECEBEU a chamada — não que mudou de estado. Este é o
+     * mesmo endpoint que o robô de LEITURA já usa, chamado aqui logo depois da ação para perguntar
+     * "e aí, mudou?". Quem decide se a resposta confirma é o TMS; este robô só relê e entrega.
+     */
+    detalhe: "/api/line_haul/agency/trip/detail",
   };
 
   /** A versão vem do CABEÇALHO, não de uma constante copiada — que envelhece calada. */
@@ -224,6 +232,27 @@
     return { ok: true, error: null, response: payload };
   }
 
+  /**
+   * Relê a viagem no portal e devolve o corpo CRU, sem interpretar nada.
+   *
+   * A regra de "isto confirma a ação?" mora no TMS (`portal-confirmacao.ts`, sob teste). Aqui só se
+   * busca: um robô que decidisse por conta própria seria uma segunda regra de negócio, num arquivo
+   * que se publica à mão e envelhece separado do servidor.
+   */
+  async function conferir(ordem) {
+    const estacao = localStorage.getItem("stationId");
+    if (!estacao) return null;
+    const u = new URL(CONFIG.detalhe, location.origin);
+    u.searchParams.set("trip_id", String(ordem.portalTripId));
+    u.searchParams.set("agency_current_station_id", estacao);
+    const r = await fetch(u.toString(), { credentials: "include" });
+    if (!r.ok) return null;
+    const payload = await r.json().catch(() => null);
+    // `retcode` diferente de zero aqui é falha DA LEITURA, não da ação: devolver o corpo assim
+    // faria o TMS comparar contra lixo e reprovar uma atribuição que deu certo.
+    return payload?.retcode === 0 ? payload : null;
+  }
+
   async function ciclo() {
     /**
      * O TEXTO DE EXEMPLO ESCRITO PARTIDO — e é de propósito (2026-08-22).
@@ -274,6 +303,22 @@
         // nunca volta é a única coisa que este desenho não pode produzir — ela ficaria em `sent`
         // para sempre, e a tela diria "enviando" até alguém desconfiar.
         resultado = { ok: false, error: String(e?.message ?? e).slice(0, 200), response: null };
+      }
+      /**
+       * A RELEITURA, só quando o portal disse que deu certo (2026-08-28, a pedido).
+       *
+       * Quando ele RECUSOU não há o que conferir: o estado não mudou, e é isso que a recusa já diz.
+       *
+       * `catch` que devolve `null`, e não erro: falhar a conferência não pode transformar uma ação
+       * BEM-SUCEDIDA em falha relatada — o portal já executou. Sem `confirmacao`, o TMS fecha a
+       * ordem como sempre fez e registra na auditoria que não foi verificada, que é honesto.
+       *
+       * E ela vai no MESMO relato, não numa segunda ida: dois POSTs abririam uma janela em que a
+       * ordem está encerrada e a conferência ainda não chegou — e é justamente nessa janela que o
+       * popup fecharia dizendo "deu certo" sem saber.
+       */
+      if (resultado.ok) {
+        resultado.confirmacao = await conferir(ordem).catch(() => null);
       }
       try {
         await aoTms({ id: ordem.id, ...resultado });

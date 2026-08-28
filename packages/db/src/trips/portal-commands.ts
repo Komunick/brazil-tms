@@ -1,8 +1,10 @@
 import { and, asc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import {
+  confirmarAcaoNoPortal,
   impedimentoDaAcao,
   impedimentoDaAtribuicao,
   impedimentoParaAtribuir,
+  mapPortalApiTrips,
   motivoValido,
   normalizarPlaca,
   placasEsperadas,
@@ -10,6 +12,7 @@ import {
   type ImpedimentoDaAtribuicao,
   type ImpedimentoParaAtribuir,
   type PortalAction,
+  type Veredito,
 } from "@brazil-tms/shared";
 import { db } from "../client";
 import { drivers, portalCommands, trips } from "../../schema";
@@ -79,6 +82,31 @@ const ACAO_AUDITADA = {
   accept: "trip.portal_accept",
   reject: "trip.portal_reject",
   assign: "trip.portal_assign",
+} as const;
+
+/**
+ * O SEGUNDO REGISTRO: o que o PORTAL respondeu (2026-08-28, a pedido).
+ *
+ * O de cima grava a DECISÃO — quem apertou, quando, com que placas. Ele é escrito na mesma
+ * transação do clique, antes de o robô sair, e por construção não sabe nada sobre o desfecho.
+ *
+ * Isto aqui é o par dele. Nasce quando o portal responde, e carrega a palavra DELE: o `retcode`
+ * como veio, a mensagem como veio, quanto tempo levou e qual tentativa foi.
+ *
+ * ── POR QUE DOIS REGISTROS, E NÃO UM ATUALIZADO ────────────────────────────────────────────────
+ *
+ * Porque são fatos de momentos e autores diferentes, e a auditoria existe para preservar ordem.
+ * Reescrever a linha da decisão com o desfecho apagaria a hora em que a pessoa decidiu — que é
+ * justamente o que se quer provar quando alguém pergunta "quem mandou isso, e o portal aceitou?".
+ *
+ * Em 28/08 a operação passou uma tarde achando que aceites não chegavam ao portal. A resposta
+ * estava em `portal_commands.response` o tempo inteiro, e só apareceu porque alguém foi ao banco
+ * com SQL. É esse caminho que este registro encurta.
+ */
+const ACAO_DO_DESFECHO = {
+  accept: "trip.portal_accept_result",
+  reject: "trip.portal_reject_result",
+  assign: "trip.portal_assign_result",
 } as const;
 
 /**
@@ -388,18 +416,152 @@ export async function encerrarOrdemDoPortal(entrada: {
   ok: boolean;
   response?: unknown;
   error?: string | null;
-}): Promise<boolean> {
+  /** O corpo cru do `/trip/detail`, relido pelo robô logo depois da ação. Ver o bloco abaixo. */
+  confirmacao?: unknown;
+}): Promise<{ encerrada: boolean; confirmada: boolean }> {
+  const agora = new Date();
+
+  // Lida ANTES do `update` porque a comparação precisa do que foi ENVIADO — placas, ação e o id do
+  // portal —, e o `update` devolve a linha já encerrada. Ler antes também não muda nada se a ordem
+  // não estiver mais em `sent`: o `where` do update é que decide, e ele continua sendo a trava.
+  const ordemPrevia = (
+    await db
+      .select({
+        action: portalCommands.action,
+        portalTripId: portalCommands.portalTripId,
+        plates: portalCommands.plates,
+      })
+      .from(portalCommands)
+      .where(eq(portalCommands.id, entrada.id))
+      .limit(1)
+  )[0];
+
+  /**
+   * A SEGUNDA PERGUNTA: "e aí, mudou?" (2026-08-28, a pedido).
+   *
+   * `retcode: 0` é o portal dizendo que RECEBEU a chamada. O `done` significava isso e o popup
+   * fechava dizendo "deu certo" — sem ninguém ter conferido se a viagem mudou de estado lá.
+   *
+   * Agora o robô relê a viagem pelo `/trip/detail` logo depois da ação e manda o corpo cru junto.
+   * Aqui ele é traduzido pelo MESMO mapeador da importação (nunca um segundo parser: dois
+   * divergem em silêncio) e comparado com o que saiu daqui.
+   *
+   * `done` passou a significar "o portal atendeu E mostra o estado novo". Não houve estado nem
+   * coluna nova: o popup já esperava `done`, e o que mudou foi a exigência por trás dele.
+   *
+   * ── ROBÔ ANTIGO NÃO VIRA FALHA ────────────────────────────────────────────────────────────
+   *
+   * O userscript se publica à mão e vai ficar atrás do servidor por um tempo. Sem `confirmacao`, a
+   * ordem fecha como antes e a auditoria registra `nao_verificado` — que é diferente de registrar
+   * que foi verificada. Tratar ausência como falha derrubaria a operação inteira no deploy.
+   */
+  const veredito = ((): Veredito | null => {
+    if (!entrada.ok || entrada.confirmacao == null) return null;
+    const acao = ordemPrevia?.action;
+    if (acao !== "accept" && acao !== "reject" && acao !== "assign") return null;
+    const viagens = mapPortalApiTrips(entrada.confirmacao).trips;
+    const alvo = viagens.find((v) => v.portalTripId === ordemPrevia?.portalTripId) ?? viagens[0];
+    if (!alvo) {
+      return { confirmado: false, motivo: "a releitura do portal não trouxe a viagem" };
+    }
+    return confirmarAcaoNoPortal({
+      acao,
+      enviadas: (ordemPrevia?.plates ?? "").split(",").map((p) => p.trim()).filter(Boolean),
+      // `?? null` porque o mapeador omite campo ausente e a regra distingue "veio vazio" de
+      // "não veio" — as duas viram `null` aqui, e a regra trata as duas como não confirmável.
+      portal: {
+        acceptanceStatus: alvo.acceptanceStatus ?? null,
+        status: alvo.status ?? null,
+        plateLabel: alvo.plateLabel ?? null,
+        driverLabel: alvo.driverLabel ?? null,
+      },
+    });
+  })();
+
+  // O portal atendeu, mas a releitura desmentiu: isso é falha, e a mensagem diz por quê.
+  const deuCerto = entrada.ok && veredito?.confirmado !== false;
   const linhas = await db
     .update(portalCommands)
     .set({
-      status: entrada.ok ? "done" : "failed",
+      status: deuCerto ? "done" : "failed",
       response: (entrada.response ?? null) as never,
-      lastError: entrada.ok ? null : (entrada.error?.slice(0, 500) ?? "sem detalhe"),
-      settledAt: new Date(),
+      lastError: deuCerto
+        ? null
+        : veredito && !veredito.confirmado
+          ? `o portal respondeu OK mas não confirmou: ${veredito.motivo}`
+          : (entrada.error?.slice(0, 500) ?? "sem detalhe"),
+      settledAt: agora,
     })
     .where(and(eq(portalCommands.id, entrada.id), eq(portalCommands.status, "sent")))
-    .returning({ id: portalCommands.id });
-  return linhas.length > 0;
+    .returning();
+  const ordem = linhas[0];
+  if (!ordem) return { encerrada: false, confirmada: false };
+
+  /**
+   * A PROVA, gravada fora da transação do clique.
+   *
+   * Não vai junto do `update` numa transação porque um erro ao escrever a auditoria não pode
+   * desfazer o encerramento: a ordem JÁ foi executada no portal, e voltar atrás no nosso lado
+   * criaria uma ordem eternamente `sent` que o robô tentaria de novo — mandando a mesma ação duas
+   * vezes ao fornecedor. Perder uma linha de auditoria é ruim; atribuir em dobro é pior.
+   *
+   * `respostaDoPortal` guarda o corpo COMO VEIO. Sem normalizar, sem extrair só o `retcode`: o
+   * dia em que o portal mudar o formato, quem ler esta linha precisa ver o que chegou de fato, não
+   * a nossa leitura de então.
+   */
+  const acao = ACAO_DO_DESFECHO[ordem.action as keyof typeof ACAO_DO_DESFECHO];
+  if (acao) {
+    const partiu = ordem.claimedAt ?? ordem.requestedAt;
+    await writeAudit(db, {
+      actorUserId: ordem.requestedBy,
+      action: acao,
+      entityType: "trip",
+      entityId: ordem.tripId,
+      previousValue: null,
+      newValue: {
+        commandId: ordem.id,
+        portalTripId: ordem.portalTripId,
+        externalTripId: ordem.externalTripId,
+        desfecho: !deuCerto
+          ? veredito?.confirmado === false
+            ? "o portal respondeu OK e a releitura desmentiu"
+            : "recusado pelo portal"
+          : veredito?.confirmado === true
+            ? "confirmado no portal"
+            : veredito?.confirmado === null
+              ? "aceito pelo portal, sem confirmação possível"
+              : "aceito pelo portal, NÃO VERIFICADO",
+        /**
+         * A CONFERÊNCIA, e o `nao_verificado` é informação, não lacuna.
+         *
+         * Enquanto o userscript não for republicado ele não manda a releitura, e a ordem fecha na
+         * palavra do `retcode` como sempre fez. Registrar isso como "não verificado" é o que
+         * impede alguém, meses depois, de ler uma linha antiga e achar que ela foi conferida.
+         */
+        conferencia:
+          veredito == null
+            ? { confirmado: null, motivo: "nao_verificado: o robô não enviou releitura" }
+            : veredito.confirmado === true
+              ? {
+                  confirmado: true,
+                  detalhe: veredito.detalhe,
+                  placasConferidas: veredito.placasConferidas,
+                }
+              : { confirmado: veredito.confirmado, motivo: veredito.motivo },
+        // A palavra do portal, sem tradução nossa.
+        respostaDoPortal: (entrada.response ?? null) as never,
+        erro: entrada.ok ? null : (entrada.error?.slice(0, 500) ?? "sem detalhe"),
+        tentativa: ordem.attempts,
+        // Separa "demorou" de "não foi" — foi a pergunta da operação em 28/08.
+        segundos: partiu ? Math.round((agora.getTime() - partiu.getTime()) / 100) / 10 : null,
+        // O que SAIU daqui, para comparar com o que o portal devolveu.
+        placasEnviadas: ordem.plates,
+        driverId: ordem.driverId,
+        secondDriverId: ordem.secondDriverId,
+      },
+    });
+  }
+  return { encerrada: true, confirmada: deuCerto };
 }
 
 /** As ordens desta viagem, da mais nova para a mais velha — é o que a tela mostra ao lado do botão. */
