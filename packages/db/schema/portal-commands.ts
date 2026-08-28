@@ -100,6 +100,19 @@ export const portalCommands = pgTable(
     driverId: integer("driver_id"),
     secondDriverId: integer("second_driver_id"),
     plates: text("plates"),
+    /**
+     * A PLACA QUE FICA SÓ NO TMS (2026-08-28, a pedido).
+     *
+     * O portal recusa quando o número de placas não bate com o tipo que a LH pede — `retcode
+     * 131213004`. Mas a operação PRECISA registrar a carreta que seguiu junto de um truck.
+     *
+     * A regra: a primeira placa vai ao portal; o que passar do que ele comporta fica aqui, como
+     * controle interno. Assim `plates` continua sendo exatamente o que foi ENVIADO — que é a
+     * definição dela desde que nasceu e o que o robô lê — e nenhuma das duas colunas mente.
+     *
+     * Nula na imensa maioria das linhas: só a LH que levou placa a mais tem valor aqui.
+     */
+    platesInternas: text("plates_internas"),
 
     status: portalCommandStatus("status").notNull().default("pending"),
     /**

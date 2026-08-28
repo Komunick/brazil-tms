@@ -58,15 +58,30 @@ export interface PlacaDoMotorista {
    * Uma viagem carrega cavalo e carreta na mesma lista, separados por vírgula, e sem o tipo a
    * sugestão é uma pilha de códigos onde quem escala precisa reconhecer de cabeça qual é qual.
    *
+   * ── O QUE ESTE CAMPO JÁ ERROU, para ninguém repetir ────────────────────────────────────
+   *
+   * A primeira versão (28/08, manhã) lia `vehicles.vehicle_type` primeiro e escrevia o valor como
+   * veio. Resultado: a placa do CAVALO aparecia como "carreta", que é o oposto do que ela é.
+   *
+   * A causa é o significado do campo. `vehicle_type` descreve a COMBINAÇÃO que o veículo forma, e
+   * não a peça: um veículo tipo "carreta" é o cavalo que puxa uma carreta. O próprio enum já
+   * denunciava isso — ele tem `carreta` E `cavalo`, com o comentário "o cadastro precisa da unidade
+   * tratora como tipo próprio" —, mas NENHUM veículo está cadastrado como `cavalo`: os 1.053 estão
+   * como `carreta`.
+   *
+   * Medido nas ordens de duas placas enviadas ao portal: das 103 primeiras posições — o slot do
+   * cavalo — 96 são veículos tipo "carreta", e 102 estão em `vehicles`. Das 103 segundas posições,
+   * 81 estão em `trailers`. A estrutura é clara: `vehicles` guarda quem PUXA, `trailers` guarda o
+   * que é PUXADO.
+   *
    * ── DE ONDE SAI, E POR QUE NESSA ORDEM ────────────────────────────────────────────────────
    *
-   * O cadastro tem DUAS fontes, e elas se sobrepõem pouco: `vehicles` (1.284 placas, com o campo
-   * `vehicle_type` preenchido) e `trailers` (1.020 placas, todas carreta por definição). Só 31
-   * placas estão nas duas — e em UMA delas os dois discordam: `trailers` diz carreta, o
-   * `vehicle_type` diz truck.
+   * `trailers` vem PRIMEIRO: estar lá responde "esta placa é um reboque", que é exatamente a
+   * pergunta. Depois vem `vehicles`, com os tipos de conjunto (carreta, bitrem, rodotrem…)
+   * traduzidos para `cavalo` — porque é isso que a placa é.
    *
-   * Nesse empate ganha o `vehicle_type`, porque ali o tipo é um campo declarado, e em `trailers` é
-   * inferido de a placa estar na tabela. Campo explícito vale mais que pertencimento.
+   * Nas 31 placas que estão nas duas tabelas, o portal as usou 5 vezes na segunda posição contra 2
+   * na primeira: o desempate por `trailers` acerta mais.
    *
    * NULO QUANDO NÃO SE SABE, e isso é comum: das 1.029 placas que aparecem em viagens, 170 (17%)
    * não estão em nenhuma das duas tabelas. A tela não mostra rótulo nenhum nessas — chutar
@@ -215,19 +230,32 @@ export async function placasDoMotorista(
          limit 1
       )                                 as ultima_rota,
       /*
-       * O TIPO DA PLACA: cavalo, carreta, toco. Ver o comentario do campo tipo no tipo publico.
+       * O PAPEL DA PLACA: cavalo, carreta, truck, toco. Ver o comentario do campo tipo, no tipo
+       * publico, para o erro que esta ordem conserta.
        *
-       * O vehicle_type vem PRIMEIRO no coalesce porque e campo declarado; estar na tabela de
-       * carretas e inferencia. Nas 31 placas que estao nas duas, uma discorda — e ali o campo ganha.
+       * TRAILERS VEM PRIMEIRO. Estar na tabela de carretas responde "esta placa E um reboque", que
+       * e a pergunta. O vehicle_type responde outra coisa — ver abaixo. Nas 31 placas que estao nas
+       * duas tabelas, o portal as usou 5 vezes na segunda posicao (reboque) contra 2 na primeira,
+       * entao o desempate pelo trailers e o que acerta mais.
+       *
+       * E OS TIPOS DE CONJUNTO VIRAM "cavalo". No cadastro, vehicle_type descreve a COMBINACAO que
+       * aquele veiculo forma, nao a peca: um veiculo tipo "carreta" e o CAVALO que puxa uma carreta.
+       * Medido nas ordens de duas placas: 96 das 103 primeiras posicoes — o slot do cavalo — sao
+       * veiculos tipo "carreta". Escrever "carreta" ali era chamar o cavalo de reboque.
        *
        * O hifen sai dos DOIS lados: a mesma placa aparece como ABC-1D23 no cadastro e ABC1D23 na
        * viagem, e comparar cru perderia o casamento sem erro nenhum aparecer.
        */
       coalesce(
-        (select v.vehicle_type::text from vehicles v
-          where upper(replace(v.plate, '-', '')) = a.placa limit 1),
         (select 'carreta' from trailers c
-          where upper(replace(c.plate, '-', '')) = a.placa limit 1)
+          where upper(replace(c.plate, '-', '')) = a.placa limit 1),
+        (select case
+                  when v.vehicle_type in ('carreta', 'carreta_ls', 'bitrem', 'rodotrem', 'cavalo')
+                    then 'cavalo'
+                  else v.vehicle_type::text
+                end
+           from vehicles v
+          where upper(replace(v.plate, '-', '')) = a.placa limit 1)
       )                                 as tipo
       from abertas a
      group by a.placa

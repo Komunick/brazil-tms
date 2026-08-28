@@ -26,10 +26,20 @@ export type VinculoEscolhido = "owned" | "agregado" | "terceiro";
  * transformaria a tela num campo de alarmes no primeiro dia, e a pessoa aprenderia a ignorá-los.
  * A consequência de deixar vazio é dita em texto, uma vez, embaixo: a viagem não gera Pré-SM.
  *
- * ── E QUEM JÁ FOI CLASSIFICADO NÃO É PERGUNTADO ───────────────────────────────────────────────
+ * ── QUEM JÁ FOI CLASSIFICADO CONTINUA EDITÁVEL (mudou em 2026-08-28, a pedido) ────────────────
  *
- * Com valor definido, o componente mostra o que está gravado e fica quieto (FR-010). Trocar é
- * operação de cadastro, na tela do recurso, onde há histórico — não efeito colateral de escalar.
+ * Aqui o componente virava TEXTO quando o recurso já tinha classificação: mostrava o valor e
+ * sumia com os botões. O argumento era que trocar é operação de cadastro, na tela do recurso,
+ * onde há histórico — e não efeito colateral de escalar.
+ *
+ * O argumento tinha um custo que só apareceu no uso: uma classificação errada não podia ser
+ * corrigida de onde ela é notada. Quem estava atribuindo via "agregado" onde devia ser frota,
+ * não conseguia mexer, e a atribuição seguia com o dado errado — nas palavras do usuário, "fica
+ * travado".
+ *
+ * Agora os três botões aparecem sempre, com o valor atual marcado. O que veio do cadastro é dito
+ * em texto ao lado, para a pessoa saber que está mudando algo que já existia — e não achar que
+ * está preenchendo um campo vazio.
  */
 export function VinculoDoRecurso({
   valor,
@@ -45,14 +55,6 @@ export function VinculoDoRecurso({
   rotulo: string;
 }) {
   const t = useTranslations("Trips.vinculo");
-
-  if (jaClassificado && valor) {
-    return (
-      <p className="text-xs text-muted-foreground">
-        {rotulo}: <span className="font-medium text-foreground">{t(valor)}</span>
-      </p>
-    );
-  }
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -73,6 +75,16 @@ export function VinculoDoRecurso({
           {t(v)}
         </button>
       ))}
+      {/*
+        DIZ QUE O VALOR VEIO DO CADASTRO, e não desta tela.
+
+        Sem isso, o botão marcado parece uma escolha que a pessoa acabou de fazer, e trocar viraria
+        um clique sem peso. Com a palavra ali, ela sabe que está corrigindo um registro que já
+        existe — que é justamente a operação que estava faltando.
+      */}
+      {jaClassificado && valor ? (
+        <span className="text-[0.65rem] text-muted-foreground">{t("doCadastro")}</span>
+      ) : null}
     </div>
   );
 }
