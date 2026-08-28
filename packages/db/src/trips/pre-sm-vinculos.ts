@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "../client";
 import { drivers, trailers, vehicles } from "../../schema";
 
@@ -13,12 +13,18 @@ import { drivers, trailers, vehicles } from "../../schema";
  * A classificação acontece pelo uso: quem atribui responde uma vez por recurso, e da próxima ele
  * já vem preenchido. Foi decisão explícita não fazer mutirão de cadastro.
  *
- * ── SÓ PREENCHE O QUE ESTÁ VAZIO ──────────────────────────────────────────────────────────────
+ * ── GRAVA TAMBÉM POR CIMA DO QUE JÁ ESTAVA CLASSIFICADO (mudou em 2026-08-28, a pedido) ───────
  *
- * O `where` exige `subcontracted`. Não é otimização: é para uma atribuição não SOBRESCREVER em
- * silêncio uma classificação que alguém já conferiu. Trocar o vínculo de um veículo já classificado
- * é operação de cadastro, feita na tela do veículo, com o histórico que ela tem — não efeito
- * colateral de escalar uma viagem.
+ * O `where` exigia `subcontracted`: só preenchia o que estava vazio, para uma atribuição não
+ * sobrescrever em silêncio uma classificação que alguém já conferiu. Trocar era operação de
+ * cadastro, na tela do recurso, com o histórico que ela tem.
+ *
+ * O custo apareceu no uso: uma classificação errada não podia ser corrigida de onde ela é
+ * notada — na atribuição. E a tela escondia os botões de quem já tinha valor, então não havia
+ * caminho nenhum a não ser abrir o cadastro. "Fica travado", nas palavras de quem opera.
+ *
+ * Agora a escolha da tela vale. O que se perde é a exclusividade da tela do recurso, e é um custo
+ * aceito: manter algo que não pode ser corrigido de onde dói é pior.
  *
  * ── E NUNCA DERRUBA A ATRIBUIÇÃO ──────────────────────────────────────────────────────────────
  *
@@ -78,17 +84,32 @@ async function gravarPlaca(placa: string, vinculo: VinculoEscolhido): Promise<nu
   if (!alvo) return 0;
 
   try {
+    /*
+     * GRAVA MESMO SOBRE CLASSIFICAÇÃO EXISTENTE (mudou em 2026-08-28, a pedido).
+     *
+     * Havia aqui um `eq(ownershipType, "subcontracted")`: só preenchia quem estava sem
+     * classificação, nunca corrigia. Combinado com a tela — que escondia os botões de quem já
+     * tinha valor —, uma classificação errada não podia ser consertada de lugar nenhum a não ser
+     * do cadastro, e quem percebia o erro estava na atribuição.
+     *
+     * A tela agora deixa escolher sempre, e sem esta mudança a escolha seria ignorada em silêncio:
+     * a pessoa clicaria "frota", salvaria, e o cadastro continuaria "agregado" — o pior desfecho,
+     * porque ela acreditaria ter corrigido.
+     *
+     * O que se perde: a troca deixa de ser exclusiva da tela do recurso. É um custo real e
+     * aceito — a alternativa era manter algo que não podia ser corrigido de onde dói.
+     */
     const v = await db
       .update(vehicles)
       .set({ ownershipType: vinculo, updatedAt: new Date() })
-      .where(and(eq(vehicles.plate, alvo), eq(vehicles.ownershipType, "subcontracted")))
+      .where(eq(vehicles.plate, alvo))
       .returning({ id: vehicles.id });
     if (v.length > 0) return v.length;
 
     const c = await db
       .update(trailers)
       .set({ ownershipType: vinculo, updatedAt: new Date() })
-      .where(and(eq(trailers.plate, alvo), eq(trailers.ownershipType, "subcontracted")))
+      .where(eq(trailers.plate, alvo))
       .returning({ id: trailers.id });
     return c.length;
   } catch {
@@ -103,12 +124,8 @@ async function gravarMotorista(portalDriverId: number, vinculo: VinculoEscolhido
     const r = await db
       .update(drivers)
       .set({ ownershipType: vinculo, updatedAt: new Date() })
-      .where(
-        and(
-          eq(drivers.portalDriverId, String(portalDriverId)),
-          eq(drivers.ownershipType, "subcontracted"),
-        ),
-      )
+      // Sem a exigência de `subcontracted`, pelo mesmo motivo do veículo — ver `gravarPlaca`.
+      .where(eq(drivers.portalDriverId, String(portalDriverId)))
       .returning({ id: drivers.id });
     return r.length;
   } catch {

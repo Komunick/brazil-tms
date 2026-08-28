@@ -1,10 +1,11 @@
-import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import {
   impedimentoDaAcao,
   impedimentoDaAtribuicao,
   impedimentoParaAtribuir,
   motivoValido,
   normalizarPlaca,
+  placasEsperadas,
   type ImpedimentoDaAcao,
   type ImpedimentoDaAtribuicao,
   type ImpedimentoParaAtribuir,
@@ -34,6 +35,13 @@ export interface OrdemDoPortal {
   driverId: number | null;
   secondDriverId: number | null;
   plates: string[];
+  /**
+   * As placas que NÃO foram ao portal e ficaram como controle interno (2026-08-28).
+   *
+   * Vazio na imensa maioria das ordens. Só tem valor quando alguém acrescentou uma placa a mais
+   * do que o tipo da LH comporta — a carreta que segue junto de um truck, tipicamente.
+   */
+  platesInternas: string[];
   status: "pending" | "sent" | "done" | "failed";
   attempts: number;
   lastError: string | null;
@@ -118,6 +126,8 @@ export async function enfileirarOrdemDoPortal(entrada: {
         id: trips.id,
         externalTripId: trips.externalTripId,
         customerFields: trips.customerFields,
+        // Decide QUANTAS placas o portal aceita nesta viagem. Ver a separação mais abaixo.
+        plannedVehicleType: trips.plannedVehicleType,
       })
       .from(trips)
       .where(eq(trips.id, entrada.tripId))
@@ -164,6 +174,26 @@ export async function enfileirarOrdemDoPortal(entrada: {
       }
     }
 
+    /**
+     * A PRIMEIRA PLACA VAI AO PORTAL; O QUE SOBRAR FICA NO TMS (2026-08-28, a pedido).
+     *
+     * O portal conta as placas contra o tipo da LH e recusa quando não fecha — medido: truck com
+     * duas placas falhou 6 vezes em 30 dias, carreta com uma falhou 1, e as combinações certas
+     * (carreta+2, truck+1, toco+1, 3/4+1) concluíram 141. Sete das nove falhas do período são isso.
+     *
+     * A resposta NÃO é bloquear: a operação precisa registrar a carreta que seguiu junto de um
+     * truck. Foi a primeira correção que tentei e ela estava errada — teria tirado uma coisa
+     * legítima para evitar um erro do fornecedor.
+     *
+     * `placasEsperadas` devolve 1 quando o tipo é nulo, e aqui isso seria destrutivo: mandaria só
+     * uma placa numa carreta cuja viagem veio sem o campo, e o portal recusaria pelo motivo oposto.
+     * Por isso, SEM TIPO CONHECIDO, nada é separado — vai tudo, como ia antes.
+     */
+    const todas = (entrada.plates ?? []).map(normalizarPlaca).filter(Boolean);
+    const cabem = v.plannedVehicleType ? placasEsperadas(v.plannedVehicleType) : todas.length;
+    const paraOPortal = todas.slice(0, cabem);
+    const internas = todas.slice(cabem);
+
     const campos = (v.customerFields ?? {}) as Record<string, string>;
     const abertas = await tx
       .select({ id: portalCommands.id })
@@ -203,10 +233,8 @@ export async function enfileirarOrdemDoPortal(entrada: {
         remark: entrada.action === "reject" ? entrada.remark?.trim() || null : null,
         driverId: entrada.action === "assign" ? (entrada.driverId ?? null) : null,
         secondDriverId: entrada.action === "assign" ? (entrada.secondDriverId ?? null) : null,
-        plates:
-          entrada.action === "assign"
-            ? (entrada.plates ?? []).map(normalizarPlaca).filter(Boolean).join(",")
-            : null,
+        plates: entrada.action === "assign" ? paraOPortal.join(",") || null : null,
+        platesInternas: entrada.action === "assign" ? internas.join(",") || null : null,
         requestedBy: entrada.requestedBy,
       })
       .returning();
@@ -233,6 +261,8 @@ export async function enfileirarOrdemDoPortal(entrada: {
         driverId: linha[0]!.driverId,
         secondDriverId: linha[0]!.secondDriverId,
         plates: linha[0]!.plates,
+        // A auditoria registra as DUAS: o que foi ao portal e o que ficou por controle interno.
+        platesInternas: linha[0]!.platesInternas,
       },
     });
     return paraOrdem(linha[0]!);
@@ -250,7 +280,71 @@ export async function enfileirarOrdemDoPortal(entrada: {
  * `limite` pequeno de propósito: a fila é de decisão humana, não de volume. Mandar dez POSTs de uma
  * vez ao portal por causa de dez cliques é o tipo de rajada que faz um fornecedor desconfiar.
  */
+/**
+ * QUANTO TEMPO UMA ORDEM VALE (2026-08-28, a pedido).
+ *
+ * ── O QUE ACONTECIA SEM ISTO ──────────────────────────────────────────────────────────────────
+ *
+ * A ordem ficava `pending` para sempre. O sistema caiu durante uma atualização, alguém atribuiu, a
+ * ordem não saiu — e quando o robô voltou, ela saiu SOZINHA, minutos depois, sem ninguém esperando
+ * por aquilo. Foi o próprio usuário quem descreveu: "a atribuição não foi, mas quando o sistema
+ * voltou foi automático, ficou na fila; eu queria que desse erro e a pessoa fizesse de novo".
+ *
+ * Uma atribuição não é uma tarefa de fundo que pode acontecer a qualquer hora: ela é a decisão de
+ * alguém que está OLHANDO a tela. Executada dez minutos depois, ela chega num mundo diferente —
+ * outra pessoa já pode ter escalado, a viagem pode ter mudado — e ninguém liga o efeito à causa.
+ *
+ * ── POR QUE PRAZO, E NÃO OUTRA FILA ───────────────────────────────────────────────────────────
+ *
+ * A pergunta que veio junto foi se um broker (RabbitMQ) resolveria. Não resolveria, e por um
+ * motivo que não é de tecnologia: broker também é FILA. A mensagem esperaria lá do mesmo jeito e
+ * sairia atrasada igual. O que faltava nunca foi onde a ordem espera — era ela ter VALIDADE.
+ *
+ * (Broker externo, aliás, é excluído pela constituição do projeto: a fila é Postgres, um worker.)
+ *
+ * ── TRÊS MINUTOS ──────────────────────────────────────────────────────────────────────────────
+ *
+ * O caminho normal leva segundos: o robô pergunta de poucos em poucos segundos e o portal responde
+ * na hora. Três minutos é folga generosa para uma lentidão de rede e curto o bastante para que a
+ * pessoa ainda esteja na tela quando o erro aparecer — que é o ponto.
+ */
+const VALIDADE_DA_ORDEM_MIN = 3;
+
+/**
+ * Fecha como falha as ordens que passaram do prazo sem serem executadas.
+ *
+ * Roda nos DOIS caminhos — quando o robô pede trabalho e quando a tela pergunta o estado. O
+ * segundo é o que importa para quem está esperando: sem ele, a ordem expirada continuaria
+ * aparecendo como "em voo" numa tela que ninguém mais vai atender.
+ *
+ * `pending` apenas. Ordem já `sent` está com o robô, e matá-la criaria o pior dos dois mundos: a
+ * tela diria que falhou enquanto o portal recebe.
+ */
+export async function expirarOrdensVencidas(): Promise<number> {
+  const r = await db
+    .update(portalCommands)
+    .set({
+      status: "failed",
+      lastError: "expirou: a ordem não foi executada a tempo e não será enviada ao portal",
+      settledAt: new Date(),
+    })
+    .where(
+      and(
+        eq(portalCommands.status, "pending"),
+        lt(
+          portalCommands.requestedAt,
+          new Date(Date.now() - VALIDADE_DA_ORDEM_MIN * 60_000),
+        ),
+      ),
+    )
+    .returning({ id: portalCommands.id });
+  return r.length;
+}
+
 export async function pegarOrdensPendentes(limite = 5): Promise<OrdemDoPortal[]> {
+  // Antes de entregar trabalho, descarta o que venceu — senão o robô que volta de uma queda
+  // executaria ordens que ninguém mais espera. Ver `VALIDADE_DA_ORDEM_MIN`.
+  await expirarOrdensVencidas();
   return db.transaction(async (tx) => {
     const candidatas = await tx
       .select({ id: portalCommands.id })
@@ -310,6 +404,17 @@ export async function encerrarOrdemDoPortal(entrada: {
 
 /** As ordens desta viagem, da mais nova para a mais velha — é o que a tela mostra ao lado do botão. */
 export async function ordensDaViagem(tripId: string, limite = 5): Promise<OrdemDoPortal[]> {
+  /*
+   * EXPIRA ANTES DE LER, e é aqui que isso mais importa.
+   *
+   * Esta é a leitura que a TELA faz enquanto alguém espera. Sem a expiração acontecendo neste
+   * caminho, uma ordem vencida continuaria aparecendo como "em voo" para quem está olhando — e a
+   * pessoa esperaria por algo que nunca vai ser executado.
+   *
+   * O outro caminho (o robô pedindo trabalho) também expira, mas ele pode não voltar tão cedo: é
+   * justamente o caso da queda. Depender só dele deixaria a tela mentindo enquanto isso.
+   */
+  await expirarOrdensVencidas();
   const linhas = await db
     .select()
     .from(portalCommands)
@@ -343,6 +448,7 @@ function paraOrdem(r: typeof portalCommands.$inferSelect): OrdemDoPortal {
     driverId: r.driverId,
     secondDriverId: r.secondDriverId,
     plates: (r.plates ?? "").split(",").filter(Boolean),
+    platesInternas: (r.platesInternas ?? "").split(",").filter(Boolean),
     status: r.status,
     attempts: r.attempts,
     lastError: r.lastError,
