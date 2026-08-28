@@ -72,15 +72,20 @@ export interface DadosDaFrente {
    * atribuída e atrasada são os três estados da atribuição, e atrasada é literalmente "pend
    * atribuição cujo prazo venceu".
    *
-   * ── MAS A JANELA É OUTRA, e a tela precisa dizer isso ─────────────────────────────────────
+   * ── A JANELA É OUTRA, E AS TRÊS FICAM COLADAS MESMO ASSIM ─────────────────────────────────
    *
    * PEND e ATRIBUÍDA contam D1+D2 — amanhã e depois. Esta não tem recorte de data: conta hoje e
    * todos os dias anteriores, de propósito, porque a viagem de ontem que ninguém atribuiu é a que
    * mais precisa aparecer.
    *
-   * Coladas sem aviso, alguém lê "65 · 46 · 7" e entende que as 7 são parte das 65. Não são. Por
-   * isso a coluna entra com um FILETE antes dela e a janela escrita no rótulo — a mesma solução
-   * que a ORIGEM já usa para separar "ainda dá tempo" de "já perdeu".
+   * Cheguei a desenhar um filete separando a terceira coluna e a janela escrita em letra miúda no
+   * rótulo, contra o risco de alguém ler "65 · 46 · 7" e entender que as 7 são parte das 65. O
+   * usuário viu as duas versões e escolheu as três coladas (27/08).
+   *
+   * FICA REGISTRADO O QUE ISSO CUSTA, para quem mexer aqui depois não desfazer sem saber: as três
+   * colunas NÃO são partes de um mesmo todo, e a tela não avisa. Quem opera todo dia sabe; quem
+   * chega novo pode somar errado. Se a confusão aparecer na prática, o conserto é o filete — e
+   * ele custa duas linhas de CSS, não um redesenho.
    *
    * A regra inteira mora em `lateToAssignSql`, que é o MESMO predicado do filtro do quadro.
    */
@@ -150,15 +155,9 @@ export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
                 </Grupo>
               </tr>
               <tr>
-                <Medida janela={t("janelaD1D2")}>{t("medidaPendAtribuicao")}</Medida>
-                <Medida janela={t("janelaD1D2")}>{t("medidaAtribuida")}</Medida>
-                {/*
-                  O FILETE ANTES DELA não é enfeite: ele diz que a janela muda aqui. Ver o
-                  comentário de `atrasadas` em `DadosDaFrente`.
-                */}
-                <Medida janela={t("janelaHojeEAntes")} separa>
-                  {t("medidaLhAtrasada")}
-                </Medida>
+                <Medida>{t("medidaPendAtribuicao")}</Medida>
+                <Medida>{t("medidaAtribuida")}</Medida>
+                <Medida>{t("medidaLhAtrasada")}</Medida>
                 <Medida>{t("medidaAtrasado2h")}</Medida>
                 <Medida>{t("medidaForaDoPrazo")}</Medida>
                 <Medida>{t("medidaAceita")}</Medida>
@@ -180,7 +179,6 @@ export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
                 <Valor
                   valor={dados.atrasadas}
                   alerta={dados.atrasadas > 0}
-                  separa
                   onClick={() => abrir("atrasada")}
                   ativo={medidaAberta === "atrasada"}
                 />
@@ -240,32 +238,11 @@ function Grupo({ cols, cor, children }: { cols: number; cor: string; children: R
 }
 
 /** O andar de baixo: o nome da medida. */
-/**
- * O andar de baixo do cabeçalho: o nome da medida.
- *
- * `janela` é a linha miúda que diz o RECORTE DE TEMPO da coluna, e ela só aparece onde as
- * colunas vizinhas contam janelas diferentes — hoje, só no PLAN. Pôr em todas seria repetir
- * "hoje" seis vezes para avisar de uma diferença que existe em uma.
- */
-function Medida({
-  children,
-  janela,
-  separa,
-}: {
-  children: React.ReactNode;
-  janela?: string;
-  /** O filete que marca a troca de janela dentro do mesmo grupo. */
-  separa?: boolean;
-}) {
+/** O andar de baixo do cabeçalho: o nome da medida. */
+function Medida({ children }: { children: React.ReactNode }) {
   return (
-    <th
-      className={cn(
-        "border-b border-l px-1.5 py-1 text-[0.58rem] font-medium uppercase leading-tight tracking-wide text-muted-foreground first:border-l-0",
-        separa && "border-l-2 border-l-border/90",
-      )}
-    >
+    <th className="border-b border-l px-1.5 py-1 text-[0.58rem] font-medium uppercase leading-tight tracking-wide text-muted-foreground first:border-l-0">
       {children}
-      {janela ? <span className="block text-[0.52rem] opacity-70">{janela}</span> : null}
     </th>
   );
 }
@@ -281,7 +258,6 @@ function Valor({
   href,
   onClick,
   alerta,
-  separa,
   ativo,
 }: {
   valor: number | null;
@@ -298,8 +274,6 @@ function Valor({
    * contrário do `.realce-aceso`, que acende uma vez quando o número muda. Ver `globals.css`.
    */
   alerta?: boolean;
-  /** O filete que marca a troca de janela dentro do mesmo grupo. Ver `Medida`. */
-  separa?: boolean;
   /**
    * A lista DESTE número está aberta embaixo.
    *
@@ -324,11 +298,7 @@ function Valor({
     </span>
   );
 
-  const classe = cn(
-    "border-l first:border-l-0",
-    separa && "border-l-2 border-l-border/90",
-    ativo && "bg-accent",
-  );
+  const classe = cn("border-l first:border-l-0", ativo && "bg-accent");
   if (href) {
     return (
       <td className={cn(classe, "p-0 transition-colors hover:bg-accent")}>
