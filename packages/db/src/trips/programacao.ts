@@ -43,8 +43,20 @@ export interface OrigemAtrasadaDaRegiao {
 /** O leilão de spot desta frente nas últimas 24h: o que a empresa pegou e o que passou. */
 export interface SpotDaRegiao {
   region: string | null;
+  /**
+   * SPOT é o leilão de HOJE; TENDÊNCIA é o de amanhã em diante (2026-08-28, a pedido).
+   *
+   * É o mesmo dado com dois recortes, e quem separa é a data da VIAGEM — o STA da origem —, não
+   * a hora em que a oferta chegou: a mesma oferta pode chegar hoje de manhã falando de uma carga
+   * de quinta. As duas contam só o que foi recebido nas últimas 24h.
+   *
+   * Viagem que já passou e oferta sem data caem no SPOT, decidido assim: escrever a regra como
+   * "é futuro?" põe o caso duvidoso do lado que já existia, em vez de sumir das duas colunas.
+   */
   aceito: number;
   naoAceito: number;
+  tendenciaAceito: number;
+  tendenciaNaoAceito: number;
   /**
    * AS ROTAS POR TRÁS DO NÚMERO (2026-08-27, a pedido).
    *
@@ -77,6 +89,10 @@ export interface SpotDaRegiao {
     /** O STA da origem: a hora de o caminhão ESTAR lá. É o que decide se dá para pegar. */
     sta: string | null;
     veiculo: string | null;
+    /** A viagem é de amanhã em diante — esta linha alimenta a TENDÊNCIA, não o SPOT. */
+    tendencia: boolean;
+    /** O dia da viagem (ISO `YYYY-MM-DD`), quando deu para ler o STA. A tela mostra dia e mês. */
+    diaDaViagem: string | null;
   }[];
 }
 
@@ -137,6 +153,36 @@ export async function readOrigemAtrasadaPorRegiao(): Promise<OrigemAtrasadaDaReg
  * lugar seria inventar uma equivalência que ninguém confirmou. Sobram 6 ofertas assim, e o caminho
  * para elas é cadastro ou apelido — não regra de texto.
  */
+/**
+ * O DIA DA VIAGEM DA OFERTA, tirado do STA da origem (2026-08-28, a pedido).
+ *
+ * É o corte que separa SPOT de TENDÊNCIA: oferta cuja viagem é HOJE é spot; para o dia 28, 29 em
+ * diante é tendência. Quem manda é a data da VIAGEM, não a hora em que a oferta chegou — a mesma
+ * oferta pode chegar hoje de manhã falando de uma carga de quinta.
+ *
+ * ── O CAMPO TEM TRÊS FORMATOS, e ignorar isso zeraria a coluna em silêncio ────────────────────
+ *
+ * `origin_arrival` é texto e o robô já escreveu de dois jeitos, mais o vazio. Medido no banco:
+ *
+ *   ISO     2026-08-28T06:00:00.000Z    24 ofertas, recebidas de 25/08 em diante — é o formato de hoje
+ *   BR      19/08/2026, 12:56:54        44 ofertas, de 19/08 a 24/08 — o formato antigo
+ *   vazio   (nulo)                      28 ofertas, de 18/08 a 25/08 — pararam em 25/08
+ *
+ * Ler só o ISO daria certo hoje e erraria calado no dia em que o robô voltasse atrás. Os dois
+ * formatos custam um `case` e compram essa garantia.
+ *
+ * O `regexp` decide o formato antes de qualquer conversão de propósito: um `::timestamptz` no
+ * texto brasileiro não devolve nulo, ele ERRA A CONSULTA INTEIRA — foi assim que este campo se
+ * anunciou (`date/time field value out of range: "19/08/2026, 12:56:54"`).
+ */
+const diaDaViagem = sql`(case
+  when s.origin_arrival ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T'
+    then (s.origin_arrival::timestamptz at time zone 'America/Sao_Paulo')::date
+  when s.origin_arrival ~ '^[0-9]{2}/[0-9]{2}/[0-9]{4}'
+    then to_date(left(s.origin_arrival, 10), 'DD/MM/YYYY')
+  else null
+end)`;
+
 const chaveDaEstacao = (col: SQL) => sql`
   upper(btrim(regexp_replace(
     regexp_replace(
@@ -177,6 +223,8 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
     region: string | null;
     aceito: string;
     nao_aceito: string;
+    tendencia_aceito: string;
+    tendencia_nao_aceito: string;
     rotas: SpotDaRegiao["rotas"] | null;
   }>(sql`
     with estacao as (
@@ -201,14 +249,28 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
         s.price,
         s.origin_arrival,
         s.vehicle,
+        /*
+         * TENDÊNCIA É O QUE VEM DEPOIS DE HOJE. Todo o resto é spot — inclusive a viagem que já
+         * passou e a oferta sem data, decidido assim a pedido (28/08).
+         *
+         * Escrito como "é futuro?" e não como "é hoje?" de propósito: assim o nulo cai no lado
+         * seguro sem precisar de uma terceira condição. Oferta que não dá para datar continua
+         * aparecendo no spot em vez de sumir das duas colunas.
+         */
+        ${diaDaViagem} as dia_da_viagem,
+        (${diaDaViagem} > (now() at time zone 'America/Sao_Paulo')::date) is true as tendencia,
         ${chaveDaEstacao(sql`trim(split_part(s.route, '->', 1))`)} as chave
       from spot_offers s
       where s.received_at > now() - interval '24 hours'
     )
     select
       e.region::text as region,
-      count(*) filter (where t.id is not null) as aceito,
-      count(*) filter (where t.id is null) as nao_aceito,
+      -- SPOT: a viagem e de hoje (ou de antes, ou nao tem data). Ver a coluna tendencia da CTE.
+      count(*) filter (where not o.tendencia and t.id is not null) as aceito,
+      count(*) filter (where not o.tendencia and t.id is null)     as nao_aceito,
+      -- TENDÊNCIA: a viagem é de amanhã em diante, sem teto de dias.
+      count(*) filter (where o.tendencia and t.id is not null) as tendencia_aceito,
+      count(*) filter (where o.tendencia and t.id is null)     as tendencia_nao_aceito,
       /*
        * AS ROTAS, agregadas na mesma passada.
        *
@@ -232,7 +294,10 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
             'hora', o.received_at,
             'preco', o.price,
             'sta', o.origin_arrival,
-            'veiculo', o.vehicle
+            'veiculo', o.vehicle,
+            -- A lista mostra as duas, e a marca é o que diz qual número cada linha alimenta.
+            'tendencia', o.tendencia,
+            'diaDaViagem', o.dia_da_viagem
           )
           order by o.received_at desc
         ) filter (where o.route is not null),
@@ -249,6 +314,8 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
       region: r.region ?? null,
       aceito: Number(r.aceito),
       naoAceito: Number(r.nao_aceito),
+      tendenciaAceito: Number(r.tendencia_aceito),
+      tendenciaNaoAceito: Number(r.tendencia_nao_aceito),
       /*
        * TETO DE VINTE, porque isto viaja no payload do painel inteiro — que recarrega de minuto em
        * minuto, numa TV que fica ligada o dia todo.

@@ -99,7 +99,10 @@ export interface DadosDaFrente {
    * oferta. Ele foi dobrado para dentro deste grupo — e dobrar teria sido perder informação se a
    * lista daqui continuasse mostrando só o nome da rota.
    */
-  spot?: Pick<SpotDaRegiao, "aceito" | "naoAceito" | "rotas">;
+  spot?: Pick<
+    SpotDaRegiao,
+    "aceito" | "naoAceito" | "tendenciaAceito" | "tendenciaNaoAceito" | "rotas"
+  >;
 }
 
 export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
@@ -202,13 +205,19 @@ export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
                   ativo={medidaAberta === "fora"}
                 />
                 {/*
-                  TENDÊNCIA ainda não tem dado. As colunas ficam desenhadas mostrando "—", e isso é
-                  deliberado: o quadro da operação as tem, e uma tabela que muda de forma quando o
-                  dado chegar obrigaria a reaprender a tela. "—" diz "não sei", que é a verdade;
-                  zero diria "não houve", que seria mentira.
+                  TENDÊNCIA GANHOU DADO (2026-08-28). Ela mostrou travessão desde que nasceu, porque
+                  travessão diz "não sei" e zero diria "não houve" — e não havia de onde tirar.
+
+                  Agora há, e é o MESMO leilão do SPOT com outro recorte: spot é a oferta cuja viagem
+                  é HOJE; tendência é a de amanhã em diante. Quem separa é a data da VIAGEM, não a
+                  hora em que a oferta chegou — a mesma oferta pode chegar hoje de manhã falando de
+                  uma carga de quinta. Ver `readSpotPorRegiao`.
+
+                  Sem clique: as duas listas moram no card de spot, embaixo, onde cada linha diz o dia
+                  da viagem. Abrir aqui seria um terceiro caminho para a mesma lista.
                 */}
-                <Valor valor={null} />
-                <Valor valor={null} />
+                <Valor valor={dados.spot?.tendenciaAceito ?? 0} />
+                <Valor valor={dados.spot?.tendenciaNaoAceito ?? 0} />
               </tr>
             </tbody>
           </table>
@@ -347,6 +356,18 @@ function Valor({
  * CAMPO AUSENTE NÃO VIRA "—": a maioria das ofertas chega sem preço, e uma coluna de travessões
  * repetidos ocuparia a linha inteira para dizer que não há nada a dizer.
  */
+/**
+ * `2026-08-29` -> `29/08`.
+ *
+ * Corta o texto em vez de construir uma data: o valor vem do Postgres como `YYYY-MM-DD` e já é o
+ * dia em São Paulo — passá-lo por `new Date` o interpretaria como UTC e a viagem da meia-noite
+ * voltaria um dia. É o mesmo erro que a regra da coleta já pagou uma vez.
+ */
+function formatarDia(iso: string): string {
+  const [, mes, dia] = iso.slice(0, 10).split("-");
+  return dia && mes ? `${dia}/${mes}` : iso;
+}
+
 function ListaDeOfertas({ ofertas }: { ofertas: SpotDaRegiao["rotas"] }) {
   const t = useTranslations("Trips.dashboard");
   const tSpot = useTranslations("Spot");
@@ -377,6 +398,24 @@ function ListaDeOfertas({ ofertas }: { ofertas: SpotDaRegiao["rotas"] }) {
               />
               <span className="min-w-0 flex-1">
                 <span className="flex items-baseline justify-between gap-2">
+                  {/*
+                    O DIA DA VIAGEM, e só nas de tendência (2026-08-28).
+
+                    Sem ele o card lista hoje e amanhã embaralhados, e o número da coluna TENDÊNCIA
+                    fica sem como ser conferido: alguém lê "2" em cima e vê quatro linhas embaixo,
+                    sem nada dizendo quais duas são.
+
+                    Só nas de tendência porque o card já é do dia: escrever a data de hoje em toda
+                    linha seria repetir o óbvio para marcar a exceção.
+                  */}
+                  {o.tendencia && o.diaDaViagem ? (
+                    <span
+                      className="shrink-0 rounded bg-emerald-200 px-1 text-[0.6rem] font-semibold tabular-nums text-emerald-950 dark:bg-emerald-800/60 dark:text-emerald-50"
+                      title={t("grupoTendencia")}
+                    >
+                      {formatarDia(o.diaDaViagem)}
+                    </span>
+                  ) : null}
                   <span className={cn("min-w-0 break-words", !o.aceito && "text-muted-foreground")}>
                     {/* A LH leva ao detalhe da viagem — quando ela existe. Oferta não aceita não
                         virou viagem nenhuma, e um link para lista vazia é promessa quebrada. */}
@@ -472,10 +511,20 @@ export function CardsDeSpot({ frentes }: { frentes: DadosDaFrente[] }) {
               As duas contagens que eram as colunas Aceita / N Aceita. Aqui elas cabem no cabeçalho
               porque o corpo do card já é a lista — o número deixou de ser o conteúdo e virou resumo.
             */}
+            {/*
+              O RESUMO CONTA OS DOIS RECORTES, não aceitas contra não-aceitas.
+
+              Ele dizia "2 aceitas · 1 não". Com a tendência separada, esse par deixou de amarrar o
+              card a coluna nenhuma: a lista traz hoje E amanhã juntas, e o número do cabeçalho não
+              batia com o SPOT nem com a TENDÊNCIA.
+
+              Agora ele diz de onde vem cada linha — e é exatamente a leitura das duas colunas da
+              tabela acima. Quem pegou e quem não pegou continua dito, linha a linha, pelo ponto.
+            */}
             <span className="shrink-0 text-[0.68rem] font-semibold tabular-nums">
               {t("spotResumo", {
-                aceitas: f.spot?.aceito ?? 0,
-                naoAceitas: f.spot?.naoAceito ?? 0,
+                hoje: (f.spot?.aceito ?? 0) + (f.spot?.naoAceito ?? 0),
+                tendencia: (f.spot?.tendenciaAceito ?? 0) + (f.spot?.tendenciaNaoAceito ?? 0),
               })}
             </span>
           </div>
@@ -613,8 +662,11 @@ export function TotaisDoQuadro({ frentes }: { frentes: DadosDaFrente[] }) {
       valor: soma((d) => (d.spot?.aceito ?? 0) + (d.spot?.naoAceito ?? 0)),
       cor: "bg-amber-300 dark:bg-amber-800/60",
     },
-    // Sem dado, o total é tão desconhecido quanto as parcelas. Zero aqui seria a soma de dois "não sei".
-    { chave: "totalTendencia", valor: null, cor: "bg-emerald-300 dark:bg-emerald-800/60" },
+    {
+      chave: "totalTendencia",
+      valor: soma((d) => (d.spot?.tendenciaAceito ?? 0) + (d.spot?.tendenciaNaoAceito ?? 0)),
+      cor: "bg-emerald-300 dark:bg-emerald-800/60",
+    },
   ];
 
   return (
