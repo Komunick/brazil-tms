@@ -1,5 +1,5 @@
 import { sql, type SQL } from "drizzle-orm";
-import { APP_TIME_ZONE, PORTAL_ATRIBUIDA } from "@brazil-tms/shared";
+import { PORTAL_ATRIBUIDA } from "@brazil-tms/shared";
 import { lanes, trips } from "../../schema";
 
 /**
@@ -12,23 +12,42 @@ import { lanes, trips } from "../../schema";
  *
  * As duas faixas dizem coisas diferentes e pedem ações diferentes:
  *
- *   LH ATRASADA      ninguém foi escalado, e o prazo já venceu   → decidir / escalar
+ *   LH ATRASADA      ninguém foi escalado, e a coleta é em menos de 12h → decidir / escalar
  *   ORIGEM ATRASADA  foi escalado e não deu entrada na origem    → ligar para o motorista
  */
 
 /**
- * O prazo de atribuição: MEIO-DIA do próprio dia da coleta.
+ * QUANTO ANTES DA COLETA O ALARME ACENDE (2026-08-27, a pedido).
  *
- * Escrito como "o meio-dia do dia da coleta", ele cobre os dois casos de uma vez — a viagem de
- * hoje depois das 12h E a de qualquer dia anterior, cujo meio-dia passou faz tempo. É por isso
- * que a conta vive no SERVIDOR: no navegador ela só sabia olhar "hoje", e a viagem de ontem que
- * ninguém atribuiu sumia do painel — o pior desfecho possível para o caso mais grave.
+ * Doze horas. Se falta menos que isso para o caminhão ter de estar na origem e ninguém foi
+ * escalado, a viagem está atrasada.
  *
- * O meio-dia é o de São Paulo, e a volta para `timestamptz` é o que garante isso: quem abre a
- * tela de outro fuso vê o mesmo prazo, porque quem decide é o relógio da operação. O fuso entra
- * como literal (`sql.raw`) porque como parâmetro o Postgres veria expressões diferentes entre o
- * SELECT e o GROUP BY.
+ * ── O QUE HAVIA AQUI, E POR QUE ESTAVA ERRADO ─────────────────────────────────────────────────
+ *
+ * O prazo era o MEIO-DIA DO DIA DA COLETA. A ideia era boa — um horário fixo, fácil de explicar —
+ * e ela quebra em toda coleta de madrugada ou de manhã, que é metade da operação:
+ *
+ *   LT1Q8S02F0VL1   coleta 28/08 01:00   o alarme acendia 28/08 12:00   ONZE HORAS DEPOIS
+ *   LT0Q8T02EP8I1   coleta 29/08 00:00   o alarme acendia 29/08 12:00   DOZE HORAS DEPOIS
+ *
+ * Medido em produção no dia da troca, com essas duas viagens reais na tela. Um alarme que toca
+ * depois de o caminhão já ter de estar carregando não é um alarme atrasado: é um alarme inútil,
+ * porque no instante em que ele acende não há mais nada a fazer.
+ *
+ * ── POR QUE ANTECEDÊNCIA, E NÃO OUTRO HORÁRIO FIXO ───────────────────────────────────────────
+ *
+ * Qualquer hora fixa do dia erra pelo mesmo motivo: a coleta não acontece sempre à mesma hora. A
+ * antecedência acompanha cada viagem — doze horas antes da SUA coleta, seja ela à meia-noite ou
+ * às seis da tarde. É a mesma forma da faixa de risco da origem, que também mede para trás a
+ * partir da hora marcada.
+ *
+ * ── ISSO FAZ A COLUNA CRUZAR COM O PLAN, e é esperado ────────────────────────────────────────
+ *
+ * Uma coleta de amanhã à uma da manhã acende hoje às 13h — e nesse instante ela conta em PEND
+ * ATRIBUIÇÃO (que é D1) e em LH ATRASADA ao mesmo tempo. As três colunas do PLAN já não eram
+ * partes de um mesmo todo, e agora menos ainda. Está registrado em `DadosDaFrente.atrasadas`.
  */
+const HORAS_DE_ANTECEDENCIA = 12;
 /**
  * A VIAGEM É DE ROTA NOSSA?
  *
@@ -48,13 +67,9 @@ export const rotaNossaSql = sql<boolean>`(
   )
 )`;
 
-const MEIO_DIA_DA_COLETA = sql`(
-  ((${trips}.planned_pickup_window_start AT TIME ZONE ${sql.raw(`'${APP_TIME_ZONE}'`)})::date
-    + interval '12 hours') AT TIME ZONE ${sql.raw(`'${APP_TIME_ZONE}'`)}
-)`;
 
 /**
- * LH ATRASADA — passou do meio-dia do dia da coleta e não há ninguém escalado.
+ * LH ATRASADA — falta menos de 12h para a coleta e não há ninguém escalado.
  *
  * AS DUAS PENDÊNCIAS CONTAM, e isso foi corrigido em 2026-08-23 (a pedido). A consulta antiga pegava
  * só `to_assign` — aceita e sem motorista — com o argumento de que `in_analysis` seria "proposta que
@@ -62,7 +77,7 @@ const MEIO_DIA_DA_COLETA = sql`(
  *
  * A premissa estava errada. `Aceitação = Pending` é o estado em que o NOSSO botão de aceitar/recusar
  * funciona: quem não decidiu somos nós. Faltar aceitar e faltar escalar são duas pendências nossas,
- * com ações diferentes e a mesma consequência — a hora passou e a LH não tem ninguém. No dia em que
+ * com ações diferentes e a mesma consequência — a coleta está chegando e a LH não tem ninguém. No dia
  * isto foi medido, a faixa mostrava 0 em todas as frentes enquanto 24 viagens estavam exatamente
  * nesse estado.
  *
@@ -95,7 +110,7 @@ export function lateToAssignSql(): SQL<boolean> {
   return sql<boolean>`(
     ${trips.currentStatus} = 'received'
     AND (${trips.customerFields} ->> 'Status (portal)') IS DISTINCT FROM ${PORTAL_ATRIBUIDA}
-    AND now() > ${MEIO_DIA_DA_COLETA}
+    AND now() > ${trips.plannedPickupWindowStart} - make_interval(hours => ${HORAS_DE_ANTECEDENCIA})
     AND ${rotaNossaSql}
   )`;
 }
