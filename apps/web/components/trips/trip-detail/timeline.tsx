@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -11,10 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { formatDateTime, TRIP_STATUSES, type TripStatus } from "@brazil-tms/shared";
-import { useAddTripNote, TripsError } from "@/lib/trips/client";
 import type { TripDetailView } from "@/lib/trips/trips-read";
 import { montarLinhaDoTempo } from "@/lib/trips/timeline";
 
@@ -42,10 +38,9 @@ export function TimelineSection({ trip }: { trip: TripDetailView }) {
   const t = useTranslations("Trips.detail");
   const tStatus = useTranslations("Trips.status");
   const tEvent = useTranslations("Trips.detail.eventType");
-  const addNote = useAddTripNote(trip.id);
 
-  const [note, setNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
+
+
 
   // A ordenação e a junção das linhas moram em `lib/trips/timeline` — pura, e com teste. Ver lá o
   // porquê: cada marco vinha duplicado com a mudança de status que ele provocou, e o empate entre os
@@ -65,26 +60,6 @@ export function TimelineSection({ trip }: { trip: TripDetailView }) {
     }
   };
 
-  const mapError = (e: unknown): string => {
-    const code = e instanceof TripsError ? e.code : "REQUEST_FAILED";
-    try {
-      return t(`error${code}` as never);
-    } catch {
-      return t("errorREQUEST_FAILED");
-    }
-  };
-
-  const onAddNote = () => {
-    if (note.trim() === "") return;
-    setError(null);
-    addNote.mutate(
-      { notes: note.trim() },
-      {
-        onSuccess: () => setNote(""),
-        onError: (e) => setError(mapError(e)),
-      },
-    );
-  };
 
   /** Planned-vs-actual delta for an arrival milestone (FR-005). Returns a localized label or null. */
   const deltaLabel = (statusAfter: string | null, eventTs: string | null): string | null => {
@@ -119,26 +94,20 @@ export function TimelineSection({ trip }: { trip: TripDetailView }) {
           Registrar milestone segue possível para quem tiver motivo, por outro caminho.
         */}
 
-        {/* Free-form note entry. */}
-        <div className="space-y-2">
-          <Textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            placeholder={t("notePlaceholder")}
-            rows={2}
-            maxLength={2000}
-          />
-          <div className="flex items-center gap-3">
-            <Button
-              size="sm"
-              onClick={onAddNote}
-              disabled={addNote.isPending || note.trim() === ""}
-            >
-              {addNote.isPending ? t("addingNote") : t("addNote")}
-            </Button>
-            {error ? <span className="text-sm text-destructive">{error}</span> : null}
-          </div>
-        </div>
+        {/*
+          O CAMPO DE ESCREVER SAIU (2026-08-28, a pedido).
+
+          A linha do tempo passa a ser só LEITURA: o que aconteceu, na ordem em que aconteceu.
+
+          É a mesma decisão que já tinha tirado daqui os botões de marco, em 24/08, e pelo mesmo
+          motivo: esta seção conta o que o PORTAL relatou, e tudo o que se escreve à mão aqui
+          dentro passa a disputar veracidade com o que o robô trouxe. O recado de gente tem lugar
+          próprio — os comentários da viagem, e o marcador de recado na linha da programação, que
+          existe justamente para escrever sem abrir a LH.
+
+          A rota de nota segue existindo e nada foi apagado: as notas já gravadas continuam
+          aparecendo na coluna de observação da tabela abaixo. O que saiu é a OFERTA de escrever.
+        */}
 
         {/* Chronological event list with planned-vs-actual deltas. */}
         {ordered.length === 0 ? (

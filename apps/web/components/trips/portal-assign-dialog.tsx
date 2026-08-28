@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Loader2 } from "lucide-react";
+import { Truck } from "lucide-react";
 import {
   alertaDoMotorista,
   formatDate,
@@ -274,8 +274,46 @@ export function PortalAssignDialog({
     (ordem?.status === "failed" ? (ordem.lastError ?? t("falhouSemMotivo")) : null);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-3xl">
+    /*
+      FECHAR FICA BLOQUEADO ENQUANTO A ORDEM ESTÁ EM VOO (2026-08-28, a pedido).
+
+      O `onOpenChange` do Dialog dispara no Esc, no clique fora e no X. Passá-lo direto deixava a
+      pessoa fechar no meio do envio — e aí a ordem seguia sem ninguém para ver o desfecho, que é
+      exatamente o silêncio que este trabalho veio desfazer.
+
+      Só o FECHAR é barrado. Abrir continua livre, e o efeito do desfecho fecha normalmente.
+    */
+    <Dialog open={open} onOpenChange={(v) => (emVoo && !v ? undefined : onOpenChange(v))}>
+      <DialogContent className="relative max-h-[88vh] overflow-y-auto sm:max-w-3xl">
+        {/**
+          A COBERTURA DE CARREGAMENTO (2026-08-28, a pedido).
+
+          Era um texto no rodapé, e o pedido foi um popup no meio — para a pessoa não fechar sem
+          querer. Aqui ele é uma camada SOBRE o formulário, e não outro diálogo: um segundo modal em
+          cima do primeiro empilha duas camadas de foco, e o leitor de tela passa a anunciar duas
+          janelas para uma coisa só.
+
+          `absolute inset-0` cobre o conteúdo inteiro, então nada embaixo recebe clique — a proteção
+          é física, não só visual. `sticky` no cartão o mantém no meio mesmo com o formulário rolado.
+
+          `aria-live="assertive"` porque isto interrompe o que a pessoa estava fazendo: ela precisa
+          ouvir, não descobrir depois.
+        */}
+        {emVoo ? (
+          <div
+            className="absolute inset-0 z-50 flex items-center justify-center rounded-lg bg-background/80 backdrop-blur-[2px]"
+            role="status"
+            aria-live="assertive"
+          >
+            <div className="sticky top-1/2 flex flex-col items-center gap-3 rounded-xl border bg-card px-8 py-6 shadow-lg">
+              <CaminhaoNaEstrada />
+              <p className="text-sm font-medium">{t("efetuando")}</p>
+              <p className="max-w-[22rem] text-center text-xs text-muted-foreground">
+                {t("efetuandoDica")}
+              </p>
+            </div>
+          </div>
+        ) : null}
         <DialogHeader>
           <DialogTitle>{driverAtual ? t("titleEdit") : t("title")}</DialogTitle>
           <DialogDescription>{t("subtitle", { lh: externalTripId ?? tripId })}</DialogDescription>
@@ -501,32 +539,7 @@ export function PortalAssignDialog({
           />
         </div>
 
-        <DialogFooter className="items-center">
-          {/**
-            A ESPERA FICA VISÍVEL (2026-08-28, a pedido).
-
-            O caminho tem três tempos — o TMS enfileira, o robô pega, o portal responde — e ele leva
-            alguns segundos. Antes o diálogo fechava no primeiro deles, e o atraso virava silêncio:
-            a pessoa não sabia se tinha funcionado.
-
-            A barra é UMA FAIXA QUE CORRE, e não uma porcentagem: não temos como saber quanto falta,
-            e uma barra que enche até 90% e para é pior que barra nenhuma — ela promete um número
-            que ninguém pode cumprir. Correr diz "está acontecendo", que é tudo o que sabemos.
-
-            Some inteira com `prefers-reduced-motion`: fica só o texto, que já informa.
-          */}
-          {emVoo ? (
-            <span className="mr-auto flex items-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
-              <span>{t("efetuando")}</span>
-              <span
-                aria-hidden
-                className="h-0.5 w-16 overflow-hidden rounded-full bg-muted motion-reduce:hidden"
-              >
-                <span className="block h-full w-1/3 rounded-full bg-primary animate-faixa-correndo" />
-              </span>
-            </span>
-          ) : null}
+        <DialogFooter>
           <Button variant="ghost" disabled={emVoo} onClick={() => onOpenChange(false)}>
             {t("cancel")}
           </Button>
@@ -623,5 +636,36 @@ function AvisoDaCnh({
           ? t("cnhVencendo", { data: formatDate(escolhido?.licenseExpiry ?? null) })
           : t("cnhSemData")}
     </p>
+  );
+}
+
+/**
+ * O CAMINHÃO NA ESTRADA — a espera da atribuição (2026-08-28, escolhido entre seis opções).
+ *
+ * ── DUAS PEÇAS, E A SEGUNDA É QUE FAZ FUNCIONAR ───────────────────────────────────────────────
+ *
+ * O caminhão vai e volta num trecho curto; o asfalto embaixo corre em sentido contrário, sem
+ * parar. Sozinho, o caminhão pareceria hesitar — vai, volta, vai. É o traço do chão que dá a
+ * direção e transforma o movimento em "está indo".
+ *
+ * ── ÍCONE, E NÃO EMOJI ────────────────────────────────────────────────────────────────────────
+ *
+ * O rascunho que o usuário escolheu usava um emoji de caminhão, que é mais rápido de escrever e
+ * muda de desenho em cada sistema: no Windows é uma coisa, no Android é outra, e num navegador sem
+ * a fonte vira um quadrado. O `Truck` do lucide é o mesmo traço dos outros ícones do TMS e herda a
+ * cor por `currentColor`.
+ *
+ * ── E QUEM DESLIGOU ANIMAÇÃO VÊ O CAMINHÃO PARADO NA PISTA ────────────────────────────────────
+ *
+ * Não some. A cena continua desenhada, junto do texto que diz o que está acontecendo. Sumir seria
+ * tirar a única marca visual de que a tela está ocupada de quem já tem menos pistas, não mais.
+ */
+function CaminhaoNaEstrada() {
+  return (
+    <div className="flex h-10 w-24 flex-col items-center justify-center gap-1.5" aria-hidden>
+      <Truck className="h-6 w-6 text-primary animate-caminhao-anda motion-reduce:animate-none" />
+      {/* A pista: o tracejado mora no CSS porque o que se anima nele é `background-position`. */}
+      <span className="h-[3px] w-full rounded-full animate-caminhao-pista motion-reduce:animate-none" />
+    </div>
   );
 }
