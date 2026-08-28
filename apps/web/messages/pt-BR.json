@@ -1458,6 +1458,7 @@
       "grupoOrigem": "Origem",
       "grupoSpot": "Spot",
       "spotResumo": "{aceitas} aceitas · {naoAceitas} não",
+      "spotSemOferta": "Nenhuma oferta nas últimas 24h.",
       "grupoTendencia": "Tendência",
       "medidaPendAtribuicao": "Pend atribuição",
       "medidaAtribuida": "Atribuída",
