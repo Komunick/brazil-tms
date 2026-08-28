@@ -93,6 +93,18 @@ import { lateToAssignSql, origemAtrasadaSql, origemRiscoSql, rotaNossaSql } from
 export interface TripBoardRow {
   id: string;
   externalTripId: string | null;
+  /**
+   * A PERNA DESTA LINHA, e quantas a operação tem.
+   *
+   * O id do cliente nomeia uma OPERAÇÃO, que pode ter mais de um movimento. Cada perna é uma
+   * viagem própria — coleta, entrega, comprovante e SLA próprios — e por isso aparece como uma
+   * LINHA a mais no quadro, com a MESMA LH.
+   *
+   * A tela precisa dos DOIS números: sozinho, `legNumber` marca a segunda linha e deixa a primeira
+   * parecendo normal, o que não desfaz a leitura de duplicata. "1 de 2" desfaz.
+   */
+  legNumber: number;
+  totalDePernas: number;
   customerId: string;
   customerName: string;
   originCode: string;
@@ -342,6 +354,39 @@ const boardCarrier = alias(carriers, "board_asg_carrier");
 const boardColumns = {
   id: trips.id,
   externalTripId: trips.externalTripId,
+  legNumber: trips.legNumber,
+  /**
+   * QUANTAS PERNAS TEM A OPERAÇÃO DESTA LINHA (2026-08-28, a pedido).
+   *
+   * O id do cliente nomeia uma OPERAÇÃO, que pode ter mais de um movimento — um milk run termina
+   * uma perna e sai do mesmo lugar na seguinte. Cada perna é uma viagem própria, com coleta,
+   * entrega, comprovante e SLA próprios, e por isso são duas LINHAS no quadro com a MESMA LH.
+   *
+   * Sem este número a tela não tinha como dizer isso, e duas linhas iguais leem como DUPLICATA —
+   * foi exatamente a conclusão a que se chegou olhando a LT0Q8R02EMW11. São 48 operações assim em
+   * 4.507, todas com pernas numeradas e distintas: o dado sempre esteve certo, quem não falava era
+   * a tela.
+   *
+   * ── POR QUE SUBCONSULTA, E NÃO `count(*) over (partition by ...)` ─────────────────────────────
+   *
+   * A janela foi a primeira escrita e está ERRADA, por um motivo que não aparece em teste feliz: ela
+   * conta sobre as linhas QUE SOBREVIVERAM AO FILTRO do quadro, não sobre a operação. Com a perna 1
+   * concluída e o quadro em "ativas", a perna 2 ficaria sozinha no conjunto e a tela escreveria
+   * `2/1` — um rótulo que não quer dizer nada e que ninguém consegue explicar olhando a tela.
+   *
+   * A subconsulta conta a operação INTEIRA, filtro nenhum. Ela é barata: o índice único
+   * `trips_customer_external_id_uq` é (cliente, id externo, perna), e a busca usa exatamente o
+   * prefixo dele.
+   *
+   * O `coalesce(..., 1)` cobre a viagem SEM id externo: ali `= NULL` não casa com nada, a contagem
+   * viria zero e a comparação `0 > 1` esconderia o rótulo por acidente em vez de por decisão. Uma
+   * viagem sem id externo é uma operação de uma perna só, e é isso que o 1 diz.
+   */
+  totalDePernas: sql<number>`coalesce((
+    select count(*) from ${trips} t_pernas
+    where t_pernas.customer_id = ${trips.customerId}
+      AND t_pernas.external_trip_id = ${trips.externalTripId}
+  ), 1)`,
   customerId: trips.customerId,
   customerName: customers.name,
   originCode: originLoc.code,
@@ -379,6 +424,8 @@ const boardColumns = {
 type BoardRow = {
   id: string;
   externalTripId: string | null;
+  legNumber: number;
+  totalDePernas: number;
   portalAcceptance: string | null;
   portalDriverId: string | null;
   portalDriverName: string | null;
@@ -414,6 +461,10 @@ function toBoardRow(row: BoardRow): TripBoardRow {
   return {
     id: row.id,
     externalTripId: row.externalTripId,
+    legNumber: row.legNumber,
+    // Vem do `count(*) over` e chega como texto no driver; `Number` uma vez aqui evita a
+    // comparação `"2" > 1` mais adiante, que é verdadeira por coincidência e falsa por sorte.
+    totalDePernas: Number(row.totalDePernas),
     customerId: row.customerId,
     customerName: row.customerName ?? "",
     originCode: row.originCode ?? "",

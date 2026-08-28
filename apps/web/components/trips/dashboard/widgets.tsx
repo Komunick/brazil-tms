@@ -466,8 +466,9 @@ export function DashboardWidgets({ papel }: { papel: Role }) {
          * colunas contam VIAGEM e o número basta; o spot conta LEILÃO, e o que decide nele é o NOME
          * DA ROTA — que ficava escondido atrás de um clique.
          *
-         * Aqui embaixo, um card por frente, a rota está à vista. A faixa inteira some nos dias sem
-         * oferta nenhuma: leilão é evento, não fluxo. Ver `CardsDeSpot`.
+         * Aqui embaixo, um card por frente, a rota está à vista. A frente que não teve oferta
+         * continua com card e DIZ que não teve (28/08, a pedido): card sumido é indistinguível de
+         * card quebrado. Ver `CardsDeSpot`.
          */}
         <div className="col-span-full">
           <CardsDeSpot frentes={dadosDasFrentes} />

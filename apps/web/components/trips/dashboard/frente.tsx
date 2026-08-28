@@ -437,19 +437,28 @@ function ListaDeOfertas({ ofertas }: { ofertas: SpotDaRegiao["rotas"] }) {
  *
  * Na faixa de totais, em cima. Lá a pergunta é "quantas hoje", e essa a contagem responde sozinha.
  *
- * ── A FRENTE SEM OFERTA NÃO GANHA CARD ────────────────────────────────────────────────────────
+ * ── A FRENTE SEM OFERTA GANHA CARD MESMO ASSIM (2026-08-28, a pedido) ─────────────────────────
  *
- * Leilão é evento, não fluxo: há dias sem nenhum. Um card vazio por frente encheria um terço da
- * tela para dizer que não houve nada — e a faixa inteira some quando nenhuma frente teve oferta.
+ * Aqui a frente sem oferta era ESCONDIDA, e a faixa inteira sumia nos dias sem nenhuma. O
+ * argumento era que leilão é evento e não fluxo, e três caixas vazias ocupariam um terço da tela
+ * para dizer que não houve nada.
+ *
+ * O argumento estava errado por um motivo que só apareceu na tela: CARD SUMIDO É INDISTINGUÍVEL
+ * DE CARD QUEBRADO. O Sudeste passou um dia sem oferta, o card sumiu, e não havia como saber se
+ * era silêncio do leilão ou defeito da tela — que é a pergunta errada para alguém fazer olhando
+ * um painel de parede.
+ *
+ * Agora as três frentes estão sempre lá, e a que não teve oferta DIZ que não teve. O silêncio
+ * vira informação em vez de ausência. O custo é a altura fixa da faixa, que é barato perto de
+ * alguém desconfiar do painel inteiro.
  */
 export function CardsDeSpot({ frentes }: { frentes: DadosDaFrente[] }) {
   const t = useTranslations("Trips.dashboard");
-  const comOferta = frentes.filter((f) => (f.spot?.rotas.length ?? 0) > 0);
-  if (comOferta.length === 0) return null;
+  if (frentes.length === 0) return null;
 
   return (
     <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
-      {comOferta.map((f) => (
+      {frentes.map((f) => (
         <Card key={f.region ?? "__sem_regiao__"} className="overflow-hidden p-0">
           {/*
             O cabeçalho é a faixa âmbar do grupo que saiu da tabela: é a mesma informação, e a cor
@@ -477,7 +486,16 @@ export function CardsDeSpot({ frentes }: { frentes: DadosDaFrente[] }) {
             ninguém mais vê. Com o teto, a faixa das três frentes mantém a mesma altura.
           */}
           <div className="max-h-52 overflow-y-auto px-3 py-2">
-            <ListaDeOfertas ofertas={f.spot?.rotas ?? []} />
+            {(f.spot?.rotas.length ?? 0) === 0 ? (
+              /*
+                A FRASE, e não uma lista vazia. Sem ela o card ficaria com um retângulo branco
+                embaixo do cabeçalho, que lê como "carregando" ou "quebrou" — exatamente a dúvida
+                que trazer o card de volta veio desfazer.
+              */
+              <p className="py-1 text-[0.7rem] text-muted-foreground">{t("spotSemOferta")}</p>
+            ) : (
+              <ListaDeOfertas ofertas={f.spot?.rotas ?? []} />
+            )}
           </div>
         </Card>
       ))}
