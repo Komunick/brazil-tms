@@ -193,6 +193,21 @@ async function asJson<T>(res: Response): Promise<T> {
 
 const TRIPS_ROOT = ["trips"] as const;
 
+/**
+ * RECARREGAR TUDO O QUE É VIAGEM (2026-08-28).
+ *
+ * Existe para a chave `TRIPS_ROOT` continuar PRIVADA deste módulo. Quem precisa recarregar é o
+ * diálogo de atribuição, e exportar a chave para ele convidaria cada tela a montar a sua — que é
+ * como duas partes do app passam a invalidar coisas diferentes achando que invalidam a mesma.
+ *
+ * Chamado quando a ordem FECHA como concluída, e não quando ela é enfileirada: no 202 nada mudou
+ * ainda, e recarregar ali só somava tempo à espera que a pessoa vê.
+ */
+export function useRecarregarViagens(): () => void {
+  const queryClient = useQueryClient();
+  return () => void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
+}
+
 /** `search` is the URL query string (e.g. `useSearchParams().toString()`). */
 export function tripBoardKey(search: string): unknown[] {
   return [...TRIPS_ROOT, "board", search];
@@ -1655,7 +1670,6 @@ export function useTripBoardFilters(): TripBoardFilters {
  * traz a viagem de volta com `portalCommand` em `pending`, e não com o efeito pronto.
  */
 export function usePortalAction(id: string) {
-  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: PortalActionBody) => {
       const res = await fetch(`/api/trips/${id}/portal-action`, {
@@ -1667,9 +1681,19 @@ export function usePortalAction(id: string) {
       // viagem podem estar em voo, e "a mais recente" mostraria o desfecho da errada.
       return asJson<{ item: { id: string } }>(res);
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
-    },
+    /*
+     * NADA DE INVALIDAR AQUI (2026-08-28).
+     *
+     * Este `onSuccess` dispara no 202, que quer dizer "enfileirei" — e invalidar `TRIPS_ROOT`
+     * recarrega TODA consulta de viagem, inclusive o quadro inteiro da programação. Isso acontecia
+     * enquanto a pessoa esperava o portal responder, somando ao tempo que ela vê.
+     *
+     * Pior: recarregava para mostrar um estado que ainda não mudou. O portal só responde segundos
+     * depois, e é o desfecho dele que muda a viagem.
+     *
+     * Quem invalida agora é o diálogo, quando a ordem FECHA como concluída — uma recarga só, no
+     * momento em que há o que recarregar.
+     */
   });
 }
 

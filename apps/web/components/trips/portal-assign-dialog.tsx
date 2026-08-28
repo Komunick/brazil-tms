@@ -30,6 +30,7 @@ import { MelhoresDaRota } from "@/components/trips/melhores-da-rota";
 import {
   TripsError,
   useOrdensDoPortal,
+  useRecarregarViagens,
   usePortalAction,
   usePortalDrivers,
   usePortalPlacas,
@@ -108,6 +109,7 @@ export function PortalAssignDialog({
   const motoristas = usePortalDrivers();
   const placasConhecidas = usePortalPlacas();
   const acao = usePortalAction(tripId);
+  const recarregarViagens = useRecarregarViagens();
   /**
    * A ORDEM QUE ESTAMOS ESPERANDO FECHAR (2026-08-28, a pedido).
    *
@@ -258,6 +260,9 @@ export function PortalAssignDialog({
     if (!ordem) return;
     if (ordem.status === "done") {
       setAguardando(null);
+      // A recarga do quadro acontece AQUI, e não no 202: é agora que a viagem de fato mudou. Ver
+      // o comentário em `usePortalAction`.
+      recarregarViagens();
       onSent?.();
       onOpenChange(false);
     } else if (ordem.status === "failed") {
