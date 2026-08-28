@@ -57,6 +57,7 @@
   "Shell": {
     "signOut": "Sair",
     "account": "Conta",
+    "closeMenu": "Fechar menu",
     "openMenu": "Abrir menu",
     "homeTitle": "Início",
     "homeWelcome": "Bem-vindo(a), {name}",
