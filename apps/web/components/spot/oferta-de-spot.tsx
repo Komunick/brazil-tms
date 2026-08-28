@@ -217,7 +217,12 @@ export function OfertaDeSpot() {
           boxShadow: `0 0 0 9999px rgba(3,10,18,0.62), 0 30px 70px -20px rgba(0,0,0,0.95)`,
           outline: `5px solid ${MARCA.verde}`,
         }}
-        className={`pointer-events-auto relative flex max-h-[80vh] w-[74vw] min-w-[360px] max-w-[1500px] flex-col overflow-hidden rounded-[28px] transition-all duration-200 ${
+        // `sm:min-w-[360px]` e não `min-w-[360px]` (2026-08-28): o aviso cobre TODAS as telas, e num
+        // aparelho de 390px sobram 358px depois do respiro de 16px de cada lado. Dois pixels a menos
+        // que o mínimo bastavam para o cartão furar a borda e a página inteira ganhar rolagem
+        // lateral — num aviso que a operação vê dez vezes por dia. Acima de `sm` nada muda: 74vw já
+        // passa de 360px muito antes disso.
+        className={`pointer-events-auto relative flex max-h-[80vh] w-[74vw] max-w-[1500px] flex-col overflow-hidden rounded-[28px] transition-all duration-200 sm:min-w-[360px] ${
           saindo ? "scale-[0.97] opacity-0" : "scale-100 opacity-100"
         }`}
       >

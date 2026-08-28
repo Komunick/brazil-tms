@@ -24,8 +24,11 @@ export default async function ShellLayout({ children }: { children: ReactNode })
     <div className="flex min-h-screen">
       <AppSidebar role={session.user.role} recolhidoInicial={recolhidoInicial} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <Topbar userName={session.user.name} />
-        <main className="flex-1 p-6">{children}</main>
+        {/* O cargo desce até aqui porque a barra de topo hospeda a navegação do telefone, e a lista
+            de itens é filtrada por permissão — ver `MenuMovel`. */}
+        <Topbar userName={session.user.name} role={session.user.role} />
+        {/* `p-4 md:p-6`: no telefone, 24px de cada lado saíam da largura útil do conteúdo. */}
+        <main className="flex-1 p-4 md:p-6">{children}</main>
       </div>
       {/**
        * O AVISO DE SPOT MORA NO SHELL, não numa tela (2026-08-22, a pedido).
