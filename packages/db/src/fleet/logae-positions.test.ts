@@ -44,6 +44,12 @@ describe.skipIf(!temBanco)("gravarPosicoesDaGerenciadora (integração)", () => 
         cpfMotorista: "08004345441",
         ignicao: "L",
         referencia: "2.19 km de algum lugar",
+
+        velocidade: null,
+
+        tipoRastreador: null,
+
+        distUltPosicao: null,
         posicaoEm: quando,
       },
     ]);
@@ -67,6 +73,12 @@ describe.skipIf(!temBanco)("gravarPosicoesDaGerenciadora (integração)", () => 
         cpfMotorista: null,
         ignicao: null,
         referencia: null,
+
+        velocidade: null,
+
+        tipoRastreador: null,
+
+        distUltPosicao: null,
         posicaoEm: null,
       },
       {
@@ -78,6 +90,12 @@ describe.skipIf(!temBanco)("gravarPosicoesDaGerenciadora (integração)", () => 
         cpfMotorista: null,
         ignicao: "D",
         referencia: null,
+
+        velocidade: null,
+
+        tipoRastreador: null,
+
+        distUltPosicao: null,
         posicaoEm: new Date("2026-08-26T10:00:00.000Z"),
       },
     ]);
@@ -102,6 +120,12 @@ describe.skipIf(!temBanco)("gravarPosicoesDaGerenciadora (integração)", () => 
       cpfMotorista: null,
       ignicao: null,
       referencia: null,
+
+      velocidade: null,
+
+      tipoRastreador: null,
+
+      distUltPosicao: null,
     };
     await gravarPosicoesDaGerenciadora([
       { ...base, latitude: -10, cidade: "ANTES", posicaoEm: new Date("2026-08-26T09:00:00.000Z") },
@@ -135,6 +159,12 @@ describe.skipIf(!temBanco)("gravarPosicoesDaGerenciadora (integração)", () => 
         cpfMotorista: null,
         ignicao: null,
         referencia: null,
+
+        velocidade: null,
+
+        tipoRastreador: null,
+
+        distUltPosicao: null,
         posicaoEm: new Date(),
       },
     ]);

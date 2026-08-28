@@ -52,6 +52,27 @@ export interface PlacaDoMotorista {
   ultimaEm: string | null;
   /** A rota da última vez, para a placa vir com contexto em vez de sozinha. */
   ultimaRota: string | null;
+  /**
+   * O QUE É ESSA PLACA — carreta, truck, toco… (2026-08-28, a pedido).
+   *
+   * Uma viagem carrega cavalo e carreta na mesma lista, separados por vírgula, e sem o tipo a
+   * sugestão é uma pilha de códigos onde quem escala precisa reconhecer de cabeça qual é qual.
+   *
+   * ── DE ONDE SAI, E POR QUE NESSA ORDEM ────────────────────────────────────────────────────
+   *
+   * O cadastro tem DUAS fontes, e elas se sobrepõem pouco: `vehicles` (1.284 placas, com o campo
+   * `vehicle_type` preenchido) e `trailers` (1.020 placas, todas carreta por definição). Só 31
+   * placas estão nas duas — e em UMA delas os dois discordam: `trailers` diz carreta, o
+   * `vehicle_type` diz truck.
+   *
+   * Nesse empate ganha o `vehicle_type`, porque ali o tipo é um campo declarado, e em `trailers` é
+   * inferido de a placa estar na tabela. Campo explícito vale mais que pertencimento.
+   *
+   * NULO QUANDO NÃO SE SABE, e isso é comum: das 1.029 placas que aparecem em viagens, 170 (17%)
+   * não estão em nenhuma das duas tabelas. A tela não mostra rótulo nenhum nessas — chutar
+   * "carreta" acertaria a maioria e mentiria no resto, que é o pior dos dois mundos.
+   */
+  tipo: string | null;
 }
 
 /**
@@ -106,6 +127,7 @@ export async function placasDoMotorista(
     vezes: string;
     ultima_em: string | null;
     ultima_rota: string | null;
+    tipo: string | null;
   }>(sql`
     /*
      * FONTE 1 — O QUE O PORTAL DIZ DE CADA VIAGEM.
@@ -191,7 +213,22 @@ export async function placasDoMotorista(
                   limit 1
                )
          limit 1
-      )                                 as ultima_rota
+      )                                 as ultima_rota,
+      /*
+       * O TIPO DA PLACA: cavalo, carreta, toco. Ver o comentario do campo tipo no tipo publico.
+       *
+       * O vehicle_type vem PRIMEIRO no coalesce porque e campo declarado; estar na tabela de
+       * carretas e inferencia. Nas 31 placas que estao nas duas, uma discorda — e ali o campo ganha.
+       *
+       * O hifen sai dos DOIS lados: a mesma placa aparece como ABC-1D23 no cadastro e ABC1D23 na
+       * viagem, e comparar cru perderia o casamento sem erro nenhum aparecer.
+       */
+      coalesce(
+        (select v.vehicle_type::text from vehicles v
+          where upper(replace(v.plate, '-', '')) = a.placa limit 1),
+        (select 'carreta' from trailers c
+          where upper(replace(c.plate, '-', '')) = a.placa limit 1)
+      )                                 as tipo
       from abertas a
      group by a.placa
      /*
@@ -210,5 +247,6 @@ export async function placasDoMotorista(
     vezes: Number(r.vezes ?? 0),
     ultimaEm: r.ultima_em,
     ultimaRota: r.ultima_rota,
+    tipo: r.tipo,
   }));
 }

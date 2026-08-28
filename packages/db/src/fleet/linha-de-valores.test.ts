@@ -34,13 +34,18 @@ describe("linhaDeValores", () => {
     cpfMotorista: "08004345441",
     ignicao: "L",
     referencia: "2.19 km de algum lugar",
+    velocidade: 78,
+    tipoRastreador: "RA",
+    distUltPosicao: 12.4,
   };
 
   it("manda a data como ISO, e nunca como Date", () => {
     const quando = new Date("2026-08-26T17:23:02.000Z");
     const { params } = dialeto.sqlToQuery(linhaDeValores({ ...base, posicaoEm: quando }));
 
-    const data = params[8];
+    // A data é o ÚLTIMO parâmetro, e o índice mudou quando velocidade, tipo de rastreador e
+    // distância entraram antes dela. É por isso que o teste conta a partir do fim.
+    const data = params[params.length - 1];
     // O ponto do teste: se isto for um Date, o INSERT quebra no Postgres.
     expect(data).toBeTypeOf("string");
     expect(data).toBe("2026-08-26T17:23:02.000Z");
@@ -49,17 +54,17 @@ describe("linhaDeValores", () => {
 
   it("data ausente vira null, e não a string 'null'", () => {
     const { params } = dialeto.sqlToQuery(linhaDeValores({ ...base, posicaoEm: null }));
-    expect(params[8]).toBeNull();
+    expect(params[params.length - 1]).toBeNull();
   });
 
-  it("os nove parâmetros saem na ordem das colunas", () => {
+  it("os doze parâmetros saem na ordem das colunas", () => {
     const { sql: texto, params } = dialeto.sqlToQuery(
       linhaDeValores({ ...base, posicaoEm: new Date("2026-01-01T00:00:00.000Z") }),
     );
-    // Nove parâmetros e um `now()` literal — a décima coluna não é parâmetro.
-    expect(params).toHaveLength(9);
+    // Doze parâmetros e um `now()` literal — a última coluna não é parâmetro.
+    expect(params).toHaveLength(12);
     expect(texto).toContain("now()");
-    expect(params.slice(0, 8)).toEqual([
+    expect(params.slice(0, 11)).toEqual([
       "ABC1D23",
       -23.5505,
       -46.6333,
@@ -68,6 +73,9 @@ describe("linhaDeValores", () => {
       "08004345441",
       "L",
       "2.19 km de algum lugar",
+      78,
+      "RA",
+      12.4,
     ]);
   });
 
@@ -88,10 +96,15 @@ describe("linhaDeValores", () => {
         cpfMotorista: null,
         ignicao: null,
         referencia: null,
+        velocidade: null,
+        tipoRastreador: null,
+        distUltPosicao: null,
         posicaoEm: null,
       }),
     );
     expect(params[0]).toBe("XYZ9W88");
-    expect(params.slice(1)).toEqual([null, null, null, null, null, null, null, null]);
+    // Onze nulos: tudo menos a placa. Escrito por contagem para o teste acompanhar a coluna nova
+    // sem alguém precisar contar `null` a olho.
+    expect(params.slice(1)).toEqual(Array.from({ length: 11 }, () => null));
   });
 });
