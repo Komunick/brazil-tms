@@ -522,13 +522,15 @@ export async function encerrarOrdemDoPortal(entrada: {
         commandId: ordem.id,
         portalTripId: ordem.portalTripId,
         externalTripId: ordem.externalTripId,
-        desfecho: deuCerto
-          ? veredito?.confirmado
-            ? "confirmado no portal"
-            : "aceito pelo portal, NÃO VERIFICADO"
-          : veredito && !veredito.confirmado
+        desfecho: !deuCerto
+          ? veredito?.confirmado === false
             ? "o portal respondeu OK e a releitura desmentiu"
-            : "recusado pelo portal",
+            : "recusado pelo portal"
+          : veredito?.confirmado === true
+            ? "confirmado no portal"
+            : veredito?.confirmado === null
+              ? "aceito pelo portal, sem confirmação possível"
+              : "aceito pelo portal, NÃO VERIFICADO",
         /**
          * A CONFERÊNCIA, e o `nao_verificado` é informação, não lacuna.
          *
@@ -536,11 +538,16 @@ export async function encerrarOrdemDoPortal(entrada: {
          * palavra do `retcode` como sempre fez. Registrar isso como "não verificado" é o que
          * impede alguém, meses depois, de ler uma linha antiga e achar que ela foi conferida.
          */
-        conferencia: veredito
-          ? veredito.confirmado
-            ? { confirmado: true, detalhe: veredito.detalhe, placasConferidas: veredito.placasConferidas }
-            : { confirmado: false, motivo: veredito.motivo }
-          : { confirmado: null, motivo: "nao_verificado: o robô não enviou releitura" },
+        conferencia:
+          veredito == null
+            ? { confirmado: null, motivo: "nao_verificado: o robô não enviou releitura" }
+            : veredito.confirmado === true
+              ? {
+                  confirmado: true,
+                  detalhe: veredito.detalhe,
+                  placasConferidas: veredito.placasConferidas,
+                }
+              : { confirmado: veredito.confirmado, motivo: veredito.motivo },
         // A palavra do portal, sem tradução nossa.
         respostaDoPortal: (entrada.response ?? null) as never,
         erro: entrada.ok ? null : (entrada.error?.slice(0, 500) ?? "sem detalhe"),

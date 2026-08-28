@@ -40,9 +40,22 @@ export type ViagemNoPortal = {
 
 export type AcaoConfirmavel = "accept" | "reject" | "assign";
 
+/**
+ * TRÊS respostas, e a terceira não é detalhe (2026-08-28).
+ *
+ * `true` — o portal mostra o que pedimos.
+ * `false` — o portal respondeu OK e a releitura DESMENTIU. Isto é falha, e trava o que vier depois.
+ * `null` — não há como confirmar esta ação. Não é falha: é ausência de prova.
+ *
+ * Juntar `null` com `false` seria o defeito: a recusa não tem estado positivo para conferir, e
+ * tratá-la como desmentida gravaria como FALHA toda recusa bem-sucedida — além de barrar o que
+ * depende do desfecho. "Não sei" e "não foi" não podem ser a mesma resposta num caminho que
+ * decide gasto.
+ */
 export type Veredito =
   | { confirmado: true; detalhe: string; placasConferidas: number }
-  | { confirmado: false; motivo: string };
+  | { confirmado: false; motivo: string }
+  | { confirmado: null; motivo: string };
 
 /** Placa comparável: só letras e números, maiúsculas. `ABC-1D23` e `abc1d23` são a mesma. */
 function normalizar(placa: string): string {
@@ -75,10 +88,14 @@ export function confirmarAcaoNoPortal(entrada: {
   if (acao === "reject") {
     /**
      * Recusar não tem estado positivo para conferir: a viagem some da nossa lista, e o portal não
-     * expõe "Rejected" em `acceptance_status`. Confirmar por ausência seria adivinhar, então esta
-     * ação fica declaradamente sem confirmação — melhor do que um "confirmado" que não olhou nada.
+     * expõe "Rejected" em `acceptance_status`. Confirmar por ausência seria adivinhar.
+     *
+     * `null` e NÃO `false` — a diferença é a que importa aqui. `false` significa "o portal
+     * desmentiu" e reprova a ordem; devolvê-lo aqui gravaria como FALHA toda recusa que deu certo,
+     * porque o robô manda a releitura para qualquer ação bem-sucedida. Isto é ausência de prova,
+     * não prova de ausência.
      */
-    return { confirmado: false, motivo: "recusa não tem confirmação: o portal não expõe esse estado" };
+    return { confirmado: null, motivo: "recusa não tem confirmação: o portal não expõe esse estado" };
   }
 
   // ── assign ──────────────────────────────────────────────────────────────────────────────────
