@@ -1215,6 +1215,8 @@
       "apply": "Aplicar",
       "clear": "Limpar filtros",
       "colExternalId": "ID externo",
+      "perna": "{numero}/{total}",
+      "pernaTitulo": "Esta LH tem mais de um trecho; cada um é uma viagem própria.",
       "colCustomer": "Cliente",
       "colOrigin": "Origem",
       "colDestination": "Destino",

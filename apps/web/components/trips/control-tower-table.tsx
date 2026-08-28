@@ -120,12 +120,43 @@ export function ControlTowerTable({
       id: "externalTripId",
       header: () => t("board.colExternalId"),
       cell: ({ row }) => (
-        <Link
-          href={`/trips/${row.original.id}`}
-          className="font-medium text-primary hover:underline"
-        >
-          {row.original.externalTripId ?? "—"}
-        </Link>
+        <span className="flex items-baseline gap-1.5">
+          <Link
+            href={`/trips/${row.original.id}`}
+            className="font-medium text-primary hover:underline"
+          >
+            {row.original.externalTripId ?? "—"}
+          </Link>
+          {/**
+           * A PERNA, quando a operação tem mais de uma (2026-08-28, a pedido).
+           *
+           * O id do cliente nomeia uma OPERAÇÃO, e ela pode ter mais de um movimento: um milk run
+           * termina uma perna e sai do mesmo lugar na seguinte. Cada perna é uma viagem própria — com
+           * coleta, entrega, comprovante e SLA próprios — e por isso ocupa uma LINHA a mais no quadro,
+           * com a MESMA LH.
+           *
+           * Sem esta marca, duas linhas com o mesmo código leem como DUPLICATA. Foi exatamente a
+           * conclusão a que se chegou olhando a LT0Q8R02EMW11 — e o dado estava certo o tempo todo:
+           * são 48 operações assim em 4.507, todas com pernas numeradas e distintas.
+           *
+           * SÓ APARECE QUANDO HÁ MAIS DE UMA. Escrever "1 de 1" em 4.459 linhas para explicar 48 seria
+           * pagar o ruído no lugar errado.
+           *
+           * E mostra "1 de 2", não só "1": sozinho, o número marcaria a segunda linha e deixaria a
+           * primeira parecendo normal — o que não desfaz a leitura de duplicata, só a desloca.
+           */}
+          {row.original.totalDePernas > 1 ? (
+            <span
+              className="shrink-0 rounded bg-muted px-1 text-[0.65rem] font-medium tabular-nums text-muted-foreground"
+              title={t("board.pernaTitulo")}
+            >
+              {t("board.perna", {
+                numero: row.original.legNumber,
+                total: row.original.totalDePernas,
+              })}
+            </span>
+          ) : null}
+        </span>
       ),
     },
     {
