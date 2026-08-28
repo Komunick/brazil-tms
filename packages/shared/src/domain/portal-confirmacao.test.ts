@@ -112,8 +112,19 @@ describe("atribuição", () => {
 });
 
 describe("recusa", () => {
-  it("declara que não há confirmação possível, em vez de fingir que confirmou", () => {
+  /**
+   * O DEFEITO QUE ESTE TESTE EXISTE PARA IMPEDIR (achado na revisão de 28/08, antes de ir ao ar).
+   *
+   * A primeira versão devolvia `false` aqui. Como o robô manda a releitura para TODA ação
+   * bem-sucedida, e quem encerra a ordem reprova em `false`, toda recusa que deu certo teria sido
+   * gravada como FALHA — silenciosamente, e só na produção, depois de o userscript ser publicado.
+   *
+   * `null` é "não há como conferir". `false` é "o portal desmentiu". Num caminho que decide gasto,
+   * essas duas respostas não podem ser a mesma.
+   */
+  it("devolve null — ausência de prova NÃO é prova de ausência", () => {
     const v = confirmarAcaoNoPortal({ acao: "reject", enviadas: [], portal: portal() });
-    expect(v.confirmado).toBe(false);
+    expect(v.confirmado).toBeNull();
+    expect(v.confirmado).not.toBe(false);
   });
 });
