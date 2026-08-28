@@ -1527,6 +1527,7 @@
       "loadingDrivers": "Carregando motoristas…",
       "plate": "Placa do veículo",
       "plateN": "Placa do veículo #{n}",
+      "efetuandoDica": "Não feche esta janela. Se o portal recusar, o erro aparece aqui e nada é enviado.",
       "efetuando": "Efetuando atribuição…",
       "falhouSemMotivo": "O portal recusou a atribuição e não disse o motivo. Nada foi enviado — refaça.",
       "soNoTms": "— só no TMS, não vai ao portal",

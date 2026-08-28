@@ -76,35 +76,55 @@
 }
 
 /**
- * A FAIXA QUE CORRE ENQUANTO A ATRIBUIÇÃO VOA (2026-08-28, a pedido).
+ * A BOLINHA DA ESPERA DA ATRIBUIÇÃO (2026-08-28, a pedido).
  *
- * ── POR QUE NÃO É UMA BARRA DE PORCENTAGEM ────────────────────────────────────────────────────
+ * Substituiu uma faixa que corria no rodapé. O pedido foi um popup no meio com uma bolinha — e a
+ * troca melhora mais do que o desenho: o popup COBRE o formulário, então ninguém fecha a janela
+ * sem querer no meio do envio, que era o risco de verdade.
  *
- * O caminho tem três tempos — o TMS enfileira, o robô pega, o portal responde — e nenhum deles
- * informa progresso. Uma barra que enche até 90% e para é pior que barra nenhuma: ela promete um
- * número que ninguém pode cumprir, e quem olha conclui que travou.
+ * ── DUAS ANIMAÇÕES, E NENHUMA É DECORAÇÃO ─────────────────────────────────────────────────────
  *
- * Uma faixa curta correndo de um lado a outro diz só "está acontecendo", que é exatamente o que
- * se sabe. É a mesma escolha de qualquer indeterminate progress bem-feita.
+ * `bolinha-gira` roda o SVG inteiro. `bolinha-traco` mexe no ARCO — ele cresce, encolhe e desliza
+ * ao redor. Só a rotação daria o giro mecânico de um ícone qualquer; é a segunda que faz o
+ * movimento parecer contínuo, e é o mesmo princípio do indicador circular do Material.
  *
- * ── E SOME COM prefers-reduced-motion ─────────────────────────────────────────────────────────
+ * Os números saem daí: a circunferência de um raio 20 é ~126, e os valores de `dasharray` são
+ * frações dela. Trocar o raio no SVG sem mexer aqui faz o arco descolar do círculo.
  *
- * Quem desligou animação não perde informação nenhuma: a palavra "Efetuando atribuição" continua
- * lá, e a faixa é escondida pelo `motion-reduce:hidden` de quem a desenha. Aqui a animação
- * simplesmente não roda.
+ * ── E COM prefers-reduced-motion NÃO RODA ─────────────────────────────────────────────────────
+ *
+ * O anel continua desenhado, parado, junto do texto. Sumir seria tirar a única marca visual de que
+ * a tela está ocupada — de quem já tem menos pistas, não mais.
  */
-@keyframes faixa-correndo {
+@keyframes bolinha-gira {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes bolinha-traco {
   0% {
-    transform: translateX(-100%);
+    stroke-dasharray: 1, 126;
+    stroke-dashoffset: 0;
+  }
+  50% {
+    stroke-dasharray: 90, 126;
+    stroke-dashoffset: -25;
   }
   100% {
-    transform: translateX(300%);
+    stroke-dasharray: 90, 126;
+    stroke-dashoffset: -124;
   }
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .animate-faixa-correndo {
-    animation: faixa-correndo 1.1s ease-in-out infinite;
+  .animate-bolinha-gira {
+    animation: bolinha-gira 1.8s linear infinite;
+    transform-origin: center;
+  }
+
+  .animate-bolinha-traco {
+    animation: bolinha-traco 1.4s ease-in-out infinite;
   }
 }
 
