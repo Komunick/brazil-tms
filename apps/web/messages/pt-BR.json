@@ -1529,6 +1529,7 @@
       "plateN": "Placa do veículo #{n}",
       "efetuandoDica": "Não feche esta janela. Se o portal recusar, o erro aparece aqui e nada é enviado.",
       "efetuando": "Efetuando atribuição…",
+      "aindaEmVoo": "O portal ainda não confirmou. A ordem continua valendo por até 3 minutos — confira a viagem antes de atribuir de novo, para não escalar em dobro.",
       "falhouSemMotivo": "O portal recusou a atribuição e não disse o motivo. Nada foi enviado — refaça.",
       "soNoTms": "— só no TMS, não vai ao portal",
       "addPlate": "Acrescentar placa",
