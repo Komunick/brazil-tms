@@ -66,6 +66,37 @@ export const PREMISSAS: Record<string, Premissa> = {
 export const ORDEM_BSC = Object.keys(PREMISSAS);
 
 /**
+ * A META QUE O CARTÃO ESCREVE — 99,5 para todos (2026-08-28, a pedido).
+ *
+ * ── ELA NÃO É O `target` DA PREMISSA, E ISSO É DE PROPÓSITO ───────────────────────────────────
+ *
+ * `Premissa.target` é o limiar CONTRATUAL, publicado pela Shopee, e continua sendo quem decide a
+ * COR e a barra: verde a partir dele, âmbar entre o mínimo e ele, vermelho abaixo do mínimo. Ele
+ * varia de 0 (Acidente Fatal, que é conformidade) a 100 (Scheduling), passando por 80 (SPOT).
+ *
+ * Esta constante é OUTRA COISA: o número único que a operação quer ver escrito ao lado de cada
+ * indicador. As duas coexistem porque respondem a perguntas diferentes — "o cliente me cobra a
+ * partir de quanto?" e "o que a gente persegue?".
+ *
+ * ── O QUE ISSO CUSTA, DITO AQUI PARA NINGUÉM DESCOBRIR SOZINHO ────────────────────────────────
+ *
+ * O cartão passa a escrever `meta 99,5` num indicador que fica VERDE com 93,33 — o SPOT, cujo
+ * limiar contratual é 80. Texto e cor dizem coisas diferentes, e isso é conhecido: foi mostrado
+ * ao usuário com esse exemplo exato antes de ele escolher, em 28/08.
+ *
+ * Se um dia isso incomodar, há dois caminhos e nenhum deles é apagar esta constante às cegas:
+ * ou a cor passa a seguir a meta exibida (e aí o mínimo de cada indicador precisa vir junto,
+ * senão o SPOT ganha uma faixa amarela de 22 pontos), ou o cartão mostra os DOIS números.
+ *
+ * ── E SÓ APARECE ONDE HÁ PREMISSA ─────────────────────────────────────────────────────────────
+ *
+ * Indicador que o BSC publicar e que não estiver em `PREMISSAS` continua sem rótulo nenhum. A
+ * regra "nunca com alvo inventado" vale mais ainda aqui: escrever 99,5 num indicador que a gente
+ * nem conhece seria inventar duas vezes.
+ */
+export const META_EXIBIDA = 99.5;
+
+/**
  * As três faixas do BSC, na regra do próprio relatório: a partir da meta é verde, do mínimo até a
  * meta é amarelo, abaixo do mínimo é vermelho.
  *

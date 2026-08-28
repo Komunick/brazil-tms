@@ -10,6 +10,7 @@ import { frescorDoBsc, idadeEmTexto } from "@/lib/bsc/frescor";
 import {
   faixaDo,
   indicadoresNaTela,
+  META_EXIBIDA,
   PREMISSAS,
   resumoNaTela,
   type Faixa,
@@ -246,10 +247,17 @@ export function BscCard({
                     {valor.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%
                   </span>
                   {premissa ? (
-                    // A meta ao lado do número transforma "83,61%" em "83,61% de 95" — sem ela, só
-                    // a cor diz que há problema, e cor sozinha não diz o TAMANHO do problema.
+                    /*
+                      A META ESCRITA É A `META_EXIBIDA`, e NÃO o `target` da premissa (28/08, a pedido).
+
+                      O `target` continua mandando na cor e na barra — ele é o limiar contratual. Este
+                      texto passou a ser o número único que a operação persegue. As duas coisas podem
+                      divergir na tela, e o porquê está escrito em `META_EXIBIDA`, com o exemplo do SPOT.
+
+                      Quem for "consertar" isto: leia lá antes. Não é engano.
+                    */
                     <span className="text-[0.68rem] text-muted-foreground">
-                      {t("target", { value: premissa.target.toLocaleString("pt-BR") })}
+                      {t("target", { value: META_EXIBIDA.toLocaleString("pt-BR") })}
                     </span>
                   ) : null}
                 </span>
