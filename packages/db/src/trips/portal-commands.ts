@@ -82,6 +82,31 @@ const ACAO_AUDITADA = {
 } as const;
 
 /**
+ * O SEGUNDO REGISTRO: o que o PORTAL respondeu (2026-08-28, a pedido).
+ *
+ * O de cima grava a DECISÃO — quem apertou, quando, com que placas. Ele é escrito na mesma
+ * transação do clique, antes de o robô sair, e por construção não sabe nada sobre o desfecho.
+ *
+ * Isto aqui é o par dele. Nasce quando o portal responde, e carrega a palavra DELE: o `retcode`
+ * como veio, a mensagem como veio, quanto tempo levou e qual tentativa foi.
+ *
+ * ── POR QUE DOIS REGISTROS, E NÃO UM ATUALIZADO ────────────────────────────────────────────────
+ *
+ * Porque são fatos de momentos e autores diferentes, e a auditoria existe para preservar ordem.
+ * Reescrever a linha da decisão com o desfecho apagaria a hora em que a pessoa decidiu — que é
+ * justamente o que se quer provar quando alguém pergunta "quem mandou isso, e o portal aceitou?".
+ *
+ * Em 28/08 a operação passou uma tarde achando que aceites não chegavam ao portal. A resposta
+ * estava em `portal_commands.response` o tempo inteiro, e só apareceu porque alguém foi ao banco
+ * com SQL. É esse caminho que este registro encurta.
+ */
+const ACAO_DO_DESFECHO = {
+  accept: "trip.portal_accept_result",
+  reject: "trip.portal_reject_result",
+  assign: "trip.portal_assign_result",
+} as const;
+
+/**
  * Grava a ordem, recusando tudo que o portal recusaria mais tarde.
  *
  * TUDO NUMA TRANSAÇÃO, com a viagem travada (`FOR UPDATE`): a checagem de "já tem ordem aberta?" e a
@@ -389,17 +414,60 @@ export async function encerrarOrdemDoPortal(entrada: {
   response?: unknown;
   error?: string | null;
 }): Promise<boolean> {
+  const agora = new Date();
   const linhas = await db
     .update(portalCommands)
     .set({
       status: entrada.ok ? "done" : "failed",
       response: (entrada.response ?? null) as never,
       lastError: entrada.ok ? null : (entrada.error?.slice(0, 500) ?? "sem detalhe"),
-      settledAt: new Date(),
+      settledAt: agora,
     })
     .where(and(eq(portalCommands.id, entrada.id), eq(portalCommands.status, "sent")))
-    .returning({ id: portalCommands.id });
-  return linhas.length > 0;
+    .returning();
+  const ordem = linhas[0];
+  if (!ordem) return false;
+
+  /**
+   * A PROVA, gravada fora da transação do clique.
+   *
+   * Não vai junto do `update` numa transação porque um erro ao escrever a auditoria não pode
+   * desfazer o encerramento: a ordem JÁ foi executada no portal, e voltar atrás no nosso lado
+   * criaria uma ordem eternamente `sent` que o robô tentaria de novo — mandando a mesma ação duas
+   * vezes ao fornecedor. Perder uma linha de auditoria é ruim; atribuir em dobro é pior.
+   *
+   * `respostaDoPortal` guarda o corpo COMO VEIO. Sem normalizar, sem extrair só o `retcode`: o
+   * dia em que o portal mudar o formato, quem ler esta linha precisa ver o que chegou de fato, não
+   * a nossa leitura de então.
+   */
+  const acao = ACAO_DO_DESFECHO[ordem.action as keyof typeof ACAO_DO_DESFECHO];
+  if (acao) {
+    const partiu = ordem.claimedAt ?? ordem.requestedAt;
+    await writeAudit(db, {
+      actorUserId: ordem.requestedBy,
+      action: acao,
+      entityType: "trip",
+      entityId: ordem.tripId,
+      previousValue: null,
+      newValue: {
+        commandId: ordem.id,
+        portalTripId: ordem.portalTripId,
+        externalTripId: ordem.externalTripId,
+        desfecho: entrada.ok ? "aceito pelo portal" : "recusado pelo portal",
+        // A palavra do portal, sem tradução nossa.
+        respostaDoPortal: (entrada.response ?? null) as never,
+        erro: entrada.ok ? null : (entrada.error?.slice(0, 500) ?? "sem detalhe"),
+        tentativa: ordem.attempts,
+        // Separa "demorou" de "não foi" — foi a pergunta da operação em 28/08.
+        segundos: partiu ? Math.round((agora.getTime() - partiu.getTime()) / 100) / 10 : null,
+        // O que SAIU daqui, para comparar com o que o portal devolveu.
+        placasEnviadas: ordem.plates,
+        driverId: ordem.driverId,
+        secondDriverId: ordem.secondDriverId,
+      },
+    });
+  }
+  return true;
 }
 
 /** As ordens desta viagem, da mais nova para a mais velha — é o que a tela mostra ao lado do botão. */
