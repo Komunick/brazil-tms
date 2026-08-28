@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Loader2 } from "lucide-react";
 import {
   alertaDoMotorista,
   formatDate,
@@ -28,6 +29,7 @@ import { PlacasDoMotorista } from "@/components/trips/placas-do-motorista";
 import { MelhoresDaRota } from "@/components/trips/melhores-da-rota";
 import {
   TripsError,
+  useOrdensDoPortal,
   usePortalAction,
   usePortalDrivers,
   usePortalPlacas,
@@ -106,6 +108,27 @@ export function PortalAssignDialog({
   const motoristas = usePortalDrivers();
   const placasConhecidas = usePortalPlacas();
   const acao = usePortalAction(tripId);
+  /**
+   * A ORDEM QUE ESTAMOS ESPERANDO FECHAR (2026-08-28, a pedido).
+   *
+   * ── O QUE ACONTECIA ANTES ─────────────────────────────────────────────────────────────────
+   *
+   * O diálogo fechava assim que o servidor respondia 202 — que quer dizer "enfileirei", não
+   * "atribuí". O caminho tem três tempos (o TMS enfileira, o robô pega, o portal responde) e a
+   * pessoa via o primeiro e ia embora. Quando o portal recusava, ela já não estava lá.
+   *
+   * Agora o diálogo SEGURA: guarda o id da ordem e acompanha até ela fechar. Deu certo, some com
+   * a mensagem de sempre; falhou, mostra o motivo do portal e fica aberto para refazer — que é
+   * exatamente o pedido ("se a ação não tiver sido concluída dá erro e nada é enviado").
+   *
+   * O id vem da resposta do POST, e não do topo da lista: duas ordens da mesma viagem podem estar
+   * em voo (alguém corrigindo uma atribuição logo depois de outra), e pegar "a mais recente"
+   * mostraria o desfecho da ordem errada.
+   */
+  const [aguardando, setAguardando] = useState<string | null>(null);
+  const ordens = useOrdensDoPortal(tripId, aguardando !== null);
+  const ordem = ordens.data?.items?.find((o) => o.id === aguardando) ?? null;
+  const emVoo = acao.isPending || aguardando !== null;
 
   const quantas = placasEsperadas(vehicleType);
   const [driverId, setDriverId] = useState(driverAtual ?? "");
@@ -222,7 +245,33 @@ export function PortalAssignDialog({
     secondDriverId: secondDriverId ? Number(secondDriverId) : null,
     plates: preenchidas,
   });
-  const erroDoServidor = acao.error instanceof TripsError ? acao.error.message : null;
+  /**
+   * O DESFECHO DA ORDEM.
+   *
+   * `done` fecha o diálogo; `failed` para a espera e deixa o erro à vista, com o diálogo aberto —
+   * a pessoa refaz sem redigitar tudo.
+   *
+   * Efeito, e não lógica no render: fechar o diálogo é efeito colateral, e `onOpenChange` durante
+   * a renderização derruba o React.
+   */
+  useEffect(() => {
+    if (!ordem) return;
+    if (ordem.status === "done") {
+      setAguardando(null);
+      onSent?.();
+      onOpenChange(false);
+    } else if (ordem.status === "failed") {
+      setAguardando(null);
+    }
+  }, [ordem, onSent, onOpenChange]);
+
+  /*
+   * O erro pode vir de DOIS lugares, e os dois precisam aparecer no mesmo canto: a recusa do
+   * servidor ao enfileirar (regra nossa) e a recusa do portal ao executar (regra deles).
+   */
+  const erroDoServidor =
+    (acao.error instanceof TripsError ? acao.error.message : null) ??
+    (ordem?.status === "failed" ? (ordem.lastError ?? t("falhouSemMotivo")) : null);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -452,12 +501,37 @@ export function PortalAssignDialog({
           />
         </div>
 
-        <DialogFooter>
-          <Button variant="ghost" disabled={acao.isPending} onClick={() => onOpenChange(false)}>
+        <DialogFooter className="items-center">
+          {/**
+            A ESPERA FICA VISÍVEL (2026-08-28, a pedido).
+
+            O caminho tem três tempos — o TMS enfileira, o robô pega, o portal responde — e ele leva
+            alguns segundos. Antes o diálogo fechava no primeiro deles, e o atraso virava silêncio:
+            a pessoa não sabia se tinha funcionado.
+
+            A barra é UMA FAIXA QUE CORRE, e não uma porcentagem: não temos como saber quanto falta,
+            e uma barra que enche até 90% e para é pior que barra nenhuma — ela promete um número
+            que ninguém pode cumprir. Correr diz "está acontecendo", que é tudo o que sabemos.
+
+            Some inteira com `prefers-reduced-motion`: fica só o texto, que já informa.
+          */}
+          {emVoo ? (
+            <span className="mr-auto flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
+              <span>{t("efetuando")}</span>
+              <span
+                aria-hidden
+                className="h-0.5 w-16 overflow-hidden rounded-full bg-muted motion-reduce:hidden"
+              >
+                <span className="block h-full w-1/3 rounded-full bg-primary animate-faixa-correndo" />
+              </span>
+            </span>
+          ) : null}
+          <Button variant="ghost" disabled={emVoo} onClick={() => onOpenChange(false)}>
             {t("cancel")}
           </Button>
           <Button
-            disabled={acao.isPending || impedimento !== null}
+            disabled={emVoo || impedimento !== null}
             onClick={() =>
               acao.mutate(
                 {
@@ -479,10 +553,13 @@ export function PortalAssignDialog({
                   },
                 },
                 {
-                  onSuccess: () => {
-                    onSent?.();
-                    onOpenChange(false);
-                  },
+                  /*
+                    202 QUER DIZER "ENFILEIREI", NÃO "ATRIBUÍ".
+
+                    Fechar aqui era o defeito: a pessoa saía antes de o portal responder. Agora este
+                    ponto só inicia a espera; quem fecha é o efeito que acompanha a ordem.
+                  */
+                  onSuccess: (resposta) => setAguardando(resposta.item.id),
                 },
               )
             }

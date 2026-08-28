@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import {
   impedimentoDaAcao,
   impedimentoDaAtribuicao,
@@ -280,7 +280,71 @@ export async function enfileirarOrdemDoPortal(entrada: {
  * `limite` pequeno de propósito: a fila é de decisão humana, não de volume. Mandar dez POSTs de uma
  * vez ao portal por causa de dez cliques é o tipo de rajada que faz um fornecedor desconfiar.
  */
+/**
+ * QUANTO TEMPO UMA ORDEM VALE (2026-08-28, a pedido).
+ *
+ * ── O QUE ACONTECIA SEM ISTO ──────────────────────────────────────────────────────────────────
+ *
+ * A ordem ficava `pending` para sempre. O sistema caiu durante uma atualização, alguém atribuiu, a
+ * ordem não saiu — e quando o robô voltou, ela saiu SOZINHA, minutos depois, sem ninguém esperando
+ * por aquilo. Foi o próprio usuário quem descreveu: "a atribuição não foi, mas quando o sistema
+ * voltou foi automático, ficou na fila; eu queria que desse erro e a pessoa fizesse de novo".
+ *
+ * Uma atribuição não é uma tarefa de fundo que pode acontecer a qualquer hora: ela é a decisão de
+ * alguém que está OLHANDO a tela. Executada dez minutos depois, ela chega num mundo diferente —
+ * outra pessoa já pode ter escalado, a viagem pode ter mudado — e ninguém liga o efeito à causa.
+ *
+ * ── POR QUE PRAZO, E NÃO OUTRA FILA ───────────────────────────────────────────────────────────
+ *
+ * A pergunta que veio junto foi se um broker (RabbitMQ) resolveria. Não resolveria, e por um
+ * motivo que não é de tecnologia: broker também é FILA. A mensagem esperaria lá do mesmo jeito e
+ * sairia atrasada igual. O que faltava nunca foi onde a ordem espera — era ela ter VALIDADE.
+ *
+ * (Broker externo, aliás, é excluído pela constituição do projeto: a fila é Postgres, um worker.)
+ *
+ * ── TRÊS MINUTOS ──────────────────────────────────────────────────────────────────────────────
+ *
+ * O caminho normal leva segundos: o robô pergunta de poucos em poucos segundos e o portal responde
+ * na hora. Três minutos é folga generosa para uma lentidão de rede e curto o bastante para que a
+ * pessoa ainda esteja na tela quando o erro aparecer — que é o ponto.
+ */
+const VALIDADE_DA_ORDEM_MIN = 3;
+
+/**
+ * Fecha como falha as ordens que passaram do prazo sem serem executadas.
+ *
+ * Roda nos DOIS caminhos — quando o robô pede trabalho e quando a tela pergunta o estado. O
+ * segundo é o que importa para quem está esperando: sem ele, a ordem expirada continuaria
+ * aparecendo como "em voo" numa tela que ninguém mais vai atender.
+ *
+ * `pending` apenas. Ordem já `sent` está com o robô, e matá-la criaria o pior dos dois mundos: a
+ * tela diria que falhou enquanto o portal recebe.
+ */
+export async function expirarOrdensVencidas(): Promise<number> {
+  const r = await db
+    .update(portalCommands)
+    .set({
+      status: "failed",
+      lastError: "expirou: a ordem não foi executada a tempo e não será enviada ao portal",
+      settledAt: new Date(),
+    })
+    .where(
+      and(
+        eq(portalCommands.status, "pending"),
+        lt(
+          portalCommands.requestedAt,
+          new Date(Date.now() - VALIDADE_DA_ORDEM_MIN * 60_000),
+        ),
+      ),
+    )
+    .returning({ id: portalCommands.id });
+  return r.length;
+}
+
 export async function pegarOrdensPendentes(limite = 5): Promise<OrdemDoPortal[]> {
+  // Antes de entregar trabalho, descarta o que venceu — senão o robô que volta de uma queda
+  // executaria ordens que ninguém mais espera. Ver `VALIDADE_DA_ORDEM_MIN`.
+  await expirarOrdensVencidas();
   return db.transaction(async (tx) => {
     const candidatas = await tx
       .select({ id: portalCommands.id })
@@ -340,6 +404,17 @@ export async function encerrarOrdemDoPortal(entrada: {
 
 /** As ordens desta viagem, da mais nova para a mais velha — é o que a tela mostra ao lado do botão. */
 export async function ordensDaViagem(tripId: string, limite = 5): Promise<OrdemDoPortal[]> {
+  /*
+   * EXPIRA ANTES DE LER, e é aqui que isso mais importa.
+   *
+   * Esta é a leitura que a TELA faz enquanto alguém espera. Sem a expiração acontecendo neste
+   * caminho, uma ordem vencida continuaria aparecendo como "em voo" para quem está olhando — e a
+   * pessoa esperaria por algo que nunca vai ser executado.
+   *
+   * O outro caminho (o robô pedindo trabalho) também expira, mas ele pode não voltar tão cedo: é
+   * justamente o caso da queda. Depender só dele deixaria a tela mentindo enquanto isso.
+   */
+  await expirarOrdensVencidas();
   const linhas = await db
     .select()
     .from(portalCommands)
