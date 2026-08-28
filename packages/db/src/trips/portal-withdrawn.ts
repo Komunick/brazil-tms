@@ -49,8 +49,19 @@ import { writeAudit } from "../audit/write-audit";
  *   viagem nenhuma. É a trava do dia ruim, e é ela — não a contagem — que protege contra a página
  *   vazia por erro de rede.
  *
- *   SÓ SEM TRAÇO OPERACIONAL. Nada de atribuição, documento, item de fatura ou exceção. Nenhuma
- *   candidata deveria ter, e é justamente por isso que se verifica.
+ *   SÓ SEM TRAÇO OPERACIONAL. Nada de atribuição, documento, item de fatura, exceção — nem ORDEM DE
+ *   PORTAL. Nenhuma candidata deveria ter, e é justamente por isso que se verifica.
+ *
+ * ── A SEXTA TRAVA, E POR QUE ELA DESMENTE O PARÁGRAFO ACIMA (2026-08-28) ───────────────────────
+ *
+ * "Nunca chegou a ser uma viagem: foi uma proposta retirada antes de qualquer coisa acontecer" vale
+ * enquanto ninguém tiver apertado Aceitar. Se apertou, aconteceu: há compromisso com o cliente, e
+ * some do portal por motivo NOSSO — a aba do Aceito era lida com 7 dias à frente contra os 30 do
+ * Planejado, e carga aceita para além de uma semana caía no vão entre as duas listas.
+ *
+ * Por isso a ordem de portal entrou na lista de traços. Até 28/08 quem impedia era a chave
+ * estrangeira, derrubando a varredura inteira com `23503` a cada meia hora — proteção por acidente,
+ * que levava junto as remoções legítimas. Ver o comentário na consulta.
  */
 
 /**
@@ -262,6 +273,28 @@ export async function marcarRetiradasDoPortal(
         sql`NOT EXISTS (SELECT 1 FROM billing_items b WHERE b.trip_id = ${trips.id})`,
         sql`NOT EXISTS (SELECT 1 FROM documents d WHERE d.trip_id = ${trips.id})`,
         sql`NOT EXISTS (SELECT 1 FROM exceptions x WHERE x.trip_id = ${trips.id})`,
+        /**
+         * A ORDEM DE PORTAL É TRAÇO OPERACIONAL, e faltava (2026-08-28, incidente medido).
+         *
+         * A premissa do bloco lá em cima — "essa nunca chegou a ser uma viagem: foi uma proposta
+         * retirada antes de qualquer coisa acontecer" — é FALSA quando alguém já apertou Aceitar.
+         * Aceitar é compromisso com o cliente, e some do portal por motivo nosso: até 28/08 a aba
+         * do Aceito era lida com 7 dias à frente contra os 30 do Planejado, então toda carga aceita
+         * com mais de uma semana de antecedência deixava de ser vista e virava candidata aqui.
+         *
+         * ── O QUE IMPEDIA ATÉ HOJE ERA UM ACIDENTE ────────────────────────────────────────────
+         *
+         * A chave estrangeira `portal_commands_trip_id_fkey`. Ela barrava o DELETE e a varredura
+         * inteira morria com `23503` — de meia em meia hora, desde as 16:00 do dia 28. Isso é
+         * proteção por efeito colateral: funciona, mas derruba junto as remoções legítimas, e o
+         * conserto "óbvio" (apagar em cascata) transformaria a trava em perda silenciosa de viagem
+         * aceita. Escrito como regra, o DELETE nunca é tentado e a varredura volta a rodar.
+         *
+         * Medido: `LT0Q8V02F17J1` e `LT0Q9502F19L1`, ambas aceitas em 28/08 e sobreviventes só
+         * porque a chave estrangeira as segurou. A `LT1Q8S02F13N1`, que veio do spot e não chegou
+         * a ter ordem, foi apagada às 10:00 — 3,3 horas depois de nascer.
+         */
+        sql`NOT EXISTS (SELECT 1 FROM portal_commands p WHERE p.trip_id = ${trips.id})`,
       ),
     );
 

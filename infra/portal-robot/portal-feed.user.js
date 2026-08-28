@@ -197,7 +197,22 @@
      */
     intervaloEmCursoMs: 5 * 60 * 1000,
     emCursoDiasAtras: 3,
-    emCursoDiasAdiante: 7,
+    /**
+     * TRINTA, IGUAL AO PLANEJADO (2026-08-28) — e antes eram SETE, o que fazia viagem aceita sumir.
+     *
+     * O Planejado é lido com 30 dias à frente; o Aceito era lido com 7. Aceitar move a viagem de uma
+     * aba para a outra, então toda carga aceita com mais de uma semana de antecedência caía no vão:
+     * saía da lista que alcança longe e entrava na que não alcança. O robô parava de vê-la.
+     *
+     * E parar de ver não é inofensivo aqui: a varredura de retiradas mede AUSÊNCIA. Sem ver, ela
+     * conclui "o cliente desistiu" — de uma viagem que a operação já tinha se comprometido a fazer.
+     *
+     * Medido em 28/08: a `LT0Q9502F19L1` entrega em 7,6 dias, foi aceita às 10:29 e deixou de ser
+     * vista às 14:23. Seis décimos de dia além da janela. Ela nunca saiu do portal.
+     *
+     * Não há razão para a aba do que já foi PROMETIDO enxergar menos longe do que a das propostas.
+     */
+    emCursoDiasAdiante: 30,
     /** Janela da execução: o que mudou nas últimas horas (o portal filtra por mtime). */
     execucaoHorasAtras: 6,
     /**
