@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { MapPin, Truck } from "lucide-react";
 import { chaveDaEstacao, distanciaKm, ufECidadeDaEstacao } from "@brazil-tms/shared";
@@ -68,6 +68,37 @@ export function VeiculosPorPerto({
    * um componente burro que recebe um id e obedece.
    */
   const [focado, setFocado] = useState<string | null>(null);
+  const caixaDoMapa = useRef<HTMLDivElement>(null);
+
+  /**
+   * CLICAR NO MOTORISTA ROLA A TELA ATÉ O MAPA (2026-08-28, a pedido).
+   *
+   * O mapa voava até o caminhão, mas o mapa em si podia estar abaixo da dobra — e a pessoa tinha de
+   * arrastar a tela para ver o resultado do próprio clique. Foi o pedido, literal: "quero que a aba
+   * desça automaticamente para o local do mapa, pois estou precisando arrastar para baixo".
+   *
+   * ── `block: "nearest"` E NÃO `"center"` ───────────────────────────────────────────────────────
+   *
+   * "nearest" só rola o necessário, e não faz nada quando o mapa JÁ está visível. Com "center" a
+   * tela daria um pulo a cada clique, mesmo quando não havia nada a corrigir — trocando um incômodo
+   * por outro.
+   *
+   * ── E RESPEITA QUEM DESLIGOU ANIMAÇÃO ─────────────────────────────────────────────────────────
+   *
+   * Rolagem suave é movimento, e movimento é justamente o que `prefers-reduced-motion` pede para
+   * evitar — em quem tem enxaqueca ou vertigem, uma tela que desliza sozinha é sintoma, não
+   * conforto. Para essas pessoas a tela salta direto: o destino é o mesmo, sem o trajeto.
+   */
+  const escolher = (placa: string) => {
+    setFocado(placa);
+    const suave =
+      typeof window !== "undefined" &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    caixaDoMapa.current?.scrollIntoView({
+      behavior: suave ? "smooth" : "auto",
+      block: "nearest",
+    });
+  };
   const frota = useFrotaComPosicao();
   const estacoes = useEstacoesComCoordenada();
 
@@ -252,7 +283,7 @@ export function VeiculosPorPerto({
                    */}
                   <button
                     type="button"
-                    onClick={() => setFocado(v.placa)}
+                    onClick={() => escolher(v.placa)}
                     title={t("verNoMapa")}
                     className="flex min-w-0 flex-1 items-center gap-2 text-left hover:underline"
                   >
@@ -329,7 +360,17 @@ export function VeiculosPorPerto({
             "está quebrado" em "falta ligar", que é acionável.
           */}
           {todos.length > 0 ? (
-            <>
+            /*
+              A ÂNCORA DA ROLAGEM É ESTA CAIXA, e não o mapa em si.
+
+              O mapa é um componente de terceiro que monta sozinho dentro de um `div` próprio; pendurar
+              a referência nele obrigaria a expor um `ref` para fora do `MapaDePosicoes`, só para rolar
+              a tela. A caixa em volta responde a mesma pergunta e não acopla nada.
+
+              A legenda entra junto de propósito: rolar até o mapa e deixar a legenda cortada embaixo
+              seria parar no meio da informação.
+            */
+            <div ref={caixaDoMapa} className="scroll-mt-2">
               <MapaDePosicoes
                 pontos={todos}
                 altura="18rem"
@@ -349,7 +390,7 @@ export function VeiculosPorPerto({
                 <Legenda cor="#94a3b8" borda="#475569" texto={t("estado_desligado")} />
                 <Legenda cor="#e2e8f0" borda="#94a3b8" texto={t("estado_sem_sinal")} />
               </div>
-            </>
+            </div>
           ) : frota.isPending ? null : (
             <div className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
               {t("semPosicaoNenhuma")}
