@@ -95,6 +95,18 @@ export async function runCarregarPosicoes(): Promise<ResultadoDaCarga> {
       cpfMotorista: soDigitos(p.Motorista),
       ignicao: texto(p.Ignicao),
       referencia: texto(p.PosReferencia),
+      /*
+       * OS TRÊS CAMPOS QUE JÁ CHEGAVAM E A GENTE DESCARTAVA (2026-08-28).
+       *
+       * Medido em produção com 108 posições: velocidade em 37 (nenhuma zero — o campo não vem
+       * quando o veículo está parado), tipo de rastreador e distância em 108 de 108.
+       *
+       * São eles que fazem a cor do ponto no mapa significar alguma coisa: antes ela dizia só
+       * qual linha da lista estava selecionada.
+       */
+      velocidade: inteiro(p.Velocidade),
+      tipoRastreador: texto(p.TipoRastreador),
+      distUltPosicao: numero(p.DistUltPosicao),
       posicaoEm: data(p.DataHoraPos),
     });
   }
@@ -110,6 +122,27 @@ export async function runCarregarPosicoes(): Promise<ResultadoDaCarga> {
  * registros medidos em 26/08 vieram assim, junto com data ausente. Passar adiante poria dois
  * caminhões no meio do oceano, e o mapa perderia a confiança de quem olha.
  */
+/**
+ * Um número qualquer, e NÃO uma coordenada.
+ *
+ * `coordenada` recusa zero e corta fora de ±180, porque para latitude e longitude essas duas
+ * coisas são erro de origem. Para distância percorrida as duas são legítimas: zero é "não saiu do
+ * lugar" — que é justamente o que a tela quer saber — e 300 km é uma viagem.
+ *
+ * Reusar `coordenada` aqui apagaria em silêncio exatamente o caso mais informativo.
+ */
+function numero(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Velocidade em km/h. Ausente quando o veículo não está andando — ver o schema. */
+function inteiro(v: unknown): number | null {
+  const n = numero(v);
+  return n === null ? null : Math.round(n);
+}
+
 function coordenada(v: unknown): number | null {
   const n = Number(v);
   if (!Number.isFinite(n) || n === 0) return null;

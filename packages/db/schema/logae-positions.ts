@@ -1,4 +1,11 @@
-import { doublePrecision, index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  doublePrecision,
+  index,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+} from "drizzle-orm/pg-core";
 
 /**
  * ONDE A GERENCIADORA VÊ CADA CAMINHÃO, com coordenada (2026-08-26, a pedido).
@@ -39,8 +46,32 @@ export const logaePositions = pgTable(
      * para recusar a posição de um caminhão que está rodando.
      */
     cpfMotorista: text("cpf_motorista"),
-    /** `L` ligado, `D` desligado — como a gerenciadora manda. */
+    /** `L` ligado, `D` desligado, `?` sem sinal — como a gerenciadora manda. */
     ignicao: text("ignicao"),
+    /**
+     * KM/H, e NULO NÃO SIGNIFICA "não sei" (2026-08-28).
+     *
+     * Medido em produção com 108 posições: 37 trouxeram velocidade, e NENHUMA com valor zero. O
+     * campo não é "0 quando parado" — ele simplesmente não vem. Então a leitura correta é sempre
+     * velocidade JUNTO da ignição:
+     *
+     *   ignição L + velocidade   -> rodando, e a quantos
+     *   ignição L sem velocidade -> ligado e parado (marcha lenta, carga, fila)
+     *   ignição D                -> desligado
+     *
+     * Interpretar nulo como "parado" sozinho erraria nos 2 sem sinal de ignição.
+     */
+    velocidade: integer("velocidade"),
+    /**
+     * `RA` rastreador, `LP` localizador — e a diferença muda a confiança na hora da posição.
+     *
+     * O rastreador reporta sozinho, de minuto em minuto; o localizador responde quando
+     * perguntado. Uma posição de LP com uma hora é o normal do aparelho; a mesma hora num RA é
+     * sinal de problema. Sem esta coluna, a tela trataria as duas como iguais.
+     */
+    tipoRastreador: text("tipo_rastreador"),
+    /** KM desde a posição anterior. Zero com ignição ligada por muito tempo é parado com motor. */
+    distUltPosicao: doublePrecision("dist_ult_posicao"),
     /** Referência textual, para quem quiser ler em vez de olhar o mapa. */
     referencia: text("referencia"),
     /**

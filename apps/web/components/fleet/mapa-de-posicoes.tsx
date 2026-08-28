@@ -43,6 +43,28 @@ import "leaflet/dist/leaflet.css";
  * Sem isso o mapa fica cinza e nada explica por quê.
  */
 
+/**
+ * O ESTADO DO VEÍCULO, que é o que a COR passa a dizer (2026-08-28, a pedido).
+ *
+ * Antes eram dois tons — azul e vermelho — e eles diziam apenas QUAL LINHA DA LISTA estava
+ * selecionada. Do lado de fora isso não significava nada: o pedido foi literalmente "o que
+ * significam esses pontos azuis e vermelhos, está sem sentido".
+ *
+ * Agora a cor responde a pergunta que alguém faz olhando um mapa de caminhões: este aqui está
+ * andando? A resposta vem da ignição JUNTO da velocidade (ver `VeiculoNoMapa.velocidade`), e a
+ * seleção deixou de ser cor — virou anel, que é o certo: selecionar é estado da TELA, mover é
+ * estado do MUNDO, e os dois disputando o mesmo canal foi o que tornou o mapa ilegível.
+ */
+export type EstadoNoMapa =
+  /** Ignição ligada e com velocidade: está rodando. */
+  | "rodando"
+  /** Ignição ligada e sem velocidade: motor rodando e parado — carga, fila, marcha lenta. */
+  | "ligado_parado"
+  /** Ignição desligada. */
+  | "desligado"
+  /** Sem sinal de ignição, ou posição velha demais para valer. */
+  | "sem_sinal";
+
 export interface PontoNoMapa {
   id: string;
   latitude: number;
@@ -50,22 +72,60 @@ export interface PontoNoMapa {
   /** O que aparece ao clicar no alfinete. Texto simples — nada de HTML de fora. */
   titulo: string;
   detalhe?: string;
-  /** Destacado: alfinete maior e em cor de destaque. Para a linha selecionada na lista ao lado. */
+  /** As linhas do balão, uma por linha. Texto simples: elas são escapadas antes de virar HTML. */
+  linhas?: readonly string[];
+  estado?: EstadoNoMapa;
+  /** Destacado: alfinete maior e com anel. Para a linha selecionada na lista ao lado. */
   destaque?: boolean;
 }
+
+/**
+ * As cores do estado.
+ *
+ * Verde anda, âmbar está ligado e parado, cinza está desligado, cinza claro perdeu o sinal. É a
+ * mesma escala de um painel de frota, e nenhuma delas quer dizer "bom" ou "ruim" — um caminhão
+ * desligado às três da manhã está certo.
+ */
+const COR: Record<EstadoNoMapa, { borda: string; dentro: string }> = {
+  rodando: { borda: "#15803d", dentro: "#22c55e" },
+  ligado_parado: { borda: "#b45309", dentro: "#f59e0b" },
+  desligado: { borda: "#475569", dentro: "#94a3b8" },
+  sem_sinal: { borda: "#94a3b8", dentro: "#e2e8f0" },
+};
 
 export function MapaDePosicoes({
   pontos,
   altura = "24rem",
   aoClicar,
+  focoNoId,
 }: {
   pontos: readonly PontoNoMapa[];
   altura?: string;
   aoClicar?: (id: string) => void;
+  /**
+   * O ponto para onde o mapa deve VOAR, e cujo balão deve abrir (2026-08-28, a pedido).
+   *
+   * O pedido foi "quando clicar no nome do cara, direcionar onde ele está no mapa". Sem isto, a
+   * lista e o mapa eram duas coisas ao lado uma da outra: clicar destacava um ponto que podia
+   * estar fora do enquadramento, e a pessoa tinha de caçá-lo.
+   *
+   * Vem de FORA como id, e não como uma função imperativa `irPara()`: assim a lista não precisa
+   * de referência ao mapa, e o estado de "quem está selecionado" mora num lugar só.
+   */
+  focoNoId?: string | null;
 }) {
   const caixa = useRef<HTMLDivElement>(null);
   const mapa = useRef<LeafletMap | null>(null);
   const alfinetes = useRef<Marker[]>([]);
+  /** Por id, para o efeito do foco achar o alfinete sem varrer a lista toda. */
+  const porId = useRef(new Map<string, Marker>());
+  /**
+   * O ENQUADRAMENTO INICIAL ACONTECE UMA VEZ.
+   *
+   * A lista recarrega sozinha, e reenquadrar a cada carga desfaria o zoom de quem está olhando —
+   * ou pior, cancelaria o voo que o clique acabou de fazer.
+   */
+  const jaEnquadrou = useRef(false);
 
   useEffect(() => {
     let vivo = true;
@@ -91,6 +151,7 @@ export function MapaDePosicoes({
       const m = mapa.current;
       for (const a of alfinetes.current) a.remove();
       alfinetes.current = [];
+      porId.current.clear();
 
       for (const p of pontos) {
         /**
@@ -100,24 +161,52 @@ export function MapaDePosicoes({
          * Next esse caminho quebra — o resultado é um mapa de alfinetes invisíveis, um clássico. O
          * `circleMarker` é desenhado, não carregado, e não depende de arquivo nenhum.
          */
+        /*
+         * A COR DIZ O ESTADO; a SELEÇÃO é o anel.
+         *
+         * Antes as duas coisas dividiam o mesmo canal — azul virava vermelho ao selecionar —, e o
+         * resultado era um mapa em que a cor não significava nada do mundo real. Agora o preenchimento
+         * responde "está andando?" e o contorno grosso responde "é este que você clicou".
+         */
+        const cor = COR[p.estado ?? "sem_sinal"];
         const alfinete = L.circleMarker([p.latitude, p.longitude], {
-          radius: p.destaque ? 9 : 6,
-          weight: 2,
-          color: p.destaque ? "#b91c1c" : "#1d4ed8",
-          fillColor: p.destaque ? "#ef4444" : "#3b82f6",
-          fillOpacity: 0.85,
+          radius: p.destaque ? 10 : 6,
+          weight: p.destaque ? 4 : 2,
+          color: p.destaque ? "#0f172a" : cor.borda,
+          fillColor: cor.dentro,
+          fillOpacity: 0.9,
         }).addTo(m);
 
-        // `bindPopup` com string montada por nós, nunca com dado cru: o texto vem do banco, e
-        // interpolar sem escapar seria injeção de HTML no mapa.
+        /*
+         * O BALÃO COM TUDO O QUE A GERENCIADORA MOSTRA (2026-08-28, a pedido).
+         *
+         * Era título e uma linha. O pedido foi ver "as informações que a Logae fala ao clicar no
+         * ícone dele" — placa, motorista, se está andando e a quantos, onde, e de quando é a posição.
+         *
+         * Cada pedaço é ESCAPADO. O texto vem do banco, e interpolar cru aqui seria injeção de HTML
+         * dentro do mapa — o `escapar` não é zelo, é a única defesa deste caminho.
+         */
+        const corpo = (p.linhas ?? (p.detalhe ? [p.detalhe] : []))
+          .filter(Boolean)
+          .map((linha) => escapar(linha))
+          .join("<br>");
         alfinete.bindPopup(
-          `<b>${escapar(p.titulo)}</b>${p.detalhe ? `<br>${escapar(p.detalhe)}` : ""}`,
+          `<b>${escapar(p.titulo)}</b>${corpo ? `<br>${corpo}` : ""}`,
+          { maxWidth: 260 },
         );
         if (aoClicar) alfinete.on("click", () => aoClicar(p.id));
         alfinetes.current.push(alfinete as unknown as Marker);
+        porId.current.set(p.id, alfinete as unknown as Marker);
       }
 
-      if (pontos.length > 0) {
+      /*
+       * ENQUADRA UMA VEZ SÓ.
+       *
+       * A lista recarrega sozinha. Reenquadrar a cada carga desfaria o zoom de quem está olhando e
+       * cancelaria o voo que o clique na lista acabou de fazer — o mapa "pulava de volta" sozinho.
+       */
+      if (pontos.length > 0 && !jaEnquadrou.current) {
+        jaEnquadrou.current = true;
         m.fitBounds(
           L.latLngBounds(pontos.map((p) => [p.latitude, p.longitude] as [number, number])),
           { padding: [30, 30], maxZoom: 12 },
@@ -140,6 +229,27 @@ export function MapaDePosicoes({
       limpar?.();
     };
   }, [pontos, aoClicar]);
+
+  /**
+   * VOAR ATÉ O ESCOLHIDO E ABRIR O BALÃO DELE (2026-08-28, a pedido).
+   *
+   * Efeito separado, dependendo só do id: junto do desenho dos alfinetes, ele voaria de novo a cada
+   * recarga da lista, e o mapa ficaria puxando a tela de volta enquanto alguém tenta arrastar.
+   *
+   * `flyTo` e não `setView`: a animação mostra PARA ONDE o mapa foi. Um salto instantâneo entre dois
+   * pontos distantes do país faz quem olha perder a referência de onde estava.
+   *
+   * O zoom vai a 11 no máximo — perto o bastante para ver a cidade, longe o bastante para não
+   * cair numa rua sem contexto.
+   */
+  useEffect(() => {
+    if (!focoNoId) return;
+    const m = mapa.current;
+    const alvo = porId.current.get(focoNoId);
+    if (!m || !alvo) return;
+    m.flyTo(alvo.getLatLng(), Math.max(m.getZoom(), 11), { duration: 0.6 });
+    alvo.openPopup();
+  }, [focoNoId, pontos]);
 
   /**
    * O mapa NÃO é destruído a cada mudança de pontos — só quando o componente sai.

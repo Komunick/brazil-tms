@@ -57,6 +57,17 @@ export function VeiculosPorPerto({
    */
   const [raioKm, setRaioKm] = useState(150);
   const [soLivres, setSoLivres] = useState(true);
+  /**
+   * QUAL VEÍCULO O MAPA ESTÁ MOSTRANDO (2026-08-28, a pedido).
+   *
+   * A lista e o mapa eram duas coisas lado a lado: clicar numa linha destacava um ponto que podia
+   * estar fora do enquadramento, e a pessoa tinha de caçá-lo. Agora o clique manda o mapa voar até
+   * ele e abrir o balão.
+   *
+   * O ESTADO MORA AQUI, e não no mapa: é a lista que sabe quem foi clicado, e assim o mapa continua
+   * um componente burro que recebe um id e obedece.
+   */
+  const [focado, setFocado] = useState<string | null>(null);
   const frota = useFrotaComPosicao();
   const estacoes = useEstacoesComCoordenada();
 
@@ -83,13 +94,25 @@ export function VeiculosPorPerto({
       latitude: v.latitude,
       longitude: v.longitude,
       titulo: v.placa,
-      detalhe: [
-        v.motorista ?? v.cpfMotorista ?? null,
-        v.cidade ? `${v.cidade}/${v.uf ?? ""}` : null,
+      estado: estadoDoVeiculo(v),
+      /*
+       * O BALÃO, uma linha por informação (2026-08-28, a pedido).
+       *
+       * Era tudo numa linha só, separado por pontos, e o pedido foi ver "as informações que a Logae
+       * fala ao clicar no ícone dele". A ordem é a da pergunta: quem dirige, está andando?, onde, e
+       * de quando é isso — porque uma posição de três horas atrás muda o valor de todo o resto.
+       *
+       * Linha ausente SOME, não vira travessão: metade dos campos não vem em metade dos veículos, e
+       * uma pilha de traços empurraria para fora do balão as três que interessam.
+       */
+      linhas: [
+        v.motorista ?? (v.cpfMotorista ? t("cpf", { cpf: v.cpfMotorista }) : null),
+        textoDoEstado(v, t),
+        v.cidade ? `${v.cidade}${v.uf ? `/${v.uf}` : ""}` : null,
+        v.referencia,
+        v.emViagem ? t("emViagemNa", { lh: v.emViagem }) : t("livre"),
         v.minutos == null ? null : t("minutosAtras", { n: v.minutos }),
-      ]
-        .filter(Boolean)
-        .join(" · "),
+      ].filter((x): x is string => Boolean(x)),
     }));
 
     if (!alvo.cidade) return { perto: [], todos: pontos };
@@ -210,12 +233,35 @@ export function VeiculosPorPerto({
           {perto.length > 0 ? (
             <ul className="space-y-1">
               {perto.map((v) => (
-                <li key={v.placa} className="flex items-center gap-2 text-xs">
-                  <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
-                  <span className="font-mono font-medium">{v.placa}</span>
-                  <span className="truncate text-muted-foreground">
-                    {v.motorista ?? v.cpfMotorista ?? t("semMotoristaVinculado")}
-                  </span>
+                <li
+                  key={v.placa}
+                  className={cn(
+                    "flex items-center gap-2 rounded px-1 text-xs",
+                    focado === v.placa && "bg-accent",
+                  )}
+                >
+                  {/**
+                   * A PLACA E O NOME LEVAM AO MAPA (2026-08-28, a pedido).
+                   *
+                   * "quando clicar no nome do cara é direcionar onde ele está no mapa". Os dois entram
+                   * no mesmo botão porque respondem à mesma pergunta — "cadê este aqui?" — e dois alvos
+                   * de clique lado a lado, num texto de 12px, viram um jogo de mira.
+                   *
+                   * BOTÃO DE VERDADE, e não um `div` com `onClick`: assim ele entra na navegação por
+                   * teclado e o leitor de tela anuncia que ali se clica.
+                   */}
+                  <button
+                    type="button"
+                    onClick={() => setFocado(v.placa)}
+                    title={t("verNoMapa")}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left hover:underline"
+                  >
+                    <MapPin className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden />
+                    <span className="font-mono font-medium">{v.placa}</span>
+                    <span className="truncate text-muted-foreground">
+                      {v.motorista ?? v.cpfMotorista ?? t("semMotoristaVinculado")}
+                    </span>
+                  </button>
                   {/*
                     EM VIAGEM É AVISO, e por isso tem cor.
 
@@ -283,7 +329,27 @@ export function VeiculosPorPerto({
             "está quebrado" em "falta ligar", que é acionável.
           */}
           {todos.length > 0 ? (
-            <MapaDePosicoes pontos={todos} altura="18rem" aoClicar={aoEscolherPlaca} />
+            <>
+              <MapaDePosicoes
+                pontos={todos}
+                altura="18rem"
+                aoClicar={aoEscolherPlaca}
+                focoNoId={focado}
+              />
+              {/**
+               * A LEGENDA, porque cor sem legenda é enfeite (2026-08-28).
+             *
+             * Foi a queixa exata: "o que significam esses pontos azuis e vermelhos". As cores novas
+             * dizem algo de verdade, mas nada na tela ensinava a lê-las — e uma escala que a pessoa
+             * precisa adivinhar é tão inútil quanto a antiga.
+             */}
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
+                <Legenda cor="#22c55e" borda="#15803d" texto={t("estadoRodandoCurto")} />
+                <Legenda cor="#f59e0b" borda="#b45309" texto={t("estado_ligado_parado")} />
+                <Legenda cor="#94a3b8" borda="#475569" texto={t("estado_desligado")} />
+                <Legenda cor="#e2e8f0" borda="#94a3b8" texto={t("estado_sem_sinal")} />
+              </div>
+            </>
           ) : frota.isPending ? null : (
             <div className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
               {t("semPosicaoNenhuma")}
@@ -293,4 +359,58 @@ export function VeiculosPorPerto({
       ) : null}
     </div>
   );
+}
+
+/** Uma bolinha e um rótulo — a mesma cor que o mapa desenha, para a leitura não depender de memória. */
+function Legenda({ cor, borda, texto }: { cor: string; borda: string; texto: string }) {
+  return (
+    <span className="flex items-center gap-1">
+      <span
+        aria-hidden
+        className="inline-block h-2 w-2 rounded-full"
+        style={{ backgroundColor: cor, border: `1px solid ${borda}` }}
+      />
+      {texto}
+    </span>
+  );
+}
+
+/**
+ * O ESTADO DO VEÍCULO, que é o que a cor do ponto passa a dizer.
+ *
+ * A regra é ignição JUNTO de velocidade, e não uma das duas: medido em produção, o campo
+ * `Velocidade` só vem quando o caminhão está andando — 37 de 108 posições, nenhuma com zero.
+ * Então velocidade ausente não é "parado", é "sem valor", e quem decide é a ignição.
+ *
+ *   L + velocidade   rodando
+ *   L sem velocidade ligado e parado (marcha lenta, carga, fila)
+ *   D                desligado
+ *   qualquer outra   sem sinal — inclusive o `?` que a gerenciadora manda em 2 de 108
+ *
+ * POSIÇÃO VELHA TAMBÉM É "sem sinal", por mais que a ignição diga algo: uma ignição ligada de seis
+ * horas atrás não descreve o caminhão de agora, e pintá-la de verde seria afirmar movimento que
+ * ninguém observou.
+ */
+const MINUTOS_ATE_ENVELHECER = 60;
+
+function estadoDoVeiculo(v: {
+  ignicao: string | null;
+  velocidade: number | null;
+  minutos: number | null;
+}): "rodando" | "ligado_parado" | "desligado" | "sem_sinal" {
+  if (v.minutos != null && v.minutos > MINUTOS_ATE_ENVELHECER) return "sem_sinal";
+  const ign = (v.ignicao ?? "").trim().toUpperCase();
+  if (ign === "L") return v.velocidade != null && v.velocidade > 0 ? "rodando" : "ligado_parado";
+  if (ign === "D") return "desligado";
+  return "sem_sinal";
+}
+
+/** A frase do estado, com a velocidade quando ela existe. */
+function textoDoEstado(
+  v: { ignicao: string | null; velocidade: number | null; minutos: number | null },
+  t: (k: string, vars?: Record<string, string | number>) => string,
+): string {
+  const estado = estadoDoVeiculo(v);
+  if (estado === "rodando") return t("estadoRodando", { kmh: v.velocidade ?? 0 });
+  return t(`estado_${estado}`);
 }
