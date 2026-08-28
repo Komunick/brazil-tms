@@ -265,13 +265,43 @@ export function PortalAssignDialog({
     }
   }, [ordem, onSent, onOpenChange]);
 
+  /**
+   * A VÁLVULA DE ESCAPE — a espera não pode prender ninguém (2026-08-28).
+   *
+   * A cobertura bloqueia fechar a janela, e isso é o ponto dela. Mas ela depende de a ordem
+   * FECHAR para sair, e há caminhos em que isso não acontece: a consulta de estado pode falhar, a
+   * rede pode cair, o navegador pode voltar do sono. Nesses casos a pessoa ficaria presa numa tela
+   * cinza sem botão nenhum — trocando um problema por outro pior.
+   *
+   * Passados VINTE E CINCO SEGUNDOS, a espera solta. É bem mais que o caminho normal, que leva
+   * poucos segundos, e bem menos que os três minutos de validade da ordem.
+   *
+   * ── E A MENSAGEM NÃO DIZ "REFAÇA" ─────────────────────────────────────────────────────────
+   *
+   * Deliberado. Soltar a espera NÃO cancela a ordem: ela continua valendo por até três minutos, e
+   * o robô ainda pode executá-la. Mandar refazer aqui criaria a atribuição em dobro, que é pior do
+   * que a demora. A frase manda CONFERIR antes — e é a verdade do que está acontecendo.
+   */
+  useEffect(() => {
+    if (!aguardando) return;
+    const t = setTimeout(() => setAguardando(null), 25_000);
+    return () => clearTimeout(t);
+  }, [aguardando]);
+
   /*
    * O erro pode vir de DOIS lugares, e os dois precisam aparecer no mesmo canto: a recusa do
    * servidor ao enfileirar (regra nossa) e a recusa do portal ao executar (regra deles).
    */
   const erroDoServidor =
     (acao.error instanceof TripsError ? acao.error.message : null) ??
-    (ordem?.status === "failed" ? (ordem.lastError ?? t("falhouSemMotivo")) : null);
+    (ordem?.status === "failed" ? (ordem.lastError ?? t("falhouSemMotivo")) : null) ??
+    /*
+      A ordem existe e continua aberta, mas a espera soltou pelo tempo. Não é erro — é "ainda não
+      sei", e a frase precisa dizer isso sem mandar refazer, senão vira atribuição em dobro.
+    */
+    (!aguardando && ordem && (ordem.status === "pending" || ordem.status === "sent")
+      ? t("aindaEmVoo")
+      : null);
 
   return (
     /*
