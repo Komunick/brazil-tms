@@ -337,8 +337,25 @@ export function PortalAssignDialog({
 
             {placas.map((placa, i) => (
               <div key={i} className="space-y-1.5">
+                {/**
+                  O RÓTULO DIZ QUANDO A PLACA NÃO VAI AO PORTAL (2026-08-28, a pedido).
+
+                  O portal aceita um número de placas que depende do tipo da LH — uma no truck, duas
+                  na carreta —, e recusa a atribuição inteira quando recebe a mais. A operação, no
+                  entanto, precisa registrar a carreta que seguiu junto de um truck.
+
+                  A regra, dita por quem opera: a PRIMEIRA placa é a que vai ao portal; o que passar
+                  disso fica como controle interno do TMS. O servidor faz esse corte ao enfileirar
+                  (ver `enfileirarOrdemDoPortal`), e este rótulo é o que impede a surpresa — sem ele,
+                  a pessoa preencheria os dois campos achando que os dois seguem.
+                */}
                 <Label htmlFor={`placa-${tripId}-${i}`}>
                   {placas.length > 1 ? t("plateN", { n: String(i + 1) }) : t("plate")}
+                  {i >= quantas ? (
+                    <span className="ml-1.5 font-normal text-muted-foreground">
+                      {t("soNoTms")}
+                    </span>
+                  ) : null}
                 </Label>
                 <div className="flex gap-2">
                   {/*

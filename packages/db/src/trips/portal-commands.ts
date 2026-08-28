@@ -5,6 +5,7 @@ import {
   impedimentoParaAtribuir,
   motivoValido,
   normalizarPlaca,
+  placasEsperadas,
   type ImpedimentoDaAcao,
   type ImpedimentoDaAtribuicao,
   type ImpedimentoParaAtribuir,
@@ -34,6 +35,13 @@ export interface OrdemDoPortal {
   driverId: number | null;
   secondDriverId: number | null;
   plates: string[];
+  /**
+   * As placas que NÃO foram ao portal e ficaram como controle interno (2026-08-28).
+   *
+   * Vazio na imensa maioria das ordens. Só tem valor quando alguém acrescentou uma placa a mais
+   * do que o tipo da LH comporta — a carreta que segue junto de um truck, tipicamente.
+   */
+  platesInternas: string[];
   status: "pending" | "sent" | "done" | "failed";
   attempts: number;
   lastError: string | null;
@@ -118,6 +126,8 @@ export async function enfileirarOrdemDoPortal(entrada: {
         id: trips.id,
         externalTripId: trips.externalTripId,
         customerFields: trips.customerFields,
+        // Decide QUANTAS placas o portal aceita nesta viagem. Ver a separação mais abaixo.
+        plannedVehicleType: trips.plannedVehicleType,
       })
       .from(trips)
       .where(eq(trips.id, entrada.tripId))
@@ -164,6 +174,26 @@ export async function enfileirarOrdemDoPortal(entrada: {
       }
     }
 
+    /**
+     * A PRIMEIRA PLACA VAI AO PORTAL; O QUE SOBRAR FICA NO TMS (2026-08-28, a pedido).
+     *
+     * O portal conta as placas contra o tipo da LH e recusa quando não fecha — medido: truck com
+     * duas placas falhou 6 vezes em 30 dias, carreta com uma falhou 1, e as combinações certas
+     * (carreta+2, truck+1, toco+1, 3/4+1) concluíram 141. Sete das nove falhas do período são isso.
+     *
+     * A resposta NÃO é bloquear: a operação precisa registrar a carreta que seguiu junto de um
+     * truck. Foi a primeira correção que tentei e ela estava errada — teria tirado uma coisa
+     * legítima para evitar um erro do fornecedor.
+     *
+     * `placasEsperadas` devolve 1 quando o tipo é nulo, e aqui isso seria destrutivo: mandaria só
+     * uma placa numa carreta cuja viagem veio sem o campo, e o portal recusaria pelo motivo oposto.
+     * Por isso, SEM TIPO CONHECIDO, nada é separado — vai tudo, como ia antes.
+     */
+    const todas = (entrada.plates ?? []).map(normalizarPlaca).filter(Boolean);
+    const cabem = v.plannedVehicleType ? placasEsperadas(v.plannedVehicleType) : todas.length;
+    const paraOPortal = todas.slice(0, cabem);
+    const internas = todas.slice(cabem);
+
     const campos = (v.customerFields ?? {}) as Record<string, string>;
     const abertas = await tx
       .select({ id: portalCommands.id })
@@ -203,10 +233,8 @@ export async function enfileirarOrdemDoPortal(entrada: {
         remark: entrada.action === "reject" ? entrada.remark?.trim() || null : null,
         driverId: entrada.action === "assign" ? (entrada.driverId ?? null) : null,
         secondDriverId: entrada.action === "assign" ? (entrada.secondDriverId ?? null) : null,
-        plates:
-          entrada.action === "assign"
-            ? (entrada.plates ?? []).map(normalizarPlaca).filter(Boolean).join(",")
-            : null,
+        plates: entrada.action === "assign" ? paraOPortal.join(",") || null : null,
+        platesInternas: entrada.action === "assign" ? internas.join(",") || null : null,
         requestedBy: entrada.requestedBy,
       })
       .returning();
@@ -233,6 +261,8 @@ export async function enfileirarOrdemDoPortal(entrada: {
         driverId: linha[0]!.driverId,
         secondDriverId: linha[0]!.secondDriverId,
         plates: linha[0]!.plates,
+        // A auditoria registra as DUAS: o que foi ao portal e o que ficou por controle interno.
+        platesInternas: linha[0]!.platesInternas,
       },
     });
     return paraOrdem(linha[0]!);
@@ -343,6 +373,7 @@ function paraOrdem(r: typeof portalCommands.$inferSelect): OrdemDoPortal {
     driverId: r.driverId,
     secondDriverId: r.secondDriverId,
     plates: (r.plates ?? "").split(",").filter(Boolean),
+    platesInternas: (r.platesInternas ?? "").split(",").filter(Boolean),
     status: r.status,
     attempts: r.attempts,
     lastError: r.lastError,
