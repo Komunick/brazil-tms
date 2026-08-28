@@ -17,6 +17,12 @@ export interface PosicaoParaGravar {
   cpfMotorista: string | null;
   ignicao: string | null;
   referencia: string | null;
+  /** KM/H. Nulo quase sempre quer dizer "não estava andando" — ver o schema. */
+  velocidade: number | null;
+  /** `RA` rastreador, `LP` localizador. Muda a confiança na hora da posição. */
+  tipoRastreador: string | null;
+  /** KM desde a posição anterior. Zero é válido e informativo. */
+  distUltPosicao: number | null;
   posicaoEm: Date | null;
 }
 
@@ -43,7 +49,7 @@ export async function gravarPosicoesDaGerenciadora(
   await db.execute(sql`
     insert into logae_positions
       (placa, latitude, longitude, cidade, uf, cpf_motorista, ignicao, referencia,
-       posicao_em, carregado_em)
+       velocidade, tipo_rastreador, dist_ult_posicao, posicao_em, carregado_em)
     values ${sql.join(valores, sql`, `)}
     on conflict (placa) do update set
       latitude = excluded.latitude,
@@ -53,6 +59,9 @@ export async function gravarPosicoesDaGerenciadora(
       cpf_motorista = excluded.cpf_motorista,
       ignicao = excluded.ignicao,
       referencia = excluded.referencia,
+      velocidade = excluded.velocidade,
+      tipo_rastreador = excluded.tipo_rastreador,
+      dist_ult_posicao = excluded.dist_ult_posicao,
       posicao_em = excluded.posicao_em,
       carregado_em = now()
   `);
@@ -66,6 +75,16 @@ export interface VeiculoNoMapa {
   cidade: string | null;
   uf: string | null;
   ignicao: string | null;
+  /**
+   * KM/H — e a leitura correta é sempre JUNTO da ignição (2026-08-28).
+   *
+   * O campo não vem quando o veículo está parado; medido, 37 de 108 e nenhuma com zero. Então
+   * nulo não quer dizer "não sei", quer dizer quase sempre "não estava andando". Ver o schema.
+   */
+  velocidade: number | null;
+  /** `RA` rastreador (reporta sozinho), `LP` localizador (responde quando perguntado). */
+  tipoRastreador: string | null;
+  distUltPosicao: number | null;
   referencia: string | null;
   posicaoEm: string | null;
   /** Quantos minutos desde a posição. É o que decide se ela ainda vale alguma coisa. */
@@ -106,6 +125,9 @@ export async function frotaComPosicao(idadeMaximaMinutos = 24 * 60): Promise<Vei
     cidade: string | null;
     uf: string | null;
     ignicao: string | null;
+    velocidade: number | null;
+    tipo_rastreador: string | null;
+    dist_ult_posicao: number | null;
     referencia: string | null;
     posicao_em: Date | null;
     minutos: number | null;
@@ -115,6 +137,7 @@ export async function frotaComPosicao(idadeMaximaMinutos = 24 * 60): Promise<Vei
   }>(sql`
     select
       p.placa, p.latitude, p.longitude, p.cidade, p.uf, p.ignicao, p.referencia,
+      p.velocidade, p.tipo_rastreador, p.dist_ult_posicao,
       p.posicao_em,
       case when p.posicao_em is null then null
            else floor(extract(epoch from (now() - p.posicao_em)) / 60)::int end as minutos,
@@ -171,6 +194,9 @@ export async function frotaComPosicao(idadeMaximaMinutos = 24 * 60): Promise<Vei
     cidade: r.cidade,
     uf: r.uf,
     ignicao: r.ignicao,
+    velocidade: r.velocidade == null ? null : Number(r.velocidade),
+    tipoRastreador: r.tipo_rastreador,
+    distUltPosicao: r.dist_ult_posicao == null ? null : Number(r.dist_ult_posicao),
     referencia: r.referencia,
     posicaoEm: r.posicao_em ? new Date(r.posicao_em).toISOString() : null,
     minutos: r.minutos == null ? null : Number(r.minutos),
@@ -207,5 +233,6 @@ export async function frotaComPosicao(idadeMaximaMinutos = 24 * 60): Promise<Vei
 export function linhaDeValores(p: PosicaoParaGravar) {
   return sql`(${p.placa}, ${p.latitude}, ${p.longitude}, ${p.cidade}, ${p.uf},
            ${p.cpfMotorista}, ${p.ignicao}, ${p.referencia},
+           ${p.velocidade}, ${p.tipoRastreador}, ${p.distUltPosicao},
            ${p.posicaoEm ? p.posicaoEm.toISOString() : null}, now())`;
 }

@@ -11,6 +11,8 @@ interface PlacaSugerida {
   vezes: number;
   ultimaEm: string | null;
   ultimaRota: string | null;
+  /** `carreta`, `truck`, `toco`… ou nulo quando o cadastro não sabe. Ver `placasDoMotorista`. */
+  tipo: string | null;
 }
 
 /**
@@ -117,6 +119,24 @@ export function PlacasDoMotorista({
             title={detalhe(p, t)}
           >
             {p.placa}
+            {/**
+             * O TIPO AO LADO DA PLACA (2026-08-28, a pedido).
+             *
+             * Uma viagem carrega cavalo e carreta juntos, e sem isto a tira de sugestões é uma pilha
+             * de códigos onde quem escala precisa reconhecer de cabeça qual é qual — que é
+             * exatamente o passo em que o erro entra.
+             *
+             * ABREVIADO, porque o espaço é de um botão: "CARR", "TRUCK". O nome inteiro fica no
+             * `title`, junto do resto do contexto.
+             *
+             * SOME QUANDO NÃO SE SABE — 15% das placas não estão em nenhum dos dois cadastros, e um
+             * rótulo chutado seria pior que rótulo nenhum: quem confia nele uma vez confia sempre.
+             */}
+            {p.tipo ? (
+              <span className="ml-1 rounded bg-muted px-1 text-[0.6rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                {abreviar(p.tipo)}
+              </span>
+            ) : null}
             {p.vezes > 1 ? (
               <span className="ml-1 text-muted-foreground tabular-nums">×{p.vezes}</span>
             ) : null}
@@ -127,9 +147,32 @@ export function PlacasDoMotorista({
   );
 }
 
-/** `ABC1D23 · 12 viagens · SIMÕES → JABOATÃO, 24/08` — o que o `title` mostra ao pousar o mouse. */
+/**
+ * O tipo do cadastro, curto o bastante para caber ao lado da placa.
+ *
+ * Os valores vêm do enum do banco (`carreta`, `truck`, `toco`, `tres_quartos`, `van`, `vuc`), e o
+ * que não estiver no mapa aparece como veio, em maiúsculas: um tipo novo no cadastro deve
+ * APARECER, mesmo feio, em vez de sumir por não ter tradução.
+ */
+const ABREVIACAO: Record<string, string> = {
+  carreta: "CARR",
+  truck: "TRUCK",
+  toco: "TOCO",
+  tres_quartos: "3/4",
+  van: "VAN",
+  vuc: "VUC",
+};
+
+function abreviar(tipo: string): string {
+  return ABREVIACAO[tipo] ?? tipo.replace(/_/g, " ").toUpperCase();
+}
+
+/** `ABC1D23 · carreta · 12 viagens · SIMÕES → JABOATÃO, 24/08` — o que o `title` mostra. */
 function detalhe(p: PlacaSugerida, t: (k: string, v?: Record<string, string>) => string): string {
-  const partes = [p.placa, t("timesUsed", { n: String(p.vezes) })];
+  const partes = [p.placa];
+  // O tipo por extenso aqui, e abreviado no botão: no `title` há espaço, e "carreta" lê melhor.
+  if (p.tipo) partes.push(p.tipo.replace(/_/g, " "));
+  partes.push(t("timesUsed", { n: String(p.vezes) }));
   if (p.ultimaRota) partes.push(p.ultimaRota);
   if (p.ultimaEm) {
     /*

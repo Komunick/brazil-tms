@@ -386,6 +386,13 @@
       "when": 1787666400008,
       "tag": "0054_passagem_de_turno",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1787752800008,
+      "tag": "0055_posicao_com_velocidade",
+      "breakpoints": true
     }
   ]
 }

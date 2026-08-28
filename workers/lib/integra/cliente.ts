@@ -292,6 +292,15 @@ export interface PosicaoDaGerenciadora {
   Latitude?: number | string;
   Longitude?: number | string;
   PosReferencia?: string;
+  /**
+   * KM/H. VEM SÓ QUANDO O VEÍCULO ESTÁ ANDANDO — medido: 37 de 108, nenhuma com zero.
+   *
+   * Ausência não é "parado", é "sem valor". Quem decide movimento é a ignição junto com isto.
+   */
+  Velocidade?: number | string;
+  VeloMediaCalc?: number | string;
+  /** KM desde a posição anterior. Veio em 108 de 108. */
+  DistUltPosicao?: number | string;
   Cidade?: string;
   UF?: string;
   Pais?: string;
