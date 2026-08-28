@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
+import { Truck } from "lucide-react";
 import {
   alertaDoMotorista,
   formatDate,
@@ -305,7 +306,7 @@ export function PortalAssignDialog({
             aria-live="assertive"
           >
             <div className="sticky top-1/2 flex flex-col items-center gap-3 rounded-xl border bg-card px-8 py-6 shadow-lg">
-              <Bolinha />
+              <CaminhaoNaEstrada />
               <p className="text-sm font-medium">{t("efetuando")}</p>
               <p className="max-w-[22rem] text-center text-xs text-muted-foreground">
                 {t("efetuandoDica")}
@@ -639,47 +640,32 @@ function AvisoDaCnh({
 }
 
 /**
- * A BOLINHA DA ESPERA (2026-08-28, a pedido).
+ * O CAMINHÃO NA ESTRADA — a espera da atribuição (2026-08-28, escolhido entre seis opções).
  *
- * ── POR QUE SVG, E NÃO O ÍCONE GIRANDO ────────────────────────────────────────────────────────
+ * ── DUAS PEÇAS, E A SEGUNDA É QUE FAZ FUNCIONAR ───────────────────────────────────────────────
  *
- * O `Loader2` do lucide com `animate-spin` é o caminho de uma linha, e ele gira um DESENHO: a
- * espessura do traço varia com o ângulo e o resultado "pisca" nas bordas. Aqui o círculo é um só,
- * e o que se anima é o TRAÇO dele — o arco cresce, encolhe e roda ao mesmo tempo. É o mesmo
- * princípio do indicador do Material, e a diferença aparece: o movimento fica contínuo em vez de
- * mecânico.
+ * O caminhão vai e volta num trecho curto; o asfalto embaixo corre em sentido contrário, sem
+ * parar. Sozinho, o caminhão pareceria hesitar — vai, volta, vai. É o traço do chão que dá a
+ * direção e transforma o movimento em "está indo".
  *
- * Duas animações compostas, e nenhuma biblioteca: `stroke-dasharray` e `stroke-dashoffset` são
- * propriedades do próprio SVG.
+ * ── ÍCONE, E NÃO EMOJI ────────────────────────────────────────────────────────────────────────
  *
- * ── E QUEM DESLIGOU ANIMAÇÃO VÊ UM ANEL PARADO ────────────────────────────────────────────────
+ * O rascunho que o usuário escolheu usava um emoji de caminhão, que é mais rápido de escrever e
+ * muda de desenho em cada sistema: no Windows é uma coisa, no Android é outra, e num navegador sem
+ * a fonte vira um quadrado. O `Truck` do lucide é o mesmo traço dos outros ícones do TMS e herda a
+ * cor por `currentColor`.
  *
- * Não some: o anel continua ali, cheio, junto do texto que diz o que está acontecendo. Some seria
- * tirar a única marca visual de que a tela está ocupada — de quem já tem menos pistas, não mais.
+ * ── E QUEM DESLIGOU ANIMAÇÃO VÊ O CAMINHÃO PARADO NA PISTA ────────────────────────────────────
+ *
+ * Não some. A cena continua desenhada, junto do texto que diz o que está acontecendo. Sumir seria
+ * tirar a única marca visual de que a tela está ocupada de quem já tem menos pistas, não mais.
  */
-function Bolinha() {
+function CaminhaoNaEstrada() {
   return (
-    <svg viewBox="0 0 50 50" className="h-10 w-10 animate-bolinha-gira motion-reduce:animate-none" aria-hidden>
-      {/* O anel de fundo dá o contorno do percurso — sem ele o arco parece flutuar sozinho. */}
-      <circle
-        cx="25"
-        cy="25"
-        r="20"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="4"
-        className="text-muted"
-      />
-      <circle
-        cx="25"
-        cy="25"
-        r="20"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="4"
-        strokeLinecap="round"
-        className="text-primary animate-bolinha-traco motion-reduce:animate-none"
-      />
-    </svg>
+    <div className="flex h-10 w-24 flex-col items-center justify-center gap-1.5" aria-hidden>
+      <Truck className="h-6 w-6 text-primary animate-caminhao-anda motion-reduce:animate-none" />
+      {/* A pista: o tracejado mora no CSS porque o que se anima nele é `background-position`. */}
+      <span className="h-[3px] w-full rounded-full animate-caminhao-pista motion-reduce:animate-none" />
+    </div>
   );
 }

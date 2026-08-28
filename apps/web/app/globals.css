@@ -76,55 +76,57 @@
 }
 
 /**
- * A BOLINHA DA ESPERA DA ATRIBUIÇÃO (2026-08-28, a pedido).
+ * O CAMINHÃO NA ESTRADA — a espera da atribuição (2026-08-28, escolhido entre seis opções).
  *
- * Substituiu uma faixa que corria no rodapé. O pedido foi um popup no meio com uma bolinha — e a
- * troca melhora mais do que o desenho: o popup COBRE o formulário, então ninguém fecha a janela
- * sem querer no meio do envio, que era o risco de verdade.
+ * ── DUAS ANIMAÇÕES, E A SEGUNDA É QUE DÁ SENTIDO À PRIMEIRA ───────────────────────────────────
  *
- * ── DUAS ANIMAÇÕES, E NENHUMA É DECORAÇÃO ─────────────────────────────────────────────────────
+ * `caminhao-anda` leva o veículo de um lado a outro de um trecho curto. Sozinha, ela pareceria
+ * hesitação: vai, volta, vai. `caminhao-pista` faz o asfalto correr em sentido CONTRÁRIO, sem
+ * parar — e é isso que transforma o vaivém em avanço. É o truque de qualquer cena lateral: quem
+ * anda é o fundo.
  *
- * `bolinha-gira` roda o SVG inteiro. `bolinha-traco` mexe no ARCO — ele cresce, encolhe e desliza
- * ao redor. Só a rotação daria o giro mecânico de um ícone qualquer; é a segunda que faz o
- * movimento parecer contínuo, e é o mesmo princípio do indicador circular do Material.
+ * O tracejado é um `repeating-linear-gradient` com `background-size` igual ao período do padrão
+ * (28px). Animar `background-position` em exatamente um período faz o laço fechar sem salto — se
+ * os dois números discordarem, aparece um tranco a cada volta.
  *
- * Os números saem daí: a circunferência de um raio 20 é ~126, e os valores de `dasharray` são
- * frações dela. Trocar o raio no SVG sem mexer aqui faz o arco descolar do círculo.
+ * ── E COM prefers-reduced-motion NADA RODA ────────────────────────────────────────────────────
  *
- * ── E COM prefers-reduced-motion NÃO RODA ─────────────────────────────────────────────────────
- *
- * O anel continua desenhado, parado, junto do texto. Sumir seria tirar a única marca visual de que
- * a tela está ocupada — de quem já tem menos pistas, não mais.
+ * A cena continua desenhada: caminhão parado sobre a pista, junto do texto. Sumir seria tirar a
+ * única marca visual de que a tela está ocupada de quem já tem menos pistas, não mais.
  */
-@keyframes bolinha-gira {
+@keyframes caminhao-anda {
+  0%,
   100% {
-    transform: rotate(360deg);
+    transform: translateX(-14px);
+  }
+  50% {
+    transform: translateX(14px);
   }
 }
 
-@keyframes bolinha-traco {
-  0% {
-    stroke-dasharray: 1, 126;
-    stroke-dashoffset: 0;
-  }
-  50% {
-    stroke-dasharray: 90, 126;
-    stroke-dashoffset: -25;
-  }
+@keyframes caminhao-pista {
   100% {
-    stroke-dasharray: 90, 126;
-    stroke-dashoffset: -124;
+    background-position: -28px 0;
   }
+}
+
+.animate-caminhao-pista {
+  /* Desenhada sempre — o movimento é que é opcional. */
+  background-image: repeating-linear-gradient(
+    90deg,
+    hsl(var(--primary)) 0 10px,
+    transparent 10px 18px
+  );
+  background-size: 28px 3px;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .animate-bolinha-gira {
-    animation: bolinha-gira 1.8s linear infinite;
-    transform-origin: center;
+  .animate-caminhao-anda {
+    animation: caminhao-anda 2.2s ease-in-out infinite;
   }
 
-  .animate-bolinha-traco {
-    animation: bolinha-traco 1.4s ease-in-out infinite;
+  .animate-caminhao-pista {
+    animation: caminhao-pista 0.7s linear infinite;
   }
 }
 
