@@ -155,7 +155,10 @@ export function PlacasDoMotorista({
  * APARECER, mesmo feio, em vez de sumir por não ter tradução.
  */
 const ABREVIACAO: Record<string, string> = {
-  carreta: "CARR",
+  // CARRETA é o reboque; CAVALO é quem puxa. Escrever "CARR" no cavalo foi o erro de 28/08 —
+  // ver o comentário de `tipo` em `placasDoMotorista`.
+  carreta: "CARRETA",
+  cavalo: "CAVALO",
   truck: "TRUCK",
   toco: "TOCO",
   tres_quartos: "3/4",
