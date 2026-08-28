@@ -1663,7 +1663,9 @@ export function usePortalAction(id: string) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       });
-      return asJson<{ item: unknown }>(res);
+      // O `id` é o que o diálogo usa para acompanhar ESTA ordem até ela fechar — duas da mesma
+      // viagem podem estar em voo, e "a mais recente" mostraria o desfecho da errada.
+      return asJson<{ item: { id: string } }>(res);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: TRIPS_ROOT });
