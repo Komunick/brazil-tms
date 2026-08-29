@@ -586,6 +586,13 @@
     "SoC_BA2,SoC_BA_Simoes Filho",
     "SoC_BA_Simoes Filho,SoC_PE_Jaboatão dos Guararapes",
     "SoC_PE_Jaboatão dos Guararapes,SoC_BA_Simoes Filho",
+    /*
+      Conferido contra os nomes REAIS do portal em 29/08, antes de entrar: `FM HUB_MG_Varginha`
+      (19 viagens) e `SOC_BA_SIMOES FILHO` (1.751). Foi escrita primeiro como
+      `FM HUB_MG_VARGINHA_03` — o sufixo existe em outras estações (`_03`, `_31`, `_01`), mas NÃO
+      nesta, e a linha teria ficado morta em silêncio, como a `SoC_BA2` já ficou.
+    */
+    "FM HUB_MG_Varginha,SOC_BA_SIMOES FILHO",
   ];
 
   const ROTAS_PERMITIDAS = new Set(
