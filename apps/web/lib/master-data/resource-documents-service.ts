@@ -19,7 +19,15 @@ import { Conflict, NotFound } from "@/lib/api/respond";
 
 interface ResourceDocumentRow {
   id: string;
-  entityType: ResourceDocumentEntityType;
+  /**
+   * A COLUNA aceita um terceiro dono desde a 028 (`preregistration`, a foto que o motorista manda
+   * pelo formulário público). Este serviço, não: todas as suas funções recebem o tipo por parâmetro
+   * já restrito a `driver | vehicle`, então uma linha de pré-cadastro nunca chega aqui.
+   *
+   * O tipo largo entra para dizer a verdade sobre o que vem do banco; quem estreita é `toDto`, com
+   * conferência de verdade em vez de um cast mudo.
+   */
+  entityType: "driver" | "vehicle" | "preregistration";
   entityId: string;
   docType: string;
   fileName: string;
@@ -31,6 +39,14 @@ interface ResourceDocumentRow {
 }
 
 function toDto(row: ResourceDocumentRow): ResourceDocumentDto {
+  /**
+   * A fronteira entre a coluna e a tela de frota. Se uma linha de pré-cadastro chegar até aqui, é
+   * erro de programação — alguém consultou sem filtrar pelo tipo — e vale falhar alto: devolvê-la
+   * mostraria a foto de um documento pessoal numa tela que não é dela.
+   */
+  if (row.entityType === "preregistration") {
+    throw new Error("Documento de pré-cadastro não pertence à tela de frota.");
+  }
   return {
     id: row.id,
     entityType: row.entityType,

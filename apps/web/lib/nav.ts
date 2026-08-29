@@ -248,6 +248,20 @@ export const NAV_ITEMS: readonly NavItem[] = [
    * descobrisse cada mudança tropeçando nela.
    */
   { key: "novidades", href: "/novidades", icon: "Sparkles", grupo: "sistema" },
+  /**
+   * A fila de pré-cadastros — o que o formulário público recebe (fatia 028).
+   *
+   * Em CADASTROS e não em operação: é conferência de cadastro de motorista, feita por quem cuida de
+   * frota, e não trabalho do dia da viagem. Mesma chave do cadastro de motorista, porque é a mesma
+   * pessoa — criar uma permissão nova para o mesmo grupo seria uma chave a mais para administrar.
+   */
+  {
+    key: "preCadastros",
+    href: "/pre-cadastros",
+    icon: "UserPlus",
+    permission: "manage_fleet_data",
+    grupo: "cadastros",
+  },
   // 002 — commercial master data (manage_commercial_data: Admin, Ops Manager).
   {
     key: "customers",

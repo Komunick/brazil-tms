@@ -81,3 +81,25 @@ describe("sem valor", () => {
     expect(linhasDaAuditoria(null)).toEqual([]);
   });
 });
+
+describe("o leilão de spot", () => {
+  it("preço em centavos vira reais — o erro de 100x é o que este teste existe para pegar", () => {
+    const [linha] = linhasDaAuditoria({ preco: 250000 });
+    expect(linha!.rotulo).toBe("Preço");
+    // R$ 2.500,00 — e NÃO "250000", que se leria como duzentos e cinquenta mil.
+    expect(linha!.valor).toMatch(/2\.500,00/);
+    expect(linha!.valor).not.toContain("250000");
+  });
+
+  it("sem preço não inventa zero", () => {
+    expect(linhasDaAuditoria({ preco: null })).toEqual([{ rotulo: "Preço", valor: "—" }]);
+  });
+
+  it("a rota vem antes da oferta — é ela que diz se a ausência era esperada", () => {
+    const linhas = linhasDaAuditoria({
+      ofertaDeSpot: "nenhuma",
+      rota: "SoC_RJ_Jacarepagua -> SoC_BA_Simoes Filho",
+    });
+    expect(linhas.map((l) => l.rotulo)).toEqual(["Rota", "Oferta de spot"]);
+  });
+});

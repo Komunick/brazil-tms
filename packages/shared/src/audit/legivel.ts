@@ -21,6 +21,8 @@
  */
 
 /** Um par pronto para desenhar. `valor` já vem em texto. */
+import { formatBRL } from "../formatting";
+
 export type LinhaLegivel = { rotulo: string; valor: string };
 
 /**
@@ -57,6 +59,11 @@ const ROTULOS: Record<string, string> = {
   respostaDoPortal: "Resposta do portal",
   releituraDoPortal: "Releitura do portal",
   erro: "Erro",
+  // O leilão de spot. `rota` vem antes de `ofertaDeSpot` porque é ela que diz se a ausência de
+  // oferta era esperada — ver `portal-trip-facts.ts`, que grava as duas justamente para isso.
+  rota: "Rota",
+  ofertaDeSpot: "Oferta de spot",
+  preco: "Preço",
   // A varredura de retiradas
   horasSemAparecer: "Horas sem aparecer no portal",
   portalLastSeenAt: "Visto no portal em",
@@ -107,6 +114,13 @@ function valorEmTexto(chave: string, valor: unknown, dic: Dicionarios): string {
     return texto.split(",").filter(Boolean).join(", ");
   }
   if (chave === "segundos") return `${texto}s`;
+  /**
+   * Dinheiro é guardado em CENTAVOS e precisa ser formatado, ou a auditoria mente por um fator de
+   * 100: `250000` lido cru parece duzentos e cinquenta mil reais, e são dois mil e quinhentos.
+   * Reusa `formatBRL`, o mesmo formatador do resto do sistema — moeda com duas grafias é a mesma
+   * armadilha, só que mais devagar.
+   */
+  if (chave === "preco" && typeof valor === "number") return formatBRL(valor);
   return texto;
 }
 

@@ -51,6 +51,13 @@ export type AuditAction =
   | "trip.portal_accept_result"
   | "trip.portal_reject_result"
   | "trip.portal_assign_result"
+  // 2026-08-29 — o leilão de spot ABRIU, e se o aviso saiu ou não.
+  // `bid_status` era lido pelo ciclo de spot e descartado; quando alguém perguntou por que um
+  // spot não foi avisado, não havia o que olhar. O ciclo do plano vê TODAS as viagens sem janela,
+  // então esta linha é o robô se pegando falhar.
+  | "trip.portal_auction_open"
+  // O descarte da fila de pré-cadastro (fatia 028). ARQUIVA, não apaga — princípio III.
+  | "preregistration.archive"
   // 026 — a ponte rota → modelo de Pré-SM. Confirmar AUTORIZA GASTO: a gerenciadora cobra por
   // solicitação, e uma rota confirmada passa a gerar Pré-SM sozinha. Quem confirmou fica registrado.
   | "pre_sm.modelo.confirmar"
@@ -220,6 +227,8 @@ export const ALL_AUDIT_ACTIONS = [
   "trip.portal_accept_result",
   "trip.portal_reject_result",
   "trip.portal_assign_result",
+  "trip.portal_auction_open",
+  "preregistration.archive",
   "pre_sm.modelo.confirmar",
   "pre_sm.modelo.desconfirmar",
   "pre_sm.enviar",

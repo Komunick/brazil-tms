@@ -32,6 +32,12 @@ export { applyPortalPlan, applyPortalPlanTrip } from "./trips/portal-plan-apply"
 export { linkFleetFromPortal } from "./trips/portal-fleet-link";
 export type { FleetLinkOutcome, FleetLinkResult } from "./trips/portal-fleet-link";
 export { resolvePortalActorId } from "./trips/portal-actor";
+export { resolvePreCadastroActorId } from "./service-actor";
+export { registrarPreCadastro, MuitosEnvios } from "./pre-cadastro/registrar";
+export type { EnvioDePreCadastro } from "./pre-cadastro/registrar";
+export { listarFilaDePreCadastros, arquivarPreCadastro } from "./pre-cadastro/fila";
+export type { ItemDaFila } from "./pre-cadastro/fila";
+export { chaveDoDocumentoDePreCadastro } from "./pre-cadastro/fila";
 export {
   marcarVistasNoPortal,
   marcarRetiradasDoPortal,

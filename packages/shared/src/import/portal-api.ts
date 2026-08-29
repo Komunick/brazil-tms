@@ -240,6 +240,20 @@ export function mapPortalApiTrips(payload: PortalApiEnvelope): PortalParseResult
       priceCents: portalPriceCents(raw.cost_unit),
       vehicleLabel: trimmed(raw.vehicle_type_name),
       plateLabel: trimmed(raw.vehicle_number),
+      /**
+       * O LEILÃO, que era lido e jogado fora (2026-08-29).
+       *
+       * `bid_status` vem nesta MESMA listagem desde sempre. O ciclo de spot o olhava para decidir
+       * se avisava, e descartava — nada ficava. Quando o usuário perguntou "por que não avisou
+       * desse spot?", a resposta honesta foi "não dá para saber": zero viagens no banco tinham o
+       * campo guardado.
+       *
+       * É a mesma lição do `Status (portal)` no comentário logo acima, e a mesma que a releitura
+       * do portal ensinou em 28/08: guardar o que a fonte diz, mesmo quando o uso imediato é outro.
+       *
+       * Medido: 10 é "em leilão" (17 de 442), 0 é sem leilão, 40 é encerrado.
+       */
+      bidStatus: typeof raw.bid_status === "number" ? raw.bid_status : null,
       stops,
       legs,
     });
