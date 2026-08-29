@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.122.0",
     "@brazil-tms/db": "workspace:*",
     "@brazil-tms/shared": "workspace:*",
     "csv-parse": "^6.2.1",

@@ -60,6 +60,7 @@ interface ItemDaFila {
   celular: string | null;
   envios: number;
   pendenciaToxicologico: boolean;
+  leituraCnh: { estado: string; motivo?: string; lidos?: number; total?: number } | null;
   documentoCnhId: string | null;
   documentoComprovanteId: string | null;
   recebidoEm: string;
@@ -191,6 +192,28 @@ export function FilaPreCadastrosClient(): React.ReactElement {
                     {item.envios > 1 ? (
                       <Badge variant="outline">{t("envios", { n: item.envios })}</Badge>
                     ) : null}
+                    {/*
+                      O ESTADO DA LEITURA, dito com honestidade.
+
+                      "Lendo…" quando ainda não processou, a contagem quando deu certo, e o motivo
+                      quando falhou. Um selo que só aparecesse no sucesso deixaria a falha
+                      indistinguível de "ainda não chegou a vez" — e alguém esperaria por algo que
+                      nunca vem.
+                    */}
+                    {item.leituraCnh === null ? (
+                      <Badge variant="outline" className="text-muted-foreground">
+                        {t("cnhLendo")}
+                      </Badge>
+                    ) : item.leituraCnh.estado === "lido" ? (
+                      <Badge variant="secondary">
+                        {t("cnhLida", { lidos: item.leituraCnh.lidos ?? 0, total: item.leituraCnh.total ?? 0 })}
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="text-amber-700 dark:text-amber-400"
+                        title={item.leituraCnh.motivo ?? undefined}>
+                        {item.leituraCnh.estado === "nao_configurado" ? t("cnhSemChave") : t("cnhFalhou")}
+                      </Badge>
+                    )}
                     {item.pendenciaToxicologico ? (
                       <Badge variant="outline" className="text-amber-700 dark:text-amber-400">
                         {t("toxicologico")}
