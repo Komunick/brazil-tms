@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.16.0
+// @version      1.17.1
 // @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -138,8 +138,21 @@
      * cobre 209 viagens em vez de 442. Menos página, menos tempo, mesma cobertura.
      */
     intervaloSpotMs: 5 * 1000,
-    /** Três vezes o intervalo, pela mesma razão do incremental do plano: um ciclo que falhe não custa uma oferta. */
-    spotJanelaSegundos: 15,
+    /**
+     * SESSENTA SEGUNDOS, e eram quinze até 29/08.
+     *
+     * O filtro é por `mtime`: uma oferta entra na janela no instante em que MUDA, e só nesse
+     * instante. Se o ciclo atrasar mais que a janela — portal lento, aba em segundo plano, VNC
+     * engasgando —, a oferta cai no vão entre duas varreduras e **nunca mais é olhada**. Não há
+     * segunda chance: o ciclo seguinte pergunta pelos segundos seguintes.
+     *
+     * Quinze segundos davam três passagens por oferta. Sessenta dão doze, e a repetição não custa
+     * nada: `spotJaVistos` descarta em memória, e o TMS descarta pelo id do portal.
+     *
+     * É barato do lado do portal também — a janela maior traz mais linhas na mesma página, não
+     * mais páginas.
+     */
+    spotJanelaSegundos: 60,
     spotDiasAdiante: 3,
     /** `bid_status = 10` é "em leilão". Medido: 10 aparece em 17 de 442; 0 é sem leilão e 40 é encerrado. */
     spotBidStatusAberto: 10,
@@ -573,6 +586,19 @@
     "SoC_BA2,SoC_BA_Simoes Filho",
     "SoC_BA_Simoes Filho,SoC_PE_Jaboatão dos Guararapes",
     "SoC_PE_Jaboatão dos Guararapes,SoC_BA_Simoes Filho",
+    /*
+      Conferido contra os nomes REAIS do portal em 29/08, antes de entrar: `FM HUB_MG_Varginha`
+      (19 viagens) e `SOC_BA_SIMOES FILHO` (1.751). Foi escrita primeiro como
+      `FM HUB_MG_VARGINHA_03` — o sufixo existe em outras estações (`_03`, `_31`, `_01`), mas NÃO
+      nesta, e a linha teria ficado morta em silêncio, como a `SoC_BA2` já ficou.
+    */
+    "FM HUB_MG_Varginha,SOC_BA_SIMOES FILHO",
+    /*
+      Conferida contra o banco em 29/08: `SoC_RJ_Jacarepagua` (5 viagens). Existe também um
+      `XPT_RJ_Jacarepaguá` — outra estação, outro prefixo e com acento —, e é por isso que o nome
+      não se escreve de memória: as duas leem igual em voz alta e só uma casa.
+    */
+    "SoC_RJ_Jacarepagua,SoC_BA_Simoes Filho",
   ];
 
   const ROTAS_PERMITIDAS = new Set(
@@ -633,6 +659,33 @@
     });
   }
 
+  /**
+   * Diz ao TMS que este ciclo completou. Sem corpo de dados: só quem, de quanto em quanto, e
+   * quanto levou — é o que separa "não há oferta" de "não há robô".
+   *
+   * A falha é ENGOLIDA de propósito: um pulso que não chega não pode derrubar a varredura que
+   * ele existe para vigiar. Perder um pulso atrasa um aviso; perder o ciclo perde uma oferta.
+   */
+  function pulsar(duracaoMs) {
+    return new Promise((resolve) => {
+      GM_xmlhttpRequest({
+        method: "POST",
+        url: `${CONFIG.tms}/api/imports/robot-pulse`,
+        headers: { "Content-Type": "application/json" },
+        data: JSON.stringify({
+          token: CONFIG.token,
+          robot: "portal_spot",
+          cicloMs: CONFIG.intervaloSpotMs,
+          duracaoMs: duracaoMs,
+        }),
+        timeout: 15000,
+        onload: () => resolve(),
+        onerror: () => resolve(),
+        ontimeout: () => resolve(),
+      });
+    });
+  }
+
   async function cicloSpot() {
     const payload = await buscarPagina(
       "/api/line_haul/agency/trip/list",
@@ -679,20 +732,33 @@
    * e a linha que importa — "SPOT: chegou uma oferta" — se perderia no meio. Aqui só se escreve
    * quando há o que dizer.
    *
-   * E NÃO ESCREVE PULSO PRÓPRIO. O pulso existe para dizer se um PROCESSO está vivo, e este ciclo
-   * não é um processo: ele roda dentro do robô do portal, que já pulsa a cada cinco minutos pelo
-   * ciclo do plano. Se aquele pulso está fresco, este laço está de pé — eram duas máquinas antes,
-   * e é uma agora. Um pulso separado aqui diria a mesma coisa duas vezes, e um pulso que só se
-   * escreve quando há oferta (elas são raras: de 3 a 21 por dia) nasceria velho e acusaria morte
-   * onde há sossego.
+   * ── E AGORA ESCREVE PULSO, corrigindo o parágrafo que estava aqui (2026-08-29) ───────────────
+   *
+   * O texto anterior dizia que o pulso do plano bastava: "se aquele pulso está fresco, este laço
+   * está de pé". O raciocínio tem um furo, e ele custou uma investigação.
+   *
+   * O pulso do plano prova que a PÁGINA está viva. Não prova que ESTE ciclo está funcionando: o
+   * laço tem `try/catch` próprio, então ele pode falhar em toda volta — rede, sessão, mudança no
+   * portal — e continuar girando calado, com o pulso do plano fresquinho ao lado.
+   *
+   * Em 29/08 ficamos oito horas sem nenhuma oferta, com uma viagem de rota permitida que nunca
+   * virou aviso. Não deu para dizer se o mercado estava parado ou se o ciclo estava quebrado,
+   * porque não havia o que olhar. "Sem oferta" e "sem robô" eram a mesma tela.
+   *
+   * O pulso é gravado DEPOIS de um ciclo bem-sucedido, então ele diz o que interessa: não que a
+   * aba está aberta, mas que a varredura completou. E vai para o SERVIDOR, não para o console — a
+   * preocupação de silêncio acima continua valendo, e nenhuma linha nova aparece por lá.
    */
   (async function lacoDoSpot() {
     for (;;) {
+      const t0 = Date.now();
       try {
         await cicloSpot();
+        // Só depois do sucesso: o pulso diz que a varredura COMPLETOU, não que a aba está aberta.
+        await pulsar(Date.now() - t0);
       } catch (e) {
         // Sem barulho a cada falha: num laço de cinco segundos, uma oscilação de rede viraria
-        // dezenas de linhas iguais. O ciclo seguinte tenta de novo, e a janela de 15 s cobre o furo.
+        // dezenas de linhas iguais. O ciclo seguinte tenta de novo, e a janela de 60 s cobre o furo.
         erro("spot falhou (tenta de novo):", String(e?.message ?? e).slice(0, 120));
       }
       await new Promise((r) => setTimeout(r, CONFIG.intervaloSpotMs));
