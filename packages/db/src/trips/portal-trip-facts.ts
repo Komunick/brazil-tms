@@ -1,7 +1,9 @@
 import { eq } from "drizzle-orm";
 import type { PortalTrip } from "@brazil-tms/shared";
 import { db } from "../client";
-import { trips } from "../../schema";
+import { spotOffers, trips } from "../../schema";
+import { writeAudit } from "../audit/write-audit";
+import { resolvePortalActorId } from "./portal-actor";
 
 /**
  * O que o CLIENTE diz sobre esta viagem, gravado onde cada coisa pertence (2026-08-16).
@@ -57,6 +59,31 @@ export async function writePortalFacts(
    */
   if (portal.status) fields["Status (portal)"] = portal.status;
   /**
+   * O LEILÃO, que era lido e jogado fora (2026-08-29).
+   *
+   * O ciclo de spot olhava `bid_status` para decidir se avisava e descartava. Quando o usuário
+   * perguntou "por que não avisou desse spot?", não deu para responder: zero viagens tinham o
+   * campo guardado, e a viagem em questão já havia sido purgada com o dado dentro.
+   *
+   * Guardado aqui, no ciclo do PLANO, que é o que enxerga todas as viagens a cada cinco minutos
+   * SEM filtro de janela. O ciclo de spot vê pela fresta de sessenta segundos; este vê tudo. Se um
+   * leilão passar batido lá, ele aparece aqui — é a segunda linha de defesa que faltava.
+   *
+   * O rótulo é traduzido porque é o que a tela mostra; o código bruto vira parte dele quando for
+   * desconhecido, pelo mesmo motivo do `Status (portal)`: aprender os que faltam a partir do dado
+   * real, em vez de chamar tudo de "outro".
+   */
+  if (typeof portal.bidStatus === "number") {
+    fields["Leilão (portal)"] =
+      portal.bidStatus === 10
+        ? "Aberto"
+        : portal.bidStatus === 40
+          ? "Encerrado"
+          : portal.bidStatus === 0
+            ? "Sem leilão"
+            : `Leilão ${portal.bidStatus}`;
+  }
+  /**
    * O eixo da ACEITAÇÃO, que é onde a operação decide (2026-08-17).
    *
    * "Pending" quer dizer que a viagem chegou e alguém precisa aceitar ou rejeitar a proposta.
@@ -83,5 +110,73 @@ export async function writePortalFacts(
     .update(trips)
     .set({ customerFields: merged, updatedAt: new Date() })
     .where(eq(trips.id, tripId));
+
+  /**
+   * O LEILÃO VIRA REGISTRO QUANDO ABRE — e diz se o aviso saiu (2026-08-29, a pedido).
+   *
+   * Só na TRANSIÇÃO para aberto: enquanto o leilão dura, o ciclo do plano passa por ele a cada
+   * cinco minutos, e uma linha por passagem encheria a auditoria com o mesmo fato.
+   *
+   * ── POR QUE ELE GRAVA A ROTA, E NÃO ACUSA ─────────────────────────────────────────────────────
+   *
+   * A tentação era escrever "o aviso NÃO saiu" quando não há oferta registrada. Seria mentira na
+   * maioria das vezes: a lista de rotas de interesse mora DENTRO do userscript (`ROTAS_PERMITIDAS`)
+   * e filtra antes de mandar, então `spot_offers` só conhece as nossas ~30 rotas. Leilão de rota
+   * alheia sem oferta é o filtro FUNCIONANDO — 659 viagens em 30 dias, decisão e não defeito.
+   *
+   * Duplicar a lista aqui para saber a diferença seria pior ainda: duas listas divergem em silêncio,
+   * e a segunda passaria a acusar um erro que não existe.
+   *
+   * Então a linha grava o PAR DE ESTAÇÕES ao lado da oferta, e não conclui nada. Quem lê compara com
+   * a lista do robô: rota nossa sem oferta é falha de verdade; rota alheia sem oferta é o esperado.
+   * A pergunta de 29/08 — "por que não avisou desse spot?" — se responde com esses dois campos.
+   *
+   * Em 29/08 a pergunta "por que não avisou desse spot?" ficou sem resposta porque `bid_status` era
+   * lido e descartado, e a viagem foi purgada com o dado dentro. Esta linha é a resposta que faltou.
+   *
+   * Falhar aqui NÃO desfaz a gravação dos fatos: a auditoria é registro, e perder uma linha dela é
+   * ruim, mas perder a atualização da viagem por causa dela seria pior.
+   */
+  const virouLeilao =
+    fields["Leilão (portal)"] === "Aberto" && existing?.["Leilão (portal)"] !== "Aberto";
+  if (virouLeilao && portal.portalTripId) {
+    try {
+      const [jaAvisado] = await db
+        .select({ id: spotOffers.id })
+        .from(spotOffers)
+        .where(eq(spotOffers.portalTripId, portal.portalTripId))
+        .limit(1);
+      await writeAudit(db, {
+        /**
+         * A conta de serviço do robô, a mesma que assina a varredura de retiradas.
+         *
+         * `audit_logs.actor_user_id` é `NOT NULL` com chave estrangeira para `users`: a tabela foi
+         * desenhada para atos de GENTE. Um registro do robô continua precisando de um autor, e o
+         * usuário de serviço é a resposta honesta — em vez de afrouxar a coluna para caber uma
+         * exceção, que abriria a porta para auditoria sem dono.
+         *
+         * Resolvido aqui dentro, e não recebido por parâmetro: quem chama é o caminho de
+         * importação, que roda sem sessão e não teria de onde tirar.
+         */
+        actorUserId: await resolvePortalActorId(),
+        action: "trip.portal_auction_open",
+        entityType: "trip",
+        entityId: tripId,
+        previousValue: null,
+        newValue: {
+          portalTripId: portal.portalTripId,
+          externalTripId: portal.externalTripId,
+          // Os dois campos com que se responde "por que não avisou desse spot?". Ver o bloco acima:
+          // é a ROTA que diz se a ausência de oferta era esperada ou é falha.
+          rota: `${portal.stops[0]?.stationName ?? "?"} -> ${portal.stops.at(-1)?.stationName ?? "?"}`,
+          ofertaDeSpot: jaAvisado ? "registrada" : "nenhuma",
+          preco: portal.priceCents ?? null,
+        },
+      });
+    } catch {
+      // Ver o bloco acima: registro perdido é ruim; viagem não atualizada é pior.
+    }
+  }
+
   return true;
 }

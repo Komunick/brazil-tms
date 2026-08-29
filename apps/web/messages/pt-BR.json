@@ -450,6 +450,7 @@
     "trip_portal_reject_result": "Portal respondeu à recusa",
     "trip_portal_assign": "Atribuição enviada ao portal",
     "trip_portal_assign_result": "Portal respondeu à atribuição",
+    "trip_portal_auction_open": "Leilão de spot aberto no portal",
     "pre_sm_modelo_confirmar": "Correspondência de rota confirmada",
     "pre_sm_modelo_desconfirmar": "Correspondência de rota desfeita",
     "pre_sm_cancelar": "Pré-SM cancelada",
