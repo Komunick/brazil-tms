@@ -13,8 +13,19 @@ import { afterAll, describe, expect, it } from "vitest";
  */
 
 const hasDb = Boolean(process.env.DATABASE_URL);
-const CPF_A = "39053344705";
-const CPF_B = "01932653546";
+
+/**
+ * CPFs EXCLUSIVOS DESTE ARQUIVO — não repita os de `route-resposta-identica.test.ts`.
+ *
+ * O vitest roda arquivos em PARALELO contra o mesmo banco. Quando os dois usavam os mesmos CPFs,
+ * um derrubava o outro com `duplicate key ... driver_preregistrations_cpf_aberto_uq` — e a leitura
+ * inocente disso seria "o índice único está errado", quando ele estava fazendo exatamente o que
+ * deve. O defeito era dos testes.
+ *
+ * Dígito verificador válido: o esquema recusa qualquer coisa que não seja um CPF real.
+ */
+const CPF_A = "52867491355";
+const CPF_B = "74218539600";
 
 const criados = { pre: [] as string[], motorista: null as string | null };
 
