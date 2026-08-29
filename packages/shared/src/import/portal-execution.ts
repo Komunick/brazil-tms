@@ -136,6 +136,15 @@ export interface PortalTrip {
   priceCents?: number | null;
   vehicleLabel: string | null;
   plateLabel: string | null;
+  /**
+   * O estado do LEILÃO, quando a origem o traz (2026-08-29).
+   *
+   * Opcional porque só a listagem da API o carrega — a importação por planilha não tem isso, e
+   * exigir aqui obrigaria a inventar um valor lá.
+   *
+   * Medido: 10 é "em leilão", 0 é sem leilão, 40 é encerrado.
+   */
+  bidStatus?: number | null;
   stops: PortalStop[];
   legs: PortalLeg[];
 }
