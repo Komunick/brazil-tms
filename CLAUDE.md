@@ -73,51 +73,57 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/027-aba-gr/plan.md` (a aba GR — a Pré-SM feita por uma pessoa, depois da
-atribuição). O desenho e as decisões de uso em `docs/PROPOSTA-ABA-GR.md`; as sete decisões difíceis
-em `specs/027-aba-gr/research.md`; a API inteira em `docs/INTEGRA-14.2-REFERENCIA.md`.
+Active feature plan: `specs/028-fila-cadastro-motorista/plan.md` — o **pré-cadastro de motorista
+parceiro**, preenchido pelo próprio motorista. **Tem prazo: 10/09/2026**, um evento com mais de 50
+motoristas e ninguém do escritório presente.
 
-**A 026 está no `dev` e NÃO deve ser promovida como está.** Ela cria a Pré-SM sozinha via
-`setPreSMdeModelo`, e a gerenciadora respondeu por escrito em 25/08: **"Tem que ser pelo setPreSM"**.
-A 027 substitui esse miolo. O resto da 026 sobrevive inteiro e **não se reescreve**.
+O desenho e a API em `docs/PROPOSTA-CADASTRO-MOTORISTA.md`; o que foi medido em
+`specs/028-fila-cadastro-motorista/research.md`; **o contrato para o outro repositório** em
+`contracts/pre-cadastro.md`.
 
-**O que a fatia faz**: a LH atribuída cai numa aba **GR**. A linha mostra o que será enviado (placas,
-motorista, vínculos, janela de coleta) e o que falta, com o botão travado enquanto faltar. Envio
-**uma por uma**, sem lote. Depois de enviada a viagem **fica** na aba, em seção separada, com o
-código e o cancelamento.
+**O QUE TEM DATA são as etapas 1 e 2** — a rota que recebe e a fila. Leitura da CNH, conferência,
+envio à gerenciadora e automação são P2/P3 e **não podem bloquear o evento**.
 
-**O QUE NÃO SE REESCREVE** (tudo já no `dev`): o vínculo A/F/T e as migrações `0046`/`0047` · a
-tabela `trip_pre_sm` e seus estados, incluindo `nao_tentada` · o índice único parcial · o
-cancelamento (`setCancelaPreSM`, job + botão) · o aviso de divergência · a tela de conferência de
-correspondências · o cliente da Integra em `workers/lib/integra/cliente.ts`.
-
-**O que SOME**: `setPreSMdeModelo` e `getModelosPreSM` no cliente · o job `pre_sm.carregar_modelos` ·
-a coluna `cod_modelo`.
+**A DIVISÃO ENTRE DOIS REPOSITÓRIOS**: o formulário vive em `site-brazil-transports` (servidor
+144.24.36.23, não clonado aqui). O TMS é **banco e API**. Este repositório entrega para lá o
+**contrato**, nunca código.
 
 **ARMADILHAS desta fatia** — as cinco que quebram de verdade:
 
-1. **Não reescrever a 026.** A tabela do plano diz o que sobrevive. Refazer é retrabalho e risco.
-2. **`drizzle-kit generate` NÃO serve aqui.** O journal tem 49 entradas e 27 snapshots: ele diffa
-   contra o `0024` e **recria tabelas de produção**. Migração escrita à mão, sempre.
-3. **Reusar `tokensDaEstacao`, nunca escrever um segundo normalizador.** A função nova
-   (`ufECidadeDaEstacao`) devolve o que aquela descarta. Dois normalizadores divergem **em
-   silêncio** — a estação não casa e nenhum erro aparece.
-4. **Hora de São Paulo, nunca UTC.** A gerenciadora agenda escolta em hora local; mandar UTC desloca
-   toda coleta em três horas, **passa em teste**, e só aparece na estrada.
-5. **`subcontracted` não tem letra A/F/T.** Significa "ainda não classificado" — 1.246 veículos e
-   405 motoristas estão assim. Vira motivo de bloqueio, nunca um chute.
+1. **A resposta da rota é IDÊNTICA nos três casos de CPF** (novo · já na fila · já é motorista).
+   Diferenciar — no corpo, no código ou no tempo — transforma o formulário numa máquina de
+   descobrir quem é motorista da empresa. Há teste afirmando isso byte a byte; se ele cair, não
+   "conserte o teste".
+2. **O TMS revalida TUDO**, mesmo o que o formulário já validou. Uma requisição feita fora do site
+   chega igual à feita por dentro.
+3. **`drizzle-kit generate` NÃO serve aqui.** O journal diffa contra o `0024` e **recria tabelas de
+   produção**. Migração escrita à mão, e renumerada só no merge.
+4. **Descartar ARQUIVA, não apaga** — princípio III da constituição. O índice único de CPF é
+   parcial justamente por isso.
+5. **Campo não lido fica VAZIO e assinalado, nunca inventado.** Um valor plausível e errado é pior
+   do que um vazio, porque ninguém confere o que parece certo.
 
-**A PENDÊNCIA, com dono**: não se sabe como o `setPreSM` amarra a Pré-SM à programação que a Logae já
-tem do portal — **não há campo de código de programação em nenhum método de criação**, conferido na
-referência. Pergunta em aberto com a gerenciadora. Isso **não bloqueia as etapas 1 a 4**; o formato
-do corpo fica isolado em `packages/shared/src/domain/pre-sm-corpo.ts`, e é o único lugar que muda
-quando a resposta chegar.
+**O QUE JÁ EXISTE E NÃO SE REESCREVE**: a fatia **025** (bucket privado, histórico, link curto) —
+as fotos entram por ali · `drivers.ownershipType` é o vínculo A/F/T · `drivers` já tem nome, CPF,
+telefone e CNH · as decisões da fatia **021** sobre leitura de documento são herdadas e ampliadas.
+
+**Descoberto em 29/08, relendo o manual do PDF em vez da conversão HTML** (53 métodos contra 62):
+o `setMotorista` **tem** um bloco `Documentos` em Base64 — dá para anexar arquivo pela API, ao
+contrário do que se afirmava. E há campos de fallback para quando o código IBGE não é conhecido.
+**O toxicológico continua não existindo em lugar nenhum do manual** — capturar e marcar como ação
+manual, nunca inventar endpoint.
+
+**Ler manual em PDF**: use o **PDF**, não conversão. `pdftotext -layout` + `iconv -f LATIN1`. A
+conversão HTML perde tabelas inteiras e já levou a duas conclusões erradas por ausência.
+
+---
+
+**A 027 (aba GR) está PAUSADA**, não cancelada: `specs/027-aba-gr/plan.md`. E **a 026 está no `dev`
+e NÃO deve ser promovida como está** — ela cria a Pré-SM via `setPreSMdeModelo`, e a gerenciadora
+respondeu em 25/08 que **tem de ser pelo `setPreSM`**. A 027 substitui esse miolo; o resto da 026
+sobrevive inteiro e não se reescreve (vínculo A/F/T, migrações `0046`/`0047`, `trip_pre_sm`, o
+cancelamento, a tela de conferência, o cliente da Integra).
 
 **Validar sem gastar**: não há homologação (`CodErro 100`, medido) e a gerenciadora **cobra por
-solicitação**. `getCidades`, `getRotas`, `getCliente` e `getTabela` são leitura e não custam — dá
-para carregar tudo e olhar a aba com dados reais antes de existir botão que gaste.
-
-**Fora de escopo**: efetivar (`setEfetivaPreSM`) · envio em lote · alterar Pré-SM quando a atribuição
-muda (só avisa) · cancelamento automático ao cancelar a viagem · documentos, ajudante e temperatura ·
-criar programação na Logae · ligar a criação automática.
+solicitação**. Tudo das etapas 1 a 4 da 028 não gasta nada.
 <!-- SPECKIT END -->
