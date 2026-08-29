@@ -4,7 +4,6 @@ import {
   impedimentoDaAcao,
   impedimentoDaAtribuicao,
   impedimentoParaAtribuir,
-  mapPortalApiTrips,
   motivoValido,
   normalizarPlaca,
   placasEsperadas,
@@ -459,22 +458,50 @@ export async function encerrarOrdemDoPortal(entrada: {
     if (!entrada.ok || entrada.confirmacao == null) return null;
     const acao = ordemPrevia?.action;
     if (acao !== "accept" && acao !== "reject" && acao !== "assign") return null;
-    const viagens = mapPortalApiTrips(entrada.confirmacao).trips;
-    const alvo = viagens.find((v) => v.portalTripId === ordemPrevia?.portalTripId) ?? viagens[0];
-    if (!alvo) {
-      return { confirmado: false, motivo: "a releitura do portal não trouxe a viagem" };
+    /**
+     * O `/trip/detail` devolve UMA viagem em `data`, não uma lista (2026-08-29, consertando o
+     * mesmo dia em que subiu).
+     *
+     * Eu tinha usado `mapPortalApiTrips`, que lê `data.list[]` — a forma da LISTAGEM. Contra o
+     * detalhe ela não acha nada, e o "não achei" virava `confirmado: false`. Resultado medido em
+     * produção: quatro atribuições marcadas como FALHA enquanto o portal mostrava todas como
+     * `Assigned`. Elas tinham funcionado.
+     *
+     * ── E A LIÇÃO SE REPETIU ────────────────────────────────────────────────────────────────────
+     *
+     * É a MESMA de ontem com a recusa: só uma contradição POSITIVA pode reprovar. Não conseguir
+     * interpretar a releitura é ignorância nossa, não desacordo do portal — e ignorância devolve
+     * `null`, que deixa a ordem passar como não verificada.
+     *
+     * A forma vem documentada em `mapPortalApiDetail`:
+     *   { retcode, message, data: { trip_number, acceptance_status, vehicle_number, … } }
+     */
+    const cru = (entrada.confirmacao as { data?: Record<string, unknown> } | null)?.data;
+    if (!cru || typeof cru !== "object") {
+      return { confirmado: null, motivo: "a releitura do portal veio sem corpo que eu saiba ler" };
+    }
+    const texto = (v: unknown): string | null =>
+      typeof v === "string" && v.trim() !== "" ? v.trim() : null;
+    const alvo = {
+      acceptanceStatus:
+        typeof cru.acceptance_status === "number"
+          ? (cru.acceptance_status === 1 ? "Accepted" : "Pending")
+          : null,
+      status: null,
+      plateLabel: texto(cru.vehicle_number),
+      driverLabel: texto(cru.driver_name),
+    };
+    // Sem os campos que a regra precisa, o detalhe não serve para confirmar NEM para desmentir.
+    if (alvo.acceptanceStatus == null && alvo.plateLabel == null) {
+      return {
+        confirmado: null,
+        motivo: "a releitura não trouxe aceitação nem placa — nada a conferir",
+      };
     }
     return confirmarAcaoNoPortal({
       acao,
       enviadas: (ordemPrevia?.plates ?? "").split(",").map((p) => p.trim()).filter(Boolean),
-      // `?? null` porque o mapeador omite campo ausente e a regra distingue "veio vazio" de
-      // "não veio" — as duas viram `null` aqui, e a regra trata as duas como não confirmável.
-      portal: {
-        acceptanceStatus: alvo.acceptanceStatus ?? null,
-        status: alvo.status ?? null,
-        plateLabel: alvo.plateLabel ?? null,
-        driverLabel: alvo.driverLabel ?? null,
-      },
+      portal: alvo,
     });
   })();
 
