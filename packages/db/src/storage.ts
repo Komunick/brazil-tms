@@ -54,7 +54,7 @@ export function documentStorageKey(tripId: string, documentId: string, ext: stri
  * (`resources/<entityType>/<entityId>/<documentId>.<ext>`; same private documents bucket as 008).
  */
 export function resourceDocumentStorageKey(
-  entityType: "driver" | "vehicle",
+  entityType: "driver" | "vehicle" | "preregistration",
   entityId: string,
   documentId: string,
   ext: string,

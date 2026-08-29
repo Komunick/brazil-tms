@@ -31,6 +31,7 @@ export * from "./document-types";
 export * from "./documents";
 export * from "./document-requirements";
 export * from "./resource-documents";
+export * from "./driver-preregistrations";
 export * from "./rates";
 export * from "./export-batches";
 export * from "./billing-items";

@@ -232,3 +232,24 @@ export const billingAdjustmentType = pgEnum("billing_adjustment_type", [
   "discount",
   "manual_adjustment",
 ]);
+
+/**
+ * O pré-cadastro de motorista parceiro (fatia 028), decidido NO RECEBIMENTO.
+ *
+ * `novo` é CPF que não existe em lugar nenhum; `atualizacao` é CPF de motorista ativo, e a linha
+ * carrega o id dele. O terceiro caso — CPF que já tem pré-cadastro aberto — não vira linha: o envio
+ * é anexado ao que existe, e por isso não tem valor aqui.
+ */
+export const driverPreregistrationType = pgEnum("driver_preregistration_type", [
+  "novo",
+  "atualizacao",
+]);
+
+/** `arquivado` é o descarte: ele MARCA, não apaga (princípio III). */
+export const driverPreregistrationStatus = pgEnum("driver_preregistration_status", [
+  "recebido",
+  "em_conferencia",
+  "pronto",
+  "enviado",
+  "arquivado",
+]);
