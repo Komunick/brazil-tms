@@ -17,7 +17,20 @@ export const resourceDocuments = pgTable(
   "resource_documents",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    entityType: text("entity_type").$type<"driver" | "vehicle">().notNull(),
+    /**
+     * `preregistration` entrou na 028, e DE PROPÓSITO só aqui.
+     *
+     * O CHECK do banco passou a aceitar os três (migração 0057) porque a foto do pré-cadastro é
+     * mandada por quem ainda NÃO é motorista, e pendurá-la num `drivers` inventado seria criar
+     * cadastro a partir de formulário público.
+     *
+     * Mas `RESOURCE_DOCUMENT_ENTITY_TYPES`, no pacote compartilhado, continua sendo só
+     * `driver | vehicle`: aquilo é o vocabulário das ROTAS DE FROTA, o que o segmento de URL
+     * aceita. Alargá-lo faria a rota autenticada de frota passar a receber `preregistration` e cair
+     * dentro de `assertResourceDocumentParent`, que procura o pai em `drivers`/`vehicles` e não
+     * acharia nada. Este tipo descreve a COLUNA; aquele descreve a porta.
+     */
+    entityType: text("entity_type").$type<"driver" | "vehicle" | "preregistration">().notNull(),
     entityId: uuid("entity_id").notNull(),
     docType: text("doc_type").notNull(),
     fileName: text("file_name").notNull(),
@@ -32,7 +45,7 @@ export const resourceDocuments = pgTable(
   (table) => [
     check(
       "resource_documents_entity_type_ck",
-      sql`${table.entityType} IN ('driver', 'vehicle')`,
+      sql`${table.entityType} IN ('driver', 'vehicle', 'preregistration')`,
     ),
     index("resource_documents_entity_idx").on(table.entityType, table.entityId, table.createdAt),
   ],

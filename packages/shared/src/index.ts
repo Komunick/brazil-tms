@@ -36,6 +36,7 @@ export * from "./documents/jobs";
 export * from "./schemas/auth";
 export * from "./schemas/admin-user";
 export * from "./schemas/master-data";
+export * from "./schemas/pre-cadastro";
 export * from "./schemas/trip";
 export * from "./schemas/trip-assignment";
 export * from "./schemas/trip-board";

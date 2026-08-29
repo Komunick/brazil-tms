@@ -137,3 +137,24 @@ CREATE TABLE driver_preregistration_submissions (
 
 CREATE INDEX driver_preregistration_submissions_prereg_idx
   ON driver_preregistration_submissions (preregistration_id, recebido_em DESC);
+
+/*
+ * AS FOTOS ENTRAM PELA FATIA 025, e para isso ela precisa aceitar um terceiro dono.
+ *
+ * `resource_documents` já resolve tudo o que as fotos do pré-cadastro precisam — bucket privado,
+ * histórico, link de curta duração — e reconstruir isso dentro da 028 seria uma segunda via de
+ * armazenamento de binário, com todas as chances de divergir da primeira.
+ *
+ * O que faltava: o CHECK só admitia 'driver' e 'vehicle'. O autor da 025 ANTECIPOU exatamente isto
+ * ao escolher `text` com CHECK em vez de enum — "adicionar `trailer` depois é uma troca de CHECK de
+ * uma linha, não cirurgia de enum". É essa troca.
+ *
+ * `preregistration` como dono é a verdade: a foto foi mandada PARA um pré-cadastro, por alguém que
+ * ainda não é motorista. Pendurá-la num `drivers` inventado para caber no CHECK seria criar
+ * cadastro de motorista a partir de formulário público — precisamente o que a fatia se recusa a
+ * fazer.
+ */
+ALTER TABLE resource_documents DROP CONSTRAINT resource_documents_entity_type_ck;
+
+ALTER TABLE resource_documents ADD CONSTRAINT resource_documents_entity_type_ck
+  CHECK (entity_type IN ('driver', 'vehicle', 'preregistration'));
