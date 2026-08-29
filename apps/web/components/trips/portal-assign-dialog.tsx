@@ -128,9 +128,11 @@ export function PortalAssignDialog({
    * mostraria o desfecho da ordem errada.
    */
   const [aguardando, setAguardando] = useState<string | null>(null);
+  /** A janela de confirmação: o portal já respondeu, e a pessoa ainda não viu. Ver o efeito. */
+  const [confirmado, setConfirmado] = useState(false);
   const ordens = useOrdensDoPortal(tripId, aguardando !== null);
   const ordem = ordens.data?.items?.find((o) => o.id === aguardando) ?? null;
-  const emVoo = acao.isPending || aguardando !== null;
+  const emVoo = acao.isPending || aguardando !== null || confirmado;
 
   const quantas = placasEsperadas(vehicleType);
   const [driverId, setDriverId] = useState(driverAtual ?? "");
@@ -264,11 +266,34 @@ export function PortalAssignDialog({
       // o comentário em `usePortalAction`.
       recarregarViagens();
       onSent?.();
-      onOpenChange(false);
+      /**
+       * O DIÁLOGO NÃO FECHA NA HORA — ele CONFIRMA primeiro (2026-08-29, a pedido).
+       *
+       * Fechava direto, e o único sinal de sucesso era um aviso no canto inferior. A pessoa
+       * apertava, a janela sumia, e ela ficava sem saber se a viagem foi atribuída — indo conferir
+       * no portal, que é justamente o passo que este recurso existe para eliminar.
+       *
+       * Agora o caminhão vira um ✓ na mesma caixa que ela já estava olhando, com a frase dizendo
+       * que o PORTAL confirmou. Um segundo e meio: tempo de ler, curto demais para irritar.
+       *
+       * O `setConfirmado` mantém a cobertura na tela durante esse tempo — ver `emVoo`.
+       */
+      setConfirmado(true);
     } else if (ordem.status === "failed") {
       setAguardando(null);
     }
-  }, [ordem, onSent, onOpenChange]);
+  }, [ordem, onSent]);
+
+  // Fecha depois de a confirmação ter sido VISTA. Separado do efeito acima porque são dois
+  // momentos: um é "o portal confirmou", o outro é "a pessoa já leu".
+  useEffect(() => {
+    if (!confirmado) return;
+    const t = setTimeout(() => {
+      setConfirmado(false);
+      onOpenChange(false);
+    }, 1_500);
+    return () => clearTimeout(t);
+  }, [confirmado, onOpenChange]);
 
   /**
    * A VÁLVULA DE ESCAPE — a espera não pode prender ninguém (2026-08-28).
@@ -358,10 +383,19 @@ export function PortalAssignDialog({
             aria-live="assertive"
           >
             <div className="flex flex-col items-center gap-3 rounded-xl border bg-card px-8 py-6 shadow-lg">
-              <CaminhaoNaEstrada />
-              <p className="text-sm font-medium">{t("efetuando")}</p>
+              {/*
+                DUAS CENAS NA MESMA CAIXA, e é isso que faz a confirmação ser vista (2026-08-29).
+
+                Enquanto espera, o caminhão anda. Quando o portal CONFIRMA, ele vira um ✓ no mesmo
+                lugar — a pessoa já está olhando para ali, e não precisa procurar a notícia em outro
+                canto da tela. O aviso do rodapé não servia: aparece longe do olhar e some sozinho.
+              */}
+              {confirmado ? <ConfirmadoNoPortal /> : <CaminhaoNaEstrada />}
+              <p className={cn("text-sm font-medium", confirmado && "text-success")}>
+                {confirmado ? t("confirmado") : t("efetuando")}
+              </p>
               <p className="max-w-[22rem] text-center text-xs text-muted-foreground">
-                {t("efetuandoDica")}
+                {confirmado ? t("confirmadoDica") : t("efetuandoDica")}
               </p>
             </div>
           </div>
@@ -712,6 +746,41 @@ function AvisoDaCnh({
  * Não some. A cena continua desenhada, junto do texto que diz o que está acontecendo. Sumir seria
  * tirar a única marca visual de que a tela está ocupada de quem já tem menos pistas, não mais.
  */
+/**
+ * A CONFIRMAÇÃO: o caminhão sai da cena e o ✓ se desenha (2026-08-29, a pedido).
+ *
+ * Ocupa o MESMO espaço do `CaminhaoNaEstrada` — mesma altura e largura — para a caixa não pular
+ * quando uma cena vira a outra. Um salto de layout no instante da boa notícia faria a pessoa
+ * perder justamente o que ela precisava ver.
+ *
+ * O caminhão continua ali por um terço de segundo, saindo pela direita: é o que liga as duas cenas
+ * numa só. Sem ele, o ✓ apareceria do nada e leria como outro componente, não como desfecho.
+ *
+ * As animações moram no CSS porque uma delas anima `stroke-dashoffset` — ver `globals.css`.
+ */
+function ConfirmadoNoPortal() {
+  return (
+    // `relative` é obrigatório: o caminhão é `absolute`, e sem um pai posicionado ele se ancoraria
+    // na cobertura `fixed inset-0` — saindo do meio da caixa para o canto da tela, no exato
+    // instante em que a pessoa está olhando para a confirmação.
+    <div className="relative flex h-10 w-24 items-center justify-center" aria-hidden>
+      <Truck className="absolute h-6 w-6 text-primary animate-caminhao-sai" />
+      <svg viewBox="0 0 52 52" className="h-10 w-10 animate-selo-entra">
+        <circle cx="26" cy="26" r="24" fill="none" stroke="currentColor" strokeWidth="3" className="text-success/30" />
+        <path
+          d="M15 27 l8 8 l15 -16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="text-success animate-visto-desenha"
+        />
+      </svg>
+    </div>
+  );
+}
+
 function CaminhaoNaEstrada() {
   return (
     <div className="flex h-10 w-24 flex-col items-center justify-center gap-1.5" aria-hidden>

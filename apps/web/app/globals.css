@@ -110,6 +110,84 @@
   }
 }
 
+/**
+ * A VIRADA: o caminhão sai e o ✓ se desenha (2026-08-29, a pedido).
+ *
+ * O diálogo fechava assim que o portal respondia, e o único sinal de sucesso era um aviso no
+ * canto inferior — longe de onde a pessoa estava olhando, e some sozinho. Ela apertava, a janela
+ * sumia, e ia conferir no portal: exatamente o passo que este recurso existe para eliminar.
+ *
+ * ── POR QUE O TRAÇO SE DESENHA, EM VEZ DE SÓ APARECER ────────────────────────────────────────
+ *
+ * Um ✓ que surge pronto lê como ícone estático — o olho não registra que ALGO ACONTECEU. O traço
+ * correndo do início ao fim é o que diz "concluiu agora", e é a mesma técnica do anel de espera:
+ * anima-se o `stroke-dashoffset`, não a opacidade.
+ *
+ * `stroke-dasharray` precisa ser >= ao comprimento real do caminho, senão o traço fecha antes do
+ * fim e o ✓ nasce cortado.
+ */
+@keyframes caminhao-sai {
+  0% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(26px);
+  }
+}
+
+@keyframes visto-desenha {
+  0% {
+    stroke-dashoffset: 40;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* O anel entra depois do traço, crescendo — dá o "selo" que fecha a cena. */
+@keyframes selo-entra {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-caminhao-sai {
+  animation: caminhao-sai 0.32s ease-in forwards;
+}
+
+.animate-visto-desenha {
+  stroke-dasharray: 40;
+  animation: visto-desenha 0.42s ease-out 0.22s forwards;
+  stroke-dashoffset: 40;
+}
+
+.animate-selo-entra {
+  animation: selo-entra 0.3s ease-out both;
+}
+
+/*
+  Quem desligou animação vê o ✓ PRONTO, não a ausência dele. Some seria tirar a confirmação de
+  quem já tem menos pistas — e a confirmação é justamente o ponto desta cena.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .animate-visto-desenha {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+
+  .animate-selo-entra,
+  .animate-caminhao-sai {
+    animation: none;
+  }
+}
+
 .animate-caminhao-pista {
   /* Desenhada sempre — o movimento é que é opcional. */
   background-image: repeating-linear-gradient(
