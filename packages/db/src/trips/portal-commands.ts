@@ -577,6 +577,18 @@ export async function encerrarOrdemDoPortal(entrada: {
               : { confirmado: veredito.confirmado, motivo: veredito.motivo },
         // A palavra do portal, sem tradução nossa.
         respostaDoPortal: (entrada.response ?? null) as never,
+        /**
+         * O CORPO DA RELEITURA, guardado como veio (2026-08-29).
+         *
+         * Três iterações em produção foram gastas adivinhando o formato do `/trip/detail`: primeiro
+         * usei o parser da listagem, depois exigi um campo que ele não traz. Cada rodada custou
+         * atribuições marcadas como falha e um deploy.
+         *
+         * A causa de fundo era não ter o corpo em lugar nenhum: ele chegava, era interpretado e
+         * jogado fora. Guardá-lo transforma a próxima dúvida numa consulta, não num palpite —
+         * e é o mesmo motivo pelo qual `respostaDoPortal` já era guardada sem tradução.
+         */
+        releituraDoPortal: (entrada.confirmacao ?? null) as never,
         erro: entrada.ok ? null : (entrada.error?.slice(0, 500) ?? "sem detalhe"),
         tentativa: ordem.attempts,
         // Separa "demorou" de "não foi" — foi a pergunta da operação em 28/08.
