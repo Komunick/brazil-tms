@@ -103,10 +103,21 @@ export function confirmarAcaoNoPortal(entrada: {
   // Duas perguntas, e as duas precisam responder sim. O status sozinho não basta: uma viagem pode
   // estar "Assigned" com a placa de OUTRA atribuição — foi exatamente o caso medido em 19/08, com
   // o cliente trocando o caminhão depois do nosso espelho.
-  if (portal.acceptanceStatus !== "Accepted") {
+  /**
+   * A ACEITAÇÃO SÓ REPROVA QUANDO ELA EXISTE E DIZ OUTRA COISA (2026-08-29, terceira vez).
+   *
+   * O `/trip/detail` traz `vehicle_number` e NÃO traz `acceptance_status` — medido em produção. A
+   * versão anterior exigia "Accepted" e reprovava a ausência, marcando como falha atribuições que
+   * o portal já mostrava atribuídas.
+   *
+   * É a MESMA falha de raciocínio pela terceira vez em dois dias: exigir prova que a fonte não
+   * fornece e ler o silêncio como desacordo. Aqui a placa é a prova, e ela basta — a aceitação
+   * vira uma checagem extra que só age quando o portal de fato afirma o contrário.
+   */
+  if (portal.acceptanceStatus != null && portal.acceptanceStatus !== "Accepted") {
     return {
       confirmado: false,
-      motivo: `o portal respondeu OK mas a viagem não consta aceita ("${portal.acceptanceStatus ?? "sem valor"}")`,
+      motivo: `o portal respondeu OK mas a viagem consta como "${portal.acceptanceStatus}"`,
     };
   }
 
