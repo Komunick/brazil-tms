@@ -111,6 +111,37 @@ describe("atribuição", () => {
   });
 });
 
+/**
+ * A REGRA QUE VALE PARA AS TRÊS AÇÕES, e que já falhou DUAS vezes em dois dias.
+ *
+ * 28/08 — a recusa devolvia `false` por não ter o que conferir. Teria gravado como falha toda
+ *         recusa bem-sucedida.
+ * 29/08 — a releitura do detalhe era lida com o parser da LISTAGEM, não achava nada, e o "não
+ *         achei" virava `false`. Quatro atribuições foram marcadas como falha EM PRODUÇÃO
+ *         enquanto o portal mostrava todas como `Assigned`.
+ *
+ * As duas têm a mesma forma: ignorância nossa virando acusação ao portal. Só uma contradição
+ * POSITIVA — ele mostra outra coisa — pode reprovar.
+ */
+describe("só contradição positiva reprova", () => {
+  it("placa ausente no portal não é o mesmo que placa diferente", () => {
+    const outraPlaca = confirmarAcaoNoPortal({
+      acao: "assign",
+      enviadas: ["NZZ7H06"],
+      portal: portal({ plateLabel: "MKK6B69" }),
+    });
+    const semPlaca = confirmarAcaoNoPortal({
+      acao: "assign",
+      enviadas: ["NZZ7H06"],
+      portal: portal({ plateLabel: null }),
+    });
+    // A primeira é acusação — o portal mostra OUTRA coisa — e reprova.
+    expect(outraPlaca.confirmado).toBe(false);
+    // A segunda é só falta de dado, e nunca pode confirmar.
+    expect(semPlaca.confirmado).not.toBe(true);
+  });
+});
+
 describe("recusa", () => {
   /**
    * O DEFEITO QUE ESTE TESTE EXISTE PARA IMPEDIR (achado na revisão de 28/08, antes de ir ao ar).
