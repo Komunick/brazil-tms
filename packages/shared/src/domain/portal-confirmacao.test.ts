@@ -79,13 +79,32 @@ describe("atribuição", () => {
     expect(v.confirmado).toBe(false);
   });
 
-  it("NÃO confirma atribuição em viagem que não consta aceita", () => {
+  it("NÃO confirma atribuição em viagem que o portal diz estar pendente", () => {
     const v = confirmarAcaoNoPortal({
       acao: "assign",
       enviadas: ["NZZ7H06"],
       portal: portal({ acceptanceStatus: "Pending", plateLabel: "NZZ7H06" }),
     });
     expect(v.confirmado).toBe(false);
+  });
+
+  /**
+   * MEDIDO EM PRODUÇÃO (29/08): o `/trip/detail` traz `vehicle_number` e NÃO traz
+   * `acceptance_status`.
+   *
+   * A versão anterior exigia "Accepted" e reprovava a ausência — marcando como falha atribuições
+   * que o portal já mostrava atribuídas. Foi a terceira vez em dois dias que o mesmo raciocínio
+   * errado passou: exigir prova que a fonte não fornece e ler silêncio como desacordo.
+   *
+   * A placa é a prova. A aceitação só age quando o portal AFIRMA outra coisa.
+   */
+  it("confirma pela placa quando o portal não informa aceitação", () => {
+    const v = confirmarAcaoNoPortal({
+      acao: "assign",
+      enviadas: ["NZZ7H06"],
+      portal: portal({ acceptanceStatus: null, plateLabel: "NZZ7H06" }),
+    });
+    expect(v.confirmado).toBe(true);
   });
 
   /** Cavalo e carreta: o portal às vezes devolve as duas no mesmo campo. */
