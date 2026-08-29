@@ -98,3 +98,24 @@ export const portalCommandPullSchema = z.object({
   token: z.string().trim().min(1).optional(),
   limite: z.number().int().min(1).max(20).optional(),
 });
+
+/**
+ * O PULSO DE UM ROBÔ QUE NEM SEMPRE ENTREGA (2026-08-29).
+ *
+ * Os ciclos de leitura provam que rodaram ao ENTREGAR uma página. O de spot não entrega nada
+ * quando não há leilão — e quase nunca há. Ficava mudo por horas, e "sem oferta" era
+ * indistinguível de "robô morto".
+ *
+ * `robot` é texto livre de propósito: a tela de status lê a tabela inteira, sem lista fixa, e um
+ * robô novo aparece sozinho.
+ */
+export const robotPulseSchema = z.object({
+  token: z.string().trim().min(1).optional(),
+  robot: z.string().trim().min(1).max(40),
+  /** De quanto em quanto tempo ele promete rodar. É contra isto que o sufoco é medido. */
+  cicloMs: z.number().int().positive().optional(),
+  /** Quanto esta volta levou. Maior que `cicloMs` é sufoco. */
+  duracaoMs: z.number().int().nonnegative().optional(),
+});
+
+export type RobotPulse = z.infer<typeof robotPulseSchema>;
