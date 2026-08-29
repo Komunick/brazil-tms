@@ -38,6 +38,7 @@ export type { EnvioDePreCadastro } from "./pre-cadastro/registrar";
 export { listarFilaDePreCadastros, arquivarPreCadastro } from "./pre-cadastro/fila";
 export type { ItemDaFila } from "./pre-cadastro/fila";
 export { chaveDoDocumentoDePreCadastro } from "./pre-cadastro/fila";
+export { documentoParaLeitura, gravarLeituraDaCnh } from "./pre-cadastro/fila";
 export {
   marcarVistasNoPortal,
   marcarRetiradasDoPortal,

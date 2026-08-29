@@ -1,6 +1,7 @@
 import { PgBoss, type Job } from "pg-boss";
 import {
   BILLING_JOBS,
+  CNH_JOBS,
   DOCUMENT_JOBS,
   IMPORT_JOBS,
   PORTAL_JOBS,
@@ -9,6 +10,8 @@ import {
   TURNO_JOBS,
   type BillingJobName,
   type BillingJobPayloads,
+  type CnhJobName,
+  type CnhJobPayloads,
   type DocumentJobName,
   type DocumentJobPayloads,
   type ImportJobName,
@@ -46,6 +49,8 @@ export const JOB = {
   ...PORTAL_JOBS,
   ...PRE_SM_JOBS,
   ...TURNO_JOBS,
+  // Fatia 028 — a leitura da CNH que chega pelo formulário público.
+  ...CNH_JOBS,
 } as const;
 
 export type JobName =
@@ -55,14 +60,16 @@ export type JobName =
   | DocumentJobName
   | PortalJobName
   | PreSmJobName
-  | TurnoJobName;
+  | TurnoJobName
+  | CnhJobName;
 export type JobPayloads = ImportJobPayloads &
   SlaJobPayloads &
   BillingJobPayloads &
   DocumentJobPayloads &
   PortalJobPayloads &
   PreSmJobPayloads &
-  TurnoJobPayloads;
+  TurnoJobPayloads &
+  CnhJobPayloads;
 
 /** Construct the pg-boss instance against the worker's DATABASE_URL (server/worker-only). */
 export function createBoss(): PgBoss {
