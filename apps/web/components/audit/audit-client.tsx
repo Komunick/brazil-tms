@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ALL_AUDIT_ACTIONS, formatDateTime } from "@brazil-tms/shared";
+import { ALL_AUDIT_ACTIONS, formatDateTime, linhasDaAuditoria } from "@brazil-tms/shared";
 import { useAuditLog } from "@/lib/trips/client";
 import {
   Table,
@@ -81,6 +81,9 @@ export function AuditClient() {
   const tPreset = useTranslations("AuditView.presets");
   const tActions = useTranslations("AuditActions");
   const tCommon = useTranslations("Common");
+  // Os rótulos de status já existem em `Trips.status` — reusados aqui para `assigned` virar
+  // "Atribuída" na auditoria, e não um valor de enum em inglês.
+  const tStatus = useTranslations("Trips.status");
 
   const [filters, setFilters] = useState<AuditFilters>({});
   const [offset, setOffset] = useState(0);
@@ -100,8 +103,34 @@ export function AuditClient() {
     setFilters({});
   };
 
-  function snapshot(value: Record<string, unknown> | null): string {
-    return value == null ? tCommon("none") : JSON.stringify(value);
+  /**
+   * O QUE A OPERAÇÃO VIA AQUI (2026-08-29, a pedido):
+   *
+   *     {"hops":["confirmed","at_origin"],"current_s
+   *
+   * `JSON.stringify` numa célula com `truncate` — cortado no meio de uma chave, em inglês, com
+   * nome de coluna de banco. Uma auditoria ilegível não presta contas de nada.
+   *
+   * A tradução mora em `shared` (`linhasDaAuditoria`, sob teste) porque é regra de leitura, não
+   * desenho. Aqui só se passa o dicionário de status — que a tela tem e o `shared` não — e se
+   * empilha as linhas.
+   *
+   * O JSON original continua no `title`: quem audita de verdade às vezes precisa do byte exato, e
+   * traduzir não pode significar esconder.
+   */
+  function Resumo({ valor }: { valor: Record<string, unknown> | null }) {
+    const linhas = linhasDaAuditoria(valor, { status: (k) => tStatus.has(k) ? tStatus(k) : null });
+    if (linhas.length === 0) return <span className="text-muted-foreground">{tCommon("none")}</span>;
+    return (
+      <div className="flex flex-col gap-0.5" title={JSON.stringify(valor, null, 1)}>
+        {linhas.map((l) => (
+          <div key={l.rotulo} className="leading-snug">
+            <span className="text-muted-foreground">{l.rotulo}: </span>
+            <span className="font-medium">{l.valor}</span>
+          </div>
+        ))}
+      </div>
+    );
   }
 
   const start = total === 0 ? 0 : offset + 1;
@@ -259,11 +288,13 @@ export function AuditClient() {
                       <TableCell className="whitespace-nowrap" title={entry.actorUserId}>
                         {entry.actorName ?? shortId(entry.actorUserId)}
                       </TableCell>
-                      <TableCell className="max-w-xs truncate font-mono text-xs">
-                        {snapshot(entry.previousValue)}
+                      {/* `align-top` e SEM `truncate`: agora são várias linhas curtas, e cortar
+                          de novo devolveria o problema que isto veio resolver. */}
+                      <TableCell className="max-w-xs align-top text-xs">
+                        <Resumo valor={entry.previousValue} />
                       </TableCell>
-                      <TableCell className="max-w-xs truncate font-mono text-xs">
-                        {snapshot(entry.newValue)}
+                      <TableCell className="max-w-xs align-top text-xs">
+                        <Resumo valor={entry.newValue} />
                       </TableCell>
                       <TableCell>{entry.reason ?? tCommon("none")}</TableCell>
                     </TableRow>

@@ -3,6 +3,7 @@
 export * from "./formatting";
 export * from "./auth/permissions";
 export * from "./audit/actions";
+export * from "./audit/legivel";
 export * from "./domain/trip-status";
 export * from "./domain/trip-display-status";
 export * from "./domain/fleet-alerts";
