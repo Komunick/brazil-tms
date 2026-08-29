@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.17.0
+// @version      1.17.1
 // @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -593,6 +593,12 @@
       nesta, e a linha teria ficado morta em silêncio, como a `SoC_BA2` já ficou.
     */
     "FM HUB_MG_Varginha,SOC_BA_SIMOES FILHO",
+    /*
+      Conferida contra o banco em 29/08: `SoC_RJ_Jacarepagua` (5 viagens). Existe também um
+      `XPT_RJ_Jacarepaguá` — outra estação, outro prefixo e com acento —, e é por isso que o nome
+      não se escreve de memória: as duas leem igual em voz alta e só uma casa.
+    */
+    "SoC_RJ_Jacarepagua,SoC_BA_Simoes Filho",
   ];
 
   const ROTAS_PERMITIDAS = new Set(
