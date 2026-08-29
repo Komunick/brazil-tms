@@ -96,12 +96,31 @@ describe.skipIf(!hasDb)("POST /api/publico/pre-cadastro — a resposta não dist
       .where(inArray(driverPreregistrations.cpf, [CPF_NOVO, CPF_NA_FILA, CPF_DE_MOTORISTA]));
     const ids = todos.map((t) => t.id);
     if (ids.length) {
+      /*
+       * Apaga só os documentos DESTES envios.
+       *
+       * A versão anterior varria `entity_type = 'preregistration'` inteiro — o que apagaria também
+       * o que outro arquivo de teste tivesse criado, já que o vitest roda arquivos em paralelo
+       * contra o mesmo banco. Limpeza de teste que passa por cima da vizinhança produz falha
+       * intermitente em OUTRO arquivo, que é o tipo de defeito que se persegue por dias.
+       */
+      const envios = await db
+        .select({
+          cnh: driverPreregistrationSubmissions.documentoCnhId,
+          comprovante: driverPreregistrationSubmissions.documentoComprovanteId,
+        })
+        .from(driverPreregistrationSubmissions)
+        .where(inArray(driverPreregistrationSubmissions.preregistrationId, ids));
+      const docs = envios.flatMap((e) => [e.cnh, e.comprovante]).filter((d): d is string => !!d);
+
       await db
         .delete(driverPreregistrationSubmissions)
         .where(inArray(driverPreregistrationSubmissions.preregistrationId, ids));
       await db.delete(driverPreregistrations).where(inArray(driverPreregistrations.id, ids));
+      if (docs.length) {
+        await db.delete(resourceDocuments).where(inArray(resourceDocuments.id, docs));
+      }
     }
-    await db.delete(resourceDocuments).where(eq(resourceDocuments.entityType, "preregistration"));
     if (motoristaId) await db.delete(drivers).where(eq(drivers.id, motoristaId));
   });
 
@@ -169,6 +188,26 @@ describe.skipIf(!hasDb)("POST /api/publico/pre-cadastro — a resposta não dist
     const res = await POST(envio(CPF_NOVO));
     // Chaves fixas: qualquer acréscimo — id, tipo, mensagem — precisa passar por aqui primeiro.
     expect(Object.keys((await res.json()) as object)).toEqual(["recebido"]);
+  });
+
+  /**
+   * Corpo que não é multipart é erro de QUEM CHAMA — 400, nunca 500.
+   *
+   * Isto passou despercebido até o `curl` contra o ambiente deployado: `request.formData()` estoura
+   * com corpo vazio e caía no `catch` geral, respondendo `falha_interna`. Dois estragos: contraria
+   * o contrato, e um 500 diz "a culpa é nossa" — some no meio de erros de verdade no monitoramento,
+   * e quem está depurando o formulário do outro lado conclui que o TMS caiu.
+   */
+  it("corpo malformado é 400, e não 500", async () => {
+    const { POST } = await import("@/app/api/publico/pre-cadastro/route");
+    const req = new Request("http://localhost/api/publico/pre-cadastro", {
+      method: "POST",
+      headers: { origin: ORIGEM, "content-type": "application/json" },
+      body: "isto não é multipart",
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ erro: "campo_faltando" });
   });
 
   it("origem diferente é recusada antes de qualquer escrita", async () => {

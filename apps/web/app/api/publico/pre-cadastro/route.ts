@@ -143,7 +143,20 @@ export async function POST(request: Request): Promise<NextResponse> {
       return recusar(400, { erro: "arquivo_grande" });
     }
 
-    const form = await request.formData();
+    /**
+     * Corpo que não é `multipart/form-data` é erro de QUEM CHAMA, e precisa sair como 400.
+     *
+     * Sem este `try`, o `formData()` estoura e cai no `catch` lá embaixo, que responde 500. Além de
+     * contrariar o contrato, um 500 diz "a culpa é nossa": ele entra no monitoramento como falha do
+     * servidor e some no meio de erros de verdade — e quem está do outro lado, depurando o
+     * formulário, conclui que o TMS está fora do ar.
+     */
+    let form: FormData;
+    try {
+      form = await request.formData();
+    } catch {
+      return recusar(400, { erro: "campo_faltando" });
+    }
 
     const analise = preCadastroSchema.safeParse({
       nome: form.get("nome"),
