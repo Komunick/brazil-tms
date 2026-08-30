@@ -256,3 +256,100 @@ describe("de quem é a viagem (agency_id)", () => {
     expect(de("LH-SEM-CAMPO").agencyId).toBeNull();
   });
 });
+
+/**
+ * A DOCA DE SAÍDA (30/08), com a forma medida no portal ao vivo naquele dia.
+ *
+ * Os valores aqui não são inventados: `outbound_dock_infos` com um objeto, `dock_name` dentro,
+ * `schedule_outbound_dock_info` zerado ao lado. Foram 39 viagens do Aceito e 0 do Planejado — a
+ * doca nasce quando a estação encosta o veículo, não no planejamento.
+ */
+describe("a doca de saída", () => {
+  const viagem = (paradas: Record<string, unknown>[]) => ({
+    retcode: 0,
+    data: { list: [{ trip_number: "LT0Q8R02ETKV1", trip_station: paradas }] },
+  });
+  const parada = (seq: number, nome: string, extra: Record<string, unknown> = {}) => ({
+    sequence_number: seq,
+    station: 8300 + seq,
+    station_name: nome,
+    ...extra,
+  });
+
+  it("lê o nome da doca da parada de origem", () => {
+    const r = mapPortalApiTrips(
+      viagem([
+        parada(1, "SoC_CE_Itaitinga", {
+          loading_time: 1787879721,
+          outbound_dock_infos: [{ dock_id: 2074, dock_name: "Doca Outbound LH 01" }],
+        }),
+        parada(2, "LM Hub_CE_Fortaleza"),
+      ]),
+    );
+    expect(r.trips[0]?.legs[0]?.origin.docaSaida).toBe("Doca Outbound LH 01");
+  });
+
+  /**
+   * MEDIDO: `" EXTERNA66"` e `" EXTERNA62"` chegam com espaço na frente. Os nomes são digitados na
+   * estação, e sem o corte o selo da tela mostraria um recuo que parece defeito de alinhamento.
+   */
+  it("corta o espaço que vem digitado na estação", () => {
+    const r = mapPortalApiTrips(
+      viagem([
+        parada(1, "A", { outbound_dock_infos: [{ dock_name: " EXTERNA66" }] }),
+        parada(2, "B"),
+      ]),
+    );
+    expect(r.trips[0]?.legs[0]?.origin.docaSaida).toBe("EXTERNA66");
+  });
+
+  it("o espaço do MEIO fica — é o nome de verdade", () => {
+    // `"EXTERNA 32"` existe assim no portal, ao lado de `"EXTERNA31"` sem espaço. Normalizar isso
+    // seria inventar um nome que a portaria não usa.
+    const r = mapPortalApiTrips(
+      viagem([
+        parada(1, "A", { outbound_dock_infos: [{ dock_name: "EXTERNA 32" }] }),
+        parada(2, "B"),
+      ]),
+    );
+    expect(r.trips[0]?.legs[0]?.origin.docaSaida).toBe("EXTERNA 32");
+  });
+
+  it("sem doca é null, e não string vazia — a viagem ainda não carregou", () => {
+    // 11 das 50 do Aceito, e 50 das 50 do Planejado. Não é falha de leitura: é o estado normal
+    // antes de a estação encostar o veículo, e a tela precisa poder calar em vez de mostrar vazio.
+    const r = mapPortalApiTrips(
+      viagem([parada(1, "A", { outbound_dock_infos: [] }), parada(2, "B")]),
+    );
+    expect(r.trips[0]?.legs[0]?.origin.docaSaida).toBeNull();
+  });
+
+  it("ignora a doca PLANEJADA, que vem zerada", () => {
+    // `schedule_outbound_dock_info` veio com `dock_name: ""` em todas as 50. Ler esse campo daria
+    // uma doca vazia em toda viagem — um selo permanente que não diz nada.
+    const r = mapPortalApiTrips(
+      viagem([
+        parada(1, "A", {
+          schedule_outbound_dock_info: { dock_id: 0, dock_name: "" },
+          outbound_dock_infos: [],
+        }),
+        parada(2, "B"),
+      ]),
+    );
+    expect(r.trips[0]?.legs[0]?.origin.docaSaida).toBeNull();
+  });
+
+  it("com mais de uma doca, fica a primeira COM NOME", () => {
+    // Nunca houve duas nas 39 medidas. Se vier, uma é melhor que duas concatenadas numa string que
+    // ninguém sabe ler — e uma entrada sem nome não pode ganhar da que tem.
+    const r = mapPortalApiTrips(
+      viagem([
+        parada(1, "A", {
+          outbound_dock_infos: [{ dock_name: "" }, { dock_name: "EXTERNA79" }, { dock_name: "X1" }],
+        }),
+        parada(2, "B"),
+      ]),
+    );
+    expect(r.trips[0]?.legs[0]?.origin.docaSaida).toBe("EXTERNA79");
+  });
+});

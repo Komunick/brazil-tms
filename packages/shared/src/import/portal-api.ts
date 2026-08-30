@@ -131,6 +131,16 @@ const trimmed = (value: unknown): string | null => {
 const positive = (value: unknown): number | null =>
   typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 
+/** O nome da primeira doca de uma lista `*_dock_infos`, ou `null`. Ver `PortalStop.docaSaida`. */
+function docaDe(valor: unknown): string | null {
+  if (!Array.isArray(valor)) return null;
+  for (const item of valor) {
+    const nome = trimmed((item as Record<string, unknown>)?.dock_name);
+    if (nome) return nome;
+  }
+  return null;
+}
+
 /**
  * The station cell the rest of the pipeline expects — `"[8300]SoC_RJ_Duque de Caxias"`. The API hands
  * the id and the name apart, so the pair is rebuilt in that shape rather than teaching every consumer
@@ -160,6 +170,40 @@ function toStop(raw: Record<string, unknown>, index: number): PortalStop {
     // machine until now — a trip arrived at its destination and stayed there for good.
     loadingStarted: positive(raw.loading_time),
     loadedAt: positive(raw.loaded_time),
+    /**
+     * A DOCA DE SAÍDA (30/08, a pedido) — "Número do Doca" na tela do portal.
+     *
+     * Vem ao lado de `loading_time`, na mesma parada, e é essa vizinhança que a define: é a doca em
+     * que ESTA parada carregou. Saber que a viagem está "Carregando" sem saber onde manda quem
+     * acompanha perguntar por rádio.
+     *
+     * ── JÁ CHEGAVA, E NINGUÉM LIA ────────────────────────────────────────────────────────────
+     *
+     * O robô entrega a página crua da listagem, então `outbound_dock_infos` já vinha em toda
+     * atualização — só não havia quem o extraísse. Nenhuma chamada nova, nenhuma versão nova do
+     * userscript, nenhuma ida ao VNC.
+     *
+     * ── MEDIDO NO PORTAL AO VIVO, 30/08 ──────────────────────────────────────────────────────
+     *
+     * Aceito: 39 de 50 viagens têm doca. Planejado: 0 de 50 — ela nasce quando a viagem é aceita e
+     * a estação encosta o veículo, não no planejamento. Sempre na parada de SEQUÊNCIA 1 (a origem,
+     * onde se carrega), nas 39. Nunca mais de uma por viagem.
+     *
+     * ── A LISTA É PLURAL E PEGAMOS A PRIMEIRA ────────────────────────────────────────────────
+     *
+     * `outbound_dock_infos` é um array e nunca teve dois elementos nas 39. Ler a primeira é o que
+     * a tela do portal faz; se um dia vier duas, mostramos uma — e é melhor do que concatenar duas
+     * numa string que ninguém sabe ler.
+     *
+     * ── E O `trim` NÃO É ZELO EXCESSIVO ──────────────────────────────────────────────────────
+     *
+     * Os nomes vêm da estação e são digitados lá: `"Doca Outbound LH 01"`, `"EXT.OUT130"`,
+     * `" EXTERNA66"` COM ESPAÇO NA FRENTE, `"EXTERNA 32"` com espaço no meio. `trimmed` resolve o
+     * primeiro; o do meio é o nome de verdade e fica como está.
+     *
+     * `schedule_outbound_dock_info` é a doca PLANEJADA e veio zerada em todas — não é esta.
+     */
+    docaSaida: docaDe(raw.outbound_dock_infos),
     unsealedAt: positive(raw.unseal_time),
     unloadedAt: positive(raw.unloaded_time),
   };

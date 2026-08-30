@@ -48,6 +48,26 @@ export async function writePortalFacts(
   if (portal.plateLabel) fields["Placa (portal)"] = portal.plateLabel;
   if (portal.operatorLabel) fields["Operador (portal)"] = portal.operatorLabel;
   /**
+   * A DOCA DE SAÍDA — onde a viagem carregou (30/08, a pedido).
+   *
+   * Da ORIGEM, que é a primeira perna: é lá que se carrega, e foi lá que o portal a registrou nas
+   * 39 viagens medidas — todas na parada de sequência 1, nenhuma exceção.
+   *
+   * ── ELA JÁ CHEGAVA HÁ MESES, E NINGUÉM LIA ───────────────────────────────────────────────
+   *
+   * O robô entrega a página crua da listagem, então `outbound_dock_infos` vinha em toda
+   * atualização. Não custou chamada nova nem versão nova do userscript — custou alguém procurar.
+   *
+   * ── E POR ISSO ELA NÃO APARECE NO PLANEJADO ──────────────────────────────────────────────
+   *
+   * Medido em 30/08: Aceito 39 de 50 com doca, Planejado 0 de 50. A doca nasce quando a estação
+   * encosta o veículo, não quando a viagem é programada — então uma viagem sem doca aqui não é
+   * falha de leitura, é uma viagem que ainda não carregou. A tela precisa dizer isso calando: sem
+   * doca, sem selo.
+   */
+  const doca = portal.legs[0]?.origin.docaSaida;
+  if (doca) fields["Doca (portal)"] = doca;
+  /**
    * O que o PORTAL chama esta viagem, gravado como está (2026-08-17).
    *
    * O status do portal era lido, usado para decidir cancelar/concluir, e jogado fora. Duas

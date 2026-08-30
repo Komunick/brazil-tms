@@ -267,7 +267,20 @@ export async function readProgramacao(
       to_char(t.planned_delivery_window_end at time zone 'America/Sao_Paulo', 'DD/MM HH24:MI') as eta_destino,
       t.planned_vehicle_type::text as perfil,
       t.operational_fields ->> 'solicitacao' as solicitacao,
-      t.operational_fields ->> 'doca' as doca,
+      /*
+       * A DOCA VEM DO PORTAL (30/08), com o campo digitado como reserva.
+       *
+       * "Doca (portal)" é o "Número do Doca" da tela deles, gravado pelo ciclo do plano — dado
+       * automático, sempre atual. O operational_fields é o que alguém digitou à mão, e continua
+       * valendo quando o portal não disse nada (viagem de import manual, por exemplo).
+       *
+       * O PORTAL VENCE porque é ele quem sabe: a doca é decisão da estação, não nossa. Se os dois
+       * discordarem, o que está escrito lá é o que a portaria vai cobrar.
+       */
+      coalesce(
+        t.customer_fields ->> 'Doca (portal)',
+        t.operational_fields ->> 'doca'
+      ) as doca,
       t.current_status::text as status,
       t.customer_fields ->> 'Aceitação (portal)' as aceitacao,
       t.customer_fields ->> 'Status (portal)' as status_portal,
