@@ -210,6 +210,39 @@ describe.skipIf(!hasDb)("POST /api/publico/pre-cadastro — a resposta não dist
     expect(await res.json()).toEqual({ erro: "campo_faltando" });
   });
 
+  /**
+   * O NÚMERO DA CASA é aceito e guardado, mas NÃO é exigido — ainda.
+   *
+   * Ele é obrigatório no `setMotorista` da gerenciadora, e o formulário o exige de quem preenche.
+   * Aqui ele é opcional de propósito: o site já está no ar, e apertar o servidor antes de o site
+   * publicar a versão nova quebraria o envio de quem estivesse com a página antiga aberta.
+   *
+   * Quando o site estiver publicado há tempo suficiente, este teste é o lugar de apertar.
+   */
+  it("aceita o envio sem número, e guarda quando vem", async () => {
+    const { POST } = await import("@/app/api/publico/pre-cadastro/route");
+    expect((await POST(envio(CPF_NOVO))).status).toBe(202);
+
+    const comNumero = envio(CPF_NA_FILA);
+    const form = await comNumero.formData();
+    form.set("numero", "120A");
+    const req = new Request("http://localhost/api/publico/pre-cadastro", {
+      method: "POST", headers: { origin: ORIGEM }, body: form,
+    });
+    expect((await POST(req)).status).toBe(202);
+
+    const { db } = await import("@brazil-tms/db");
+    const { driverPreregistrationSubmissions, driverPreregistrations } = await import("@brazil-tms/db/schema");
+    const { eq, desc } = await import("drizzle-orm");
+    const [pre] = await db.select({ id: driverPreregistrations.id }).from(driverPreregistrations)
+      .where(eq(driverPreregistrations.cpf, CPF_NA_FILA)).limit(1);
+    const [ultimo] = await db.select({ dados: driverPreregistrationSubmissions.dados })
+      .from(driverPreregistrationSubmissions)
+      .where(eq(driverPreregistrationSubmissions.preregistrationId, pre!.id))
+      .orderBy(desc(driverPreregistrationSubmissions.recebidoEm)).limit(1);
+    expect((ultimo!.dados as Record<string, unknown>).numero).toBe("120A");
+  });
+
   it("origem diferente é recusada antes de qualquer escrita", async () => {
     const { POST } = await import("@/app/api/publico/pre-cadastro/route");
     const req = new Request("http://localhost/api/publico/pre-cadastro", {

@@ -46,6 +46,28 @@ export const preCadastroSchema = z
       .trim()
       .transform((s) => s.replace(/[-\s.]/g, ""))
       .pipe(z.string().regex(/^\d{8}$/, "CEP deve ter 8 dígitos.")),
+    /**
+     * O NÚMERO DA CASA — e por que ele existe aqui (2026-08-30).
+     *
+     * Descoberto lendo o `setMotorista` no PDF do manual: `Numero` é **obrigatório** quando o
+     * cadastro vai para o módulo de Pesquisa e Consulta, que é o nosso caso. E ele não sai de
+     * lugar nenhum: não está impresso na CNH, o ViaCEP não devolve, e o formulário não perguntava.
+     * Sem ele nenhum cadastro pode ser enviado à gerenciadora.
+     *
+     * TEXTO e não número, com folga de 15 caracteres (o teto do manual): "S/N", "120A" e "km 12"
+     * são endereços reais, e um campo numérico os recusaria.
+     *
+     * ── OPCIONAL AQUI, OBRIGATÓRIO NO FORMULÁRIO, E ISSO É DE PROPÓSITO ───────────────────────
+     *
+     * O formulário já está no ar recebendo cadastros de verdade. Exigir o campo no servidor antes
+     * de o site passar a mandá-lo quebraria o envio de quem estivesse preenchendo naquele momento —
+     * e a pessoa não teria como saber por quê.
+     *
+     * Então o servidor aceita sem exigir, o formulário exige de quem preenche, e a conferência
+     * pega os poucos que chegarem sem. Apertar aqui é uma linha, quando o site estiver publicado
+     * há tempo suficiente para não haver ninguém com a versão antiga aberta.
+     */
+    numero: z.string().trim().max(15, "Número longo demais.").optional(),
     possuiMopp: simNao,
     validadeMopp: dateStringSchema.optional(),
     /**

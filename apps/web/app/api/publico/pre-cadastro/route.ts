@@ -169,6 +169,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       cpf: form.get("cpf"),
       celular: form.get("celular"),
       cep: form.get("cep"),
+      numero: form.get("numero") ?? undefined,
       possuiMopp: form.get("possuiMopp"),
       validadeMopp: form.get("validadeMopp") ?? undefined,
       possuiToxicologico: form.get("possuiToxicologico"),
