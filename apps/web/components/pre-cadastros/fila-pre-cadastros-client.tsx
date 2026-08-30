@@ -60,7 +60,14 @@ interface ItemDaFila {
   celular: string | null;
   envios: number;
   pendenciaToxicologico: boolean;
-  leituraCnh: { estado: string; motivo?: string; lidos?: number; total?: number } | null;
+  leituraCnh: {
+    estado: string;
+    motivo?: string;
+    lidos?: number;
+    total?: number;
+    /** O CPF impresso no documento, quando NÃO bate com o digitado. */
+    cpfDivergente?: string;
+  } | null;
   documentoCnhId: string | null;
   documentoComprovanteId: string | null;
   recebidoEm: string;
@@ -193,6 +200,25 @@ export function FilaPreCadastrosClient(): React.ReactElement {
                       <Badge variant="outline">{t("envios", { n: item.envios })}</Badge>
                     ) : null}
                     {/*
+                      A DIVERGÊNCIA DE CPF vem ANTES de tudo, e em vermelho.
+
+                      O CPF impresso no documento não é o que a pessoa digitou. Aconteceu no
+                      primeiro cadastro real recebido — a foto era a CNH de outra pessoa — e só
+                      apareceu porque alguém abriu o arquivo. Enviado assim, gastaria uma
+                      solicitação de pesquisa na gerenciadora para voltar reprovado.
+
+                      Em destaque porque é o único aviso desta tela que muda o que se FAZ com a
+                      linha, em vez de apenas descrever o estado dela.
+                    */}
+                    {item.leituraCnh?.cpfDivergente ? (
+                      <Badge
+                        variant="destructive"
+                        title={t("cpfDivergenteDetalhe", { cpf: item.leituraCnh.cpfDivergente })}
+                      >
+                        {t("cpfDivergente")}
+                      </Badge>
+                    ) : null}
+                    {/*
                       O ESTADO DA LEITURA, dito com honestidade.
 
                       "Lendo…" quando ainda não processou, a contagem quando deu certo, e o motivo
@@ -206,12 +232,20 @@ export function FilaPreCadastrosClient(): React.ReactElement {
                       </Badge>
                     ) : item.leituraCnh.estado === "lido" ? (
                       <Badge variant="secondary">
-                        {t("cnhLida", { lidos: item.leituraCnh.lidos ?? 0, total: item.leituraCnh.total ?? 0 })}
+                        {t("cnhLida", {
+                          lidos: item.leituraCnh.lidos ?? 0,
+                          total: item.leituraCnh.total ?? 0,
+                        })}
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-amber-700 dark:text-amber-400"
-                        title={item.leituraCnh.motivo ?? undefined}>
-                        {item.leituraCnh.estado === "nao_configurado" ? t("cnhSemChave") : t("cnhFalhou")}
+                      <Badge
+                        variant="outline"
+                        className="text-amber-700 dark:text-amber-400"
+                        title={item.leituraCnh.motivo ?? undefined}
+                      >
+                        {item.leituraCnh.estado === "nao_configurado"
+                          ? t("cnhSemChave")
+                          : t("cnhFalhou")}
                       </Badge>
                     )}
                     {item.pendenciaToxicologico ? (

@@ -180,6 +180,44 @@ export function fundirCampos(
   return saida;
 }
 
+/**
+ * O CPF DO DOCUMENTO CONFERE COM O QUE A PESSOA DIGITOU? (2026-08-30)
+ *
+ * ── O CASO QUE FEZ ISTO EXISTIR ───────────────────────────────────────────────────────────────
+ *
+ * O primeiro cadastro real recebido veio preenchido com um nome e um CPF, e a foto anexada era a
+ * CNH de OUTRA PESSOA — nome diferente, CPF diferente, nada em comum. Só apareceu porque alguém
+ * abriu o arquivo e olhou. Um cadastro assim atravessaria a conferência apressada, seria enviado à
+ * gerenciadora e voltaria reprovado — gastando uma solicitação de pesquisa para descobrir o que
+ * esta função descobre de graça.
+ *
+ * ── POR QUE SÓ O CPF, E NÃO O NOME ────────────────────────────────────────────────────────────
+ *
+ * CPF são onze dígitos: ou são iguais ou não são, sem meio-termo. Nome tem abreviação, acento,
+ * ordem trocada e erro de digitação — comparar nomes produziria divergência em cadastro legítimo,
+ * e um aviso que grita à toa é um aviso que as pessoas aprendem a ignorar. Quando o aviso do CPF
+ * aparecer, ele vai estar certo.
+ *
+ * ── ISTO NÃO BLOQUEIA NADA ────────────────────────────────────────────────────────────────────
+ *
+ * Devolve um fato, não um veredito. Quem decide é a pessoa na conferência: pode ser fraude, pode
+ * ser arquivo trocado, pode ser o motorista que anexou a CNH do irmão por engano. O sistema não
+ * tem como saber qual — e recusar sozinho transformaria um engano comum em porta fechada.
+ */
+export type ConferenciaDeCpf =
+  | { estado: "confere" }
+  | { estado: "diverge"; cpfNoDocumento: string }
+  | { estado: "nao_lido" };
+
+export function conferirCpfDoDocumento(cpfDigitado: string, lida: CnhLida): ConferenciaDeCpf {
+  const doDocumento = lida.cpf == null ? "" : apenasDigitos(String(lida.cpf));
+  // Não ter lido o CPF não é divergência: é ausência de informação, e acusar por ausência seria
+  // exatamente o palpite que este arquivo inteiro existe para impedir.
+  if (doDocumento.length !== 11) return { estado: "nao_lido" };
+  const digitado = apenasDigitos(cpfDigitado);
+  return doDocumento === digitado ? { estado: "confere" } : { estado: "diverge", cpfNoDocumento: doDocumento };
+}
+
 /** Quantos dos campos da CNH saíram legíveis — é o que a fila mostra como "12 de 18". */
 export function quantosLidos(campos: CamposDoPreCadastro): { lidos: number; total: number } {
   let lidos = 0;

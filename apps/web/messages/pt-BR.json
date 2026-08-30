@@ -2274,6 +2274,8 @@
     "atualizacao": "Atualização",
     "envios": "{n} envios",
     "toxicologico": "Toxicológico à mão",
+    "cpfDivergente": "CPF não confere com o documento",
+    "cpfDivergenteDetalhe": "A CNH anexada está no CPF {cpf}, diferente do que a pessoa digitou. Confira antes de enviar à gerenciadora.",
     "cnhLendo": "Lendo a CNH…",
     "cnhLida": "CNH lida · {lidos} de {total} campos",
     "cnhFalhou": "CNH não pôde ser lida",
