@@ -461,10 +461,25 @@ export function PortalAssignDialog({
               />
               <AvisoDaCnh driverId={driverId} motoristas={motoristas.data?.items} />
               {driverId ? (
+                /*
+                  A ESCOLHA DESTA TELA VEM PRIMEIRO (30/08, a pedido).
+
+                  Era `doMotorista ?? vinculoMotorista`: o cadastro ganhava SEMPRE. O clique mudava o
+                  estado, a tela continuava mostrando o valor antigo, e no envio a escolha virava
+                  `null`. Nas palavras do usuário, "não dá pra alterar mais".
+
+                  O componente já tinha sido consertado em 28/08 para nunca virar texto — mas o
+                  conserto foi no lugar errado. Quem travava era quem o chamava, e o botão ficou
+                  clicável e inerte, que é pior do que desabilitado: um botão desabilitado ao menos
+                  diz que não vai funcionar.
+
+                  Invertido, o cadastro é só o PADRÃO. `jaClassificado` só vale enquanto ninguém
+                  mexeu — depois de mexer, "do cadastro" seria mentira sobre o que está na tela.
+                */
                 <VinculoDoRecurso
                   rotulo={t("driver")}
-                  valor={doMotorista ?? vinculoMotorista}
-                  jaClassificado={doMotorista != null}
+                  valor={vinculoMotorista ?? doMotorista}
+                  jaClassificado={doMotorista != null && vinculoMotorista == null}
                   aoEscolher={setVinculoMotorista}
                 />
               ) : null}
@@ -490,8 +505,8 @@ export function PortalAssignDialog({
               {secondDriverId ? (
                 <VinculoDoRecurso
                   rotulo={t("secondDriver")}
-                  valor={doSegundo ?? vinculoSegundo}
-                  jaClassificado={doSegundo != null}
+                  valor={vinculoSegundo ?? doSegundo}
+                  jaClassificado={doSegundo != null && vinculoSegundo == null}
                   aoEscolher={setVinculoSegundo}
                 />
               ) : null}
@@ -582,8 +597,11 @@ export function PortalAssignDialog({
                     rotulo={
                       placas.length > 1 && i > 0 ? t("plateN", { n: String(i + 1) }) : t("plate")
                     }
-                    valor={jaClassificados[normalizarPlaca(placa)] ?? vinculoDasPlacas[i] ?? null}
-                    jaClassificado={jaClassificados[normalizarPlaca(placa)] != null}
+                    /* A escolha desta tela vem primeiro — mesma inversão do motorista, mesmo motivo. */
+                    valor={vinculoDasPlacas[i] ?? jaClassificados[normalizarPlaca(placa)] ?? null}
+                    jaClassificado={
+                      jaClassificados[normalizarPlaca(placa)] != null && vinculoDasPlacas[i] == null
+                    }
                     aoEscolher={(v) =>
                       setVinculoDasPlacas((atual) => {
                         const proximo = [...atual];
@@ -658,16 +676,25 @@ export function PortalAssignDialog({
                   secondDriverId: secondDriverId ? Number(secondDriverId) : null,
                   plates: preenchidas,
                   /**
-                   * Só o que ESTA tela escolheu. O que já estava classificado não é reenviado: a
-                   * gravação ignoraria de qualquer jeito (ela só preenche vazio), e mandar de volta
-                   * o valor lido daria a impressão de que a tela pode sobrescrever o cadastro.
+                   * SÓ O QUE ESTA TELA ESCOLHEU — e agora isso inclui a CORREÇÃO (30/08, a pedido).
+                   *
+                   * Estava `jaClassificados[p] != null ? null : ...`, que descartava a escolha
+                   * sempre que o recurso já tinha classificação. O comentário antigo justificava com
+                   * "a gravação ignoraria de qualquer jeito (ela só preenche vazio)" — e isso deixou
+                   * de ser verdade em 28/08: `pre-sm-vinculos.ts` passou a sobrescrever, justamente
+                   * para a correção ser possível de onde ela é notada.
+                   *
+                   * Naquele dia mudaram o componente e o servidor, e este ponto no meio ficou. O
+                   * resultado era o pior dos três mundos: os botões apareciam, o clique não mudava
+                   * a tela, e o que fosse escolhido virava `null` na ida.
+                   *
+                   * Os estados locais continuam nascendo VAZIOS, então `null` aqui é "ninguém mexeu"
+                   * — não uma reafirmação do que já estava. Quem não tocou não gera escrita.
                    */
                   vinculos: {
-                    placas: preenchidas.map((p, i) =>
-                      jaClassificados[p] != null ? null : (vinculoDasPlacas[i] ?? null),
-                    ),
-                    motorista: doMotorista != null ? null : vinculoMotorista,
-                    segundoMotorista: doSegundo != null ? null : vinculoSegundo,
+                    placas: preenchidas.map((_p, i) => vinculoDasPlacas[i] ?? null),
+                    motorista: vinculoMotorista,
+                    segundoMotorista: vinculoSegundo,
                   },
                 },
                 {

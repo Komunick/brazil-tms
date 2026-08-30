@@ -181,6 +181,70 @@ export function fundirCampos(
 }
 
 /**
+ * O QUE O MOTORISTA DECLAROU, virando campos com procedência (2026-08-30).
+ *
+ * ── O DEFEITO QUE ISTO CONSERTA ───────────────────────────────────────────────────────────────
+ *
+ * O formulário público manda dezesseis valores — endereço inteiro, celular, MOPP — e eles ficavam
+ * SÓ na linha do envio. `campos` só era escrito pela leitura da CNH, então:
+ *
+ *   · sem leitura, a conferência abria VAZIA, mesmo com tudo que a pessoa digitou ali do lado;
+ *   · com leitura, ela mostrava os catorze campos do documento e nenhum endereço — e o envio seria
+ *     recusado por `sem_endereco`, `sem_cep`, `sem_bairro`, `sem_numero`, `sem_mopp`.
+ *
+ * Medido em produção: 16 chaves em `dados`, 1 em `campos` — e essa uma era o estado da leitura.
+ *
+ * E havia uma consequência pior, silenciosa: o job da CNH funde com `fundirCampos(existentes, ...)`
+ * "para o que o motorista digitou vencer o que a foto disse". `existentes` era SEMPRE vazio, então
+ * essa regra nunca teve nada para proteger. A proteção existia no papel.
+ *
+ * ── TUDO É `declarado`, E ISSO É A VERDADE, NÃO PREGUIÇA ──────────────────────────────────────
+ *
+ * `declarado` é o que o motorista afirmou e NINGUÉM conferiu — exatamente o que estes valores são.
+ * `digitado` seria mentira: ele quer dizer alguém do escritório preenchendo com o documento à
+ * vista, que é justamente o ato que ainda não aconteceu.
+ *
+ * O endereço tem uma tentação: ele nasce do ViaCEP, e `cep` é uma origem que existe. Mas o
+ * formulário deixa EDITAR o que o CEP trouxe e não diz o que foi mexido — marcar tudo como `cep`
+ * afirmaria uma verificação que não houve. Quando o formulário passar a informar o que auto-
+ * preencheu, essa distinção fica fácil; até lá, `declarado` é o que se pode dizer com honestidade.
+ */
+export function camposDeclarados(dados: Record<string, unknown>): CamposDoPreCadastro {
+  const saida: CamposDoPreCadastro = {};
+  for (const chave of CAMPOS_DECLARADOS_PELO_MOTORISTA) {
+    const bruto = dados[chave];
+    if (typeof bruto !== "string") continue;
+    const valor = bruto.trim();
+    if (valor === "") continue;
+    saida[chave] = { valor, origem: "declarado" };
+  }
+  return saida;
+}
+
+/**
+ * O QUE O FORMULÁRIO MANDA e o cadastro usa — a interseção, medida em produção (30/08).
+ *
+ * `ciencia`, `donoDosDocumentos`, `possuiToxicologico` e `validadeToxicologico` ficam FORA de
+ * propósito: não são campos do `setMotorista`. O toxicológico não existe em lugar nenhum da API da
+ * gerenciadora (conferido no manual em PDF), e vira pendência manual — trazê-lo para cá o faria
+ * parecer um campo que alguém corrige e envia.
+ */
+const CAMPOS_DECLARADOS_PELO_MOTORISTA = [
+  "nome",
+  "cpf",
+  "celular",
+  "cep",
+  "logradouro",
+  "numero",
+  "complemento",
+  "bairro",
+  "cidade",
+  "uf",
+  "possuiMopp",
+  "validadeMopp",
+] as const;
+
+/**
  * O CPF DO DOCUMENTO CONFERE COM O QUE A PESSOA DIGITOU? (2026-08-30)
  *
  * ── O CASO QUE FEZ ISTO EXISTIR ───────────────────────────────────────────────────────────────

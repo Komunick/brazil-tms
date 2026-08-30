@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   CAMPOS_DA_CNH,
   camposDaLeitura,
+  camposDeclarados,
   conferirCpfDoDocumento,
   cnhLidaSchema,
   dataBrParaIso,
   fundirCampos,
   quantosLidos,
+  type CamposDoPreCadastro,
 } from "./cnh-lida";
 
 /**
@@ -134,5 +136,111 @@ describe("o CPF do documento contra o que a pessoa digitou", () => {
     expect(conferirCpfDoDocumento("39053344705", {}).estado).toBe("nao_lido");
     expect(conferirCpfDoDocumento("39053344705", { cpf: null }).estado).toBe("nao_lido");
     expect(conferirCpfDoDocumento("39053344705", { cpf: "390.533" }).estado).toBe("nao_lido");
+  });
+});
+
+/**
+ * O QUE O MOTORISTA DECLAROU (30/08) — o conserto do primeiro cadastro real.
+ *
+ * Medido em produção naquele dia: 16 valores no envio, `campos` com UMA chave, e essa era o estado
+ * da leitura. A conferência abria vazia com o endereço da pessoa ali do lado.
+ */
+describe("os campos declarados pelo motorista", () => {
+  const DO_FORMULARIO = {
+    nome: "Alexandre Morais Barros",
+    cpf: "07600530570",
+    celular: "71992067086",
+    cep: "41770395",
+    logradouro: "Rua Edístio Pondé",
+    numero: "120",
+    complemento: "Apto 302",
+    bairro: "Stiep",
+    cidade: "Salvador",
+    uf: "BA",
+    possuiMopp: "nao",
+    // Os quatro que o formulário manda e o cadastro NÃO usa:
+    ciencia: "sim",
+    donoDosDocumentos: "sim",
+    possuiToxicologico: "nao",
+    validadeToxicologico: "",
+  };
+
+  it("traz os doze campos que o cadastro usa", () => {
+    const c = camposDeclarados(DO_FORMULARIO);
+    expect(Object.keys(c).sort()).toEqual([
+      "bairro",
+      "celular",
+      "cep",
+      "cidade",
+      "complemento",
+      "cpf",
+      "logradouro",
+      "nome",
+      "numero",
+      "possuiMopp",
+      "uf",
+    ]);
+    expect(c.logradouro).toEqual({ valor: "Rua Edístio Pondé", origem: "declarado" });
+  });
+
+  /**
+   * `declarado`, nunca `digitado`: o segundo quer dizer alguém do escritório preenchendo com o
+   * documento à vista — o ato que ainda NÃO aconteceu. Marcar assim faria a conferência tratar uma
+   * afirmação sem prova como fato já verificado, que é o oposto do que a tela existe para fazer.
+   */
+  it("a origem é `declarado`, e isso é o que separa afirmar de conferir", () => {
+    const c = camposDeclarados(DO_FORMULARIO);
+    for (const campo of Object.values(c)) expect(campo.origem).toBe("declarado");
+  });
+
+  /**
+   * O endereço nasce do ViaCEP e `cep` é uma origem que existe — mas o formulário deixa EDITAR o que
+   * o CEP trouxe e não diz o que foi mexido. Marcar tudo como `cep` afirmaria uma verificação que
+   * não houve.
+   */
+  it("o endereço NÃO vira origem `cep` — o formulário deixa editar e não diz o quê", () => {
+    const c = camposDeclarados(DO_FORMULARIO);
+    expect(c.cep?.origem).toBe("declarado");
+    expect(c.bairro?.origem).toBe("declarado");
+  });
+
+  it("deixa de fora o que o setMotorista não usa — inclusive o toxicológico", () => {
+    // O toxicológico não existe em lugar nenhum da API da gerenciadora (manual em PDF, conferido).
+    // Trazê-lo o faria parecer um campo que alguém corrige e envia.
+    const c = camposDeclarados(DO_FORMULARIO);
+    for (const fora of ["ciencia", "donoDosDocumentos", "possuiToxicologico", "validadeToxicologico"]) {
+      expect(c[fora], fora).toBeUndefined();
+    }
+  });
+
+  it("valor vazio não vira campo — vazio é ausência, não uma declaração", () => {
+    const c = camposDeclarados({ nome: "Fulano", complemento: "", numero: "   " });
+    expect(c.nome).toBeDefined();
+    expect(c.complemento).toBeUndefined();
+    expect(c.numero).toBeUndefined();
+  });
+
+  it("ignora o que não é texto sem estourar", () => {
+    const c = camposDeclarados({ nome: 42, cpf: null, celular: { a: 1 }, bairro: "Stiep" });
+    expect(Object.keys(c)).toEqual(["bairro"]);
+  });
+
+  /**
+   * O CASO QUE MAIS IMPORTA: um reenvio não pode apagar a correção de quem já conferiu.
+   *
+   * A mesma `fundirCampos` do job da CNH, com a mesma regra — o existente vence. Sem isso, um
+   * motorista que mandasse de novo desfaria o trabalho do escritório em silêncio.
+   */
+  it("o já conferido vence o reenvio", () => {
+    const jaConferido: CamposDoPreCadastro = {
+      logradouro: { valor: "Rua Edistio Ponde, 120", origem: "digitado" },
+      rg: { valor: "2098431", origem: "cnh" },
+    };
+    const fundido = fundirCampos(jaConferido, camposDeclarados(DO_FORMULARIO));
+    expect(fundido.logradouro).toEqual({ valor: "Rua Edistio Ponde, 120", origem: "digitado" });
+    // E o que ele mandou de novo e ninguém tinha tocado entra normalmente.
+    expect(fundido.bairro).toEqual({ valor: "Stiep", origem: "declarado" });
+    // O que veio da CNH continua lá — o reenvio não apaga a leitura.
+    expect(fundido.rg).toEqual({ valor: "2098431", origem: "cnh" });
   });
 });
