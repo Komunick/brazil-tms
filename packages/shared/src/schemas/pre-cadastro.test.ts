@@ -61,3 +61,139 @@ describe("campo opcional vazio conta como AUSÊNCIA", () => {
     if (r.success) expect(r.data.uf).toBe("BA");
   });
 });
+
+/**
+ * "TENHO" + UMA DATA QUE JÁ PASSOU (30/08, achado no primeiro cadastro real).
+ *
+ * O Alexandre mandou `possuiMopp: sim` com `validadeMopp: 1990-01-01`. Nos DOIS envios. E o TMS
+ * aceitou calado as duas vezes — a validação só exigia que a data existisse.
+ *
+ * A data não vem do formulário: os dois campos são `<input type="date">` crus, sem `value`, `min`
+ * nem `max` (conferido na página em produção). É o seletor nativo do celular abrindo num ano baixo.
+ * Por isso a regra mora no ESQUEMA: o formulário pode ganhar um `min` amanhã, e uma requisição
+ * feita fora dele chegaria igual.
+ */
+describe("validade que já passou", () => {
+  const ontem = () => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+  };
+  const hoje = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+  const amanha = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+  };
+
+  it("recusa o MOPP vencido — o caso de 1990 que passou batido", () => {
+    const r = preCadastroSchema.safeParse({
+      ...BASE,
+      possuiMopp: "sim",
+      validadeMopp: "1990-01-01",
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const erro = r.error.issues.find((i) => i.path[0] === "validadeMopp");
+      expect(erro?.message).toContain("já passou");
+    }
+  });
+
+  it("recusa também o de ontem — não é só data absurda", () => {
+    const r = preCadastroSchema.safeParse({
+      ...BASE,
+      possuiMopp: "sim",
+      validadeMopp: ontem(),
+    });
+    expect(r.success).toBe(false);
+  });
+
+  /**
+   * VENCER HOJE AINDA VALE. Recusar por isso mandaria embora quem está em dia por questão de horas
+   * — e no dia do evento seria uma pessoa parada no estande sem entender o motivo.
+   */
+  it("aceita o que vence HOJE", () => {
+    const r = preCadastroSchema.safeParse({
+      ...BASE,
+      possuiMopp: "sim",
+      validadeMopp: hoje(),
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it("aceita o que vence amanhã", () => {
+    expect(
+      preCadastroSchema.safeParse({ ...BASE, possuiMopp: "sim", validadeMopp: amanha() }).success,
+    ).toBe(true);
+  });
+
+  it("vale igual para o toxicológico", () => {
+    const r = preCadastroSchema.safeParse({
+      ...BASE,
+      possuiToxicologico: "sim",
+      validadeToxicologico: "1990-01-01",
+    });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      expect(r.error.issues.some((i) => i.path[0] === "validadeToxicologico")).toBe(true);
+    }
+  });
+
+  /**
+   * Quem NÃO tem não é incomodado com data nenhuma — nem para reclamar de vencida. A validade sem o
+   * documento correspondente já é descartada pela regra de cima.
+   */
+  it("quem não tem MOPP passa mesmo com data velha pendurada", () => {
+    const r = preCadastroSchema.safeParse({
+      ...BASE,
+      possuiMopp: "nao",
+      validadeMopp: "1990-01-01",
+    });
+    expect(r.success).toBe(true);
+  });
+
+  /**
+   * UMA MENSAGEM SÓ por campo vazio. Sem esta guarda, quem deixa a data em branco levaria duas
+   * reclamações sobre o mesmo campo — "informe" e "já passou" —, o que no celular é uma tela de
+   * erros contraditórios.
+   */
+  it("campo vazio reclama que FALTA, não que venceu", () => {
+    const r = preCadastroSchema.safeParse({ ...BASE, possuiMopp: "sim" });
+    expect(r.success).toBe(false);
+    if (!r.success) {
+      const doCampo = r.error.issues.filter((i) => i.path[0] === "validadeMopp");
+      expect(doCampo).toHaveLength(1);
+      expect(doCampo[0]?.message).toContain("Informe");
+    }
+  });
+});
+
+/**
+ * A UF AUSENTE (30/08) — achado escrevendo os testes acima, não em produção.
+ *
+ * O `.optional()` estava dentro do pipe, depois do transform, então o `z.string()` de fora seguia
+ * obrigatório: `uf: ""` passava e `uf` ausente devolvia "Required", derrubando o envio inteiro.
+ *
+ * Nunca doeu porque o `FormData` manda todo campo do formulário, mesmo vazio — e é justamente por
+ * isso que importa: uma requisição montada FORA do site não manda o que não tem. É a armadilha 2
+ * desta fatia levada a sério.
+ */
+describe("a UF é opcional de verdade", () => {
+  it("aceita o corpo SEM a chave `uf`", () => {
+    expect(preCadastroSchema.safeParse({ ...BASE }).success).toBe(true);
+  });
+
+  it("aceita `uf` vazia, como o formulário manda quando o CEP não resolve", () => {
+    expect(preCadastroSchema.safeParse({ ...BASE, uf: "" }).success).toBe(true);
+  });
+
+  it("continua recusando UF malformada — opcional não é 'aceita qualquer coisa'", () => {
+    expect(preCadastroSchema.safeParse({ ...BASE, uf: "BAHIA" }).success).toBe(false);
+  });
+
+  it("normaliza para maiúscula", () => {
+    const r = preCadastroSchema.safeParse({ ...BASE, uf: " ba " });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.uf).toBe("BA");
+  });
+});
