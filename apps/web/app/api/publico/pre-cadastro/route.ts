@@ -59,19 +59,50 @@ export const dynamic = "force-dynamic";
  * atrasar o evento de 10/09, que é a razão de esta rota existir.
  */
 
-/** A única origem que pode chamar. Sem isto, qualquer página na internet posta aqui. */
-function origemPermitida(): string {
-  return process.env.PRE_CADASTRO_ORIGEM ?? "https://braziltransports.com.br";
+/**
+ * AS ORIGENS QUE PODEM CHAMAR — uma LISTA, e isso custou um defeito para aprender (2026-08-30).
+ *
+ * Nasceu como valor único, `https://braziltransports.com.br`. Mas o site é publicado em DOIS
+ * domínios — com e sem `www` — e quem chegasse pelo `www` levava 403. O navegador então bloqueia a
+ * leitura da resposta, o `fetch` estoura, e o formulário dizia "sem conexão com o servidor": a
+ * pessoa ia procurar defeito no 4G dela, com o 4G funcionando.
+ *
+ * A informação estava à vista desde o começo — o Coolify lista os dois domínios na configuração da
+ * aplicação. Ler não é o mesmo que conferir.
+ *
+ * Separadas por vírgula na variável. Espaços em volta são tolerados porque quem edita `.env` a
+ * altas horas põe espaço depois da vírgula, e um domínio que não casa por causa disso derruba o
+ * formulário inteiro sem deixar rastro.
+ */
+function origensPermitidas(): string[] {
+  const bruto =
+    process.env.PRE_CADASTRO_ORIGEM ??
+    "https://braziltransports.com.br,https://www.braziltransports.com.br";
+  return bruto
+    .split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
 }
 
 function cabecalhosCors(origem: string | null): Record<string, string> {
-  const permitida = origemPermitida();
-  // Ecoa a origem SÓ quando ela é a permitida. Devolver `*` funcionaria e abriria a rota para
-  // qualquer página; devolver a origem recebida sem conferir seria o mesmo com passos a mais.
+  const permitidas = origensPermitidas();
+  /**
+   * ECOA A ORIGEM RECEBIDA quando ela está na lista — e é obrigatório que seja assim.
+   *
+   * `Access-Control-Allow-Origin` aceita UM valor, nunca uma lista. Devolver sempre o primeiro
+   * domínio faria o navegador de quem veio pelo segundo recusar a resposta mesmo com o servidor
+   * tendo aceitado — o defeito seria idêntico ao que esta correção conserta.
+   *
+   * Quando a origem não está na lista, devolve o primeiro: a requisição vai ser recusada com 403 de
+   * qualquer forma, e ecoar uma origem desconhecida seria dizer "eu confio em você" para alguém em
+   * quem não confiamos.
+   */
+  const permitida = origem && permitidas.includes(origem) ? origem : permitidas[0]!;
   return {
-    "Access-Control-Allow-Origin": origem === permitida ? permitida : permitida,
+    "Access-Control-Allow-Origin": permitida,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
+    // Sem isto, um cache guardaria a resposta de um domínio e a serviria ao outro.
     Vary: "Origin",
   };
 }
@@ -139,7 +170,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     NextResponse.json(corpo, { status, headers: cors });
 
   try {
-    if (request.headers.get("origin") !== origemPermitida()) {
+    const origem = request.headers.get("origin");
+    if (!origem || !origensPermitidas().includes(origem)) {
       return recusar(403, { erro: "origem_nao_permitida" });
     }
 
