@@ -158,6 +158,17 @@ export interface LinhaDaProgramacao {
   portalStatus: string | null;
   motorista: string | null;
   placa: string | null;
+  /**
+   * A PLACA QUE FICOU SÓ NO TMS (30/08, a pedido).
+   *
+   * O caso que ela existe para contar: uma CARRETA rodou no lugar de um TRUCK. O portal aceita uma
+   * placa só numa LH de truck — vai a do cavalo — e a segunda ficava guardada em
+   * `portal_commands.plates_internas` sem NENHUMA tela para mostrá-la.
+   *
+   * É por isso que a planilha do faturamento sobrevivia a esta: o TMS capturava o dado e o escondia,
+   * e pagar pela tarifa de carreta dependia de alguém anotar do lado de fora.
+   */
+  placaInterna: string | null;
   cpf: string | null;
   telefone: string | null;
   /**
@@ -238,6 +249,7 @@ export async function readProgramacao(
     status_portal: string | null;
     motorista: string | null;
     placa: string | null;
+    placa_interna: string | null;
     cpf: string | null;
     telefone: string | null;
     cor: string | null;
@@ -286,6 +298,16 @@ export async function readProgramacao(
       t.customer_fields ->> 'Status (portal)' as status_portal,
       t.customer_fields ->> 'Motorista (portal)' as motorista,
       t.customer_fields ->> 'Placa (portal)' as placa,
+      /*
+       * A PLACA QUE NÃO FOI AO PORTAL — a carreta que rodou no lugar do truck (30/08).
+       *
+       * Vem da ÚLTIMA ordem de atribuição concluída, e só dela: uma ordem que falhou não descreve o
+       * que está na estrada, e uma ordem antiga descreveria a atribuição anterior.
+       *
+       * Um "left join lateral" e não subconsulta no SELECT: a esmagadora maioria das viagens não tem
+       * placa interna, e o lateral não paga nada por elas.
+       */
+      pi.plates_internas as placa_interna,
       m.cpf,
       m.phone as telefone,
       w.cor,
@@ -318,6 +340,23 @@ export async function readProgramacao(
     -- O nome sai do cadastro na leitura, nunca de uma copia guardada: "portal_driver_id" e a chave
     -- estavel, e um nome copiado envelheceria sem que ninguém soubesse de onde veio.
     left join drivers dpv on dpv.portal_driver_id = pv.portal_driver_id
+    /*
+     * A PLACA QUE NÃO FOI AO PORTAL, da ÚLTIMA atribuição CONCLUÍDA (30/08).
+     *
+     * Exige status "done" e não a mais recente qualquer: uma ordem que falhou não descreve o que está
+     * na estrada, e mostrá-la faria a linha afirmar uma carreta que nunca foi aceita.
+     *
+     * Lateral com "limit 1" em vez de subconsulta no SELECT: a esmagadora maioria das viagens não
+     * tem placa interna, e o lateral não paga nada por elas.
+     */
+    left join lateral (
+      select pc.plates_internas
+        from portal_commands pc
+       where pc.trip_id = t.id and pc.action = 'assign' and pc.status = 'done'
+         and pc.plates_internas is not null
+       order by pc.requested_at desc
+       limit 1
+    ) pi on true
     where t.planned_pickup_window_start is not null
       -- A janela é em DIAS de calendário, não em horas: "ontem" tem de trazer a viagem das 06h de
       -- ontem, e subtrair 24 horas de agora a deixaria de fora pela manhã.
@@ -357,6 +396,7 @@ export async function readProgramacao(
     portalStatus: r.status_portal,
     motorista: r.motorista,
     placa: r.placa,
+    placaInterna: r.placa_interna,
     cpf: r.cpf,
     telefone: r.telefone,
     cor: r.cor,
