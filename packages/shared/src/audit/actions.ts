@@ -58,6 +58,7 @@ export type AuditAction =
   | "trip.portal_auction_open"
   // O descarte da fila de pré-cadastro (fatia 028). ARQUIVA, não apaga — princípio III.
   | "preregistration.archive"
+  | "preregistration.sent"
   // 026 — a ponte rota → modelo de Pré-SM. Confirmar AUTORIZA GASTO: a gerenciadora cobra por
   // solicitação, e uma rota confirmada passa a gerar Pré-SM sozinha. Quem confirmou fica registrado.
   | "pre_sm.modelo.confirmar"
@@ -229,6 +230,7 @@ export const ALL_AUDIT_ACTIONS = [
   "trip.portal_assign_result",
   "trip.portal_auction_open",
   "preregistration.archive",
+  "preregistration.sent",
   "pre_sm.modelo.confirmar",
   "pre_sm.modelo.desconfirmar",
   "pre_sm.enviar",

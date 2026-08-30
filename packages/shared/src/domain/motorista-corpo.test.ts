@@ -96,10 +96,15 @@ describe("o que impede o envio", () => {
 describe("o corpo montado", () => {
   const corpo = corpoDoMotorista(PRONTO);
 
-  it("as datas viram brasileiras — o TMS guarda ISO, a gerenciadora recebe DD/MM/AAAA", () => {
-    expect(corpo.DataNascimento).toBe("14/03/1985");
-    expect(corpo.DataVencCNH).toBe("22/07/2029");
-    expect(corpo.DtPrimEmissCNH).toBe("09/11/2006");
+  /**
+   * AS DATAS VÃO EM ISO, e eu tinha implementado DD/MM/AAAA supondo que uma API brasileira quisesse
+   * data brasileira. O exemplo do manual mostra `"DataNascimento":"1987-07-07"`, e — evidência mais
+   * forte — o `paraDataHoraDaIntegra` da 026 usa ISO contra a API REAL há dias.
+   */
+  it("as datas vão em ISO, como a 026 já faz contra a API real", () => {
+    expect(corpo.DataNascimento).toBe("1985-03-14");
+    expect(corpo.DataVencCNH).toBe("2029-07-22");
+    expect(corpo.DtPrimEmissCNH).toBe("2006-11-09");
   });
 
   it("a profissão é 30, fixo e medido — nunca adivinhado", () => {
@@ -109,7 +114,8 @@ describe("o corpo montado", () => {
 
   it("MOPP vira uma letra, não o 'sim'/'nao' do formulário", () => {
     expect(corpo.PossuiMOPP).toBe("N");
-    expect(corpo.DtVencMOPP).toBe("");
+    // Data ausente é null, não string vazia — o exemplo do manual mostra `"DtVencMOPP":null`.
+    expect(corpo.DtVencMOPP).toBeNull();
   });
 
   it("quem TEM MOPP manda a validade junto", () => {
@@ -118,7 +124,7 @@ describe("o corpo montado", () => {
       campos: { ...COMPLETO, possuiMopp: campo("sim"), validadeMopp: campo("2027-05-10") },
     });
     expect(c.PossuiMOPP).toBe("S");
-    expect(c.DtVencMOPP).toBe("10/05/2027");
+    expect(c.DtVencMOPP).toBe("2027-05-10");
   });
 
   it("quem NÃO tem MOPP não manda validade, mesmo que ela exista nos campos", () => {
@@ -127,7 +133,7 @@ describe("o corpo montado", () => {
       ...PRONTO,
       campos: { ...COMPLETO, possuiMopp: campo("nao"), validadeMopp: campo("2027-05-10") },
     });
-    expect(c.DtVencMOPP).toBe("");
+    expect(c.DtVencMOPP).toBeNull();
   });
 
   it("CPF e celular vão só com dígitos", () => {
@@ -152,6 +158,23 @@ describe("o corpo montado", () => {
       campos: { ...COMPLETO, complemento: { valor: null, origem: null } },
     });
     expect(c.Complemento).toBe("");
+  });
+
+  /**
+   * A TABELA E O EXEMPLO DO MANUAL DISCORDAM sobre dois nomes, e o exemplo é de uma versão anterior
+   * (rodapé: "Versão 14.0"). Mandamos os DOIS: a API ignora campo que não reconhece — medido no
+   * `getCidades`, onde nome de filtro errado é silenciosamente descartado.
+   *
+   * O risco de mandar um a mais é zero; o de mandar o errado é um cadastro recusado sem dizer qual
+   * campo faltou, e sem homologação para descobrir por tentativa.
+   *
+   * Quando o primeiro cadastro real subir, o retorno diz qual vale, e o outro sai daqui.
+   */
+  it("manda os DOIS nomes onde a tabela e o exemplo do manual discordam", () => {
+    expect(corpo.NumFormCNH).toBe("BA118392044");
+    expect(corpo.NumDocCNH).toBe("BA118392044");
+    expect(corpo.NumRenachCNH).toBe("BA954120388");
+    expect(corpo.Renach).toBe("BA954120388");
   });
 
   it("o endereço vai por extenso, não só o CEP", () => {
