@@ -45,7 +45,14 @@ export interface ItemDaFila {
    * um pré-cadastro sem campos lidos teria duas explicações indistinguíveis e a pessoa ficaria
    * esperando por algo que nunca vem.
    */
-  leituraCnh: { estado: string; motivo?: string; lidos?: number; total?: number } | null;
+  leituraCnh: {
+    estado: string;
+    motivo?: string;
+    lidos?: number;
+    total?: number;
+    /** O CPF impresso no documento, quando ele NÃO bate com o que a pessoa digitou. */
+    cpfDivergente?: string;
+  } | null;
   documentoCnhId: string | null;
   documentoComprovanteId: string | null;
   recebidoEm: string;
@@ -225,6 +232,11 @@ export async function chaveDoDocumentoDePreCadastro(documentId: string): Promise
  */
 export async function documentoParaLeitura(documentoId: string): Promise<{
   preregistrationId: string;
+  /**
+   * O CPF que a PESSOA digitou. Vai junto porque a leitura o compara com o CPF impresso no
+   * documento — foi assim que se descobriu, no primeiro cadastro real, uma CNH de outra pessoa.
+   */
+  cpf: string;
   chave: string;
   tipo: string;
   campos: Record<string, unknown>;
@@ -232,6 +244,7 @@ export async function documentoParaLeitura(documentoId: string): Promise<{
   const [linha] = await db
     .select({
       preregistrationId: driverPreregistrations.id,
+      cpf: driverPreregistrations.cpf,
       chave: resourceDocuments.fileStorageKey,
       tipo: resourceDocuments.contentType,
       campos: driverPreregistrations.campos,
@@ -259,6 +272,7 @@ export async function documentoParaLeitura(documentoId: string): Promise<{
   if (!linha) return null;
   return {
     preregistrationId: linha.preregistrationId,
+    cpf: linha.cpf,
     chave: linha.chave,
     tipo: linha.tipo,
     campos: (linha.campos ?? {}) as Record<string, unknown>,
@@ -278,7 +292,7 @@ export async function documentoParaLeitura(documentoId: string): Promise<{
 export async function gravarLeituraDaCnh(
   preregistrationId: string,
   campos: Record<string, unknown>,
-  leitura: { estado: string; motivo?: string; lidos?: number; total?: number },
+  leitura: { estado: string; motivo?: string; lidos?: number; total?: number; cpfDivergente?: string },
 ): Promise<void> {
   await db
     .update(driverPreregistrations)

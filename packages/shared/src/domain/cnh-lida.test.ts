@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CAMPOS_DA_CNH,
   camposDaLeitura,
+  conferirCpfDoDocumento,
   cnhLidaSchema,
   dataBrParaIso,
   fundirCampos,
@@ -110,5 +111,28 @@ describe("a contagem que a fila mostra", () => {
 
   it("leitura totalmente falha conta zero, sem estourar", () => {
     expect(quantosLidos(camposDaLeitura({})).lidos).toBe(0);
+  });
+});
+
+describe("o CPF do documento contra o que a pessoa digitou", () => {
+  /**
+   * O caso real que fez isto existir: o primeiro cadastro recebido veio com um nome e CPF, e a
+   * foto era a CNH de outra pessoa. Só apareceu porque alguém abriu o arquivo e olhou.
+   */
+  it("CPF diferente é DIVERGÊNCIA, e diz qual está no documento", () => {
+    const r = conferirCpfDoDocumento("07600530570", { cpf: "007.588.154-33" });
+    expect(r).toEqual({ estado: "diverge", cpfNoDocumento: "00758815433" });
+  });
+
+  it("mesmo CPF confere, com ou sem pontuação dos dois lados", () => {
+    expect(conferirCpfDoDocumento("39053344705", { cpf: "390.533.447-05" }).estado).toBe("confere");
+    expect(conferirCpfDoDocumento("390.533.447-05", { cpf: "39053344705" }).estado).toBe("confere");
+  });
+
+  it("CPF não lido NÃO é divergência — ausência não acusa", () => {
+    // Acusar por ausência seria o mesmo palpite que o resto deste arquivo existe para impedir.
+    expect(conferirCpfDoDocumento("39053344705", {}).estado).toBe("nao_lido");
+    expect(conferirCpfDoDocumento("39053344705", { cpf: null }).estado).toBe("nao_lido");
+    expect(conferirCpfDoDocumento("39053344705", { cpf: "390.533" }).estado).toBe("nao_lido");
   });
 });

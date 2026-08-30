@@ -1,6 +1,7 @@
 import { type PgBoss } from "pg-boss";
 import {
   camposDaLeitura,
+  conferirCpfDoDocumento,
   fundirCampos,
   quantosLidos,
   type CamposDoPreCadastro,
@@ -75,6 +76,26 @@ export async function registerCnhLer(boss: PgBoss): Promise<void> {
     const fundidos = fundirCampos(existentes, camposDaLeitura(resultado.campos));
     const { lidos, total } = quantosLidos(fundidos);
 
-    await gravarLeituraDaCnh(alvo.preregistrationId, fundidos, { estado: "lido", lidos, total });
+    /**
+     * O CPF DO DOCUMENTO CONTRA O QUE A PESSOA DIGITOU — e o momento é aqui, não depois.
+     *
+     * `fundirCampos` acabou de fazer o CPF digitado vencer o da foto, que é a regra certa. Mas ele
+     * DESCARTA o do documento no processo, e é justamente esse descarte que esconderia a
+     * divergência. Comparar antes de perder é a única janela que existe.
+     *
+     * O caso real: o primeiro cadastro recebido trazia a CNH de outra pessoa — nome e CPF
+     * diferentes. Só apareceu porque alguém abriu o arquivo. Enviado assim, gastaria uma
+     * solicitação de pesquisa na gerenciadora para voltar reprovado.
+     */
+    const cpf = conferirCpfDoDocumento(alvo.cpf, resultado.campos);
+
+    await gravarLeituraDaCnh(alvo.preregistrationId, fundidos, {
+      estado: "lido",
+      lidos,
+      total,
+      // Só viaja quando diverge: um campo presente e falso em todo cadastro legítimo faria a tela
+      // ter de saber ignorá-lo, e cedo ou tarde alguém ignoraria o caso verdadeiro junto.
+      ...(cpf.estado === "diverge" ? { cpfDivergente: cpf.cpfNoDocumento } : {}),
+    });
   });
 }
