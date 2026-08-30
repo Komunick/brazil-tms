@@ -1,4 +1,5 @@
 import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
+import type { CamposDoPreCadastro } from "@brazil-tms/shared";
 import { db } from "../client";
 import {
   driverPreregistrationSubmissions,
@@ -55,6 +56,23 @@ export interface ItemDaFila {
   } | null;
   documentoCnhId: string | null;
   documentoComprovanteId: string | null;
+  /**
+   * O QUE ACONTECEU NO ENVIO À GERENCIADORA — sem isto o botão não tem resposta.
+   *
+   * Um botão cujo resultado não aparece em lugar nenhum é pior do que botão nenhum: quem apertou
+   * não sabe se funcionou, aperta de novo, e o silêncio vira desconfiança na tela inteira.
+   *
+   * `enviadoEm` é o desfecho FELIZ e é definitivo. `cadastro` é a última tentativa — o que faltou,
+   * ou a recusa dela — e existe tanto para quem ainda não foi quanto para quem já foi.
+   */
+  enviadoEm: string | null;
+  cadastro: {
+    em: string;
+    /** Códigos de `motivosDeNaoCadastrar`; a tela os traduz. */
+    motivos?: string[];
+    /** A recusa DELA, com a mensagem DELA, sem tradução nossa. */
+    erro?: string;
+  } | null;
   recebidoEm: string;
   atualizadoEm: string;
 }
@@ -98,6 +116,7 @@ export async function listarFilaDePreCadastros(): Promise<ItemDaFila[]> {
       motoristaNome: drivers.name,
       pendenciaToxicologico: driverPreregistrations.pendenciaToxicologico,
       camposConsolidados: driverPreregistrations.campos,
+      enviadoEm: driverPreregistrations.enviadoEm,
       criadoEm: driverPreregistrations.createdAt,
       atualizadoEm: driverPreregistrations.updatedAt,
       dados: ultimo.dados,
@@ -132,6 +151,10 @@ export async function listarFilaDePreCadastros(): Promise<ItemDaFila[]> {
         null,
       documentoCnhId: l.documentoCnhId ?? null,
       documentoComprovanteId: l.documentoComprovanteId ?? null,
+      enviadoEm: l.enviadoEm?.toISOString() ?? null,
+      cadastro:
+        (((l.camposConsolidados ?? {}) as Record<string, unknown>)
+          .cadastroGerenciadora as ItemDaFila["cadastro"]) ?? null,
       recebidoEm: l.criadoEm.toISOString(),
       atualizadoEm: l.atualizadoEm.toISOString(),
     };
@@ -304,6 +327,170 @@ export async function gravarLeituraDaCnh(
 }
 
 /**
+ * UM PRÉ-CADASTRO INTEIRO, para a tela de conferência (fatia 028, etapa 4).
+ *
+ * A fila mostra o suficiente para escolher em qual linha trabalhar. Isto é o que a pessoa precisa
+ * para de fato CONFERIR: todos os campos, cada um com a sua procedência, e as fotos ao lado.
+ */
+export interface PreCadastroParaConferencia {
+  id: string;
+  cpf: string;
+  tipo: "novo" | "atualizacao";
+  motoristaNome: string | null;
+  nome: string | null;
+  campos: CamposDoPreCadastro;
+  leituraCnh: ItemDaFila["leituraCnh"];
+  documentoCnhId: string | null;
+  documentoComprovanteId: string | null;
+  /**
+   * O tipo do arquivo da CNH — `image/jpeg`, `application/pdf`.
+   *
+   * A tela precisa saber ANTES de renderizar: imagem entra num `<img>`, PDF num `<object>`. Adivinhar
+   * pela extensão do nome falharia justamente no caso comum, que é o PDF do app da CNH chegando com
+   * nome de foto do celular.
+   */
+  documentoCnhTipo: string | null;
+  pendenciaToxicologico: boolean;
+  enviadoEm: string | null;
+  cadastro: ItemDaFila["cadastro"];
+  recebidoEm: string;
+}
+
+export async function preCadastroParaConferencia(
+  id: string,
+): Promise<PreCadastroParaConferencia | null> {
+  const [linha] = await db
+    .select({
+      id: driverPreregistrations.id,
+      cpf: driverPreregistrations.cpf,
+      tipo: driverPreregistrations.tipo,
+      campos: driverPreregistrations.campos,
+      motoristaNome: drivers.name,
+      pendenciaToxicologico: driverPreregistrations.pendenciaToxicologico,
+      enviadoEm: driverPreregistrations.enviadoEm,
+      arquivadoEm: driverPreregistrations.arquivadoEm,
+      criadoEm: driverPreregistrations.createdAt,
+    })
+    .from(driverPreregistrations)
+    .leftJoin(drivers, eq(drivers.id, driverPreregistrations.driverId))
+    .where(eq(driverPreregistrations.id, id))
+    .limit(1);
+
+  // Arquivado não abre: a linha existe para o histórico, não para voltar a ser trabalhada.
+  if (!linha || linha.arquivadoEm) return null;
+
+  const [ultimo] = await db
+    .select({
+      dados: driverPreregistrationSubmissions.dados,
+      documentoCnhId: driverPreregistrationSubmissions.documentoCnhId,
+      documentoComprovanteId: driverPreregistrationSubmissions.documentoComprovanteId,
+    })
+    .from(driverPreregistrationSubmissions)
+    .where(eq(driverPreregistrationSubmissions.preregistrationId, id))
+    .orderBy(desc(driverPreregistrationSubmissions.recebidoEm))
+    .limit(1);
+
+  const [docCnh] = ultimo?.documentoCnhId
+    ? await db
+        .select({ contentType: resourceDocuments.contentType })
+        .from(resourceDocuments)
+        .where(eq(resourceDocuments.id, ultimo.documentoCnhId))
+        .limit(1)
+    : [];
+
+  const todos = (linha.campos ?? {}) as Record<string, unknown>;
+  const { leituraCnh, cadastroGerenciadora, ...campos } = todos;
+  const dados = (ultimo?.dados ?? {}) as Record<string, unknown>;
+
+  return {
+    id: linha.id,
+    cpf: linha.cpf,
+    tipo: linha.tipo,
+    motoristaNome: linha.motoristaNome ?? null,
+    nome: typeof dados.nome === "string" ? dados.nome : null,
+    campos: campos as CamposDoPreCadastro,
+    leituraCnh: (leituraCnh as ItemDaFila["leituraCnh"]) ?? null,
+    documentoCnhId: ultimo?.documentoCnhId ?? null,
+    documentoComprovanteId: ultimo?.documentoComprovanteId ?? null,
+    documentoCnhTipo: docCnh?.contentType ?? null,
+    pendenciaToxicologico: linha.pendenciaToxicologico,
+    enviadoEm: linha.enviadoEm?.toISOString() ?? null,
+    cadastro: (cadastroGerenciadora as ItemDaFila["cadastro"]) ?? null,
+    recebidoEm: linha.criadoEm.toISOString(),
+  };
+}
+
+/**
+ * O FUNCIONÁRIO CORRIGIU — e o que ele tocou passa a ter origem `digitado`.
+ *
+ * A procedência não é enfeite. Ela é o que permite, meses depois, separar "o modelo leu errado" de
+ * "o motorista mandou errado": um campo `cnh` errado é defeito de leitura, um `digitado` errado é
+ * outra história inteiramente. Manter a origem antiga num valor mexido apagaria essa distinção logo
+ * no caso em que ela mais importa.
+ *
+ * ── SÓ O QUE MUDOU ────────────────────────────────────────────────────────────────────────────
+ *
+ * Quem chama manda os campos que abriu; aqui só entram os que têm valor DIFERENTE do que já estava.
+ * Sem essa comparação, abrir a tela e salvar sem mexer em nada marcaria os catorze campos como
+ * digitados, e a origem deixaria de querer dizer alguma coisa.
+ *
+ * ── E NÃO MEXE EM QUEM JÁ FOI ─────────────────────────────────────────────────────────────────
+ *
+ * Cadastro já enviado é retrato do que foi mandado. Editá-lo faria o TMS e a gerenciadora
+ * discordarem em silêncio, e o TMS pareceria a versão certa.
+ */
+export async function salvarCamposConferidos(
+  id: string,
+  alteracoes: Record<string, string | null>,
+  actorUserId: string,
+): Promise<{ salvo: boolean; mudou: string[] }> {
+  return db.transaction(async (tx) => {
+    const [linha] = await tx
+      .select({ campos: driverPreregistrations.campos, enviadoEm: driverPreregistrations.enviadoEm })
+      .from(driverPreregistrations)
+      .where(eq(driverPreregistrations.id, id))
+      .limit(1);
+
+    if (!linha || linha.enviadoEm) return { salvo: false, mudou: [] };
+
+    const atuais = (linha.campos ?? {}) as Record<string, unknown>;
+    const antes: Record<string, string | null> = {};
+    const depois: Record<string, string | null> = {};
+    const novos = { ...atuais };
+
+    for (const [chave, valor] of Object.entries(alteracoes)) {
+      const atual = (atuais[chave] ?? null) as { valor?: string | null } | null;
+      const anterior = atual?.valor ?? null;
+      const limpo = valor === null || valor.trim() === "" ? null : valor.trim();
+      if (anterior === limpo) continue;
+      antes[chave] = anterior;
+      depois[chave] = limpo;
+      // Apagado volta a ser o campo VAZIO E ASSINALADO, não um campo com origem e sem valor.
+      novos[chave] = limpo === null ? { valor: null, origem: null } : { valor: limpo, origem: "digitado" };
+    }
+
+    const mudou = Object.keys(depois);
+    if (mudou.length === 0) return { salvo: true, mudou: [] };
+
+    await tx
+      .update(driverPreregistrations)
+      .set({ campos: novos, status: "em_conferencia", updatedAt: new Date() })
+      .where(eq(driverPreregistrations.id, id));
+
+    await writeAudit(tx, {
+      entityType: "driver_preregistration",
+      entityId: id,
+      action: "preregistration.reviewed",
+      previousValue: antes,
+      newValue: depois,
+      actorUserId,
+    });
+
+    return { salvo: true, mudou };
+  });
+}
+
+/**
  * O QUE O ENVIO À GERENCIADORA PRECISA SABER (fatia 028, etapa 5).
  *
  * Só os pré-cadastros PRONTOS para tentar: não arquivados e ainda não enviados. Quem decide se cada
@@ -319,7 +506,17 @@ export interface CandidatoAoCadastro {
   cpfDivergente: boolean;
 }
 
-export async function candidatosAoCadastro(limite = 50): Promise<CandidatoAoCadastro[]> {
+/**
+ * `apenasId` restringe a UM pré-cadastro — o botão de uma linha da fila.
+ *
+ * Ele ESTREITA, nunca afrouxa: as duas condições que impedem o reenvio continuam na cláusula, e é
+ * por isso que o filtro mora na CONSULTA e não em JavaScript depois. Um `filter()` em memória é o
+ * tipo de coisa que alguém simplifica meses depois sem perceber que era a trava.
+ */
+export async function candidatosAoCadastro(
+  limite = 50,
+  apenasId?: string | null,
+): Promise<CandidatoAoCadastro[]> {
   const linhas = await db
     .select({
       id: driverPreregistrations.id,
@@ -333,6 +530,7 @@ export async function candidatosAoCadastro(limite = 50): Promise<CandidatoAoCada
         // Já enviado não se manda de novo: o `setMotorista` cria pessoa, e repetir criaria duplicata
         // no cadastro deles — o erro exato que esta fatia existe para evitar.
         isNull(driverPreregistrations.enviadoEm),
+        ...(apenasId ? [eq(driverPreregistrations.id, apenasId)] : []),
       ),
     )
     .orderBy(driverPreregistrations.createdAt)

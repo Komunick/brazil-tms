@@ -97,5 +97,20 @@ export async function registerCnhLer(boss: PgBoss): Promise<void> {
       // ter de saber ignorá-lo, e cedo ou tarde alguém ignoraria o caso verdadeiro junto.
       ...(cpf.estado === "diverge" ? { cpfDivergente: cpf.cpfNoDocumento } : {}),
     });
+
+    /**
+     * E PARA AQUI — a leitura NÃO envia (decisão do usuário, 30/08).
+     *
+     * Cheguei a ligar o envio no fim desta função: a leitura terminava e o cadastro seguia sozinho
+     * para a gerenciadora. Funcionava, e estava errado pelo motivo escrito no alto deste arquivo —
+     * uma leitura COMPLETA e ERRADA, um dígito trocado num RG, é plausível o bastante para passar
+     * por todos os motivos de bloqueio e criar uma pessoa errada sem ninguém ver.
+     *
+     * "Campo não lido fica vazio e assinalado" protege contra o que o modelo NÃO leu. Nada protege
+     * contra o que ele leu errado com confiança, a não ser alguém olhando o documento ao lado.
+     *
+     * Então o caminho até a gerenciadora passa obrigatoriamente pela tela de conferência, e passa
+     * por ESTRUTURA e não por disciplina: não existe outro gatilho para o job de envio.
+     */
   });
 }

@@ -26,31 +26,84 @@ import type { CamposDoPreCadastro } from "./cnh-lida";
  * então descobrir que também falta o Renach são duas idas em vez de uma.
  */
 
-/** O que impede o envio. Ordem: primeiro o que NÃO se resolve olhando a foto. */
-export type MotivoDeNaoCadastrar =
-  | "sem_cpf"
-  | "sem_nome"
-  | "cpf_divergente"
-  | "sem_ibge_natal"
-  | "sem_ibge_residencia"
-  | "sem_endereco"
-  | "sem_numero"
-  | "sem_bairro"
-  | "sem_cep"
-  | "sem_nascimento"
-  | "sem_sexo"
-  | "sem_nome_mae"
-  | "sem_rg"
-  | "sem_orgao_rg"
-  | "sem_uf_cnh"
-  | "sem_validade_cnh"
-  | "sem_categoria_cnh"
-  | "sem_primeira_habilitacao"
-  | "sem_registro_cnh"
-  | "sem_formulario_cnh"
-  | "sem_seguranca_cnh"
-  | "sem_renach"
-  | "sem_mopp";
+/**
+ * O que impede o envio. Ordem: primeiro o que NÃO se resolve olhando a foto.
+ *
+ * LISTA EM TEMPO DE EXECUÇÃO, e não só um tipo: a fila traduz cada motivo para português, e um
+ * motivo novo sem rótulo apareceria na tela como `sem_toxicologico`. O teste que cobre isso precisa
+ * poder percorrer os motivos — um tipo desaparece na compilação e não se percorre.
+ */
+export const MOTIVOS_DE_NAO_CADASTRAR = [
+  "sem_cpf",
+  "sem_nome",
+  "cpf_divergente",
+  "sem_ibge_natal",
+  "sem_ibge_residencia",
+  "sem_endereco",
+  "sem_numero",
+  "sem_bairro",
+  "sem_cep",
+  "sem_nascimento",
+  "sem_sexo",
+  "sem_nome_mae",
+  "sem_rg",
+  "sem_orgao_rg",
+  "sem_uf_cnh",
+  "sem_validade_cnh",
+  "sem_categoria_cnh",
+  "sem_primeira_habilitacao",
+  "sem_registro_cnh",
+  "sem_formulario_cnh",
+  "sem_seguranca_cnh",
+  "sem_renach",
+  "sem_mopp",
+] as const;
+
+export type MotivoDeNaoCadastrar = (typeof MOTIVOS_DE_NAO_CADASTRAR)[number];
+
+/**
+ * OS CAMPOS QUE O CADASTRO USA — a lista fechada, e o motivo de ela ser fechada.
+ *
+ * Dois lugares dependem disto e precisam concordar: a tela de conferência, que os desenha, e a rota
+ * que salva o que a pessoa corrigiu. A rota RECUSA chave que não esteja aqui — sem isso, qualquer
+ * requisição feita fora da tela escreveria o que quisesse dentro do `campos` do pré-cadastro, e
+ * ninguém descobriria até alguém abrir o JSON meses depois.
+ *
+ * `cidadeNatal`/`ufNatal` e `cidade`/`uf` não aparecem no corpo do `setMotorista` como texto: elas
+ * viram os dois códigos IBGE. Estão aqui porque é a pessoa que as corrige quando o município não
+ * casa com o catálogo da gerenciadora.
+ */
+export const CAMPOS_DO_CADASTRO = [
+  "nome",
+  "cpf",
+  "dataNascimento",
+  "sexo",
+  "nomeMae",
+  "cidadeNatal",
+  "ufNatal",
+  "rg",
+  "orgaoEmissorRg",
+  "ufEmissorRg",
+  "numeroRegistro",
+  "categoria",
+  "validade",
+  "primeiraHabilitacao",
+  "numeroFormulario",
+  "numeroSeguranca",
+  "renach",
+  "cep",
+  "logradouro",
+  "numero",
+  "complemento",
+  "bairro",
+  "cidade",
+  "uf",
+  "celular",
+  "possuiMopp",
+  "validadeMopp",
+] as const;
+
+export type CampoDoCadastro = (typeof CAMPOS_DO_CADASTRO)[number];
 
 /**
  * O que o job junta antes de montar: os campos consolidados mais o que só o banco sabe.
