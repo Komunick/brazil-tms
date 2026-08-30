@@ -53,7 +53,17 @@ export async function registerMotoristaCadastrar(boss: PgBoss): Promise<void> {
       return;
     }
 
-    const candidatos = await candidatosAoCadastro(payload.limite ?? 50);
+    /**
+     * O JOB É O PORTÃO, o gatilho não. Por isso quem chama pode chamar à vontade.
+     *
+     * Duas coisas enfileiram isto: o fim de uma leitura de CNH bem-sucedida e o botão de uma linha.
+     * Nenhuma das duas decide se o cadastro pode ir — as duas só dizem "vale reexaminar". Toda a
+     * decisão está aqui e em `motivosDeNaoCadastrar`, num lugar só.
+     *
+     * A alternativa — cada gatilho conferir antes de enfileirar — teria a mesma regra escrita em
+     * três lugares, e três cópias divergem em silêncio.
+     */
+    const candidatos = await candidatosAoCadastro(payload.limite ?? 50, payload.preRegistrationId);
     if (candidatos.length === 0) return;
 
     const indice = indexarCidades(

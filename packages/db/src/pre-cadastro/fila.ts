@@ -55,6 +55,23 @@ export interface ItemDaFila {
   } | null;
   documentoCnhId: string | null;
   documentoComprovanteId: string | null;
+  /**
+   * O QUE ACONTECEU NO ENVIO À GERENCIADORA — sem isto o botão não tem resposta.
+   *
+   * Um botão cujo resultado não aparece em lugar nenhum é pior do que botão nenhum: quem apertou
+   * não sabe se funcionou, aperta de novo, e o silêncio vira desconfiança na tela inteira.
+   *
+   * `enviadoEm` é o desfecho FELIZ e é definitivo. `cadastro` é a última tentativa — o que faltou,
+   * ou a recusa dela — e existe tanto para quem ainda não foi quanto para quem já foi.
+   */
+  enviadoEm: string | null;
+  cadastro: {
+    em: string;
+    /** Códigos de `motivosDeNaoCadastrar`; a tela os traduz. */
+    motivos?: string[];
+    /** A recusa DELA, com a mensagem DELA, sem tradução nossa. */
+    erro?: string;
+  } | null;
   recebidoEm: string;
   atualizadoEm: string;
 }
@@ -98,6 +115,7 @@ export async function listarFilaDePreCadastros(): Promise<ItemDaFila[]> {
       motoristaNome: drivers.name,
       pendenciaToxicologico: driverPreregistrations.pendenciaToxicologico,
       camposConsolidados: driverPreregistrations.campos,
+      enviadoEm: driverPreregistrations.enviadoEm,
       criadoEm: driverPreregistrations.createdAt,
       atualizadoEm: driverPreregistrations.updatedAt,
       dados: ultimo.dados,
@@ -132,6 +150,10 @@ export async function listarFilaDePreCadastros(): Promise<ItemDaFila[]> {
         null,
       documentoCnhId: l.documentoCnhId ?? null,
       documentoComprovanteId: l.documentoComprovanteId ?? null,
+      enviadoEm: l.enviadoEm?.toISOString() ?? null,
+      cadastro:
+        (((l.camposConsolidados ?? {}) as Record<string, unknown>)
+          .cadastroGerenciadora as ItemDaFila["cadastro"]) ?? null,
       recebidoEm: l.criadoEm.toISOString(),
       atualizadoEm: l.atualizadoEm.toISOString(),
     };
@@ -319,7 +341,17 @@ export interface CandidatoAoCadastro {
   cpfDivergente: boolean;
 }
 
-export async function candidatosAoCadastro(limite = 50): Promise<CandidatoAoCadastro[]> {
+/**
+ * `apenasId` restringe a UM pré-cadastro — o botão de uma linha da fila.
+ *
+ * Ele ESTREITA, nunca afrouxa: as duas condições que impedem o reenvio continuam na cláusula, e é
+ * por isso que o filtro mora na CONSULTA e não em JavaScript depois. Um `filter()` em memória é o
+ * tipo de coisa que alguém simplifica meses depois sem perceber que era a trava.
+ */
+export async function candidatosAoCadastro(
+  limite = 50,
+  apenasId?: string | null,
+): Promise<CandidatoAoCadastro[]> {
   const linhas = await db
     .select({
       id: driverPreregistrations.id,
@@ -333,6 +365,7 @@ export async function candidatosAoCadastro(limite = 50): Promise<CandidatoAoCada
         // Já enviado não se manda de novo: o `setMotorista` cria pessoa, e repetir criaria duplicata
         // no cadastro deles — o erro exato que esta fatia existe para evitar.
         isNull(driverPreregistrations.enviadoEm),
+        ...(apenasId ? [eq(driverPreregistrations.id, apenasId)] : []),
       ),
     )
     .orderBy(driverPreregistrations.createdAt)

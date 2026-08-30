@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, FileImage, IdCard, RefreshCw, UserPlus, UserCheck } from "lucide-react";
+import { Archive, FileImage, IdCard, RefreshCw, Send, UserPlus, UserCheck } from "lucide-react";
 import { formatDateTime } from "@brazil-tms/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,6 +70,10 @@ interface ItemDaFila {
   } | null;
   documentoCnhId: string | null;
   documentoComprovanteId: string | null;
+  /** Preenchido quando o cadastro chegou à gerenciadora. É definitivo. */
+  enviadoEm: string | null;
+  /** A última tentativa: o que faltou, ou a recusa dela. */
+  cadastro: { em: string; motivos?: string[]; erro?: string } | null;
   recebidoEm: string;
   atualizadoEm: string;
 }
@@ -124,6 +128,35 @@ export function FilaPreCadastrosClient(): React.ReactElement {
     },
     onError: () => avisar({ tipo: "erro", texto: t("arquivarFalhou") }),
   });
+
+  /**
+   * O EMPURRÃO — e o aviso diz "pedido", não "enviado".
+   *
+   * A rota devolve 202: o job foi para a fila, a gerenciadora ainda não respondeu. Dizer "enviado"
+   * aqui seria uma tela afirmando um fato que só existirá daqui a alguns segundos — e que pode não
+   * existir, se ainda faltar campo. O desfecho aparece no polling, que é onde ele é verdade.
+   */
+  const enviar = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/pre-cadastros/${id}/enviar`, { method: "POST" });
+      if (!res.ok) throw new Error(String(res.status));
+    },
+    onSuccess: async () => {
+      avisar({ tipo: "ok", texto: t("envioPedido") });
+      await queryClient.invalidateQueries({ queryKey: ["pre-cadastros"] });
+    },
+    onError: () => avisar({ tipo: "erro", texto: t("envioFalhou") }),
+  });
+
+  /**
+   * O código cru é o ÚLTIMO recurso, e é melhor do que "campo faltando".
+   *
+   * Um motivo novo em `motivosDeNaoCadastrar` sem tradução aqui aparece como `sem_toxicologico` —
+   * feio, e ainda assim suficiente para alguém entender e ir atrás. Um rótulo genérico seria mais
+   * bonito e não diria nada.
+   */
+  const faltandoLegivel = (codigo: string): string =>
+    t.has(`faltando.${codigo}`) ? t(`faltando.${codigo}`) : codigo;
 
   const itens = useMemo(() => {
     const todos = consulta.data?.items ?? [];
@@ -253,6 +286,39 @@ export function FilaPreCadastrosClient(): React.ReactElement {
                         {t("toxicologico")}
                       </Badge>
                     ) : null}
+                    {/*
+                      O DESFECHO DO ENVIO — a resposta que o botão precisa ter.
+
+                      Três estados e nada de "em andamento": entre o clique e a resposta passam
+                      segundos, e um selo intermediário piscaria sem informar. O que falta aparece
+                      POR EXTENSO, e não como "incompleto", porque a pessoa está aqui para resolver:
+                      "incompleto" a manda abrir o cadastro para descobrir o quê.
+                    */}
+                    {item.enviadoEm ? (
+                      <Badge
+                        variant="secondary"
+                        className="text-emerald-700 dark:text-emerald-400"
+                        title={t("enviadoEm", { data: formatDateTime(item.enviadoEm) })}
+                      >
+                        <Send className="size-3" />
+                        {t("enviado")}
+                      </Badge>
+                    ) : item.cadastro?.erro ? (
+                      <Badge variant="destructive" title={item.cadastro.erro}>
+                        {t("envioRecusado")}
+                      </Badge>
+                    ) : item.cadastro?.motivos?.length ? (
+                      <Badge
+                        variant="outline"
+                        className="text-amber-700 dark:text-amber-400"
+                        title={item.cadastro.motivos.map(faltandoLegivel).join(" · ")}
+                      >
+                        {t("faltam", {
+                          n: item.cadastro.motivos.length,
+                          quais: item.cadastro.motivos.slice(0, 2).map(faltandoLegivel).join(", "),
+                        })}
+                      </Badge>
+                    ) : null}
                   </div>
                   <div className="text-muted-foreground text-sm">
                     {cpfLegivel(item.cpf)} · {celularLegivel(item.celular)}
@@ -292,6 +358,24 @@ export function FilaPreCadastrosClient(): React.ReactElement {
                       </a>
                     </Button>
                   ) : null}
+                  {/*
+                    SÓ APARECE ENQUANTO FAZ SENTIDO.
+
+                    Quem já foi para a gerenciadora não tem botão — não porque o clique quebraria
+                    algo (a consulta do worker exige `enviado_em IS NULL`), mas porque um botão que
+                    não faz nada ensina que os botões desta tela não fazem nada.
+                  */}
+                  {item.enviadoEm ? null : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={enviar.isPending}
+                      onClick={() => enviar.mutate(item.id)}
+                    >
+                      <Send />
+                      {t("enviar")}
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"

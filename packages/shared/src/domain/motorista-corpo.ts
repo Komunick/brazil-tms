@@ -26,31 +26,40 @@ import type { CamposDoPreCadastro } from "./cnh-lida";
  * então descobrir que também falta o Renach são duas idas em vez de uma.
  */
 
-/** O que impede o envio. Ordem: primeiro o que NÃO se resolve olhando a foto. */
-export type MotivoDeNaoCadastrar =
-  | "sem_cpf"
-  | "sem_nome"
-  | "cpf_divergente"
-  | "sem_ibge_natal"
-  | "sem_ibge_residencia"
-  | "sem_endereco"
-  | "sem_numero"
-  | "sem_bairro"
-  | "sem_cep"
-  | "sem_nascimento"
-  | "sem_sexo"
-  | "sem_nome_mae"
-  | "sem_rg"
-  | "sem_orgao_rg"
-  | "sem_uf_cnh"
-  | "sem_validade_cnh"
-  | "sem_categoria_cnh"
-  | "sem_primeira_habilitacao"
-  | "sem_registro_cnh"
-  | "sem_formulario_cnh"
-  | "sem_seguranca_cnh"
-  | "sem_renach"
-  | "sem_mopp";
+/**
+ * O que impede o envio. Ordem: primeiro o que NÃO se resolve olhando a foto.
+ *
+ * LISTA EM TEMPO DE EXECUÇÃO, e não só um tipo: a fila traduz cada motivo para português, e um
+ * motivo novo sem rótulo apareceria na tela como `sem_toxicologico`. O teste que cobre isso precisa
+ * poder percorrer os motivos — um tipo desaparece na compilação e não se percorre.
+ */
+export const MOTIVOS_DE_NAO_CADASTRAR = [
+  "sem_cpf",
+  "sem_nome",
+  "cpf_divergente",
+  "sem_ibge_natal",
+  "sem_ibge_residencia",
+  "sem_endereco",
+  "sem_numero",
+  "sem_bairro",
+  "sem_cep",
+  "sem_nascimento",
+  "sem_sexo",
+  "sem_nome_mae",
+  "sem_rg",
+  "sem_orgao_rg",
+  "sem_uf_cnh",
+  "sem_validade_cnh",
+  "sem_categoria_cnh",
+  "sem_primeira_habilitacao",
+  "sem_registro_cnh",
+  "sem_formulario_cnh",
+  "sem_seguranca_cnh",
+  "sem_renach",
+  "sem_mopp",
+] as const;
+
+export type MotivoDeNaoCadastrar = (typeof MOTIVOS_DE_NAO_CADASTRAR)[number];
 
 /**
  * O que o job junta antes de montar: os campos consolidados mais o que só o banco sabe.

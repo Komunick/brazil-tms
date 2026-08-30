@@ -52,6 +52,14 @@ export type MotoristaJobName = (typeof MOTORISTA_JOBS)[keyof typeof MOTORISTA_JO
 export interface MotoristaCadastrarPayload {
   /** Quantos por execução. Sem teto de custo — cadastrar não custa (D7) —, só de fôlego. */
   limite?: number;
+  /**
+   * UM SÓ, quando alguém apertou o botão numa linha. Ausente = todos os candidatos.
+   *
+   * Sem isto, um botão numa linha mandaria a fila inteira — e a pessoa que apertou em "João" veria
+   * doze cadastros nascerem na gerenciadora. O id não afrouxa nada: a consulta continua exigindo
+   * `arquivado_em IS NULL` e `enviado_em IS NULL`, então apontar para quem já foi não reenvia.
+   */
+  preRegistrationId?: string;
 }
 
 export interface MotoristaJobPayloads {

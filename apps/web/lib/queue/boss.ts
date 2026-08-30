@@ -1,6 +1,12 @@
 import "server-only";
 import { PgBoss } from "pg-boss";
-import { BILLING_JOBS, IMPORT_JOBS } from "@brazil-tms/shared";
+import {
+  BILLING_JOBS,
+  CNH_JOBS,
+  IMPORT_JOBS,
+  MOTORISTA_JOBS,
+  PRE_SM_JOBS,
+} from "@brazil-tms/shared";
 
 /**
  * ONE shared pg-boss SENDER for the whole Next (BFF) server process. The BFF only enqueues jobs
@@ -29,8 +35,26 @@ async function startBffBoss(): Promise<PgBoss> {
   boss.on("error", (err: Error) => console.error("[pg-boss/bff] error", err));
   try {
     await boss.start();
-    // Ensure every queue the BFF sends to exists (idempotent) so send() works before the worker boots.
-    for (const name of [...Object.values(IMPORT_JOBS), ...Object.values(BILLING_JOBS)]) {
+    /**
+     * Ensure every queue the BFF sends to exists (idempotent) so send() works before the worker boots.
+     *
+     * PRE_SM, CNH and MOTORISTA were MISSING here (found 2026-08-30). They worked only because the
+     * worker's `setupQueues` creates every queue on boot, so in a long-lived environment the queue is
+     * always already there. The failure needs a fresh database and a BFF that answers first — which
+     * is exactly a new environment's first minutes.
+     *
+     * What it costs is invisible: the public pre-registration route enqueues `cnh.ler` inside a
+     * try/catch that logs and moves on, precisely so a queue problem never costs the driver his
+     * registration. On a day with fifty drivers at a booth, every CNH would simply never be read,
+     * and the log line saying why is on a machine nobody is watching.
+     */
+    for (const name of [
+      ...Object.values(IMPORT_JOBS),
+      ...Object.values(BILLING_JOBS),
+      ...Object.values(PRE_SM_JOBS),
+      ...Object.values(CNH_JOBS),
+      ...Object.values(MOTORISTA_JOBS),
+    ]) {
       await boss.createQueue(name);
     }
     return boss;
