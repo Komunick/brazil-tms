@@ -30,7 +30,7 @@ import { lateToAssignSql, origemAtrasadaSql, origemRiscoSql } from "./atrasos";
  * O spot não entra: ele deixou de ser coluna e virou card próprio, onde as rotas já estão à vista
  * sem clique nenhum.
  */
-export type MedidaDoPainel = "pend" | "atribuida" | "atrasada" | "risco" | "fora";
+export type MedidaDoPainel = "pend" | "pendD1" | "pendD2" | "atribuida" | "atrasada" | "risco" | "fora";
 
 export interface LhDoPainel {
   lh: string | null;
@@ -72,8 +72,26 @@ const janelaDoPlano = sql<boolean>`(
   AND ${trips.plannedPickupWindowStart} < (date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') + interval '3 days') AT TIME ZONE 'America/Sao_Paulo'
 )`;
 
+/**
+ * UM DIA SÓ da janela do plano — D1 é amanhã, D2 é depois de amanhã.
+ *
+ * Existe porque o PEND ATRIBUIÇÃO passou a mostrar os dois números separados (30/08, a pedido), e
+ * cada um tem de abrir a SUA lista. A soma continua clicável no total, mas dois números que abrem a
+ * mesma lista mostrariam mais linhas do que o número que a abriu — o erro que o comentário do
+ * `janelaDoPlano` acima já descreve.
+ *
+ * O dia sai do fuso de SÃO PAULO, como no resto do painel: uma coleta às 22h de Brasília é 01h do
+ * dia seguinte em UTC e cairia no número errado, justamente nas viagens noturnas.
+ */
+const diaDoPlano = (offset: 1 | 2): SQL<boolean> => sql<boolean>`(
+  ${trips.plannedPickupWindowStart} >= (date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') + interval '${sql.raw(String(offset))} day') AT TIME ZONE 'America/Sao_Paulo'
+  AND ${trips.plannedPickupWindowStart} < (date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') + interval '${sql.raw(String(offset + 1))} day') AT TIME ZONE 'America/Sao_Paulo'
+)`;
+
 function predicado(medida: MedidaDoPainel): SQL<boolean> {
   if (medida === "pend") return sql<boolean>`(${ehPendente} AND ${janelaDoPlano})`;
+  if (medida === "pendD1") return sql<boolean>`(${ehPendente} AND ${diaDoPlano(1)})`;
+  if (medida === "pendD2") return sql<boolean>`(${ehPendente} AND ${diaDoPlano(2)})`;
   if (medida === "atribuida") return sql<boolean>`(${ehAtribuida} AND ${janelaDoPlano})`;
   /*
    * A ATRASADA NÃO LEVA `janelaDoPlano`, e isso não é esquecimento.

@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { db } from "../client";
+import type { ProgramacaoPrefs } from "@brazil-tms/shared";
 import { userDashboardPrefs } from "../../schema";
 
 /**
@@ -23,11 +24,23 @@ export async function readDashboardPrefs(userId: string): Promise<PainelGuardado
     .select({
       hidden: userDashboardPrefs.hiddenCards,
       minimized: userDashboardPrefs.minimizedCards,
+      programacao: userDashboardPrefs.programacaoPrefs,
     })
     .from(userDashboardPrefs)
     .where(eq(userDashboardPrefs.userId, userId))
     .limit(1);
-  return { hidden: linha?.hidden ?? [], minimized: linha?.minimized ?? [] };
+  /**
+   * O jsonb vazio (`{}`, o default da coluna) vira `undefined`, e não um objeto de campos vazios.
+   *
+   * A distinção é o que faz a cancelada nascer escondida: um objeto com `status: []` diria "esta
+   * pessoa escolheu não esconder nada", e o padrão seria perdido no primeiro carregamento.
+   */
+  const prog = linha?.programacao as ProgramacaoPrefs | undefined;
+  return {
+    hidden: linha?.hidden ?? [],
+    minimized: linha?.minimized ?? [],
+    ...(prog && Object.keys(prog).length > 0 ? { programacao: prog } : {}),
+  };
 }
 
 function limpar(chaves: string[]): string[] {

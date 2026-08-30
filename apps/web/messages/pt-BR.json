@@ -1489,7 +1489,9 @@
       "totalAtrasada": "Total LH atrasada",
       "totalOrigem": "Total atrasado e fora do prazo",
       "totalSpot": "Total spot",
-      "totalTendencia": "Total tendência"
+      "totalTendencia": "Total tendência",
+      "d1": "D1",
+      "d2": "D2"
     },
     "portalDecision": {
       "title": "Decisão da proposta",
@@ -1584,7 +1586,8 @@
       "semPosicaoNenhuma": "Nenhuma posição de veículo carregada. O mapa aparece quando a integração com a gerenciadora estiver ligada neste ambiente.",
       "platesUsedBefore": "Placas que este motorista já rodou",
       "timesUsed": "{n} viagens",
-      "typeToSearch": "Digite {n} letras para buscar"
+      "typeToSearch": "Digite {n} letras para buscar",
+      "addPlateInterna": "Acrescentar carreta (fica só no TMS)"
     },
     "melhoresDaRota": {
       "titulo": "Nesta rota",
@@ -2149,7 +2152,8 @@
     "temComentarios": "{n, plural, one {# comentário} other {# comentários}}",
     "statusOperacional": "Status",
     "marcarStatus": "Marcar status",
-    "semStatus": "Sem status"
+    "semStatus": "Sem status",
+    "doca": "Doca {n}"
   },
   "HistoricoMotorista": {
     "titulo": "Histórico do motorista",

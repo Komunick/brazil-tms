@@ -74,6 +74,14 @@ export interface PortalStop {
   /** Breaking the seal — the truck was opened to be unloaded here. */
   unsealedAt?: string | number | null;
   unloadedAt?: string | number | null;
+  /**
+   * A DOCA DE SAÍDA desta parada — "Número do Doca" na tela do portal (30/08, a pedido).
+   *
+   * Fica junto de `loadingStarted` porque é da mesma pergunta: onde este carregamento aconteceu.
+   * Opcional como os marcos ao lado — a planilha não tem essa coluna, e a viagem só ganha doca
+   * depois de aceita (medido: 39 de 50 no Aceito, 0 de 50 no Planejado).
+   */
+  docaSaida?: string | null;
 }
 
 /** One movement: from one stop to the next, with the plan and what actually happened. */

@@ -596,6 +596,25 @@ export function PortalAssignDialog({
               </div>
             ))}
 
+            {/*
+              O BOTÃO DIZ O QUE VAI ACONTECER COM A PLACA A MAIS (30/08, a pedido).
+
+              A divisão já existia e funcionava desde 28/08 — e NUNCA foi usada. Medido em produção:
+              das ordens de truck dos últimos catorze dias, `plates_internas` está vazia em TODAS.
+
+              O histórico explica. Em 28/08, às 09:48, um truck com duas placas foi recusado pelo
+              portal ("Quantidade incorreta do número do veículo"); às 09:49, um minuto depois, a
+              mesma pessoa refez com UMA placa e passou. O mesmo padrão às 11:58. A partir daí, todo
+              truck vai com uma placa só — e a carreta que seguiu junto não fica registrada em lugar
+              nenhum, que é exatamente o que a coluna interna existe para evitar.
+
+              O rótulo do campo já dizia "só no TMS, não vai ao portal". Só que ele aparece DEPOIS
+              de acrescentar o campo, e quem foi recusado uma vez lê "Acrescentar placa" como o botão
+              que quebrou da outra vez. A informação certa chegava tarde demais para ser usada.
+
+              Aqui ela vem ANTES do clique, e só quando o portal já está satisfeito — numa carreta,
+              a segunda placa VAI ao portal e o texto normal está correto.
+            */}
             {placas.length < 2 ? (
               <Button
                 type="button"
@@ -603,7 +622,7 @@ export function PortalAssignDialog({
                 size="sm"
                 onClick={() => setPlacas((a) => [...a, ""])}
               >
-                {t("addPlate")}
+                {placas.length >= quantas ? t("addPlateInterna") : t("addPlate")}
               </Button>
             ) : null}
 

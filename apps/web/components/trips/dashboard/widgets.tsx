@@ -7,7 +7,6 @@ import {
   saoPauloDate,
   regionPosition,
   chaveDaFrente,
-  type TripDisplayStatus,
 } from "@brazil-tms/shared";
 import type { RegionSlice } from "@brazil-tms/db";
 import { Role } from "@brazil-tms/shared";
@@ -314,21 +313,17 @@ export function DashboardWidgets({ papel }: { papel: Role }) {
    * Duas contas sobre a mesma pergunta é a porta clássica para o total dizer um número e as parcelas
    * outro, com nenhum dos dois parecendo errado sozinho.
    *
-   * O PLAN soma D1 e D2: a planilha tem dois números, não quatro. Os dois dias continuam chegando
-   * separados do servidor — separar de novo é outra soma aqui, não uma consulta nova.
+   * O PLAN VAI SEPARADO POR DIA (30/08, a pedido): o PEND ATRIBUIÇÃO mostra D1 e D2 lado a lado, e
+   * quem monta o dia seguinte precisa saber quanto do pendente é para AMANHÃ. O servidor já mandava
+   * os dois dias separados desde sempre — a soma que existia aqui era da tela, e some com ela.
    */
   const dadosDasFrentes: DadosDaFrente[] = frentesVisiveis.map(({ region, dias }) => {
     const de = (chave: string) => dias.find((d) => d.diaKey === chave);
     const hoje = de("regionToday");
-    const plano = new Map<TripDisplayStatus, number>();
-    for (const dia of [de("regionD1"), de("regionD2")]) {
-      for (const s of dia?.byStatus ?? []) {
-        plano.set(s.status, (plano.get(s.status) ?? 0) + s.count);
-      }
-    }
     return {
       region,
-      plano: [...plano.entries()].map(([status, count]) => ({ status, count })),
+      planoD1: de("regionD1")?.byStatus ?? [],
+      planoD2: de("regionD2")?.byStatus ?? [],
       /*
        * A ATRASADA vem do SERVIDOR, e sem recorte de dia.
        *
