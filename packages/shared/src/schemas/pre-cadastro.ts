@@ -101,10 +101,26 @@ export const preCadastroSchema = z
      * Ou seja: bastava alguém com CEP desconhecido para perder o cadastro. O `transform` para
      * `undefined` é o que separa "não informou" de "informou errado" — e só o segundo deve recusar.
      */
+    /**
+     * AUSENTE E VAZIO SÃO A MESMA COISA AQUI — e só o segundo funcionava (30/08).
+     *
+     * O `.optional()` estava DENTRO do pipe, depois do transform: o `z.string()` de fora continuava
+     * obrigatório. `uf: ""` passava; `uf` ausente devolvia "Required", e o envio inteiro caía por
+     * causa de uma chave que ninguém prometeu mandar.
+     *
+     * Nunca apareceu porque o `FormData` manda todo campo do formulário, mesmo vazio. Apareceu ao
+     * escrever um teste que montava o corpo à mão — que é exatamente o que uma requisição feita
+     * fora do site faz.
+     *
+     * É o MESMO defeito que o `""` já tinha causado uma vez, um passo antes na cadeia: lá o vazio
+     * caía na regra de duas letras e derrubava o cadastro de quem tem CEP desconhecido. Aqui é a
+     * ausência. Os dois custam a mesma coisa — o envio inteiro — por um campo opcional.
+     */
     uf: z
       .string()
       .trim()
-      .transform((s) => (s === "" ? undefined : s.toUpperCase()))
+      .optional()
+      .transform((s) => (s == null || s === "" ? undefined : s.toUpperCase()))
       .pipe(z.string().regex(/^[A-Z]{2}$/, "UF deve ter 2 letras.").optional()),
     possuiMopp: simNao,
     validadeMopp: dateStringSchema.optional(),
@@ -133,7 +149,60 @@ export const preCadastroSchema = z
   .refine((v) => v.possuiToxicologico === "nao" || !!v.validadeToxicologico, {
     message: "Informe a validade do exame toxicológico.",
     path: ["validadeToxicologico"],
+  })
+  /**
+   * "TENHO" + UMA DATA QUE JÁ PASSOU É CONTRADIÇÃO (30/08, achado no primeiro cadastro real).
+   *
+   * O Alexandre mandou `possuiMopp: sim` com `validadeMopp: 1990-01-01`. Nos DOIS envios. E o TMS
+   * aceitou calado as duas vezes — a validação só exigia que a data EXISTISSE.
+   *
+   * ── DE ONDE VEM A DATA DE 1990 ────────────────────────────────────────────────────────────
+   *
+   * Não é padrão do formulário: os dois campos são `<input type="date">` crus, sem `value`, `min`
+   * nem `max` (conferido na página em produção). É o seletor nativo do celular, que abre num ano
+   * baixo — um toque desatento cai em 01/01/1990 e ninguém percebe.
+   *
+   * Por isso a regra mora AQUI e não só no formulário: o formulário pode ganhar um `min` amanhã, e
+   * ainda assim uma requisição feita fora dele chegaria igual. É a armadilha 2 desta fatia — o TMS
+   * revalida tudo.
+   *
+   * ── O QUE ELA CUSTARIA NO DIA 10 ──────────────────────────────────────────────────────────
+   *
+   * Cinquenta motoristas num estande, cada um com um MOPP "vencido em 1990" no cadastro. Ninguém
+   * conferindo data de curso durante o evento, e o erro só aparecendo na gerenciadora depois.
+   *
+   * ── VENCER HOJE AINDA VALE ────────────────────────────────────────────────────────────────
+   *
+   * A comparação é ESTRITAMENTE menor: um curso que vence hoje está válido hoje. Recusar por isso
+   * mandaria embora quem está em dia por uma questão de horas.
+   *
+   * Datas ISO (`YYYY-MM-DD`) comparam bem como TEXTO, e é de propósito: nada de `new Date()` num
+   * esquema puro, que traria o fuso do servidor para dentro de uma regra sobre o dia do motorista.
+   */
+  .refine((v) => v.possuiMopp === "nao" || !venceuAntesDeHoje(v.validadeMopp), {
+    message: "A validade do MOPP já passou. Confira a data no certificado.",
+    path: ["validadeMopp"],
+  })
+  .refine((v) => v.possuiToxicologico === "nao" || !venceuAntesDeHoje(v.validadeToxicologico), {
+    message: "A validade do exame toxicológico já passou. Confira a data no exame.",
+    path: ["validadeToxicologico"],
   });
+
+/**
+ * A data já passou, no dia de SÃO PAULO?
+ *
+ * O fuso é o da empresa e não o do servidor: às 22h de Brasília o servidor em UTC já está no dia
+ * seguinte, e um certificado que vence hoje seria recusado por causa disso — justamente à noite,
+ * que é quando a operação mais roda.
+ *
+ * Ausente devolve `false`: quem não mandou data cai na regra de cima, que é a que reclama disso.
+ * Duas mensagens sobre o mesmo campo vazio confundiriam quem está preenchendo no celular.
+ */
+function venceuAntesDeHoje(iso: string | undefined): boolean {
+  if (!iso) return false;
+  const hoje = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+  return iso < hoje;
+}
 
 export type PreCadastroInput = z.infer<typeof preCadastroSchema>;
 
