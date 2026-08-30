@@ -29,6 +29,11 @@ JSON infla o corpo em um terço — num 4G de evento isso é a diferença entre 
 | `celular` | texto | **sim** | com DDD. 10 ou 11 dígitos |
 | `cep` | texto | **sim** | 8 dígitos, com ou sem hífen |
 | `numero` | texto | **sim** | número da casa, até 15 caracteres. Aceita `S/N`, `120A`, `km 12` |
+| `logradouro` | texto | **sim** | rua/avenida, até 200. Vem do CEP, mas a pessoa pode corrigir |
+| `complemento` | texto | não | apto, bloco, até 50 |
+| `bairro` | texto | **sim** | até 100. Vem do CEP, editável |
+| `cidade` | texto | **sim** | até 100. Vem do CEP, editável |
+| `uf` | texto | **sim** | 2 letras. Vem do CEP, editável |
 | `possuiMopp` | `"sim"` \| `"nao"` | **sim** | |
 | `validadeMopp` | data | se `possuiMopp=sim` | `AAAA-MM-DD` |
 | `possuiToxicologico` | `"sim"` \| `"nao"` | **sim** | |
@@ -36,6 +41,15 @@ JSON infla o corpo em um terço — num 4G de evento isso é a diferença entre 
 | `ciencia` | `"true"` | **sim** | a ciência sobre coleta e uso dos dados. Sem ela o envio é recusado |
 | `cnh` | arquivo | **sim** | JPEG, PNG ou PDF |
 | `comprovante` | arquivo | **sim** | JPEG, PNG ou PDF |
+
+> **O endereço vem do CEP mas NÃO fica travado.** Preencha os campos automaticamente ao
+> receber o CEP e **deixe a pessoa editar**. O ViaCEP erra: logradouro longo vem sem o trecho, CEP
+> único de cidade pequena vem vazio, loteamento novo às vezes não está na base. Travar faria a
+> pessoa mandar um endereço que ela sabe estar errado — e ninguém do outro lado teria como
+> adivinhar. O que vale é o que ela confirmou na tela.
+>
+> Todos são aceitos como **opcionais** pelo servidor, pelo mesmo motivo do número: não quebrar
+> quem estiver com a página antiga aberta. O formulário é que exige.
 
 > **Por que o número da casa, se a CNH não pede?** Ele é obrigatório no `setMotorista` da
 > gerenciadora quando o cadastro vai para Pesquisa e Consulta, e não sai de lugar nenhum: não está
