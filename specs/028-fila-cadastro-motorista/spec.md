@@ -456,7 +456,8 @@ Nenhuma bloqueia as histórias P1.
 
 - **O toxicológico bloqueia a liberação na gerenciadora?** Se bloquear, a ação manual é obrigatória
   antes de a pesquisa valer. *Gerenciadora.*
-- **Criar o cadastro é cobrado, ou só a pesquisa?** *Gerenciadora.*
+- ~~**Criar o cadastro é cobrado, ou só a pesquisa?**~~ **RESPONDIDO em 2026-08-29, pelo usuário:
+  criar o cadastro é DE GRAÇA — a cobrança é só da solicitação de pesquisa.** Ver a decisão D7.
 - **Qual o prazo de descarte das fotos?** *Usuário.*
 
 ## Fora de escopo

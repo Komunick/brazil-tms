@@ -163,8 +163,11 @@ nosso. Ele consulta os *clientes* da transportadora, não a própria empresa.
 
 ## As perguntas em aberto, com dono
 
-1. **O `setMotorista` custa, ou só a solicitação?** Muda se a Etapa 1 pode ser exercitada à vontade.
-   *Gerenciadora.*
+1. ~~**O `setMotorista` custa, ou só a solicitação?**~~ **RESPONDIDO em 2026-08-29, pelo usuário:
+   cadastrar é DE GRAÇA; só a solicitação de pesquisa é cobrada.** A etapa de cadastro PODE ser
+   exercitada contra a produção — com a ressalva de que cada chamada cria uma pessoa real no sistema
+   deles, então com CPF de gente que vai mesmo ser cadastrada, nunca inventado. Ver a decisão D7 em
+   `specs/028-fila-cadastro-motorista/plan.md`.
 2. **`Expressa` / `PesquisaPlus` / `PesquisaBiometrica` — qual combinação usar por motorista?**
    São níveis com preços diferentes e não há tabela que decida por nós. *Usuário.*
 3. **O toxicológico trava a liberação?** Se travar, alguém continua tratando à mão — ele não existe

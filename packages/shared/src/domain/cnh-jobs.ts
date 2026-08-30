@@ -1,0 +1,38 @@
+/**
+ * A LEITURA DA CNH como trabalho de segundo plano (fatia 028, etapa 3).
+ *
+ * Enfileirado por EVENTO, quando um pré-cadastro chega pelo formulário público — e não por horário.
+ * A leitura só faz sentido diante de um envio novo; uma varredura periódica reprocessaria os
+ * mesmos documentos e gastaria dinheiro para chegar ao mesmo resultado.
+ *
+ * ── POR QUE NÃO NA ROTA ───────────────────────────────────────────────────────────────────────
+ *
+ * A rota pública responde em 0,74 s, com o motorista esperando no celular. A leitura leva segundos
+ * e custa. Pendurá-la ali faria uma falha do provedor virar perda do cadastro — o motorista
+ * perderia o envio por causa de algo que ele nem sabe que existe.
+ */
+export const CNH_JOBS = {
+  cnhLer: "cnh.ler",
+} as const;
+
+export type CnhJobName = (typeof CNH_JOBS)[keyof typeof CNH_JOBS];
+
+/**
+ * SÓ O DOCUMENTO, e isso é deliberado.
+ *
+ * O pré-cadastro é descoberto pelo worker, a partir do envio que aponta para esta foto. A rota
+ * pública nunca chega a saber qual pré-cadastro foi criado ou reaproveitado — `registrarPreCadastro`
+ * devolve `void` justamente para que ela não possa vazar qual dos três casos de CPF ocorreu.
+ *
+ * Passar o id do pré-cadastro por aqui obrigaria a rota a recebê-lo, e o mesmo id voltando duas
+ * vezes para o mesmo CPF já contaria que ele existia. A garantia é estrutural, e uma conveniência
+ * de payload não vale desmontá-la.
+ */
+export interface CnhLerPayload {
+  /** O documento da fatia 025 a ser lido — a foto da CNH daquele envio. */
+  documentoId: string;
+}
+
+export interface CnhJobPayloads {
+  "cnh.ler": CnhLerPayload;
+}

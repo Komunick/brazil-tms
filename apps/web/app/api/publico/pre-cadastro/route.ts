@@ -1,7 +1,12 @@
 import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { PRE_CADASTRO_TIPOS_ACEITOS, preCadastroSchema } from "@brazil-tms/shared";
+import {
+  CNH_JOBS,
+  PRE_CADASTRO_TIPOS_ACEITOS,
+  preCadastroSchema,
+  type CnhLerPayload,
+} from "@brazil-tms/shared";
 import {
   MuitosEnvios,
   registrarPreCadastro,
@@ -15,6 +20,7 @@ import {
   removeObject,
   resourceDocumentStorageKey,
 } from "@/lib/supabase/storage";
+import { getBffBoss } from "@/lib/queue/boss";
 
 export const dynamic = "force-dynamic";
 
@@ -250,6 +256,24 @@ export async function POST(request: Request): Promise<NextResponse> {
       documentoCnhId: documentos[0]!,
       documentoComprovanteId: documentos[1]!,
     });
+
+    /**
+     * A LEITURA DA CNH vai para a fila, e o cadastro NÃO depende dela.
+     *
+     * Depois de gravar, nunca antes: enfileirar um documento cujo envio falhou deixaria o worker
+     * procurando um pré-cadastro que não existe.
+     *
+     * E o `catch` vazio é deliberado. A leitura é uma melhoria sobre um fluxo que já funciona sem
+     * ela — o motorista já se cadastrou, a fila já mostra o que ele digitou. Se a fila de jobs
+     * estiver fora do ar, ele NÃO pode perder o cadastro por causa disso. O preço é um pré-cadastro
+     * que chega sem os campos lidos, e que alguém confere à mão, como se faz hoje.
+     */
+    try {
+      const boss = await getBffBoss();
+      await boss.send(CNH_JOBS.cnhLer, { documentoId: documentos[0]! } satisfies CnhLerPayload);
+    } catch (erro) {
+      console.error("[pre-cadastro] não foi possível enfileirar a leitura da CNH", erro);
+    }
 
     /*
      * ── O ÚNICO PONTO DE SAÍDA DE SUCESSO ─────────────────────────────────────────────────────

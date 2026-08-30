@@ -38,6 +38,14 @@ export interface ItemDaFila {
   /** Quantos envios esta pessoa fez. Mais de um quase sempre quer dizer foto ruim na primeira. */
   envios: number;
   pendenciaToxicologico: boolean;
+  /**
+   * O ESTADO DA LEITURA DA CNH, para a tela poder dizer a verdade.
+   *
+   * `null` é "ainda não processou"; `falhou` e `nao_configurado` são desfechos. Sem essa distinção,
+   * um pré-cadastro sem campos lidos teria duas explicações indistinguíveis e a pessoa ficaria
+   * esperando por algo que nunca vem.
+   */
+  leituraCnh: { estado: string; motivo?: string; lidos?: number; total?: number } | null;
   documentoCnhId: string | null;
   documentoComprovanteId: string | null;
   recebidoEm: string;
@@ -82,6 +90,7 @@ export async function listarFilaDePreCadastros(): Promise<ItemDaFila[]> {
       motoristaId: driverPreregistrations.driverId,
       motoristaNome: drivers.name,
       pendenciaToxicologico: driverPreregistrations.pendenciaToxicologico,
+      camposConsolidados: driverPreregistrations.campos,
       criadoEm: driverPreregistrations.createdAt,
       atualizadoEm: driverPreregistrations.updatedAt,
       dados: ultimo.dados,
@@ -111,6 +120,9 @@ export async function listarFilaDePreCadastros(): Promise<ItemDaFila[]> {
       celular: typeof dados.celular === "string" ? dados.celular : null,
       envios: Number(l.envios ?? 0),
       pendenciaToxicologico: l.pendenciaToxicologico,
+      leituraCnh:
+        (((l.camposConsolidados ?? {}) as Record<string, unknown>).leituraCnh as ItemDaFila["leituraCnh"]) ??
+        null,
       documentoCnhId: l.documentoCnhId ?? null,
       documentoComprovanteId: l.documentoComprovanteId ?? null,
       recebidoEm: l.criadoEm.toISOString(),
@@ -203,4 +215,76 @@ export async function chaveDoDocumentoDePreCadastro(documentId: string): Promise
     )
     .limit(1);
   return linha?.chave ?? null;
+}
+
+/**
+ * O DOCUMENTO A LER e o que já se sabe sobre o pré-cadastro (fatia 028, etapa 3).
+ *
+ * Devolve a chave de storage da foto e os campos já consolidados, para o worker ler o binário e
+ * fundir sem precisar de duas viagens ao banco.
+ */
+export async function documentoParaLeitura(documentoId: string): Promise<{
+  preregistrationId: string;
+  chave: string;
+  tipo: string;
+  campos: Record<string, unknown>;
+} | null> {
+  const [linha] = await db
+    .select({
+      preregistrationId: driverPreregistrations.id,
+      chave: resourceDocuments.fileStorageKey,
+      tipo: resourceDocuments.contentType,
+      campos: driverPreregistrations.campos,
+    })
+    .from(resourceDocuments)
+    // O caminho do documento até o pré-cadastro passa pelo ENVIO — é ele que liga os dois. O job
+    // recebe só o documento justamente para a rota pública não precisar conhecer o pré-cadastro.
+    .innerJoin(
+      driverPreregistrationSubmissions,
+      eq(driverPreregistrationSubmissions.documentoCnhId, resourceDocuments.id),
+    )
+    .innerJoin(
+      driverPreregistrations,
+      eq(driverPreregistrations.id, driverPreregistrationSubmissions.preregistrationId),
+    )
+    .where(
+      and(
+        eq(resourceDocuments.id, documentoId),
+        eq(resourceDocuments.entityType, "preregistration"),
+        // Arquivado entre o envio e a leitura: não gasta chamada paga com o que foi descartado.
+        isNull(driverPreregistrations.arquivadoEm),
+      ),
+    )
+    .limit(1);
+  if (!linha) return null;
+  return {
+    preregistrationId: linha.preregistrationId,
+    chave: linha.chave,
+    tipo: linha.tipo,
+    campos: (linha.campos ?? {}) as Record<string, unknown>,
+  };
+}
+
+/**
+ * GRAVA o que a leitura produziu — inclusive quando ela falhou.
+ *
+ * A falha é gravada de propósito, em `leituraCnh`. Sem isso, um pré-cadastro sem campos lidos teria
+ * duas explicações indistinguíveis — "ainda não processou" e "processou e não conseguiu" — e a
+ * pessoa na tela ficaria esperando por algo que nunca vai chegar.
+ *
+ * `campos` é substituído inteiro porque quem chama já fundiu com o que existia (`fundirCampos`):
+ * a decisão de quem vence mora naquela função pura, sob teste, e não espalhada em SQL.
+ */
+export async function gravarLeituraDaCnh(
+  preregistrationId: string,
+  campos: Record<string, unknown>,
+  leitura: { estado: string; motivo?: string; lidos?: number; total?: number },
+): Promise<void> {
+  await db
+    .update(driverPreregistrations)
+    .set({
+      campos: { ...campos, leituraCnh: { ...leitura, em: new Date().toISOString() } },
+      updatedAt: new Date(),
+    })
+    .where(eq(driverPreregistrations.id, preregistrationId));
 }

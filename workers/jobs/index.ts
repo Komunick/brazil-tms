@@ -14,6 +14,7 @@ import { registerPreSmCarregarCadastro } from "./pre-sm/carregar-cadastro";
 import { registerCarregarPosicoes } from "./posicoes";
 import { registerCarregarCoordenadas } from "./coordenadas";
 import { registerTurnoFecharAtrasados } from "./turno";
+import { registerCnhLer } from "./cnh";
 
 /**
  * Registry of import job handlers (feature 004, research R3). The bootstrap (`workers/index.ts`)
@@ -81,4 +82,7 @@ export async function registerJobHandlers(boss: PgBoss): Promise<void> {
    * ser botão.
    */
   await registerTurnoFecharAtrasados(boss);
+  // Fatia 028 — lê a CNH que chega pelo formulário público. Enfileirado por envio, nunca agendado:
+  // reprocessar as mesmas fotos gastaria dinheiro para chegar ao mesmo resultado.
+  await registerCnhLer(boss);
 }
