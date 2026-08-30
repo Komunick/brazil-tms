@@ -38,10 +38,62 @@ export function chaveDaFrente(region: string | null): string {
  */
 const listaDeChaves = z.array(z.string().trim().min(1).max(60)).max(60);
 
+/**
+ * OS FILTROS DA MINHA PROGRAMAÇÃO que a pessoa deixou ligados (30/08, a pedido).
+ *
+ * Antes disto eles viviam em `useState`: sair da tela e voltar zerava tudo, e quem cuida de uma
+ * frente refazia a mesma escolha dezenas de vezes por dia.
+ *
+ * ── O QUE FICA DE FORA, E POR QUÊ ─────────────────────────────────────────────────────────────
+ *
+ * A BUSCA não persiste: ninguém espera reencontrar amanhã o texto que digitou hoje, e uma tela que
+ * abre já filtrada por um termo esquecido parece uma tela vazia.
+ *
+ * OS DIAS ESCONDIDOS também não. Eles são DATAS — "esconder 30/08" não quer dizer nada em 05/09, e
+ * voltaria como um filtro que não filtra: a pessoa veria o botão de filtro aceso sobre uma lista
+ * inteira, sem entender o que ele está fazendo.
+ *
+ * ── O MESMO PRINCÍPIO DO `hidden`: guardamos o DESVIO ─────────────────────────────────────────
+ *
+ * `status` é o que foi ESCONDIDO, nunca o que aparece. Um status novo no sistema nasce visível para
+ * quem já personalizou, em vez de ficar invisível para sempre sem erro nenhum.
+ *
+ * A exceção é `frentes`, que é uma SELEÇÃO e não um esconder — vazio quer dizer "todas", que é o
+ * padrão, então guardá-la também é guardar o desvio.
+ */
+export const programacaoPrefsSchema = z.object({
+  /** Até duas, como a tela e a rota já limitam. Vazio = todas as frentes. */
+  frentes: z.array(z.string().trim().max(40)).max(2).optional().default([]),
+  /** Os status ESCONDIDOS. `cancelled` entra aqui por padrão — ver `PADRAO_DA_PROGRAMACAO`. */
+  status: z.array(z.string().trim().max(40)).max(30).optional().default([]),
+  /** As linhas que a pessoa ocultou estão à mostra? */
+  mostrarOcultas: z.boolean().optional().default(false),
+});
+
+export type ProgramacaoPrefs = z.infer<typeof programacaoPrefsSchema>;
+
+/**
+ * O PADRÃO DE QUEM NUNCA MEXEU: cancelada escondida.
+ *
+ * As canceladas passaram a chegar na consulta em 30/08 — antes elas eram excluídas no SQL e ninguém
+ * as via. Trazê-las acesas encheria o quadro do dia de viagem que não vai acontecer, então elas
+ * nascem escondidas e o filtro fica lá, com a contagem, para quem quiser olhar.
+ *
+ * É o único caso em que guardar o desvio não basta: "nunca mexeu" precisa querer dizer algo
+ * diferente de "nada escondido".
+ */
+export const PADRAO_DA_PROGRAMACAO: ProgramacaoPrefs = {
+  frentes: [],
+  status: ["cancelled"],
+  mostrarOcultas: false,
+};
+
 export const dashboardPrefsSchema = z.object({
   hidden: listaDeChaves,
   /** Os cartões encolhidos — o BSC, hoje. Ausente = nenhum, para o cliente antigo não zerar nada. */
   minimized: listaDeChaves.optional().default([]),
+  /** Ausente = não mexeu nos filtros; a tela aplica `PADRAO_DA_PROGRAMACAO`. */
+  programacao: programacaoPrefsSchema.optional(),
 });
 
 export type DashboardPrefs = z.infer<typeof dashboardPrefsSchema>;

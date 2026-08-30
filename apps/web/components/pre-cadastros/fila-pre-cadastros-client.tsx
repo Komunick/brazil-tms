@@ -3,7 +3,17 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, FileImage, IdCard, RefreshCw, UserPlus, UserCheck } from "lucide-react";
+import Link from "next/link";
+import {
+  Archive,
+  ClipboardCheck,
+  FileImage,
+  IdCard,
+  RefreshCw,
+  Send,
+  UserPlus,
+  UserCheck,
+} from "lucide-react";
 import { formatDateTime } from "@brazil-tms/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,6 +80,10 @@ interface ItemDaFila {
   } | null;
   documentoCnhId: string | null;
   documentoComprovanteId: string | null;
+  /** Preenchido quando o cadastro chegou à gerenciadora. É definitivo. */
+  enviadoEm: string | null;
+  /** A última tentativa: o que faltou, ou a recusa dela. */
+  cadastro: { em: string; motivos?: string[]; erro?: string } | null;
   recebidoEm: string;
   atualizadoEm: string;
 }
@@ -124,6 +138,16 @@ export function FilaPreCadastrosClient(): React.ReactElement {
     },
     onError: () => avisar({ tipo: "erro", texto: t("arquivarFalhou") }),
   });
+
+  /**
+   * O código cru é o ÚLTIMO recurso, e é melhor do que "campo faltando".
+   *
+   * Um motivo novo em `motivosDeNaoCadastrar` sem tradução aqui aparece como `sem_toxicologico` —
+   * feio, e ainda assim suficiente para alguém entender e ir atrás. Um rótulo genérico seria mais
+   * bonito e não diria nada.
+   */
+  const faltandoLegivel = (codigo: string): string =>
+    t.has(`faltando.${codigo}`) ? t(`faltando.${codigo}`) : codigo;
 
   const itens = useMemo(() => {
     const todos = consulta.data?.items ?? [];
@@ -253,6 +277,39 @@ export function FilaPreCadastrosClient(): React.ReactElement {
                         {t("toxicologico")}
                       </Badge>
                     ) : null}
+                    {/*
+                      O DESFECHO DO ENVIO — a resposta que o botão precisa ter.
+
+                      Três estados e nada de "em andamento": entre o clique e a resposta passam
+                      segundos, e um selo intermediário piscaria sem informar. O que falta aparece
+                      POR EXTENSO, e não como "incompleto", porque a pessoa está aqui para resolver:
+                      "incompleto" a manda abrir o cadastro para descobrir o quê.
+                    */}
+                    {item.enviadoEm ? (
+                      <Badge
+                        variant="secondary"
+                        className="text-emerald-700 dark:text-emerald-400"
+                        title={t("enviadoEm", { data: formatDateTime(item.enviadoEm) })}
+                      >
+                        <Send className="size-3" />
+                        {t("enviado")}
+                      </Badge>
+                    ) : item.cadastro?.erro ? (
+                      <Badge variant="destructive" title={item.cadastro.erro}>
+                        {t("envioRecusado")}
+                      </Badge>
+                    ) : item.cadastro?.motivos?.length ? (
+                      <Badge
+                        variant="outline"
+                        className="text-amber-700 dark:text-amber-400"
+                        title={item.cadastro.motivos.map(faltandoLegivel).join(" · ")}
+                      >
+                        {t("faltam", {
+                          n: item.cadastro.motivos.length,
+                          quais: item.cadastro.motivos.slice(0, 2).map(faltandoLegivel).join(", "),
+                        })}
+                      </Badge>
+                    ) : null}
                   </div>
                   <div className="text-muted-foreground text-sm">
                     {cpfLegivel(item.cpf)} · {celularLegivel(item.celular)}
@@ -292,6 +349,22 @@ export function FilaPreCadastrosClient(): React.ReactElement {
                       </a>
                     </Button>
                   ) : null}
+                  {/*
+                    CONFERIR, e não "enviar" — o envio não existe fora da tela de conferência.
+
+                    Chegou a existir um botão de enviar aqui, e ele tornava possível mandar um
+                    cadastro para a gerenciadora sem nunca ter olhado o documento. A lista mostra
+                    nome, CPF e selos; ela não mostra o RG que o modelo pode ter lido errado.
+
+                    Quem já foi tem o link mesmo assim: o cadastro vira leitura, e a pessoa ainda
+                    precisa poder ver o que foi mandado.
+                  */}
+                  <Button asChild variant={item.enviadoEm ? "ghost" : "outline"} size="sm">
+                    <Link href={`/pre-cadastros/${item.id}`}>
+                      <ClipboardCheck />
+                      {item.enviadoEm ? t("ver") : t("conferir")}
+                    </Link>
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"

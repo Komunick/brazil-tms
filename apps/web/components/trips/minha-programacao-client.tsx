@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ChevronDown, ChevronRight, Eye, EyeOff, Palette, SlidersHorizontal } from "lucide-react";
 import { useMarcarViagem, useProgramacao } from "@/lib/trips/client";
 import { proximasFrentes } from "@/lib/trips/frentes";
+import { usePainelDoUsuario } from "@/lib/ui/painel-do-usuario";
 import { ProgramacaoDetalhe } from "@/components/trips/programacao-detalhe";
 import { StatusDaLinha } from "@/components/trips/status-da-linha";
 import { ComentariosDaLinha } from "@/components/trips/comentarios-da-linha";
@@ -14,6 +15,7 @@ import {
   displayStatusOf,
   type TripDisplayStatus,
   type TripStatus,
+  type ProgramacaoPrefs,
 } from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -162,6 +164,25 @@ export function MinhaProgramacaoClient({
    * recorte que a operação pediu: quem cuida do Sudeste e do Sul-Centro-Oeste não quer o
    * Norte-Nordeste no meio.
    */
+  /**
+   * OS FILTROS SÃO LEMBRADOS (30/08, a pedido) — e no BANCO, por pessoa.
+   *
+   * Antes eles viviam só em `useState`: sair da tela e voltar zerava tudo, e quem cuida de uma
+   * frente refazia a mesma escolha dezenas de vezes por dia.
+   *
+   * ── POR QUE NÃO EM COOKIE NEM EM localStorage ─────────────────────────────────────────────
+   *
+   * A mesma razão que fez `user_dashboard_prefs` existir: A OPERAÇÃO COMPARTILHA MÁQUINA. Dois
+   * operadores no mesmo computador veriam o filtro um do outro, e o segundo desfaria a escolha do
+   * primeiro sem perceber. A preferência é da pessoa, então segue a pessoa.
+   *
+   * ── O ESTADO LOCAL CONTINUA EXISTINDO, e não é redundância ────────────────────────────────
+   *
+   * Clicar num filtro pinta a tela na hora; a gravação vai atrás. Esperar o servidor para ver o
+   * efeito de um clique faria a pessoa clicar duas vezes — o mesmo motivo pelo qual o painel já
+   * grava de forma otimista.
+   */
+  const prefs = usePainelDoUsuario();
   const [frentes, setFrentes] = useState<string[]>([]);
   const [mostrarOcultas, setMostrarOcultas] = useState(false);
   const [busca, setBusca] = useState("");
@@ -172,9 +193,40 @@ export function MinhaProgramacaoClient({
   const [diasEscondidos, setDiasEscondidos] = useState<Set<string>>(new Set());
   const [statusEscondidos, setStatusEscondidos] = useState<Set<string>>(new Set());
 
+  /**
+   * O guardado entra UMA VEZ, quando chega — depois quem manda é o clique.
+   *
+   * `carregado` é o sinal: antes dele o hook devolve o padrão, e aplicá-lo cedo faria a tela mostrar
+   * o padrão por um instante e pular para o guardado. `aplicado` impede que uma revalidação da
+   * consulta de preferências desfaça um filtro que a pessoa acabou de mexer.
+   */
+  const [aplicado, setAplicado] = useState(false);
+  useEffect(() => {
+    if (aplicado || !prefs.carregado) return;
+    setFrentes(prefs.programacao.frentes);
+    setStatusEscondidos(new Set(prefs.programacao.status));
+    setMostrarOcultas(prefs.programacao.mostrarOcultas);
+    setAplicado(true);
+  }, [aplicado, prefs.carregado, prefs.programacao]);
+
+  /** Grava o estado final, como o resto das preferências: sem `add`/`remove`, a última vence. */
+  const lembrar = (mudanca: Partial<ProgramacaoPrefs>) => {
+    if (!aplicado) return; // Antes de aplicar o guardado, gravar escreveria o padrão por cima dele.
+    prefs.salvarProgramacao({
+      frentes,
+      status: [...statusEscondidos],
+      mostrarOcultas,
+      ...mudanca,
+    });
+  };
+
   const consulta = useProgramacao(frentes, { atras: 2, adiante: 7 });
 
-  const alternarFrente = (valor: string) => setFrentes((atual) => proximasFrentes(atual, valor));
+  const alternarFrente = (valor: string) => {
+    const proximas = proximasFrentes(frentes, valor);
+    setFrentes(proximas);
+    lembrar({ frentes: proximas });
+  };
   const marcar = useMarcarViagem();
 
   const hoje = useMemo(() => {
@@ -285,7 +337,10 @@ export function MinhaProgramacaoClient({
               type="button"
               size="sm"
               variant="ghost"
-              onClick={() => setMostrarOcultas((v) => !v)}
+              onClick={() => {
+                setMostrarOcultas(!mostrarOcultas);
+                lembrar({ mostrarOcultas: !mostrarOcultas });
+              }}
             >
               {mostrarOcultas ? (
                 <EyeOff className="mr-1 h-3.5 w-3.5" aria-hidden />
@@ -380,14 +435,13 @@ export function MinhaProgramacaoClient({
                         key={status}
                         type="button"
                         aria-pressed={!escondido}
-                        onClick={() =>
-                          setStatusEscondidos((atuais) => {
-                            const novo = new Set(atuais);
-                            if (novo.has(status)) novo.delete(status);
-                            else novo.add(status);
-                            return novo;
-                          })
-                        }
+                        onClick={() => {
+                          const novo = new Set(statusEscondidos);
+                          if (novo.has(status)) novo.delete(status);
+                          else novo.add(status);
+                          setStatusEscondidos(novo);
+                          lembrar({ status: [...novo] });
+                        }}
                         className={cn(
                           "flex items-center gap-1.5 rounded-full border px-2 py-1 text-xs transition-opacity",
                           escondido ? "opacity-40" : "",
@@ -404,7 +458,10 @@ export function MinhaProgramacaoClient({
                     type="button"
                     size="sm"
                     variant="ghost"
-                    onClick={() => setStatusEscondidos(new Set())}
+                    onClick={() => {
+                      setStatusEscondidos(new Set());
+                      lembrar({ status: [] });
+                    }}
                   >
                     {t("verTodosOsStatus")}
                   </Button>
@@ -588,11 +645,32 @@ export function MinhaProgramacaoClient({
                     </TableCell>
                     <TableCell className="text-xs uppercase">{l.perfil ?? "—"}</TableCell>
                     <TableCell>
-                      <TripStatusBadge
-                        status={l.status as TripDisplayStatus}
-                        portalAcceptance={l.acceptanceStatus}
-                        portalStatus={l.portalStatus}
-                      />
+                      {/*
+                        A DOCA VEM ANTES DO STATUS (30/08, a pedido).
+
+                        Saber que a viagem está "Carregando" sem saber ONDE manda quem acompanha
+                        perguntar por rádio — e a doca já existia no TMS, guardada no detalhe da
+                        viagem, a dois cliques de distância de quem precisa dela.
+
+                        Na MESMA célula, e não numa coluna nova: a linha já tem quinze colunas, e a
+                        doca só quer dizer alguma coisa junto do carregamento. Coluna própria seria
+                        uma faixa vazia em todas as linhas que não estão carregando.
+
+                        Só aparece quando está preenchida: um "Doca —" em cada linha do quadro seria
+                        ruído em cima de um dado que quase sempre não existe ainda.
+                      */}
+                      <div className="flex flex-wrap items-center gap-1">
+                        {l.doca ? (
+                          <span className="rounded border px-1 py-0.5 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
+                            {t("doca", { n: l.doca })}
+                          </span>
+                        ) : null}
+                        <TripStatusBadge
+                          status={l.status as TripDisplayStatus}
+                          portalAcceptance={l.acceptanceStatus}
+                          portalStatus={l.portalStatus}
+                        />
+                      </div>
                     </TableCell>
                     {/*
                       O PREVISTO OCUPA A CÉLULA ENQUANTO ELA ESTIVER VAZIA (2026-08-26, a pedido).

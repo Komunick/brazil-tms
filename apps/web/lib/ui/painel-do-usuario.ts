@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { PADRAO_DA_PROGRAMACAO, type ProgramacaoPrefs } from "@brazil-tms/shared";
 
 /**
  * O PAINEL DE CADA UM (2026-08-23, a pedido): o que esta pessoa escondeu e o que deixou encolhido.
@@ -20,13 +21,21 @@ const CHAVE = ["painel-do-usuario"] as const;
 interface Resposta {
   hidden: string[];
   minimized: string[];
+  /** Os filtros da Minha Programação (30/08). Ausente = nunca mexeu — ver `PADRAO_DA_PROGRAMACAO`. */
+  programacao?: ProgramacaoPrefs;
 }
 
 async function ler(): Promise<Resposta> {
   const res = await fetch("/api/me/dashboard-prefs");
   if (!res.ok) throw new Error("PREFS_READ_FAILED");
   const corpo = (await res.json()) as Partial<Resposta>;
-  return { hidden: corpo.hidden ?? [], minimized: corpo.minimized ?? [] };
+  return {
+    hidden: corpo.hidden ?? [],
+    minimized: corpo.minimized ?? [],
+    // Continua AUSENTE quando o servidor não mandou: "nunca mexeu" é diferente de "não escondeu
+    // nada", e é essa diferença que faz a cancelada nascer oculta.
+    ...(corpo.programacao ? { programacao: corpo.programacao } : {}),
+  };
 }
 
 export interface PainelDoUsuario {
@@ -39,6 +48,9 @@ export interface PainelDoUsuario {
   alternar: (chave: string) => void;
   alternarMinimizado: (chave: string) => void;
   restaurarPadrao: () => void;
+  /** Os filtros lembrados da Minha Programação — o padrão já vem aplicado (30/08). */
+  programacao: ProgramacaoPrefs;
+  salvarProgramacao: (proximo: ProgramacaoPrefs) => void;
 }
 
 export function usePainelDoUsuario(): PainelDoUsuario {
@@ -95,13 +107,24 @@ export function usePainelDoUsuario(): PainelDoUsuario {
    */
   const alternarEm = useCallback(
     (campo: "hidden" | "minimized", chave: string) => {
-      const atual: Resposta = { hidden: [...escondidos], minimized: [...minimizados] };
+      /**
+       * `programacao` VAI JUNTO, e é o mesmo motivo do comentário acima levado a sério.
+       *
+       * O PUT grava o estado inteiro. Sem esta linha, esconder um cartão do painel apagaria os
+       * filtros da Minha Programação — uma perda em outra tela, causada por um clique que não tem
+       * nada a ver com ela, e que ninguém ligaria à causa.
+       */
+      const atual: Resposta = {
+        hidden: [...escondidos],
+        minimized: [...minimizados],
+        ...(data?.programacao ? { programacao: data.programacao } : {}),
+      };
       const conjunto = new Set(atual[campo]);
       if (conjunto.has(chave)) conjunto.delete(chave);
       else conjunto.add(chave);
       salvar.mutate({ ...atual, [campo]: [...conjunto] });
     },
-    [escondidos, minimizados, salvar],
+    [escondidos, minimizados, data?.programacao, salvar],
   );
 
   const alternar = useCallback((chave: string) => alternarEm("hidden", chave), [alternarEm]);
@@ -112,8 +135,28 @@ export function usePainelDoUsuario(): PainelDoUsuario {
 
   /** Restaura só o que o editor mostra: os escondidos. O encolhido tem o próprio botão no cartão. */
   const restaurarPadrao = useCallback(
-    () => salvar.mutate({ hidden: [], minimized: [...minimizados] }),
-    [minimizados, salvar],
+    () =>
+      salvar.mutate({
+        hidden: [],
+        minimized: [...minimizados],
+        // Restaurar o PAINEL não mexe nos filtros de outra tela: o botão diz "cartões", não "tudo".
+        ...(data?.programacao ? { programacao: data.programacao } : {}),
+      }),
+    [minimizados, data?.programacao, salvar],
+  );
+
+  /**
+   * OS FILTROS DA MINHA PROGRAMAÇÃO — lidos com o padrão já aplicado (30/08, a pedido).
+   *
+   * `PADRAO_DA_PROGRAMACAO` entra quando não há escolha guardada, e é o que põe a cancelada
+   * escondida para quem nunca mexeu. A regra mora no `shared`, junto do esquema, e não aqui: a tela
+   * não deve precisar saber que "cancelada começa oculta" para desenhar certo.
+   */
+  const programacao = data?.programacao ?? PADRAO_DA_PROGRAMACAO;
+  const salvarProgramacao = useCallback(
+    (proximo: ProgramacaoPrefs) =>
+      salvar.mutate({ hidden: [...escondidos], minimized: [...minimizados], programacao: proximo }),
+    [escondidos, minimizados, salvar],
   );
 
   return {
@@ -123,5 +166,7 @@ export function usePainelDoUsuario(): PainelDoUsuario {
     alternar,
     alternarMinimizado,
     restaurarPadrao,
+    programacao,
+    salvarProgramacao,
   };
 }

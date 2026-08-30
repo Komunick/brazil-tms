@@ -14,7 +14,16 @@ export const dynamic = "force-dynamic";
  * Leitura pura, sob demanda: as LH não viajam no payload do painel porque uma frente movimentada
  * traria centenas de códigos a cada minuto de recarga, para uma lista que quase nunca é aberta.
  */
-const MEDIDAS = new Set<MedidaDoPainel>(["pend", "atribuida", "atrasada", "risco", "fora"]);
+const MEDIDAS = new Set<MedidaDoPainel>([
+  "pend",
+  // D1 e D2 separados: o PEND ATRIBUIÇÃO mostra os dois números, e cada um abre a sua lista.
+  "pendD1",
+  "pendD2",
+  "atribuida",
+  "atrasada",
+  "risco",
+  "fora",
+]);
 
 export async function GET(request: Request): Promise<NextResponse> {
   try {

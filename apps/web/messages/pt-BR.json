@@ -453,6 +453,7 @@
     "trip_portal_assign_result": "Portal respondeu à atribuição",
     "trip_portal_auction_open": "Leilão de spot aberto no portal",
     "preregistration_archive": "Pré-cadastro arquivado",
+    "preregistration_sent": "Cadastro enviado à gerenciadora",
     "pre_sm_modelo_confirmar": "Correspondência de rota confirmada",
     "pre_sm_modelo_desconfirmar": "Correspondência de rota desfeita",
     "pre_sm_cancelar": "Pré-SM cancelada",
@@ -460,7 +461,8 @@
     "driver_unblock": "Motorista desbloqueado",
     "pre_sm_cidade_confirmar": "Correspondência de cidade confirmada",
     "pre_sm_cidade_desconfirmar": "Correspondência de cidade desfeita",
-    "pre_sm_enviar": "Pré-SM pedida"
+    "pre_sm_enviar": "Pré-SM pedida",
+    "preregistration_reviewed": "Pré-cadastro conferido"
   },
   "Documents": {
     "title": "Documentos",
@@ -1487,7 +1489,9 @@
       "totalAtrasada": "Total LH atrasada",
       "totalOrigem": "Total atrasado e fora do prazo",
       "totalSpot": "Total spot",
-      "totalTendencia": "Total tendência"
+      "totalTendencia": "Total tendência",
+      "d1": "D1",
+      "d2": "D2"
     },
     "portalDecision": {
       "title": "Decisão da proposta",
@@ -1582,7 +1586,8 @@
       "semPosicaoNenhuma": "Nenhuma posição de veículo carregada. O mapa aparece quando a integração com a gerenciadora estiver ligada neste ambiente.",
       "platesUsedBefore": "Placas que este motorista já rodou",
       "timesUsed": "{n} viagens",
-      "typeToSearch": "Digite {n} letras para buscar"
+      "typeToSearch": "Digite {n} letras para buscar",
+      "addPlateInterna": "Acrescentar carreta (fica só no TMS)"
     },
     "melhoresDaRota": {
       "titulo": "Nesta rota",
@@ -2147,7 +2152,8 @@
     "temComentarios": "{n, plural, one {# comentário} other {# comentários}}",
     "statusOperacional": "Status",
     "marcarStatus": "Marcar status",
-    "semStatus": "Sem status"
+    "semStatus": "Sem status",
+    "doca": "Doca {n}"
   },
   "HistoricoMotorista": {
     "titulo": "Histórico do motorista",
@@ -2263,7 +2269,7 @@
   },
   "PreCadastros": {
     "title": "Pré-cadastros",
-    "subtitle": "O que os motoristas mandaram pelo formulário. Confira as fotos e descarte o que não servir; a conferência campo a campo ainda não está aqui.",
+    "subtitle": "O que chega pelo formulário público. Confira e envie à gerenciadora.",
     "buscar": "Buscar por nome ou CPF",
     "atualizar": "Atualizar",
     "naFila": "{n} na fila",
@@ -2290,7 +2296,95 @@
     "motivoExemplo": "Duplicado, teste, fotos ilegíveis…",
     "cancelar": "Cancelar",
     "arquivado": "Pré-cadastro arquivado.",
-    "arquivarFalhou": "Não foi possível arquivar."
+    "arquivarFalhou": "Não foi possível arquivar.",
+    "enviado": "Enviado",
+    "enviadoEm": "Enviado à gerenciadora em {data}",
+    "envioPedido": "Envio pedido. O resultado aparece aqui em instantes.",
+    "envioFalhou": "Não foi possível pedir o envio.",
+    "envioRecusado": "Recusado pela gerenciadora",
+    "faltam": "{n, plural, =1 {Falta: {quais}} other {Faltam {n}: {quais}}}",
+    "faltando": {
+      "cpf_divergente": "o CPF do documento não é o que a pessoa digitou",
+      "sem_ibge_natal": "cidade natal não encontrada",
+      "sem_ibge_residencia": "cidade do endereço não encontrada",
+      "sem_cpf": "CPF",
+      "sem_nome": "nome",
+      "sem_endereco": "logradouro",
+      "sem_numero": "número",
+      "sem_bairro": "bairro",
+      "sem_cep": "CEP",
+      "sem_nascimento": "data de nascimento",
+      "sem_sexo": "sexo",
+      "sem_nome_mae": "nome da mãe",
+      "sem_rg": "RG",
+      "sem_orgao_rg": "órgão emissor do RG",
+      "sem_uf_cnh": "UF de emissão da CNH",
+      "sem_validade_cnh": "validade da CNH",
+      "sem_categoria_cnh": "categoria da CNH",
+      "sem_primeira_habilitacao": "1ª habilitação",
+      "sem_registro_cnh": "nº de registro da CNH",
+      "sem_formulario_cnh": "nº do formulário da CNH",
+      "sem_seguranca_cnh": "nº de segurança da CNH",
+      "sem_renach": "Renach",
+      "sem_mopp": "MOPP (sim/não)"
+    },
+    "conferir": "Conferir",
+    "ver": "Ver",
+    "conferirTitulo": "Conferir pré-cadastro",
+    "conferirSubtitulo": "O documento fica ao lado. Corrija o que estiver errado e envie à gerenciadora.",
+    "voltarAFila": "Voltar à fila",
+    "naoEncontrado": "Pré-cadastro não encontrado, ou já arquivado.",
+    "semDocumento": "Este envio não trouxe foto da CNH.",
+    "semVisualizador": "Seu navegador não abre PDF aqui. Use o botão para abrir em outra aba.",
+    "abrirCnh": "Abrir CNH",
+    "salvar": "Salvar",
+    "salvo": "{n, plural, =0 {Nada mudou.} =1 {1 campo salvo.} other {# campos salvos.}}",
+    "salvarFalhou": "Não foi possível salvar.",
+    "nadaFalta": "Nada falta. Pronto para enviar.",
+    "enviarParaGerenciadora": "Enviar à gerenciadora",
+    "origem": {
+      "cnh": "da CNH",
+      "cep": "do CEP",
+      "digitado": "digitado",
+      "declarado": "declarado",
+      "existente": "já cadastrado"
+    },
+    "grupo": {
+      "pessoais": "Dados pessoais",
+      "identidade": "Identidade",
+      "habilitacao": "Habilitação",
+      "endereco": "Endereço",
+      "contato": "Contato e MOPP"
+    },
+    "campo": {
+      "nome": "Nome",
+      "cpf": "CPF",
+      "dataNascimento": "Nascimento",
+      "sexo": "Sexo",
+      "nomeMae": "Nome da mãe",
+      "cidadeNatal": "Cidade natal",
+      "ufNatal": "UF natal",
+      "rg": "RG",
+      "orgaoEmissorRg": "Órgão emissor",
+      "ufEmissorRg": "UF do RG",
+      "numeroRegistro": "Nº de registro",
+      "categoria": "Categoria",
+      "validade": "Validade",
+      "primeiraHabilitacao": "1ª habilitação",
+      "numeroFormulario": "Nº do formulário",
+      "numeroSeguranca": "Nº de segurança",
+      "renach": "Renach",
+      "cep": "CEP",
+      "logradouro": "Logradouro",
+      "numero": "Número",
+      "complemento": "Complemento",
+      "bairro": "Bairro",
+      "cidade": "Cidade",
+      "uf": "UF",
+      "celular": "Celular",
+      "possuiMopp": "Possui MOPP (sim/não)",
+      "validadeMopp": "Validade do MOPP"
+    }
   },
   "GR": {
     "title": "GR — Pré-SM",

@@ -3,6 +3,8 @@ import {
   ALL_AUDIT_ACTIONS,
   BILLING_PHASE_STATUSES,
   EXCEPTION_SEVERITIES,
+  MOTIVOS_DE_NAO_CADASTRAR,
+  ORIGENS,
   REASON_CODE_CATEGORIES,
   STANDARD_IMPORT_TEMPLATE,
 } from "@brazil-tms/shared";
@@ -251,6 +253,106 @@ describe("pt-BR messages", () => {
     for (const key of Object.keys(cols)) {
       const known = STANDARD_IMPORT_TEMPLATE.columnMappings.some((m) => m.source === key);
       expect(known, `unexpected expectedColumns key: ${key}`).toBe(true);
+    }
+  });
+
+  // ---- fatia 028, etapa 5 — o que impede o envio, dito em português -------------------------------
+
+  /**
+   * A fila mostra o que FALTA para o cadastro sair. Sem rótulo, o selo diria `sem_seguranca_cnh` a
+   * quem está com a CNH na mão procurando "nº de segurança" — e a tela deixaria de ser o lugar onde
+   * o problema se resolve.
+   *
+   * O componente cai no código cru quando não acha a chave, então isto nunca quebra a tela; quebra
+   * o build, que é onde a falta deve aparecer.
+   */
+  it("PreCadastros.faltando covers every reason the send can be blocked (no raw code in the queue)", () => {
+    const rotulos = (messages as { PreCadastros: { faltando: Record<string, string> } })
+      .PreCadastros.faltando;
+    const missing = MOTIVOS_DE_NAO_CADASTRAR.filter(
+      (m) => typeof rotulos[m] !== "string" || rotulos[m] === "",
+    );
+    expect(missing).toEqual([]);
+    // Inverse: a label with no reason behind it is a reason that was renamed and left a ghost.
+    for (const key of Object.keys(rotulos)) {
+      const known = (MOTIVOS_DE_NAO_CADASTRAR as readonly string[]).includes(key);
+      expect(known, `unexpected faltando key: ${key}`).toBe(true);
+    }
+  });
+
+  it("PreCadastros has the review-screen strings (the only path to the gerenciadora)", () => {
+    const p = (messages as { PreCadastros: Record<string, unknown> }).PreCadastros;
+    for (const k of [
+      "conferir",
+      "ver",
+      "conferirTitulo",
+      "voltarAFila",
+      "salvar",
+      "salvo",
+      "nadaFalta",
+      "enviarParaGerenciadora",
+      "enviado",
+      "enviadoEm",
+      "envioPedido",
+      "envioFalhou",
+      "envioRecusado",
+      "faltam",
+    ]) {
+      expect(typeof p[k], `PreCadastros.${k}`).toBe("string");
+      expect(p[k]).not.toBe("");
+    }
+    /**
+     * INVERTIDO em 30/08: a lista TINHA um botão de enviar, e ele permitia mandar um cadastro à
+     * gerenciadora sem nunca ter olhado o documento. O envio agora só existe na conferência, e esta
+     * asserção é o que impede a chave de voltar sozinha num "conserto" de string órfã.
+     */
+    expect(p.enviar).toBeUndefined();
+  });
+
+  /**
+   * Todo campo que a conferência edita precisa de rótulo: o componente cai no nome cru da chave, e
+   * `numeroSeguranca` acima de um campo de texto não diz a ninguém o que procurar na CNH.
+   */
+  it("PreCadastros.campo covers every field the review screen edits", () => {
+    const p = (
+      messages as { PreCadastros: { campo: Record<string, string>; origem: Record<string, string> } }
+    ).PreCadastros;
+    for (const c of [
+      "nome",
+      "cpf",
+      "dataNascimento",
+      "sexo",
+      "nomeMae",
+      "cidadeNatal",
+      "ufNatal",
+      "rg",
+      "orgaoEmissorRg",
+      "ufEmissorRg",
+      "numeroRegistro",
+      "categoria",
+      "validade",
+      "primeiraHabilitacao",
+      "numeroFormulario",
+      "numeroSeguranca",
+      "renach",
+      "cep",
+      "logradouro",
+      "numero",
+      "complemento",
+      "bairro",
+      "cidade",
+      "uf",
+      "celular",
+      "possuiMopp",
+      "validadeMopp",
+    ]) {
+      expect(typeof p.campo[c], `PreCadastros.campo.${c}`).toBe("string");
+      expect(p.campo[c]).not.toBe("");
+    }
+    // E as cinco procedências — o selo ao lado do campo é o que torna a conferência rápida.
+    for (const o of ORIGENS) {
+      expect(typeof p.origem[o], `PreCadastros.origem.${o}`).toBe("string");
+      expect(p.origem[o]).not.toBe("");
     }
   });
 });

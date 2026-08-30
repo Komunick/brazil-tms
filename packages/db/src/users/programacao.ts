@@ -145,6 +145,14 @@ export interface LinhaDaProgramacao {
   etaDestino: string | null;
   perfil: string | null;
   solicitacao: string | null;
+  /**
+   * A DOCA (30/08, a pedido: "a função de doca junto com o carregamento").
+   *
+   * Vem do mesmo `operational_fields` da solicitação. Aparece na linha ANTES do status, porque é a
+   * informação que quem acompanha o carregamento procura junto com ele — saber que a viagem está
+   * "Carregando" sem saber ONDE manda a pessoa perguntar por rádio.
+   */
+  doca: string | null;
   status: string;
   acceptanceStatus: string | null;
   portalStatus: string | null;
@@ -217,6 +225,14 @@ export async function readProgramacao(
     eta_destino: string | null;
     perfil: string | null;
     solicitacao: string | null;
+  /**
+   * A DOCA (30/08, a pedido: "a função de doca junto com o carregamento").
+   *
+   * Vem do mesmo `operational_fields` da solicitação. Aparece na linha ANTES do status, porque é a
+   * informação que quem acompanha o carregamento procura junto com ele — saber que a viagem está
+   * "Carregando" sem saber ONDE manda a pessoa perguntar por rádio.
+   */
+  doca: string | null;
     status: string;
     aceitacao: string | null;
     status_portal: string | null;
@@ -251,6 +267,20 @@ export async function readProgramacao(
       to_char(t.planned_delivery_window_end at time zone 'America/Sao_Paulo', 'DD/MM HH24:MI') as eta_destino,
       t.planned_vehicle_type::text as perfil,
       t.operational_fields ->> 'solicitacao' as solicitacao,
+      /*
+       * A DOCA VEM DO PORTAL (30/08), com o campo digitado como reserva.
+       *
+       * "Doca (portal)" é o "Número do Doca" da tela deles, gravado pelo ciclo do plano — dado
+       * automático, sempre atual. O operational_fields é o que alguém digitou à mão, e continua
+       * valendo quando o portal não disse nada (viagem de import manual, por exemplo).
+       *
+       * O PORTAL VENCE porque é ele quem sabe: a doca é decisão da estação, não nossa. Se os dois
+       * discordarem, o que está escrito lá é o que a portaria vai cobrar.
+       */
+      coalesce(
+        t.customer_fields ->> 'Doca (portal)',
+        t.operational_fields ->> 'doca'
+      ) as doca,
       t.current_status::text as status,
       t.customer_fields ->> 'Aceitação (portal)' as aceitacao,
       t.customer_fields ->> 'Status (portal)' as status_portal,
@@ -295,9 +325,16 @@ export async function readProgramacao(
             >= (now() at time zone 'America/Sao_Paulo')::date - ${diasAtras}::int
       and (t.planned_pickup_window_start at time zone 'America/Sao_Paulo')::date
             <= (now() at time zone 'America/Sao_Paulo')::date + ${diasAdiante}::int
-      -- Encerrada e cancelada saem: a programação é sobre o que ainda vai acontecer ou acabou de
-      -- acontecer, e a planilha também não guarda o que morreu.
-      and t.current_status not in ('cancelled', 'billing_pending', 'billing_ready', 'billed')
+      -- ENCERRADA sai; CANCELADA passou a FICAR (30/08, a pedido).
+      --
+      -- As duas saíam juntas, com a mesma justificativa ("a planilha não guarda o que morreu"), e
+      -- elas não são a mesma coisa. Encerrada acabou de acontecer e não pede nada de ninguém.
+      -- Cancelada é uma viagem que estava no quadro e SUMIU — e sumir sem deixar rastro faz quem
+      -- procura por ela achar que perdeu a linha, ou que o TMS perdeu.
+      --
+      -- Ela chega escondida: o filtro de status da tela começa com 'cancelled' desligado, e quem
+      -- quiser ver liga. Trazê-la acesa encheria o quadro do dia de viagem que não vai acontecer.
+      and t.current_status not in ('billing_pending', 'billing_ready', 'billed')
       and ${filtroDeFrente}
     order by t.planned_pickup_window_start, t.external_trip_id
   `);
@@ -314,6 +351,7 @@ export async function readProgramacao(
     etaDestino: r.eta_destino,
     perfil: r.perfil,
     solicitacao: r.solicitacao,
+    doca: r.doca,
     status: r.status,
     acceptanceStatus: r.aceitacao,
     portalStatus: r.status_portal,

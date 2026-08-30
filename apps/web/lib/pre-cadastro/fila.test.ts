@@ -26,6 +26,9 @@ const hasDb = Boolean(process.env.DATABASE_URL);
  */
 const CPF_A = "52867491355";
 const CPF_B = "74218539600";
+/** Do teste dos candidatos ao envio — próprios, para não depender da ordem dos testes acima. */
+const CPF_C = "61830492713";
+const CPF_D = "83512704662";
 
 const criados = { pre: [] as string[], motorista: null as string | null };
 
@@ -137,5 +140,52 @@ describe.skipIf(!hasDb)("a fila de pré-cadastros", () => {
       .returning({ id: driverPreregistrations.id });
     expect(volta?.id).toBeTruthy();
     criados.pre.push(volta!.id);
+  });
+
+  /**
+   * OS CANDIDATOS AO ENVIO — e as três coisas que impedem um cadastro de ser mandado duas vezes.
+   *
+   * Aqui é onde a garantia mora: o botão de uma linha, a leitura da CNH e um lote qualquer chamam
+   * todos a MESMA consulta, e é ela que recusa. Um `filter()` em memória depois dela teria passado
+   * neste teste com dados de brinquedo e falhado com um `limit` cheio — por isso as três condições
+   * são cláusula de SQL.
+   */
+  it("candidatos ao envio: mira em um, e nem arquivado nem já enviado voltam", async () => {
+    const { db, candidatosAoCadastro } = await import("@brazil-tms/db");
+    const { driverPreregistrations } = await import("@brazil-tms/db/schema");
+    const { eq } = await import("drizzle-orm");
+
+    const [alvo] = await db
+      .insert(driverPreregistrations)
+      .values({ cpf: CPF_C, tipo: "novo" })
+      .returning({ id: driverPreregistrations.id });
+    const [vizinho] = await db
+      .insert(driverPreregistrations)
+      .values({ cpf: CPF_D, tipo: "novo" })
+      .returning({ id: driverPreregistrations.id });
+    criados.pre.push(alvo!.id, vizinho!.id);
+
+    // Com id: SÓ ele. Sem isto, um clique em "João" mandaria a fila inteira.
+    const mirado = await candidatosAoCadastro(50, alvo!.id);
+    expect(mirado.map((c) => c.id)).toEqual([alvo!.id]);
+
+    // Sem id: o lote traz os dois (e possivelmente outros da fila — por isso `toContain`).
+    const lote = (await candidatosAoCadastro(100)).map((c) => c.id);
+    expect(lote).toContain(alvo!.id);
+    expect(lote).toContain(vizinho!.id);
+
+    // JÁ ENVIADO não volta, nem mirado. É o que impede a duplicata na gerenciadora.
+    await db
+      .update(driverPreregistrations)
+      .set({ enviadoEm: new Date() })
+      .where(eq(driverPreregistrations.id, alvo!.id));
+    expect(await candidatosAoCadastro(50, alvo!.id)).toEqual([]);
+
+    // ARQUIVADO também não — quem foi descartado não pode ser criado lá por um lote noturno.
+    await db
+      .update(driverPreregistrations)
+      .set({ arquivadoEm: new Date() })
+      .where(eq(driverPreregistrations.id, vizinho!.id));
+    expect(await candidatosAoCadastro(50, vizinho!.id)).toEqual([]);
   });
 });

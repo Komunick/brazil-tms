@@ -58,13 +58,22 @@ interface PorStatus {
 export interface DadosDaFrente {
   region: string | null;
   /**
-   * O PLAN soma D1 e D2.
+   * O PLAN CHEGA SEPARADO POR DIA — D1 é amanhã, D2 é depois de amanhã.
    *
-   * A planilha tem dois números, não quatro: o horizonte de planejamento é "o que vem", não "o que
-   * vem amanhã contra depois". O dado dos dois dias continua chegando separado do servidor — quem
-   * quiser voltar a separar não precisa de consulta nova.
+   * Nasceu somado ("a planilha tem dois números, não quatro"), e o PEND ATRIBUIÇÃO voltou a mostrar
+   * os dois em 30/08, a pedido: quem monta o dia seguinte precisa saber quanto do pendente é para
+   * AMANHÃ. Um total de 61 não distingue 55 para amanhã de 6 para amanhã, e são dias muito
+   * diferentes de trabalho.
+   *
+   * SÓ O PEND se reparte. ATRIBUÍDA continua somada porque ninguém age sobre ela — é a coluna do que
+   * já foi resolvido, e reparti-la só acrescentaria número para o olho filtrar.
+   *
+   * NÃO existe um `plano` somado ao lado destes dois: os totais somam ESTES. Duas contas sobre a
+   * mesma pergunta é a porta clássica para o total dizer um número e as parcelas outro, sem que
+   * nenhum dos dois pareça errado sozinho.
    */
-  plano: PorStatus[];
+  planoD1: PorStatus[];
+  planoD2: PorStatus[];
   /**
    * LH ATRASADA — passou do meio-dia do dia da coleta e não há ninguém escalado.
    *
@@ -118,7 +127,10 @@ export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
   const abrir = (m: MedidaDoPainel) => setMedidaAberta((atual) => (atual === m ? null : m));
   const { region } = dados;
 
-  const doPlano = new Map(dados.plano.map((s) => [s.status, s.count]));
+  const d1 = new Map(dados.planoD1.map((s) => [s.status, s.count]));
+  const d2 = new Map(dados.planoD2.map((s) => [s.status, s.count]));
+  /** ATRIBUÍDA continua somada: é a coluna do que já foi resolvido, e ninguém age sobre ela. */
+  const atribuida = (d1.get("assigned") ?? 0) + (d2.get("assigned") ?? 0);
 
 
   return (
@@ -169,13 +181,26 @@ export function CardDaFrente({ dados }: { dados: DadosDaFrente }) {
             </thead>
             <tbody>
               <tr>
-                <Valor
-                  valor={doPlano.get("to_assign") ?? 0}
-                  onClick={() => abrir("pend")}
-                  ativo={medidaAberta === "pend"}
+                {/*
+                  PEND ATRIBUIÇÃO SÃO DOIS NÚMEROS: D1 e D2 (30/08, a pedido — ver a foto anotada).
+
+                  Cada metade abre a SUA lista, e não a soma das duas. Dois números que abrissem a
+                  mesma lista mostrariam mais linhas do que o número clicado — o mesmo erro que o
+                  comentário do `janelaDoPlano` já descreve do outro lado, e a razão de `pendD1` e
+                  `pendD2` existirem como medidas próprias em vez de um recorte feito na tela.
+                */}
+                <ValorDuplo
+                  a={d1.get("to_assign") ?? 0}
+                  b={d2.get("to_assign") ?? 0}
+                  rotuloA={t("d1")}
+                  rotuloB={t("d2")}
+                  aoClicarA={() => abrir("pendD1")}
+                  aoClicarB={() => abrir("pendD2")}
+                  ativoA={medidaAberta === "pendD1"}
+                  ativoB={medidaAberta === "pendD2"}
                 />
                 <Valor
-                  valor={doPlano.get("assigned") ?? 0}
+                  valor={atribuida}
                   onClick={() => abrir("atribuida")}
                   ativo={medidaAberta === "atribuida"}
                 />
@@ -327,6 +352,83 @@ function Valor({
     );
   }
   return <td className={classe}>{conteudo}</td>;
+}
+
+/**
+ * DUAS MEDIDAS NUMA CÉLULA SÓ — o PEND ATRIBUIÇÃO repartido em D1 e D2 (30/08, a pedido).
+ *
+ * O desenho veio de uma foto anotada à mão: sobre o número único, o usuário escreveu "D1 | D2" com
+ * o filete no meio. É isso, literalmente — a coluna continua sendo UMA no cabeçalho, e o filete é o
+ * que diz que ali dentro há duas perguntas.
+ *
+ * ── POR QUE O RÓTULO FICA EM CIMA DE CADA NÚMERO ──────────────────────────────────────────────
+ *
+ * "61" sozinho já era ambíguo (amanhã? os dois dias?). "55 · 6" sem rótulo seria pior: dois números
+ * sem nome convidam a somar, e a soma aqui não é o que interessa. O rótulo é minúsculo de propósito
+ * — ele identifica, não compete com o número.
+ *
+ * ── E POR QUE NÃO SÃO DUAS COLUNAS ────────────────────────────────────────────────────────────
+ *
+ * Porque o cabeçalho é a planilha da operação, e mexer nele significaria a linha inteira mudar de
+ * forma — sete medidas viram oito, e as outras frentes desalinham. A foto pedia dentro da célula.
+ */
+function ValorDuplo({
+  a,
+  b,
+  rotuloA,
+  rotuloB,
+  aoClicarA,
+  aoClicarB,
+  ativoA,
+  ativoB,
+}: {
+  a: number;
+  b: number;
+  rotuloA: string;
+  rotuloB: string;
+  aoClicarA: () => void;
+  aoClicarB: () => void;
+  ativoA?: boolean;
+  ativoB?: boolean;
+}) {
+  const metade = (
+    valor: number,
+    rotulo: string,
+    aoClicar: () => void,
+    ativo: boolean | undefined,
+  ) => (
+    <button
+      type="button"
+      onClick={aoClicar}
+      className={cn(
+        "flex-1 px-1 py-1 transition-colors hover:bg-accent",
+        ativo && "bg-accent",
+      )}
+    >
+      <span className="text-muted-foreground block text-[0.5rem] font-medium uppercase leading-none tracking-wide">
+        {rotulo}
+      </span>
+      <span
+        className={cn(
+          "block text-base font-semibold tabular-nums",
+          // Zero apagado, como no `Valor`: um zero em tinta cheia disputa com o que importa.
+          valor === 0 && "text-muted-foreground/50",
+        )}
+      >
+        {valor}
+      </span>
+    </button>
+  );
+
+  return (
+    <td className="border-l p-0 first:border-l-0">
+      {/* O filete do meio é o `divide-x` — o mesmo traço que o usuário desenhou na foto. */}
+      <div className="flex divide-x">
+        {metade(a, rotuloA, aoClicarA, ativoA)}
+        {metade(b, rotuloB, aoClicarB, ativoB)}
+      </div>
+    </td>
+  );
 }
 
 /**
@@ -634,7 +736,9 @@ export function TotaisDoQuadro({ frentes }: { frentes: DadosDaFrente[] }) {
   const t = useTranslations("Trips.dashboard");
 
   const soma = (f: (d: DadosDaFrente) => number) => frentes.reduce((n, d) => n + f(d), 0);
-  const doPlano = (d: DadosDaFrente) => d.plano.reduce((n, s) => n + s.count, 0);
+  // Soma os DOIS dias — os totais somam as parcelas que os cards mostram, nunca um terceiro cálculo.
+  const doPlano = (d: DadosDaFrente) =>
+    [...d.planoD1, ...d.planoD2].reduce((n, s) => n + s.count, 0);
 
   const totais = [
     { chave: "totalPlan", valor: soma(doPlano), cor: "bg-sky-300 dark:bg-sky-800/70" },

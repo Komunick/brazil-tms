@@ -39,6 +39,10 @@ export { listarFilaDePreCadastros, arquivarPreCadastro } from "./pre-cadastro/fi
 export type { ItemDaFila } from "./pre-cadastro/fila";
 export { chaveDoDocumentoDePreCadastro } from "./pre-cadastro/fila";
 export { documentoParaLeitura, gravarLeituraDaCnh } from "./pre-cadastro/fila";
+export { candidatosAoCadastro, marcarCadastroEnviado, gravarFalhaDoCadastro } from "./pre-cadastro/fila";
+export type { CandidatoAoCadastro } from "./pre-cadastro/fila";
+export { preCadastroParaConferencia, salvarCamposConferidos } from "./pre-cadastro/fila";
+export type { PreCadastroParaConferencia } from "./pre-cadastro/fila";
 export {
   marcarVistasNoPortal,
   marcarRetiradasDoPortal,

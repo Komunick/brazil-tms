@@ -15,6 +15,7 @@ import { registerCarregarPosicoes } from "./posicoes";
 import { registerCarregarCoordenadas } from "./coordenadas";
 import { registerTurnoFecharAtrasados } from "./turno";
 import { registerCnhLer } from "./cnh";
+import { registerMotoristaCadastrar } from "./motorista";
 
 /**
  * Registry of import job handlers (feature 004, research R3). The bootstrap (`workers/index.ts`)
@@ -85,4 +86,7 @@ export async function registerJobHandlers(boss: PgBoss): Promise<void> {
   // Fatia 028 — lê a CNH que chega pelo formulário público. Enfileirado por envio, nunca agendado:
   // reprocessar as mesmas fotos gastaria dinheiro para chegar ao mesmo resultado.
   await registerCnhLer(boss);
+  // Fatia 028, etapa 5 — o espelho do cadastro na gerenciadora. Cadastrar NÃO custa (D7); a
+  // solicitação de pesquisa, que custa, continua sendo clique de uma pessoa e não passa por aqui.
+  await registerMotoristaCadastrar(boss);
 }

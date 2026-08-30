@@ -225,6 +225,33 @@ export async function getCarreta(
 // ---------------------------------------------------------------------------
 
 /**
+ * CADASTRA UM MOTORISTA (fatia 028, etapa 5).
+ *
+ * ── ESTA ESCRITA NÃO CUSTA, e é a única do arquivo que não custa ──────────────────────────────
+ *
+ * Confirmado pelo usuário em 29/08: o `setMotorista` é **de graça**; a cobrança é da
+ * `setSolicitacaoPesquisaConsulta`. Isso separa esta fatia em duas metades de risco muito
+ * diferentes, e é a decisão D7 do plano.
+ *
+ * Toda a cautela que a 026 carrega — interruptor, teto diário, uma por vez — nasceu do dinheiro, e
+ * NÃO se aplica aqui. Copiá-la seria repetir uma precaução sem o motivo dela.
+ *
+ * ── MAS "DE GRAÇA" NÃO É "SEM CONSEQUÊNCIA" ───────────────────────────────────────────────────
+ *
+ * Cada chamada cria uma PESSOA REAL no cadastro da gerenciadora, e não há homologação (`CodErro
+ * 100`, medido). Um engano não gera fatura — gera registro sujo que alguém terá de limpar. Quem
+ * chama precisa ter CPF de gente que vai mesmo ser cadastrada.
+ *
+ * Devolve o retorno cru: quem chama grava o que veio, sem tradução nossa.
+ */
+export async function setMotorista(
+  cred: Credenciais,
+  motorista: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  return chamar<Record<string, unknown>>("setMotorista", { ...cred, Motorista: motorista });
+}
+
+/**
  * CRIA A PRÉ-SM (2026-08-26, fatia 027).
  *
  * ⚠️ **Isto CUSTA DINHEIRO.** A gerenciadora cobra por solicitação, e não existe ambiente de
