@@ -68,6 +68,32 @@ export const preCadastroSchema = z
      * há tempo suficiente para não haver ninguém com a versão antiga aberta.
      */
     numero: z.string().trim().max(15, "Número longo demais.").optional(),
+    /**
+     * O ENDEREÇO POR EXTENSO — preenchido pelo CEP, mas EDITÁVEL (2026-08-30, a pedido).
+     *
+     * O ViaCEP resolve logradouro, bairro, cidade e UF a partir do CEP, e o formulário preenche
+     * sozinho. Mas o resultado nem sempre está certo: CEP de logradouro longo devolve o nome da
+     * rua sem o trecho, CEP único de cidade pequena devolve vazio, e loteamento novo às vezes
+     * ainda não está na base. Travar o campo depois de preencher faria a pessoa mandar um endereço
+     * que ela SABE estar errado — e ninguém do outro lado teria como adivinhar.
+     *
+     * Por isso os campos chegam aqui como texto livre: o que vale é o que a pessoa confirmou na
+     * tela, não o que o CEP sugeriu.
+     *
+     * Os tamanhos são os do `setMotorista` (manual, pág. 52): Endereco 200, Bairro 100. Cortar
+     * aqui é melhor do que a gerenciadora recusar o cadastro inteiro por um campo longo demais.
+     */
+    logradouro: z.string().trim().max(200, "Logradouro longo demais.").optional(),
+    complemento: z.string().trim().max(50, "Complemento longo demais.").optional(),
+    bairro: z.string().trim().max(100, "Bairro longo demais.").optional(),
+    cidade: z.string().trim().max(100, "Cidade longa demais.").optional(),
+    /** Sigla de duas letras. Vira maiúscula aqui para não depender de como foi digitada. */
+    uf: z
+      .string()
+      .trim()
+      .transform((s) => s.toUpperCase())
+      .pipe(z.string().regex(/^[A-Z]{2}$/, "UF deve ter 2 letras."))
+      .optional(),
     possuiMopp: simNao,
     validadeMopp: dateStringSchema.optional(),
     /**
