@@ -115,7 +115,7 @@ async function lerNoGroq(binario: Buffer, tipo: string, chave: string): Promise<
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${chave}` },
     body: JSON.stringify({
-      model: process.env.CNH_MODELO ?? "meta-llama/llama-4-scout-17b-16e-instruct",
+      model: process.env.CNH_MODELO ?? "qwen/qwen3.8-27b",
       temperature: 0,
       // O provedor garante JSON, em vez de a gente torcer para o texto sair limpo.
       response_format: { type: "json_object" },
