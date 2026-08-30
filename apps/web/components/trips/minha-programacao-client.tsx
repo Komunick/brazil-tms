@@ -692,6 +692,26 @@ export function MinhaProgramacaoClient({
                       ) : (
                         <Previsto texto={l.previstoPlaca} rotulo={t("previsto")} />
                       )}
+                      {/*
+                        A PLACA QUE NÃO FOI AO PORTAL, embaixo da que foi (30/08, a pedido).
+
+                        O caso: uma CARRETA rodou no lugar de um TRUCK. O portal aceita uma placa só
+                        nessa LH — vai a do cavalo — e a segunda existia no banco sem nenhuma tela
+                        para mostrá-la. O faturamento precisa dela para pagar pela tarifa de carreta,
+                        e sem ela aqui a planilha paralela continuava sendo a fonte da verdade.
+
+                        Embaixo e em tom secundário, não ao lado: quem lê a coluna procura a placa
+                        que a portaria vai conferir, e essa é a de cima. A segunda é contexto de
+                        quem fatura, e não pode disputar o olho de quem opera.
+                      */}
+                      {l.placaInterna ? (
+                        <span
+                          className="text-muted-foreground block text-[0.65rem]"
+                          title={t("placaInternaDetalhe")}
+                        >
+                          + {l.placaInterna}
+                        </span>
+                      ) : null}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs">
                       {/* Discar no celular, copiar no computador — o `tel:` faz as duas. */}

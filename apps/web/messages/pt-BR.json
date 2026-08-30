@@ -2153,7 +2153,8 @@
     "statusOperacional": "Status",
     "marcarStatus": "Marcar status",
     "semStatus": "Sem status",
-    "doca": "Doca {n}"
+    "doca": "Doca {n}",
+    "placaInternaDetalhe": "Placa que NÃO foi ao portal — controle interno. Ex.: carreta que rodou no lugar do truck."
   },
   "HistoricoMotorista": {
     "titulo": "Histórico do motorista",
