@@ -116,6 +116,35 @@ data, e some da fila — mas a linha e os envios permanecem.
 
 Isso também protege contra o engano: um descarte errado no meio de cinquenta se desfaz.
 
+### D7 · Cadastrar é de graça; pesquisar é que custa
+
+**Respondido pelo usuário em 2026-08-29**, fechando a pendência que a spec carregava. O
+`setMotorista` **não é cobrado** — a cobrança é da `setSolicitacaoPesquisaConsulta`.
+
+Isso parte a etapa 5 em duas metades de risco **muito** diferentes, e o desenho tem de refletir
+isso em vez de tratar as duas com a mesma cautela:
+
+| | Custo | Quem dispara |
+|---|---|---|
+| `setMotorista` (cadastrar) | **nada** | pode ser automático |
+| `setSolicitacaoPesquisaConsulta` (pesquisar) | **cobrado** | clique deliberado de uma pessoa |
+
+Toda a cautela que a fatia 026 carregava — *uma por vez, com o usuário presente, porque cada engano
+custa uma solicitação* — nasceu do dinheiro, e **não se aplica à metade que cadastra**. Aplicá-la
+ali seria copiar uma precaução sem o motivo dela.
+
+**Mas "de graça" não é "sem consequência".** Cada `setMotorista` cria uma PESSOA REAL no cadastro da
+gerenciadora. Um teste malfeito não gera fatura, gera registro sujo que alguém terá de limpar — e
+não há ambiente de homologação (`CodErro 100`, medido). Exercitar, sim; com CPF inventado, não.
+
+**A INTENÇÃO, dita pelo usuário:** o TMS é um **ESPELHO** do cadastro da Raster, para facilitar o
+trabalho — não um substituto da tela deles. O que muda com D7 é que o espelho pode se sincronizar
+sozinho na metade que não custa.
+
+**O que D7 NÃO muda:** a ordem. O TMS continua sem os dezesseis campos que vivem dentro da foto, e
+espelhar exige ter o que espelhar. O gargalo segue sendo as etapas 3 e 4 — o que mudou é que a
+última etapa deixou de ser a arriscada e virou a barata, concentrando o risco na anterior.
+
 ---
 
 ## As etapas
@@ -157,10 +186,27 @@ CEP resolve o endereço. O vínculo é confirmado aqui, nunca pelo motorista.
 `setMotorista` com o bloco `Documentos`, seguido da solicitação de pesquisa. Credencial só no
 worker, escrita sempre por job. O toxicológico marca a pendência manual.
 
+**Depois de D7, esta etapa tem duas metades que NÃO se parecem:**
+
+**Cadastrar não custa** — então esta metade pode ser exercitada contra a produção da gerenciadora
+antes de ir para o ar, o que nenhuma escrita da 026 ou 027 pôde. A ressalva não é financeira: cada
+chamada cria uma pessoa real no cadastro deles, e não há homologação. Testar com CPF de gente que
+vai mesmo ser cadastrada, nunca com dado inventado.
+
+**Pesquisar custa** — e continua sendo um clique deliberado, uma por vez, com a cautela da 026
+inteira. É aqui que aquela precaução pertence, e só aqui.
+
 ### Etapa 6 — O envio automático · P3
 
 Só depois de haver número real sobre quantos cadastros chegam limpos. Reusa `faltaAlgo`: se a lista
-vier vazia e o interruptor estiver ligado, segue sozinho, com teto diário.
+vier vazia e o interruptor estiver ligado, segue sozinho.
+
+**D7 muda o que esta etapa automatiza.** O automático vale para o CADASTRO, que não custa — é ele o
+espelho se sincronizando sozinho. A **pesquisa continua manual**, e não por prudência genérica: ela
+é a única das duas que gasta, e automatizar gasto é como uma conta cresce sem ninguém decidir.
+
+O **teto diário**, que existia para conter custo, perde o motivo na metade que cadastra. Fica só na
+que pesquisa — se um dia ela for automatizada, o que esta fatia não propõe.
 
 ### Etapa 7 — O retorno da auditoria · P3
 
