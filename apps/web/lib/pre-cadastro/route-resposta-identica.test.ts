@@ -63,7 +63,9 @@ describe.skipIf(!hasDb)("POST /api/publico/pre-cadastro — a resposta não dist
   let motoristaId: string | null = null;
 
   beforeAll(async () => {
-    process.env.PRE_CADASTRO_ORIGEM = ORIGEM;
+    // OS DOIS DOMÍNIOS, como em produção — o site responde com e sem `www`. Fixar um só aqui foi o
+    // que deixou passar o defeito que este arquivo agora cobre.
+    process.env.PRE_CADASTRO_ORIGEM = `${ORIGEM},https://www.braziltransports.com.br`;
     process.env.PRE_CADASTRO_ACTOR_EMAIL ??= "admin@braziltransports.com.br";
 
     const { db } = await import("@brazil-tms/db");
@@ -241,6 +243,32 @@ describe.skipIf(!hasDb)("POST /api/publico/pre-cadastro — a resposta não dist
       .where(eq(driverPreregistrationSubmissions.preregistrationId, pre!.id))
       .orderBy(desc(driverPreregistrationSubmissions.recebidoEm)).limit(1);
     expect((ultimo!.dados as Record<string, unknown>).numero).toBe("120A");
+  });
+
+  /**
+   * O SITE RESPONDE EM DOIS DOMÍNIOS — com e sem `www` — e os dois precisam passar.
+   *
+   * Um motorista relatou "sem conexão com o servidor" no celular, com 4G funcionando: ele havia
+   * aberto pelo `www`, a rota devolveu 403, o navegador bloqueou a leitura da resposta e o `fetch`
+   * estourou. A pessoa foi procurar defeito na internet dela.
+   *
+   * E o cabeçalho tem de ECOAR a origem recebida: `Access-Control-Allow-Origin` aceita um valor
+   * só, então devolver sempre o primeiro domínio reproduziria o mesmo defeito para o segundo.
+   */
+  it("aceita os DOIS domínios do site, e ecoa o que recebeu", async () => {
+    const { POST, OPTIONS } = await import("@/app/api/publico/pre-cadastro/route");
+    for (const o of ["https://braziltransports.com.br", "https://www.braziltransports.com.br"]) {
+      const pre = OPTIONS(new Request("http://localhost/x", { method: "OPTIONS", headers: { origin: o } }));
+      expect(pre.status).toBe(204);
+      expect(pre.headers.get("access-control-allow-origin")).toBe(o);
+
+      const res = await POST(new Request("http://localhost/x", {
+        method: "POST", headers: { origin: o, "content-type": "application/json" }, body: "x",
+      }));
+      // 400 e não 403: passou pela guarda de origem e caiu na validação, que é o esperado.
+      expect(res.status).toBe(400);
+      expect(res.headers.get("access-control-allow-origin")).toBe(o);
+    }
   });
 
   it("origem diferente é recusada antes de qualquer escrita", async () => {
