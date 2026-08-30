@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.17.1
+// @version      1.18.0
 // @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -594,24 +594,44 @@
     */
     "FM HUB_MG_Varginha,SOC_BA_SIMOES FILHO",
     /*
-      Conferida contra o banco em 29/08: `SoC_RJ_Jacarepagua` (5 viagens). Existe também um
-      `XPT_RJ_Jacarepaguá` — outra estação, outro prefixo e com acento —, e é por isso que o nome
-      não se escreve de memória: as duas leem igual em voz alta e só uma casa.
+        Conferida contra o banco em 29/08: `SoC_RJ_Jacarepagua` (5 viagens). Existe também um
+        `XPT_RJ_Jacarepaguá` — outra estação, outro prefixo e com acento —, e é por isso que o nome
+        não se escreve de memória: as duas leem igual em voz alta e só uma casa.
+      */
+      "SoC_RJ_Jacarepagua,SoC_BA_Simoes Filho",
+    /*
+      Conferida contra o banco em 30/08, e esta exigiu cuidado extra: existem TRÊS grafias de
+      Caruaru em `locations`, e duas delas não servem.
+
+        LM HUB_PE_CARUARU_CIDADE_ALTA   ← criada em 12/06, TUDO MAIÚSCULO: veio da PLANILHA
+        FM Hub_PE_Caruaru               ← outra estação (FM, não LM)
+        FM_HUB_PE_Caruaru               ← a mesma, com grafia antiga
+
+      O portal escreve em CAIXA MISTA — está provado nas ofertas já registradas
+      (`SoC_BA_Simoes Filho`, `LM Hub_SE_Aracaju_02`) e nas estações que ele mesmo criou
+      (`LM Hub_PE_Recife_Imbiribeira`, `LM Hub_BA_Salvador_Cajazeiras`). As de 11–12/06, todas em
+      maiúscula, vieram do import de planilha e NÃO são o que chega no spot.
+
+      Usar a grafia da planilha aqui deixaria a linha morta em silêncio — como a `SoC_BA2` já ficou.
+
+      RESSALVA HONESTA: o portal nunca mandou ESTA estação numa listagem que registramos, então a
+      grafia segue a convenção mas não foi vista. Se depois de alguns dias houver spot desta rota
+      sem aviso, é aqui que se olha primeiro.
     */
-    "SoC_RJ_Jacarepagua,SoC_BA_Simoes Filho",
-  ];
+      "SoC_BA_Simoes Filho,LM Hub_PE_Caruaru_Cidade_Alta",
+    ];
 
-  const ROTAS_PERMITIDAS = new Set(
-    ROTAS_DE_INTERESSE.map((linha) => {
-      const c = linha.indexOf(",");
-      return `${normalizarNome(linha.slice(0, c))} -> ${normalizarNome(linha.slice(c + 1))}`;
-    }),
-  );
+    const ROTAS_PERMITIDAS = new Set(
+      ROTAS_DE_INTERESSE.map((linha) => {
+        const c = linha.indexOf(",");
+        return `${normalizarNome(linha.slice(0, c))} -> ${normalizarNome(linha.slice(c + 1))}`;
+      }),
+    );
 
-  /** A rota da viagem, no mesmo formato da lista: primeira parada -> última. */
-  function rotaPermitida(v) {
-    const paradas = Array.isArray(v.trip_station) ? v.trip_station : [];
-    if (paradas.length < 2) return false;
+    /** A rota da viagem, no mesmo formato da lista: primeira parada -> última. */
+    function rotaPermitida(v) {
+      const paradas = Array.isArray(v.trip_station) ? v.trip_station : [];
+      if (paradas.length < 2) return false;
     const origem = normalizarNome(paradas[0]?.station_name);
     const destino = normalizarNome(paradas[paradas.length - 1]?.station_name);
     return ROTAS_PERMITIDAS.has(`${origem} -> ${destino}`);
