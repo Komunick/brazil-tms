@@ -1489,7 +1489,9 @@
       "totalAtrasada": "Total LH atrasada",
       "totalOrigem": "Total atrasado e fora do prazo",
       "totalSpot": "Total spot",
-      "totalTendencia": "Total tendência"
+      "totalTendencia": "Total tendência",
+      "d1": "D1",
+      "d2": "D2"
     },
     "portalDecision": {
       "title": "Decisão da proposta",
@@ -1891,7 +1893,9 @@
       "carrier_doc_expired": "Documentação da transportadora vencida.",
       "carrier_doc_pending": "Documentação da transportadora pendente.",
       "unknown": "Alerta de elegibilidade.",
-      "driver_blocked_here": "Motorista bloqueado no cadastro. Desbloqueie em Motoristas para poder escalá-lo."
+      "driver_blocked_here": "Motorista bloqueado no cadastro. Desbloqueie em Motoristas para poder escalá-lo.",
+      "rigido_com_carreta": "Este veículo tem placa única e não engata carreta. Tire a carreta ou troque o veículo.",
+      "cavalo_sem_carreta": "Cavalo mecânico não carrega sozinho: falta a carreta."
     },
     "errors": {
       "INCOMPLETE_ASSIGNMENT": "Atribuição incompleta: informe ao menos motorista e veículo (e transportadora quando subcontratado).",
@@ -2149,7 +2153,8 @@
     "temComentarios": "{n, plural, one {# comentário} other {# comentários}}",
     "statusOperacional": "Status",
     "marcarStatus": "Marcar status",
-    "semStatus": "Sem status"
+    "semStatus": "Sem status",
+    "doca": "Doca {n}"
   },
   "HistoricoMotorista": {
     "titulo": "Histórico do motorista",

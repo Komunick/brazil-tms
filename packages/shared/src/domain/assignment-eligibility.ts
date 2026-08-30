@@ -115,6 +115,18 @@ export const DEFAULT_ASSIGNMENT_POLICY: AssignmentPolicy = {
     carrier_doc_expired: "block",
     carrier_doc_pending: "warn",
     type_mismatch: "warn",
+    /**
+     * A COMPOSIÇÃO IMPOSSÍVEL É BLOQUEIO, ao contrário do `type_mismatch` logo acima (30/08).
+     *
+     * A diferença é o que a exceção pode consertar. Um veículo de tipo diferente do planejado ainda
+     * roda, e às vezes é a decisão certa — por isso avisa e alguém assume. Um truck com carreta não
+     * existe na rua: nenhum motivo escrito faz aparecer um engate no chassi.
+     *
+     * Aviso aqui seria pior do que nada, porque a tela já mostra avisos que se aceita todo dia — e
+     * este viraria mais um a passar batido, até a portaria da estação recusar a entrada.
+     */
+    rigido_com_carreta: "block",
+    cavalo_sem_carreta: "block",
     schedule_overlap: "warn",
   },
 };
@@ -147,6 +159,31 @@ export function requiredResourcesFor(ownership: "owned" | "subcontracted"): {
 } {
   return { driver: true, vehicle: true, carrier: ownership === "subcontracted" };
 }
+
+/**
+ * OS RÍGIDOS: chassi único, uma placa só. Não têm onde engatar uma carreta.
+ *
+ * Listados por NOME e não por exclusão ("tudo que não é cavalo"): um tipo novo no cadastro entraria
+ * calado na regra errada, e o desfecho seria uma atribuição bloqueada sem que ninguém entendesse o
+ * porquê. Tipo novo aqui não cai em regra nenhuma até alguém decidir — que é o desfecho certo.
+ */
+const VEICULOS_SEM_REBOQUE = new Set<VehicleType>([
+  "van",
+  "vuc",
+  "tres_quartos",
+  "toco",
+  "truck",
+  "bitruck",
+]);
+
+/**
+ * O CAVALO é o contrário: sozinho ele não carrega nada.
+ *
+ * Só ele. `carreta`, `bitrem` e `rodotrem` são entradas de cadastro do próprio REBOQUE — quem as
+ * escolhe no campo de veículo já está descrevendo a composição, e exigir um segundo reboque em cima
+ * disso bloquearia a atribuição correta.
+ */
+const VEICULOS_QUE_EXIGEM_REBOQUE = new Set<VehicleType>(["cavalo"]);
 
 /** Turnaround buffer applied to schedule-overlap detection, in minutes. Default 0 (spec Blocked #6). */
 export const ASSIGNMENT_TURNAROUND_BUFFER_MINUTES = 0;
@@ -233,6 +270,38 @@ export function evaluateAssignmentEligibility(
     ctx.vehicle.vehicleType !== ctx.trip.plannedVehicleType
   ) {
     push("vehicle_type", "vehicle", ctx.vehicle.id, "type_mismatch");
+  }
+
+  /**
+   * 3b. DUAS PLACAS NUM VEÍCULO QUE SÓ TEM UMA (30/08, a pedido).
+   *
+   * "Se for truck e pôr 2 placas ele não atribui pelo TMS." Um truck é um chassi único — cavalo e
+   * carroceria são a mesma placa. Escalar uma carreta junto produz uma composição que não existe na
+   * rua, e o erro só aparece na portaria da estação, com o motorista já lá.
+   *
+   * De onde ele vem: a tela tem dois seletores lado a lado, e quem preenche de cima para baixo põe
+   * uma carreta sem reparar no perfil. Nada impedia — a verificação de tipo acima compara o veículo
+   * com o PLANEJADO e não diz nada sobre o reboque.
+   *
+   * ── É BLOQUEIO, não aviso ─────────────────────────────────────────────────────────────────
+   *
+   * Um aviso se justifica quando a exceção existe — documento vencendo, transportadora suspensa que
+   * alguém libera sob responsabilidade. Aqui não há exceção possível: o caminhão não passa a ter
+   * onde engatar porque alguém escreveu um motivo.
+   *
+   * ── E O INVERSO TAMBÉM É ERRO ─────────────────────────────────────────────────────────────
+   *
+   * `cavalo` é o contrário: ele NÃO carrega nada sozinho. Um cavalo sem carreta é uma viagem que
+   * sai vazia, e o custo de descobrir isso é o mesmo — o motorista na estação.
+   */
+  if (ctx.vehicle) {
+    const tipo = ctx.vehicle.vehicleType;
+    if (VEICULOS_SEM_REBOQUE.has(tipo) && ctx.trailer) {
+      push("vehicle_type", "vehicle", ctx.vehicle.id, "rigido_com_carreta");
+    }
+    if (VEICULOS_QUE_EXIGEM_REBOQUE.has(tipo) && !ctx.trailer) {
+      push("vehicle_type", "vehicle", ctx.vehicle.id, "cavalo_sem_carreta");
+    }
   }
 
   // 4. Carrier eligibility — contract/documentation status + archived.

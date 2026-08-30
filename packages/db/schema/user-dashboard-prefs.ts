@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { users } from "./users";
 
 /**
@@ -31,5 +31,17 @@ export const userDashboardPrefs = pgTable("user_dashboard_prefs", {
     .array()
     .notNull()
     .default(sql`'{}'::text[]`),
+  /**
+   * OS FILTROS DA MINHA PROGRAMAÇÃO que a pessoa deixou ligados (30/08, a pedido).
+   *
+   * `jsonb` e não três colunas: ao contrário da lista de cartões, os filtros desta tela ainda mudam
+   * toda semana, e três colunas hoje virariam uma migração a cada filtro novo. É preferência de
+   * tela — preferência errada não corrompe nada — e o Zod valida a forma antes de gravar.
+   *
+   * Não entrou aqui, e é decisão: a BUSCA (transitória — ninguém espera reencontrar o texto que
+   * digitou ontem) e os DIAS ESCONDIDOS (são datas; "esconder 30/08" não quer dizer nada em 05/09,
+   * e voltaria como um filtro que não filtra).
+   */
+  programacaoPrefs: jsonb("programacao_prefs").notNull().default({}),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

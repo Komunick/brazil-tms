@@ -323,6 +323,11 @@ describe("DEFAULT_ASSIGNMENT_POLICY (data-model.md §3.2 — verbatim)", () => {
     carrier_doc_expired: "block",
     carrier_doc_pending: "warn",
     type_mismatch: "warn",
+    // A COMPOSIÇÃO IMPOSSÍVEL (30/08). Bloqueio, e não aviso como o `type_mismatch` acima: veículo
+    // de tipo diferente do planejado ainda roda, e às vezes é a decisão certa. Truck com carreta
+    // não existe na rua — nenhum motivo escrito faz aparecer um engate no chassi.
+    rigido_com_carreta: "block",
+    cavalo_sem_carreta: "block",
     schedule_overlap: "warn",
   };
 
@@ -429,5 +434,78 @@ describe("motorista bloqueado por nós", () => {
       DEFAULT_ASSIGNMENT_POLICY,
     );
     expect(findings.map((f) => f.code)).not.toContain("driver_blocked_here");
+  });
+});
+
+/**
+ * A COMPOSIÇÃO IMPOSSÍVEL (30/08, a pedido: "se for truck e pôr 2 placas ele não atribui pelo TMS").
+ *
+ * Um truck é chassi único — cavalo e carroceria são a mesma placa. Escalar uma carreta junto produz
+ * uma composição que não existe na rua, e o erro só aparecia na portaria da estação, com o motorista
+ * já lá. A tela tem os dois seletores lado a lado, e quem preenche de cima para baixo põe a carreta
+ * sem reparar no perfil.
+ */
+describe("a composição impossível — rígido com carreta, cavalo sem carreta", () => {
+  const carreta = { id: TRAILER, status: "active" as const, documentExpiry: "2027-01-01" };
+
+  it("truck COM carreta é bloqueio, não aviso", () => {
+    const f = find(evaluateAssignmentEligibility(cleanCtx({ trailer: carreta })), "rigido_com_carreta");
+    expect(f).toBeDefined();
+    /*
+     * BLOQUEIO e não aviso: um aviso se justifica quando a exceção existe. Aqui não existe — nenhum
+     * motivo escrito faz aparecer um engate no chassi, e a tela já mostra avisos que se aceita todo
+     * dia. Este viraria mais um a passar batido.
+     */
+    expect(resolveSeverity(f!.code)).toBe("block");
+  });
+
+  it("vale para todos os rígidos, não só o truck", () => {
+    for (const tipo of ["van", "vuc", "tres_quartos", "toco", "bitruck"] as const) {
+      const ctx = cleanCtx({
+        trip: { plannedVehicleType: tipo, windowStart: NOW, windowEnd: NOW },
+        vehicle: { id: VEHICLE, status: "active", vehicleType: tipo, documentExpiry: "2027-01-01" },
+        trailer: carreta,
+      });
+      expect(codesOf(evaluateAssignmentEligibility(ctx)), tipo).toContain("rigido_com_carreta");
+    }
+  });
+
+  it("truck SEM carreta continua limpo — a regra não inventa exigência", () => {
+    expect(codesOf(evaluateAssignmentEligibility(cleanCtx()))).not.toContain("rigido_com_carreta");
+    expect(codesOf(evaluateAssignmentEligibility(cleanCtx()))).not.toContain("cavalo_sem_carreta");
+  });
+
+  it("cavalo SEM carreta é bloqueio — sozinho ele não carrega nada", () => {
+    const ctx = cleanCtx({
+      trip: { plannedVehicleType: "cavalo", windowStart: NOW, windowEnd: NOW },
+      vehicle: { id: VEHICLE, status: "active", vehicleType: "cavalo", documentExpiry: "2027-01-01" },
+    });
+    const f = find(evaluateAssignmentEligibility(ctx), "cavalo_sem_carreta");
+    expect(f).toBeDefined();
+    expect(resolveSeverity(f!.code)).toBe("block");
+  });
+
+  it("cavalo COM carreta é a composição certa, e não acusa nada", () => {
+    const ctx = cleanCtx({
+      trip: { plannedVehicleType: "cavalo", windowStart: NOW, windowEnd: NOW },
+      vehicle: { id: VEHICLE, status: "active", vehicleType: "cavalo", documentExpiry: "2027-01-01" },
+      trailer: carreta,
+    });
+    expect(evaluateAssignmentEligibility(ctx)).toEqual([]);
+  });
+
+  /**
+   * `carreta`, `bitrem` e `rodotrem` são entradas do próprio REBOQUE no cadastro: quem as escolhe no
+   * campo de veículo já descreveu a composição. Exigir um segundo reboque em cima disso bloquearia
+   * a atribuição CORRETA — o pior desfecho possível para uma regra que existe para evitar erro.
+   */
+  it("carreta/bitrem/rodotrem no campo de veículo não exigem um segundo reboque", () => {
+    for (const tipo of ["carreta", "carreta_ls", "bitrem", "rodotrem"] as const) {
+      const ctx = cleanCtx({
+        trip: { plannedVehicleType: tipo, windowStart: NOW, windowEnd: NOW },
+        vehicle: { id: VEHICLE, status: "active", vehicleType: tipo, documentExpiry: "2027-01-01" },
+      });
+      expect(evaluateAssignmentEligibility(ctx), tipo).toEqual([]);
+    }
   });
 });
