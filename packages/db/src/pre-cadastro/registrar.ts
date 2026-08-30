@@ -1,4 +1,5 @@
 import { and, count, eq, gt, isNull, sql } from "drizzle-orm";
+import { camposDeclarados, fundirCampos, type CamposDoPreCadastro } from "@brazil-tms/shared";
 import { db } from "../client";
 import {
   driverPreregistrationSubmissions,
@@ -152,6 +153,36 @@ export async function registrarPreCadastro(envio: EnvioDePreCadastro): Promise<v
       documentoCnhId: envio.documentoCnhId,
       documentoComprovanteId: envio.documentoComprovanteId,
     });
+
+    /**
+     * O QUE O MOTORISTA DECLAROU VAI PARA `campos` AGORA (2026-08-30) — não depois, na leitura.
+     *
+     * Antes, `campos` só era escrito pelo job da CNH. Consequência medida no primeiro cadastro real:
+     * 16 valores no envio, `campos` com uma chave só, e essa era o estado da leitura. A conferência
+     * abria vazia com o endereço da pessoa ali do lado, e o envio seria recusado por `sem_endereco`,
+     * `sem_cep`, `sem_bairro`, `sem_numero`, `sem_mopp` — mesmo com a CNH lida perfeitamente.
+     *
+     * Aqui é o lugar certo porque não depende de nada: se o provedor de leitura estiver desligado,
+     * se a foto estiver ilegível, se a chave faltar, o que a pessoa digitou continua chegando. A
+     * leitura é uma MELHORIA sobre isto, não um pré-requisito.
+     *
+     * ── O JÁ CONFERIDO VENCE O REENVIO ────────────────────────────────────────────────────────
+     *
+     * `fundirCampos(existentes, novos)` põe os existentes por cima — a mesma função e a mesma regra
+     * do job da CNH. Sem isso, um motorista que mandasse de novo apagaria a correção que alguém do
+     * escritório já tinha feito, e apagaria em silêncio.
+     */
+    const [linha] = await tx
+      .select({ campos: driverPreregistrations.campos })
+      .from(driverPreregistrations)
+      .where(eq(driverPreregistrations.id, preregistrationId))
+      .limit(1);
+
+    const existentes = (linha?.campos ?? {}) as CamposDoPreCadastro;
+    await tx
+      .update(driverPreregistrations)
+      .set({ campos: fundirCampos(existentes, camposDeclarados(envio.dados)) })
+      .where(eq(driverPreregistrations.id, preregistrationId));
 
     /*
      * O reenvio faz a linha voltar a ser recente para quem olha a fila por `updated_at`, sem mexer
