@@ -137,14 +137,47 @@ export function motivosDeNaoCadastrar(d: DadosParaSetMotorista): MotivoDeNaoCada
   return m;
 }
 
-/** "1987-05-10" → "10/05/1987". A gerenciadora recebe data brasileira; o TMS guarda ISO. */
-function paraDataBr(iso: string | null): string {
-  if (!iso) return "";
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : "";
+/**
+ * A DATA VAI EM ISO, e eu errei isto antes de ler o exemplo do manual (2026-08-30).
+ *
+ * Eu tinha convertido para `DD/MM/AAAA`, supondo que uma API brasileira quisesse data brasileira. O
+ * exemplo do próprio `setMotorista` mostra o contrário:
+ *
+ *     "DataNascimento":"1987-07-07"   "DataVencCNH":"2018-11-13"
+ *
+ * E há evidência mais forte que o manual: o `paraDataHoraDaIntegra` da fatia 026 usa `YYYY-MM-DD`
+ * e roda contra a API REAL há dias, criando Pré-SM de verdade. Manual pode estar desatualizado;
+ * o que funciona em produção, não.
+ *
+ * Então isto só valida a forma e repassa. A conversão que eu tinha escrito era trabalho que
+ * estragava o dado.
+ */
+function paraDataDaIntegra(iso: string | null): string | null {
+  if (!iso) return null;
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : null;
 }
 
-/** O bloco `Motorista` do `setMotorista`, com os nomes de campo exatos do manual (pág. 52). */
+/**
+ * O bloco `Motorista`, com os nomes EXATOS — e há um conflito dentro do manual (2026-08-30).
+ *
+ * A TABELA de layout (pág. 52, versão 14.2) e o EXEMPLO de requisição na mesma seção discordam:
+ *
+ *     tabela            exemplo         decisão
+ *     NumFormCNH        NumDocCNH       manda os DOIS
+ *     NumRenachCNH      Renach          manda os DOIS
+ *     NumSegurCNH       (ausente)       manda, pela tabela
+ *     (ausente)         Fone            manda, pelo exemplo
+ *
+ * O rodapé do exemplo diz **"Versão 14.0 - 22/10/2025"**, enquanto a tabela é da 14.2 — o exemplo
+ * não foi atualizado junto.
+ *
+ * MANDAR OS DOIS NOMES é a escolha, e não é preguiça de decidir: a API ignora campo que não
+ * reconhece (medido no `getCidades`, onde nome de filtro errado é silenciosamente descartado). O
+ * risco de mandar um a mais é zero; o de mandar o errado é um cadastro recusado sem dizer qual
+ * campo faltou — e sem homologação para descobrir por tentativa.
+ *
+ * Quando o primeiro cadastro real subir, o retorno diz qual dos dois vale, e o outro sai daqui.
+ */
 export interface CorpoDoMotorista {
   CPF: string;
   Nome: string;
@@ -153,18 +186,22 @@ export interface CorpoDoMotorista {
   OrgaoEmissRG: string;
   /** `30 = MOTORISTA`, medido em `getTabela(PROFISSOES)` em 28/08. Fixo, nunca adivinhado. */
   CodProfissao: number;
+  /** Ver o bloco acima: os dois nomes do número de formulário. */
   NumFormCNH: string;
+  NumDocCNH: string;
   NumRegCNH: string;
   NumSegurCNH: string;
+  /** Ver o bloco acima: os dois nomes do Renach. */
   NumRenachCNH: string;
+  Renach: string;
   UFEmissCNH: string;
-  DataVencCNH: string;
+  DataVencCNH: string | null;
   CategoriaCNH: string;
-  DtPrimEmissCNH: string;
+  DtPrimEmissCNH: string | null;
   PossuiMOPP: string;
-  DtVencMOPP: string;
+  DtVencMOPP: string | null;
   CodIBGECidadeNatal: number;
-  DataNascimento: string;
+  DataNascimento: string | null;
   NomeMae: string;
   Endereco: string;
   Numero: string;
@@ -185,8 +222,11 @@ export const COD_PROFISSAO_MOTORISTA = 30;
  * que é "pronto", e o dia em que divergissem seria o dia em que a tela diria "pronto" e o envio
  * falharia sem explicação.
  *
- * Campos opcionais ausentes viram string VAZIA, nunca `null`: a API é DataSnap e trata ausência e
- * nulo de formas diferentes — vazio é o que o manual mostra nos exemplos.
+ * DATA AUSENTE VAI COMO `null`, não como string vazia — e isto também eu tinha errado. O exemplo do
+ * manual mostra `"DtPrimEmissCNH":null` e `"DtVencMOPP":null`. Mandar `""` num campo de data é
+ * pedir para o outro lado tentar interpretar uma data vazia.
+ *
+ * Texto ausente continua indo VAZIO: é o que o exemplo mostra para os campos de texto.
  *
  * `PossuiMOPP` é 'S'/'N' de uma letra, como o manual pede — não o "sim"/"nao" que o formulário usa.
  */
@@ -202,19 +242,22 @@ export function corpoDoMotorista(d: DadosParaSetMotorista): CorpoDoMotorista {
     RG: v("rg"),
     OrgaoEmissRG: v("orgaoEmissorRg"),
     CodProfissao: COD_PROFISSAO_MOTORISTA,
+    // Os dois nomes de cada um: a tabela e o exemplo do manual discordam. Ver o bloco acima.
     NumFormCNH: v("numeroFormulario"),
+    NumDocCNH: v("numeroFormulario"),
     NumRegCNH: v("numeroRegistro"),
     NumSegurCNH: v("numeroSeguranca"),
     NumRenachCNH: v("renach"),
+    Renach: v("renach"),
     UFEmissCNH: v("ufEmissorRg"),
-    DataVencCNH: paraDataBr(valor(c, "validade")),
+    DataVencCNH: paraDataDaIntegra(valor(c, "validade")),
     CategoriaCNH: v("categoria"),
-    DtPrimEmissCNH: paraDataBr(valor(c, "primeiraHabilitacao")),
+    DtPrimEmissCNH: paraDataDaIntegra(valor(c, "primeiraHabilitacao")),
     PossuiMOPP: temMopp ? "S" : "N",
     // Só quem tem MOPP manda validade. Data sem o curso correspondente é dado que ninguém pediu.
-    DtVencMOPP: temMopp ? paraDataBr(valor(c, "validadeMopp")) : "",
+    DtVencMOPP: temMopp ? paraDataDaIntegra(valor(c, "validadeMopp")) : null,
     CodIBGECidadeNatal: d.codIbgeNatal!,
-    DataNascimento: paraDataBr(valor(c, "dataNascimento")),
+    DataNascimento: paraDataDaIntegra(valor(c, "dataNascimento")),
     NomeMae: v("nomeMae"),
     Endereco: v("logradouro"),
     Numero: v("numero"),

@@ -36,3 +36,24 @@ export interface CnhLerPayload {
 export interface CnhJobPayloads {
   "cnh.ler": CnhLerPayload;
 }
+
+/**
+ * O ENVIO DO CADASTRO À GERENCIADORA (fatia 028, etapa 5).
+ *
+ * Processa um LOTE, não um cadastro: `getCidades` traz 5.571 municípios e é o mesmo catálogo para
+ * todos. Um job por motorista buscaria a mesma resposta cinquenta vezes.
+ */
+export const MOTORISTA_JOBS = {
+  motoristaCadastrar: "motorista.cadastrar",
+} as const;
+
+export type MotoristaJobName = (typeof MOTORISTA_JOBS)[keyof typeof MOTORISTA_JOBS];
+
+export interface MotoristaCadastrarPayload {
+  /** Quantos por execução. Sem teto de custo — cadastrar não custa (D7) —, só de fôlego. */
+  limite?: number;
+}
+
+export interface MotoristaJobPayloads {
+  "motorista.cadastrar": MotoristaCadastrarPayload;
+}
