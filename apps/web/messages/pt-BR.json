@@ -1586,7 +1586,8 @@
       "semPosicaoNenhuma": "Nenhuma posição de veículo carregada. O mapa aparece quando a integração com a gerenciadora estiver ligada neste ambiente.",
       "platesUsedBefore": "Placas que este motorista já rodou",
       "timesUsed": "{n} viagens",
-      "typeToSearch": "Digite {n} letras para buscar"
+      "typeToSearch": "Digite {n} letras para buscar",
+      "addPlateInterna": "Acrescentar carreta (fica só no TMS)"
     },
     "melhoresDaRota": {
       "titulo": "Nesta rota",
@@ -1893,9 +1894,7 @@
       "carrier_doc_expired": "Documentação da transportadora vencida.",
       "carrier_doc_pending": "Documentação da transportadora pendente.",
       "unknown": "Alerta de elegibilidade.",
-      "driver_blocked_here": "Motorista bloqueado no cadastro. Desbloqueie em Motoristas para poder escalá-lo.",
-      "rigido_com_carreta": "Este veículo tem placa única e não engata carreta. Tire a carreta ou troque o veículo.",
-      "cavalo_sem_carreta": "Cavalo mecânico não carrega sozinho: falta a carreta."
+      "driver_blocked_here": "Motorista bloqueado no cadastro. Desbloqueie em Motoristas para poder escalá-lo."
     },
     "errors": {
       "INCOMPLETE_ASSIGNMENT": "Atribuição incompleta: informe ao menos motorista e veículo (e transportadora quando subcontratado).",
