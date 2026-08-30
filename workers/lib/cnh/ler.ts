@@ -88,12 +88,42 @@ const CHAVES: ReadonlyArray<keyof CnhLida> = [
  */
 const ONDE = [
   "Onde encontrar cada campo na CNH:",
-  "- nome: rótulo NOME",
-  "- nomeMae e nomePai: sob FILIACAO, geralmente duas linhas (a mãe primeiro)",
-  "- rg, orgaoEmissorRg, ufEmissorRg: do campo DOC IDENTIDADE / ORG EMISSOR / UF, que vem junto",
-  "- cidadeNatal e ufNatal: de LOCAL DE NASCIMENTO ou NATURALIDADE, separando cidade e UF",
-  "- numeroRegistro: N REGISTRO · numeroFormulario: N FORMULARIO · numeroSeguranca: N SEGURANCA",
-  "- renach: RENACH · categoria: CAT HAB · validade: VALIDADE · primeiraHabilitacao: 1a HABILITACAO",
+  "A CNH tem os campos NUMERADOS. Use o número impresso, não o rótulo — ele é o mais confiável:",
+  "- 2 e 1 NOME E SOBRENOME -> nome",
+  "- 1a HABILITACAO (canto superior direito) -> primeiraHabilitacao",
+  "- 3 DATA, LOCAL E UF DE NASCIMENTO -> dataNascimento, cidadeNatal e ufNatal, nessa ordem,",
+  "  separados por vírgula (ex.: '29/09/1976, RECIFE, PE')",
+  "- 4a DATA EMISSAO -> NÃO É NENHUM CAMPO PEDIDO. Não a use para primeiraHabilitacao.",
+  "- 4b VALIDADE -> validade",
+  "- 4c DOC IDENTIDADE / ORG EMISSOR / UF -> rg, orgaoEmissorRg e ufEmissorRg, nessa ordem",
+  "- 4d CPF -> cpf",
+  "- 5 N REGISTRO -> numeroRegistro",
+  "- 9 CAT HAB -> categoria (a sigla ao lado do rótulo, ex.: AE, D, AB;",
+  "  NÃO use a caixa ACC nem a tabela de categorias do verso)",
+  "- FILIACAO -> nomeMae e nomePai (duas linhas; a mãe costuma vir por último)",
+  /*
+   * OS TRÊS SEM RÓTULO — descritos por POSIÇÃO, porque na carteira eles não têm nome (30/08).
+   *
+   * O prompt mandava procurar "N FORMULARIO" e "N SEGURANCA". Esses rótulos NÃO EXISTEM no
+   * documento, e o resultado foi o previsível: nos três primeiros cadastros reais, os dois campos
+   * vieram vazios TODAS as vezes. O modelo procurou o que foi pedido, não achou, e devolveu null —
+   * a regra principal segurou, mas a pista estava errada.
+   *
+   * Conferido numa CNH de verdade (modelo atual, CE): o número de segurança é o que aparece na
+   * VERTICAL, na margem esquerda, repetido em cima e embaixo, sem nenhum rótulo. E o formulário e o
+   * Renach ficam no rodapé do verso, sob "ASSINADO DIGITALMENTE".
+   *
+   * O Renach é o único dos três com forma reconhecível — duas letras de UF e dígitos ("CE209619872",
+   * "BA-711866475"). É por isso que ele ganha a instrução mais forte: sem ela, o modelo já devolveu
+   * um CPF no lugar dele, duas vezes, no mesmo documento. Valor plausível e errado é o que a
+   * conferência existe para pegar, mas é melhor não produzi-lo.
+   */
+  "- numeroFormulario: o número impresso na VERTICAL, na margem esquerda, sem rótulo, repetido",
+  "  em cima e embaixo (ex.: 2807348015)",
+  "- numeroSeguranca: no rodapé, sob ASSINADO DIGITALMENTE, o número só de dígitos (ex.: 91262888055)",
+  "- renach: no MESMO rodapé, logo abaixo, o código com DUAS LETRAS de UF e dígitos (ex.: BA711866475)",
+  "  O renach NUNCA tem formato de CPF. Se o que você achou parece 000.000.000-00, ele é o campo",
+  "  4d CPF e não o renach — devolva null no renach.",
 ].join("\n");
 
 /** O formato pedido, listado no texto: modelo aberto costuma respeitar melhor quando vê as chaves. */
