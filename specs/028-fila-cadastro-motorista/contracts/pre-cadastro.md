@@ -28,6 +28,7 @@ JSON infla o corpo em um terço — num 4G de evento isso é a diferença entre 
 | `cpf` | texto | **sim** | só dígitos ou com pontuação — o servidor normaliza. **Dígito verificador é conferido** |
 | `celular` | texto | **sim** | com DDD. 10 ou 11 dígitos |
 | `cep` | texto | **sim** | 8 dígitos, com ou sem hífen |
+| `numero` | texto | **sim** | número da casa, até 15 caracteres. Aceita `S/N`, `120A`, `km 12` |
 | `possuiMopp` | `"sim"` \| `"nao"` | **sim** | |
 | `validadeMopp` | data | se `possuiMopp=sim` | `AAAA-MM-DD` |
 | `possuiToxicologico` | `"sim"` \| `"nao"` | **sim** | |
@@ -35,6 +36,14 @@ JSON infla o corpo em um terço — num 4G de evento isso é a diferença entre 
 | `ciencia` | `"true"` | **sim** | a ciência sobre coleta e uso dos dados. Sem ela o envio é recusado |
 | `cnh` | arquivo | **sim** | JPEG, PNG ou PDF |
 | `comprovante` | arquivo | **sim** | JPEG, PNG ou PDF |
+
+> **Por que o número da casa, se a CNH não pede?** Ele é obrigatório no `setMotorista` da
+> gerenciadora quando o cadastro vai para Pesquisa e Consulta, e não sai de lugar nenhum: não está
+> impresso na CNH e o ViaCEP não devolve. Sem ele o cadastro não pode ser enviado. É o único campo
+> de endereço que precisa ser perguntado — rua, bairro e cidade saem do CEP.
+>
+> **O servidor ainda o aceita como opcional**, para não quebrar quem tiver a versão antiga da
+> página aberta. O formulário deve exigi-lo mesmo assim.
 
 **Nada além disso.** Não peça nascimento, RG, nome da mãe, Renach, categoria ou validade da CNH —
 tudo isso é lido da foto depois. Pedir ao motorista o que está impresso no documento que ele acabou
