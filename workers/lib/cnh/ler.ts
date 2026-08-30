@@ -73,8 +73,31 @@ const CHAVES: ReadonlyArray<keyof CnhLida> = [
   "renach", "categoria", "validade", "primeiraHabilitacao",
 ];
 
+/**
+ * ONDE CADA CAMPO MORA NA CNH — e isto vale 2 campos, medido (2026-08-30).
+ *
+ * Sem estas pistas, o modelo devolvia `cidadeNatal` e `ufNatal` como `null`: ele lê "LOCAL DE
+ * NASCIMENTO" na carteira e recebe um pedido de `cidadeNatal`, e não liga as duas coisas. Medido
+ * na mesma imagem: 16 de 18 sem as pistas, 18 de 18 com elas.
+ *
+ * Repare que ele devolveu NULL, não um palpite — a regra principal segurou mesmo quando o
+ * mapeamento falhou. É a diferença entre "não achei" e "achei errado", e é a diferença que importa.
+ *
+ * Os três campos que vêm COLADOS numa linha só (`DOC IDENTIDADE / ORG EMISSOR / UF`) precisam da
+ * instrução de separar; sem ela sai tudo junto num campo.
+ */
+const ONDE = [
+  "Onde encontrar cada campo na CNH:",
+  "- nome: rótulo NOME",
+  "- nomeMae e nomePai: sob FILIACAO, geralmente duas linhas (a mãe primeiro)",
+  "- rg, orgaoEmissorRg, ufEmissorRg: do campo DOC IDENTIDADE / ORG EMISSOR / UF, que vem junto",
+  "- cidadeNatal e ufNatal: de LOCAL DE NASCIMENTO ou NATURALIDADE, separando cidade e UF",
+  "- numeroRegistro: N REGISTRO · numeroFormulario: N FORMULARIO · numeroSeguranca: N SEGURANCA",
+  "- renach: RENACH · categoria: CAT HAB · validade: VALIDADE · primeiraHabilitacao: 1a HABILITACAO",
+].join("\n");
+
 /** O formato pedido, listado no texto: modelo aberto costuma respeitar melhor quando vê as chaves. */
-const FORMATO = `Campos: ${CHAVES.join(", ")}.`;
+const FORMATO = `${ONDE}\n\nCampos: ${CHAVES.join(", ")}.`;
 
 const TIPOS = ["image/jpeg", "image/png", "application/pdf"];
 
@@ -101,15 +124,49 @@ function interpretar(texto: string): ResultadoDaLeitura {
   return { estado: "lido", campos: analise.data };
 }
 
-/** Groq — API compatível com OpenAI. Só imagem; ver o bloco sobre PDF no topo. */
+/**
+ * PDF VIRA IMAGEM, aqui dentro (2026-08-30, decisão do usuário).
+ *
+ * O Groq não lê PDF — medido, não suposto: responde `invalid image data`. E o formulário pede o PDF
+ * do aplicativo Carteira Digital de Trânsito EM PRIMEIRO LUGAR, porque é o formato que sai perfeito.
+ * Recusar PDF seria não ler justamente o que estamos pedindo.
+ *
+ * Havia duas saídas: mudar o formulário para preferir foto, ou converter aqui. Converter mantém o
+ * documento mais legível como preferência, e o custo é uma dependência.
+ *
+ * `mupdf` é WASM, sem binário nativo — e isso é requisito, não gosto: o worker roda em ARM, e
+ * dependência nativa ali é fonte de dor na instalação.
+ *
+ * 150 DPI: legível para o modelo sem inflar o base64. Medido nesta escala, a leitura de um PDF de
+ * CNH deu 18 de 18.
+ *
+ * SÓ A PRIMEIRA PÁGINA. A CNH-e tem três, e as outras são termo e QR de validação — mandar todas
+ * gastaria o triplo para ler o mesmo.
+ */
+async function pdfParaPng(pdf: Buffer): Promise<Buffer> {
+  const mupdf = await import("mupdf");
+  const doc = mupdf.Document.openDocument(pdf, "application/pdf");
+  if (doc.countPages() < 1) throw new Error("PDF sem páginas");
+  const escala = 150 / 72;
+  const pix = doc
+    .loadPage(0)
+    .toPixmap(mupdf.Matrix.scale(escala, escala), mupdf.ColorSpace.DeviceRGB, false, true);
+  return Buffer.from(pix.asPNG());
+}
+
+/** Groq — API compatível com OpenAI. Só imagem; PDF é convertido antes (ver acima). */
 async function lerNoGroq(binario: Buffer, tipo: string, chave: string): Promise<ResultadoDaLeitura> {
   if (tipo === "application/pdf") {
-    return {
-      estado: "falhou",
-      motivo:
-        "PDF não é suportado por este provedor (só imagem). O formulário pede o PDF do aplicativo " +
-        "em primeiro lugar — este cadastro precisa de conferência à mão, ou de um provedor que leia PDF.",
-    };
+    try {
+      binario = await pdfParaPng(binario);
+      tipo = "image/png";
+    } catch (erro) {
+      // PDF corrompido ou protegido: falha com motivo, e a conferência à mão continua possível.
+      return {
+        estado: "falhou",
+        motivo: `não foi possível converter o PDF em imagem: ${erro instanceof Error ? erro.message : String(erro)}`,
+      };
+    }
   }
   const resposta = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",

@@ -17,6 +17,7 @@
     "drizzle-orm": "^0.45.2",
     "exceljs": "^4.4.0",
     "luxon": "^3.7.2",
+    "mupdf": "^1.28.0",
     "pg-boss": "^12.18.2",
     "postgres": "^3.4.9"
   },
