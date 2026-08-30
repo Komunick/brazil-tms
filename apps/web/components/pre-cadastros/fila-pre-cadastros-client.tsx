@@ -3,7 +3,17 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Archive, FileImage, IdCard, RefreshCw, Send, UserPlus, UserCheck } from "lucide-react";
+import Link from "next/link";
+import {
+  Archive,
+  ClipboardCheck,
+  FileImage,
+  IdCard,
+  RefreshCw,
+  Send,
+  UserPlus,
+  UserCheck,
+} from "lucide-react";
 import { formatDateTime } from "@brazil-tms/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -127,25 +137,6 @@ export function FilaPreCadastrosClient(): React.ReactElement {
       await queryClient.invalidateQueries({ queryKey: ["pre-cadastros"] });
     },
     onError: () => avisar({ tipo: "erro", texto: t("arquivarFalhou") }),
-  });
-
-  /**
-   * O EMPURRÃO — e o aviso diz "pedido", não "enviado".
-   *
-   * A rota devolve 202: o job foi para a fila, a gerenciadora ainda não respondeu. Dizer "enviado"
-   * aqui seria uma tela afirmando um fato que só existirá daqui a alguns segundos — e que pode não
-   * existir, se ainda faltar campo. O desfecho aparece no polling, que é onde ele é verdade.
-   */
-  const enviar = useMutation({
-    mutationFn: async (id: string) => {
-      const res = await fetch(`/api/pre-cadastros/${id}/enviar`, { method: "POST" });
-      if (!res.ok) throw new Error(String(res.status));
-    },
-    onSuccess: async () => {
-      avisar({ tipo: "ok", texto: t("envioPedido") });
-      await queryClient.invalidateQueries({ queryKey: ["pre-cadastros"] });
-    },
-    onError: () => avisar({ tipo: "erro", texto: t("envioFalhou") }),
   });
 
   /**
@@ -359,23 +350,21 @@ export function FilaPreCadastrosClient(): React.ReactElement {
                     </Button>
                   ) : null}
                   {/*
-                    SÓ APARECE ENQUANTO FAZ SENTIDO.
+                    CONFERIR, e não "enviar" — o envio não existe fora da tela de conferência.
 
-                    Quem já foi para a gerenciadora não tem botão — não porque o clique quebraria
-                    algo (a consulta do worker exige `enviado_em IS NULL`), mas porque um botão que
-                    não faz nada ensina que os botões desta tela não fazem nada.
+                    Chegou a existir um botão de enviar aqui, e ele tornava possível mandar um
+                    cadastro para a gerenciadora sem nunca ter olhado o documento. A lista mostra
+                    nome, CPF e selos; ela não mostra o RG que o modelo pode ter lido errado.
+
+                    Quem já foi tem o link mesmo assim: o cadastro vira leitura, e a pessoa ainda
+                    precisa poder ver o que foi mandado.
                   */}
-                  {item.enviadoEm ? null : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={enviar.isPending}
-                      onClick={() => enviar.mutate(item.id)}
-                    >
-                      <Send />
-                      {t("enviar")}
-                    </Button>
-                  )}
+                  <Button asChild variant={item.enviadoEm ? "ghost" : "outline"} size="sm">
+                    <Link href={`/pre-cadastros/${item.id}`}>
+                      <ClipboardCheck />
+                      {item.enviadoEm ? t("ver") : t("conferir")}
+                    </Link>
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"

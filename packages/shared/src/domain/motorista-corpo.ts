@@ -62,6 +62,50 @@ export const MOTIVOS_DE_NAO_CADASTRAR = [
 export type MotivoDeNaoCadastrar = (typeof MOTIVOS_DE_NAO_CADASTRAR)[number];
 
 /**
+ * OS CAMPOS QUE O CADASTRO USA — a lista fechada, e o motivo de ela ser fechada.
+ *
+ * Dois lugares dependem disto e precisam concordar: a tela de conferência, que os desenha, e a rota
+ * que salva o que a pessoa corrigiu. A rota RECUSA chave que não esteja aqui — sem isso, qualquer
+ * requisição feita fora da tela escreveria o que quisesse dentro do `campos` do pré-cadastro, e
+ * ninguém descobriria até alguém abrir o JSON meses depois.
+ *
+ * `cidadeNatal`/`ufNatal` e `cidade`/`uf` não aparecem no corpo do `setMotorista` como texto: elas
+ * viram os dois códigos IBGE. Estão aqui porque é a pessoa que as corrige quando o município não
+ * casa com o catálogo da gerenciadora.
+ */
+export const CAMPOS_DO_CADASTRO = [
+  "nome",
+  "cpf",
+  "dataNascimento",
+  "sexo",
+  "nomeMae",
+  "cidadeNatal",
+  "ufNatal",
+  "rg",
+  "orgaoEmissorRg",
+  "ufEmissorRg",
+  "numeroRegistro",
+  "categoria",
+  "validade",
+  "primeiraHabilitacao",
+  "numeroFormulario",
+  "numeroSeguranca",
+  "renach",
+  "cep",
+  "logradouro",
+  "numero",
+  "complemento",
+  "bairro",
+  "cidade",
+  "uf",
+  "celular",
+  "possuiMopp",
+  "validadeMopp",
+] as const;
+
+export type CampoDoCadastro = (typeof CAMPOS_DO_CADASTRO)[number];
+
+/**
  * O que o job junta antes de montar: os campos consolidados mais o que só o banco sabe.
  *
  * Os dois CÓDIGOS IBGE não vêm da foto nem do CEP diretamente — são resolvidos contra o catálogo de

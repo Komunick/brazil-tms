@@ -4,6 +4,7 @@ import {
   BILLING_PHASE_STATUSES,
   EXCEPTION_SEVERITIES,
   MOTIVOS_DE_NAO_CADASTRAR,
+  ORIGENS,
   REASON_CODE_CATEGORIES,
   STANDARD_IMPORT_TEMPLATE,
 } from "@brazil-tms/shared";
@@ -279,10 +280,17 @@ describe("pt-BR messages", () => {
     }
   });
 
-  it("PreCadastros has the send-button strings the queue looks up", () => {
+  it("PreCadastros has the review-screen strings (the only path to the gerenciadora)", () => {
     const p = (messages as { PreCadastros: Record<string, unknown> }).PreCadastros;
     for (const k of [
-      "enviar",
+      "conferir",
+      "ver",
+      "conferirTitulo",
+      "voltarAFila",
+      "salvar",
+      "salvo",
+      "nadaFalta",
+      "enviarParaGerenciadora",
       "enviado",
       "enviadoEm",
       "envioPedido",
@@ -292,6 +300,59 @@ describe("pt-BR messages", () => {
     ]) {
       expect(typeof p[k], `PreCadastros.${k}`).toBe("string");
       expect(p[k]).not.toBe("");
+    }
+    /**
+     * INVERTIDO em 30/08: a lista TINHA um botão de enviar, e ele permitia mandar um cadastro à
+     * gerenciadora sem nunca ter olhado o documento. O envio agora só existe na conferência, e esta
+     * asserção é o que impede a chave de voltar sozinha num "conserto" de string órfã.
+     */
+    expect(p.enviar).toBeUndefined();
+  });
+
+  /**
+   * Todo campo que a conferência edita precisa de rótulo: o componente cai no nome cru da chave, e
+   * `numeroSeguranca` acima de um campo de texto não diz a ninguém o que procurar na CNH.
+   */
+  it("PreCadastros.campo covers every field the review screen edits", () => {
+    const p = (
+      messages as { PreCadastros: { campo: Record<string, string>; origem: Record<string, string> } }
+    ).PreCadastros;
+    for (const c of [
+      "nome",
+      "cpf",
+      "dataNascimento",
+      "sexo",
+      "nomeMae",
+      "cidadeNatal",
+      "ufNatal",
+      "rg",
+      "orgaoEmissorRg",
+      "ufEmissorRg",
+      "numeroRegistro",
+      "categoria",
+      "validade",
+      "primeiraHabilitacao",
+      "numeroFormulario",
+      "numeroSeguranca",
+      "renach",
+      "cep",
+      "logradouro",
+      "numero",
+      "complemento",
+      "bairro",
+      "cidade",
+      "uf",
+      "celular",
+      "possuiMopp",
+      "validadeMopp",
+    ]) {
+      expect(typeof p.campo[c], `PreCadastros.campo.${c}`).toBe("string");
+      expect(p.campo[c]).not.toBe("");
+    }
+    // E as cinco procedências — o selo ao lado do campo é o que torna a conferência rápida.
+    for (const o of ORIGENS) {
+      expect(typeof p.origem[o], `PreCadastros.origem.${o}`).toBe("string");
+      expect(p.origem[o]).not.toBe("");
     }
   });
 });

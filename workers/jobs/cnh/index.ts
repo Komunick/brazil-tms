@@ -6,11 +6,10 @@ import {
   quantosLidos,
   type CamposDoPreCadastro,
   type CnhLerPayload,
-  type MotoristaCadastrarPayload,
 } from "@brazil-tms/shared";
 import { documentoParaLeitura, gravarLeituraDaCnh } from "@brazil-tms/db";
 import { documentsBucket, downloadObject } from "@brazil-tms/db/storage";
-import { JOB, enqueue, work } from "../../lib/queue";
+import { JOB, work } from "../../lib/queue";
 import { lerCnh } from "../../lib/cnh/ler";
 
 /**
@@ -100,37 +99,18 @@ export async function registerCnhLer(boss: PgBoss): Promise<void> {
     });
 
     /**
-     * E DAQUI SAI PARA A GERENCIADORA — o que fecha a corrente do dia 10/09.
+     * E PARA AQUI — a leitura NÃO envia (decisão do usuário, 30/08).
      *
-     * O motorista preenche no celular, a CNH é lida, e o cadastro segue. Sem este enfileiramento o
-     * job de envio existe e nunca roda: alguém teria de abrir a fila e apertar cinquenta botões,
-     * que é exatamente o trabalho que a fatia existe para não haver.
+     * Cheguei a ligar o envio no fim desta função: a leitura terminava e o cadastro seguia sozinho
+     * para a gerenciadora. Funcionava, e estava errado pelo motivo escrito no alto deste arquivo —
+     * uma leitura COMPLETA e ERRADA, um dígito trocado num RG, é plausível o bastante para passar
+     * por todos os motivos de bloqueio e criar uma pessoa errada sem ninguém ver.
      *
-     * ── ENFILEIRA SEMPRE QUE LEU, mesmo com o CPF divergindo ──────────────────────────────────
+     * "Campo não lido fica vazio e assinalado" protege contra o que o modelo NÃO leu. Nada protege
+     * contra o que ele leu errado com confiança, a não ser alguém olhando o documento ao lado.
      *
-     * Não é descuido. O portão é o job, e ele recusa a divergência como recusa qualquer campo que
-     * falte. Conferir aqui ANTES de enfileirar duplicaria a regra em dois lugares, e a cópia daqui
-     * envelheceria sem ninguém notar — o job continuaria certo e o gatilho, errado.
-     *
-     * ── E ISSO SIGNIFICA QUE NINGUÉM OLHA ANTES ───────────────────────────────────────────────
-     *
-     * Uma leitura COMPLETA e ERRADA — um dígito trocado num RG, plausível o bastante para passar
-     * pelos motivos — cria uma pessoa errada na gerenciadora sem passar por olho humano. É o risco
-     * assumido em troca de um evento sem ninguém do escritório presente, e é reversível pela tela
-     * deles, não daqui.
-     *
-     * ── FALHAR AQUI NÃO PODE PERDER A LEITURA ─────────────────────────────────────────────────
-     *
-     * A gravação já aconteceu. Se o pg-boss estiver fora do ar, estourar agora faria o job repetir
-     * e RELER a foto — gastando de novo para chegar ao mesmo texto. O envio se recupera sozinho: o
-     * botão da fila enfileira o mesmo job.
+     * Então o caminho até a gerenciadora passa obrigatoriamente pela tela de conferência, e passa
+     * por ESTRUTURA e não por disciplina: não existe outro gatilho para o job de envio.
      */
-    try {
-      await enqueue(boss, JOB.motoristaCadastrar, {
-        preRegistrationId: alvo.preregistrationId,
-      } satisfies MotoristaCadastrarPayload);
-    } catch (erro) {
-      console.error("[cnh.ler] não foi possível enfileirar o envio do cadastro", erro);
-    }
   });
 }
