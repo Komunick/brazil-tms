@@ -88,12 +88,24 @@ export const preCadastroSchema = z
     bairro: z.string().trim().max(100, "Bairro longo demais.").optional(),
     cidade: z.string().trim().max(100, "Cidade longa demais.").optional(),
     /** Sigla de duas letras. Vira maiúscula aqui para não depender de como foi digitada. */
+    /**
+     * VAZIO É AUSÊNCIA, e não um valor inválido (2026-08-30, achado em produção).
+     *
+     * `.optional()` do Zod só pula `undefined`. Uma string vazia CAI na regra de duas letras,
+     * falha, e derruba o envio inteiro — com `sem_ciencia_de_erro`, que não explica nada.
+     *
+     * E o formulário manda vazio com facilidade: quando o CEP não resolve, os campos ficam em
+     * branco (o do primeiro cadastro real recebido, `40390-294`, o ViaCEP não conhece). Um `<input>`
+     * vazio vira `""` no `FormData`, nunca `undefined`.
+     *
+     * Ou seja: bastava alguém com CEP desconhecido para perder o cadastro. O `transform` para
+     * `undefined` é o que separa "não informou" de "informou errado" — e só o segundo deve recusar.
+     */
     uf: z
       .string()
       .trim()
-      .transform((s) => s.toUpperCase())
-      .pipe(z.string().regex(/^[A-Z]{2}$/, "UF deve ter 2 letras."))
-      .optional(),
+      .transform((s) => (s === "" ? undefined : s.toUpperCase()))
+      .pipe(z.string().regex(/^[A-Z]{2}$/, "UF deve ter 2 letras.").optional()),
     possuiMopp: simNao,
     validadeMopp: dateStringSchema.optional(),
     /**
