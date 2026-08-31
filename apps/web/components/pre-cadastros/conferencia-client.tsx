@@ -170,6 +170,20 @@ export function ConferenciaClient({ id }: { id: string }): React.ReactElement {
             codIbgeNatal: 1,
             codIbgeResidencia: 1,
             cpfDivergente: Boolean(item.leituraCnh?.cpfDivergente),
+            /**
+             * OS ANEXOS: aqui a tela SABE, ao contrário do IBGE.
+             *
+             * Ela não tem o conteúdo em Base64 — quem baixa é o worker —, mas tem os ids, e é
+             * disso que depende o bloqueio: faltar arquivo é faltar id. Um marcador de um byte
+             * por documento presente diz "existe" sem fingir tamanho, e o teto continua sendo
+             * conferido lá, sobre os bytes de verdade.
+             *
+             * Diferente do IBGE justamente por isso: lá a tela fingiria saber algo que só o
+             * catálogo da gerenciadora responde; aqui ela responde com o que tem na mão.
+             */
+            documentos: [item.documentoCnhId, item.documentoComprovanteId]
+              .filter(Boolean)
+              .map((_, i) => ({ Descricao: String(i), Extensao: "PDF", Documento: "." })),
           })
         : [],
     [item, camposAtuais],
