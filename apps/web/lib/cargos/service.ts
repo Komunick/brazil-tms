@@ -3,6 +3,8 @@ import { z } from "zod";
 import {
   ALL_PERMISSIONS,
   motivosParaRecusar,
+  ROLE_PERMISSIONS,
+  type Role,
   type MotivoDeRecusaDeCargo,
   type PermissionKey,
 } from "@brazil-tms/shared";
@@ -139,4 +141,37 @@ export async function moverPessoa(ctx: AuthContext, userId: string, cargoId: str
 /** Quantos administram hoje — a tela mostra antes de deixar mexer no último. */
 export async function quantosAdministramHoje(): Promise<number> {
   return quantosAindaAdministram(db as never);
+}
+
+/**
+ * O CARGO EQUIVALENTE A UM PAPEL — a ponte enquanto a tela de usuários ainda pergunta o papel.
+ *
+ * Ninguém pode nascer sem cargo (FR-011): `users.cargo_id` é NULO no banco de propósito — o app
+ * anterior precisava criar usuário durante o deploy sem saber preencher a coluna —, e até o
+ * `NOT NULL` de uma fatia futura quem sustenta o invariante é a APLICAÇÃO.
+ *
+ * ── COMPARA CONJUNTOS, E NÃO NOMES ────────────────────────────────────────────────────────────
+ *
+ * Os cargos semeados são renomeáveis (FR-016). Procurar "Despachante" pelo nome quebraria no dia em
+ * que alguém o chamasse de "Programação" — e quebraria em silêncio, com gente nascendo sem cargo.
+ *
+ * A ponte é o CONJUNTO de capacidades: o cargo cujo conjunto é exatamente o do papel.
+ *
+ * ── E QUANDO NÃO BATE, RECUSA — não escolhe um parecido ───────────────────────────────────────
+ *
+ * Isso acontece assim que alguém editar um cargo semeado, e é esperado. Pôr a pessoa num cargo
+ * "próximo" concederia acesso que ninguém pediu, em silêncio, na criação de um usuário — que é o
+ * momento em que menos se confere. A recusa diz o que fazer: escolher o cargo.
+ */
+export async function cargoParaPapel(papel: Role): Promise<string> {
+  const doPapel = ROLE_PERMISSIONS[papel];
+  const cargos = await listarCargos();
+  const igual = cargos.find(
+    (c) =>
+      c.ativo &&
+      c.permissoes.length === doPapel.size &&
+      c.permissoes.every((p) => doPapel.has(p as PermissionKey)),
+  );
+  if (!igual) throw new RecusaDeCargo(["PERMISSAO_DESCONHECIDA"]);
+  return igual.id;
 }
