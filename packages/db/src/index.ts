@@ -365,3 +365,4 @@ export * from "./cargos/cargos-write";
 export * from "./cargos/ainda-tem-admin";
 // Fatia 029 — o descarte da foto de perfil aos 90 dias.
 export * from "./perfil/fotos-vencidas";
+export * from "./cargos/selos";
