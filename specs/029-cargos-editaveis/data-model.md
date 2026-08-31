@@ -85,15 +85,18 @@ research §6 detalha.
 
 ## A semeadura, na mesma migração
 
-1. Cria **8 cargos** com os nomes dos papéis de hoje.
+1. Cria **7 cargos** com os nomes dos **papéis atribuíveis** de hoje.
+   **Sete, e não oito.** O enum `app_role` tem 8 valores, mas `ROLE_PERMISSIONS` é `Record<Role, …>` e
+   `Role` tem 7: `customer_viewer` está no banco e **não está no catálogo**. Semear 8 a partir dele não
+   teria de onde tirar o oitavo — e criá-lo à mão violaria o FR-017.
 2. Preenche `cargo_permissoes` a partir de `ROLE_PERMISSIONS` — escrito literalmente no SQL, não
    gerado em tempo de execução: a migração precisa ser lida e conferida.
 3. `update users set cargo_id = (o cargo do seu role)`.
 
-Depois: `scripts/029-conferir-acesso.ts` compara pessoa a pessoa e precisa dizer **34 de 34
+Depois: `packages/db/seed/029-conferir-acesso.ts` compara pessoa a pessoa e precisa dizer **34 de 34
 idênticos** antes de qualquer código novo subir.
 
-Os 8 cargos semeados são **ponto de partida, não estrutura** (FR-016): renomeáveis e editáveis como
+Os 7 cargos semeados são **ponto de partida, não estrutura** (FR-016): renomeáveis e editáveis como
 qualquer outro. Quatro deles (`control_tower`, `fleet_coordinator`, `finance`, `executive_viewer`)
 nascem sem ninguém dentro, e isso está certo — são o vocabulário existente, e apagá-los seria decidir
 pelo admin.
@@ -128,7 +131,7 @@ dia — e é justamente essa a pergunta que se faz depois de um incidente.
 | # | invariante | onde é garantida |
 |---|---|---|
 | I1 | sempre existe ≥1 pessoa ativa com `manage_users` | `ainda-tem-admin.ts`, dentro da transação, depois da escrita (research §3) |
-| I2 | ninguém fica sem cargo | rota recusa apagar cargo com gente dentro sem destino; `NOT NULL` numa fatia futura |
+| I2 | ninguém fica sem cargo | **a APLICAÇÃO sustenta**: criar usuário exige cargo (T035b) e apagar cargo com gente dentro exige destino (T034). A coluna é NULL de propósito (research §5); o `NOT NULL` só entra numa fatia futura, com o app novo já no ar — até lá o banco NÃO garante isto, e é honesto dizer |
 | I3 | selo nunca concede permissão | não existe caminho de `usuario_selos` a `cargo_permissoes` |
 | I4 | ninguém amplia o próprio acesso | quem edita só concede o que ele mesmo alcança (FR-012) |
 | I5 | cargo sem cargo_id ⇒ conjunto vazio | `loadSession`, sem fallback (research §1) |

@@ -49,7 +49,7 @@ Duas respostas não nulas, ou a migração não subiu.
 **Este é o passo que não pode ser pulado.** Leitura pura, nada muda:
 
 ```bash
-pnpm tsx scripts/029-conferir-acesso.ts
+pnpm --filter @brazil-tms/db db:conferir-acesso
 ```
 
 Saída esperada:
@@ -57,6 +57,20 @@ Saída esperada:
 ```
 34 pessoas · 34 idênticas · 0 divergentes
 ```
+
+**E confira a conta mestre pelo nome** (FR-017a). Ela é a que precisa continuar alcançando tudo, e um
+relatório de 34 linhas idênticas esconde bem uma linha específica:
+
+```sql
+select u.email, c.nome as cargo, count(cp.permissao) as capacidades
+  from users u
+  join cargos c on c.id = u.cargo_id
+  left join cargo_permissoes cp on cp.cargo_id = c.id
+ where u.email = 'victorti@braziltransports.com.br'
+ group by 1, 2;
+```
+
+Esperado: o cargo semeado a partir de `admin`, com **23 capacidades** — o catálogo inteiro.
 
 Qualquer número diferente de zero significa que a semeadura está errada — e **nada precisa ser
 desfeito**, porque o app novo ainda não subiu e `users.role` continua sendo quem manda. Conserte a
@@ -136,3 +150,10 @@ produção.
   produção.
 - **Não** esquecer a entrada no `meta/_journal.json`. Sem ela a migração é pulada e o deploy diz
   sucesso.
+- **Não** alargar `RESOURCE_DOCUMENT_ENTITY_TYPES` junto com o CHECK da coluna. O CHECK passa a
+  aceitar `user`; a PORTA das rotas de frota continua `driver|vehicle`. Alargar as duas faria a rota
+  de frota procurar o pai em `drivers`/`vehicles` e não achar — o comentário no schema avisa.
+- **Não** espalhar a trava do último admin pelas quatro rotas. Uma função, um ponto de chamada,
+  **dentro da transação e depois da escrita** — verificar antes perde a corrida de duas abas.
+- **Não** semear oito cargos. São **sete**: `customer_viewer` está no enum do banco e não está em
+  `ROLE_PERMISSIONS`, e criá-lo violaria o FR-017.

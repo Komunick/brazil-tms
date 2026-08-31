@@ -147,7 +147,11 @@ de produção consegue muito pior.
 
 ## R4 — Como PROVAR que ninguém perde acesso
 
-### Decisão: `scripts/029-conferir-acesso.ts`, leitura pura
+### Decisão: `packages/db/seed/029-conferir-acesso.ts`, leitura pura
+
+Em `seed/`, e não numa pasta `scripts/` nova: é onde este repositório já guarda script operacional
+rodado por `tsx` (`db:seed:*` no `package.json`). Uma pasta nova para um arquivo seria inventar
+convenção ao lado de uma que funciona.
 
 Para cada uma das 34 pessoas, monta dois conjuntos e compara:
 

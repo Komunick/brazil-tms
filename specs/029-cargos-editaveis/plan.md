@@ -7,6 +7,10 @@
 O acesso ao TMS deixa de ser um catálogo em código e passa a ser dado editável. O que **não** muda é
 quem decide: a autorização continua sendo resolvida no BFF, nos mesmos pontos de hoje.
 
+**Para que isto serve, além de hoje** (usuário, 31/08): vão entrar sistemas de outros setores no TMS,
+e o cargo editável é o que vai separar quem pode ver de quem pode mexer, sem deploy. Os 20
+administradores atuais são o sintoma; a fatia é o alicerce.
+
 A descoberta que define o desenho: **`requirePermission(ctx, chave)` já é um ponto de estrangulamento
 único**. Dos 231 usos de permissão no `apps/web`, **169 passam por ele** e 62 chamam `can(papel, chave)`
 direto, quase todos em `page.tsx` para decidir o que a tela mostra. E `loadSession` **lê a linha do
@@ -40,16 +44,18 @@ autorização que a spec proíbe (FR-005).
 
 **Constraints**: migração à mão, aditiva, aplicada com o app ANTERIOR no ar (o `deploy.sh` não migra)
 
-**Scale/Scope**: 34 usuários, 8 cargos semeados, 23 permissões, 30 itens de menu, 231 pontos de
+**Scale/Scope**: 34 usuários, 7 cargos semeados, 23 permissões, 30 itens de menu, 231 pontos de
 verificação
 
 ## Constitution Check
 
 *GATE antes da Fase 0, reavaliado depois da Fase 1.*
 
-- [x] **Simplicity (I)**: nenhum pacote novo, nenhum serviço novo. Duas tabelas e uma coluna. A
-  tabela de ligação `cargo_permissoes` é a resposta relacional simples, e é ela que responde em SQL
-  a pergunta da trava do último admin (ver research §2). Nenhuma abstração nova sem 3 repetições.
+- [x] **Simplicity (I)**: nenhum pacote novo, nenhum serviço novo. **Quatro tabelas e duas colunas** —
+  e as quatro se justificam separadamente: `cargos` + `cargo_permissoes` são o par mínimo que responde
+  em SQL a pergunta da trava do último admin (research §2); `selos` + `usuario_selos` são uma HISTÓRIA
+  inteira à parte (US3, P3) e podem ser cortadas sem tocar nas outras duas. Não é abstração
+  antecipada — é escopo pedido. Nenhuma abstração nova sem 3 repetições.
 - [x] **Scope (II)**: dentro do escopo — §18 do PRD (permissões) é requisito de MVP, e esta fatia o
   torna operável. Nada dependente da §29 é marcado como pronto.
 - [x] **System-of-record (III)**: Postgres é dono do cargo. Nada é apagado de verdade: cargo se
@@ -116,7 +122,7 @@ apps/web/
 workers/jobs/perfil/
 └── limpar-fotos.ts                            ← descarte aos 90 dias
 
-scripts/
+packages/db/seed/
 └── 029-conferir-acesso.ts                     ← a prova de FR-015, leitura pura
 ```
 
@@ -127,15 +133,15 @@ Cada uma é entregável e verificável sozinha. As três primeiras não mudam na
 ### 1. As tabelas e a semeadura (bloqueia tudo)
 
 Migração `0060` **aditiva**: cria `cargos`, `cargo_permissoes`, `selos`, `usuario_selos`; acrescenta
-`users.cargo_id` (NULO por enquanto) e `users.desativado_em`; **semeia os 8 cargos a partir de
-`ROLE_PERMISSIONS`** e aponta cada uma das 34 pessoas para o seu.
+`users.cargo_id` (NULO por enquanto) e `users.desativado_em`; **semeia os 7 cargos a partir de
+`ROLE_PERMISSIONS`** (sete, e não oito: `customer_viewer` está no enum do banco e não no catálogo) e aponta cada uma das 34 pessoas para o seu.
 
 `users.role` **NÃO é removido**, e o enum `app_role` **NÃO é tocado**. Ver research §5: a migração
 roda com o app ANTERIOR no ar, e ele lê `role`.
 
 ### 2. A prova de que ninguém perde acesso
 
-`scripts/029-conferir-acesso.ts`, leitura pura contra produção. Para cada pessoa, compara o conjunto
+`packages/db/seed/029-conferir-acesso.ts`, leitura pura contra produção. Para cada pessoa, compara o conjunto
 vindo de `ROLE_PERMISSIONS[role]` com o vindo das tabelas novas. **Roda antes de qualquer código
 novo subir**, e a saída esperada é "34 de 34 idênticos". É o critério SC-003, executável.
 

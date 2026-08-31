@@ -51,3 +51,41 @@ O texto separa o que é medição do que é requisito.
 cargos depois de a ferramenta existir. Ficou como critério assim mesmo porque é o desfecho que dá sentido à
 fatia — entregar a ferramenta e continuar com 20 administradores seria ter falhado, ainda que todo requisito
 passasse.
+
+---
+
+## Rodada de `/speckit-analyze` — 31/08
+
+Oito achados, todos corrigidos antes de qualquer código. Os três que valiam a rodada:
+
+**F1 (CRITICAL) — "8 cargos semeados" era impossível.** `ROLE_PERMISSIONS` é `Record<Role, …>` e
+`Role` tem **7** valores; `customer_viewer` está no enum do banco (8 valores) e **não está no
+catálogo**. Semear 8 a partir dele não teria de onde tirar o oitavo, e criá-lo à mão violaria o
+FR-017 — que o próprio `data-model.md` afirmava três parágrafos adiante. Corrigido para **7** nos
+cinco lugares. Teria virado uma migração de produção, escrita à mão, semeando o acesso de 34 pessoas.
+
+**F2 (HIGH) — a metade SERVIDOR do FR-006 não tinha task.** As tarefas cobriam esconder o item no
+menu e conferir que ele encolhe; nada cobria *"o servidor MUST recusar o acesso direto ao endereço"*,
+que é o cenário 2 da US1 e a parte que o requisito chama de "esconder no menu nunca é a única
+defesa". Virou a T035a.
+
+**F3 (HIGH) — usuário NOVO podia nascer sem cargo.** `cargo_id` é NULL de propósito (research §5,
+por causa do app anterior), e a única tarefa de FR-011 tratava de apagar cargo. A criação de usuário
+não aparecia em lugar nenhum — FR-011 seria falso para todo cadastro feito depois da virada. Virou a
+T035b, e o invariante I2 do `data-model.md` passou a dizer honestamente que **é a aplicação que o
+sustenta**, não o banco, até o `NOT NULL` de uma fatia futura.
+
+Os outros cinco: caminho do script divergente em quatro artefatos (F4), auditoria de selo prevista e
+sem tarefa (F5), duas armadilhas ausentes do quickstart (F6), "admin" usado onde se queria
+`manage_users` — que é justamente a distinção que esta fatia cria (F7), e FR-016 sem afirmação (F8).
+
+### Dois fatos acrescentados pelo usuário na mesma rodada
+
+**O motivo que olha para a frente**: vão entrar sistemas de outros setores no TMS. Os 20
+administradores são o sintoma de hoje; o alicerce é o que precisa aguentar um setor que ainda não
+existe. Está em `spec.md` e `plan.md`, porque muda o critério de "pronto".
+
+**A conta mestre** `victorti@braziltransports.com.br` (conferida em produção: `admin`, ativa) →
+FR-017a e T013a. **Conferência, não regra**: o endereço não entra no código de autorização, porque
+seria um segundo caminho de decisão e uma conta privilegiada por e-mail escrito em código sobrevive a
+quem saiu da empresa.

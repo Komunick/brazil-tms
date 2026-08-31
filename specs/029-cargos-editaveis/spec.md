@@ -27,6 +27,18 @@ Não é desleixo de cadastro: é o modelo de papéis fixos falhando em uso. Quan
 
 O catálogo tem 7 papéis atribuíveis e 23 permissões. Quem precisa de uma combinação que não existe no catálogo não tem para onde ir, porque o catálogo é código: mudar exige deploy. É essa porta que esta fatia abre.
 
+### E o motivo que olha para a frente (usuário, 31/08)
+
+Os 20 admins são o sintoma de hoje. A razão que dá peso à fatia é outra, e foi dita assim: **vão
+entrar sistemas de OUTROS SETORES no TMS**, e com cargo editável *"vai ficar fácil separar quem pode
+ver e o que pode mexer"*.
+
+Isso muda o critério de "pronto". Não basta desfazer os 20 administradores de hoje — o desenho
+precisa aguentar um setor que ainda não existe, cadastrado por quem não sabe programar, sem deploy e
+sem tocar em nenhum dos 231 pontos de verificação. É por isso que o cargo escolhe **capacidades** e
+não páginas (decisão 1): um setor novo traz telas novas, e telas novas trazem capacidades novas — que
+aparecem sozinhas na tela de cargos, porque o catálogo é derivado e há um teste que o cobra.
+
 **Esta spec supera o FR-008 da fatia 001** ("no DB permissions table"). Aquela decisão era de feature, não da constituição: o princípio IV exige que o **BFF** seja a única autoridade de autorização, e continua sendo — o que muda é de onde ele lê o conjunto de permissões, não quem decide.
 
 ---
@@ -52,7 +64,11 @@ O admin abre a tela de cargos, cria "Despachante", e marca as áreas que esse ca
 
 ### User Story 2 - O mini perfil, aberto pelo nome (Priority: P2)
 
-Onde aparece o nome de uma pessoa, ele é clicável. O clique abre um cartão pequeno: foto, nome, cargo e selos. Cada um troca a própria foto; o admin troca a de qualquer um.
+Onde aparece o nome de uma pessoa, ele é clicável. O clique abre um cartão pequeno: foto, nome, cargo e selos. Cada um troca a própria foto; **quem administra usuários** troca a de qualquer um.
+
+("Administrador" aqui é *quem alcança administrar usuários*, e não o papel `admin`. Hoje os dois são
+a mesma coisa; **é esta fatia que os separa** — depois dela, um cargo pode administrar usuários sem
+se chamar admin, e é esse o ponto.)
 
 **Why this priority**: resolve "quem é essa pessoa e o que ela pode?" sem abrir a administração de usuários — mas não muda o que ninguém consegue fazer. Entrega valor sozinha, depois da US1.
 
@@ -63,7 +79,7 @@ Onde aparece o nome de uma pessoa, ele é clicável. O clique abre um cartão pe
 1. **Given** uma lista com nomes de usuários, **When** alguém clica num nome, **Then** abre o cartão com foto, nome, cargo e selos daquela pessoa.
 2. **Given** o próprio perfil aberto, **When** a pessoa envia uma foto dentro do formato e do tamanho aceitos, **Then** a foto passa a aparecer no cartão e nas listas.
 3. **Given** uma pessoa sem foto, **When** o cartão abre, **Then** aparecem as iniciais dela, e não um espaço vazio nem um ícone genérico igual para todos.
-4. **Given** alguém que não é admin, **When** abre o perfil de outra pessoa, **Then** vê os dados e **não** consegue trocar a foto nem o cargo.
+4. **Given** alguém que não administra usuários, **When** abre o perfil de outra pessoa, **Then** vê os dados e **não** consegue trocar a foto nem o cargo.
 
 ---
 
@@ -126,6 +142,8 @@ O admin cria selos com nome e cor — "Beta tester", "Líder", "Supervisor" — 
 - **FR-015**: Nenhuma pessoa MUST perder acesso no momento da virada. Verificável antes: para cada pessoa, o conjunto de capacidades depois é idêntico ao de antes.
 - **FR-016**: Os cargos semeados MUST poder ser editados e renomeados como qualquer outro — eles são ponto de partida, não estrutura fixa.
 - **FR-017**: O valor reservado que não é papel atribuível (`customer_viewer`, FR-007 da fatia 001) MUST continuar não sendo oferecido como cargo.
+- **FR-017a**: A conta mestre `victorti@braziltransports.com.br` (confirmada em produção em 31/08: `admin`, ativa) MUST terminar a virada com **todas as 23 capacidades**, e a conferência do FR-015 MUST nomeá-la explicitamente em vez de deixá-la se perder entre as 34.
+  **Isto é um fato a conferir, e NÃO uma regra no código.** Gravar esse endereço numa verificação de autorização criaria um segundo caminho de decisão — exatamente o que o FR-005 proíbe —, e uma conta privilegiada por e-mail escrito em código é o tipo de coisa que sobrevive à pessoa que saiu da empresa. Quem protege a organização de ficar sem administrador é o FR-010, que vale para qualquer pessoa.
 
 #### O perfil
 

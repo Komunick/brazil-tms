@@ -61,7 +61,7 @@ A fase 3 é a mais arriscada **e a que menos muda**. Se ela não for invisível,
 
 - [ ] T004 Escrever À MÃO `packages/db/migrations/0060_cargos_e_perfil.sql`: cria as quatro tabelas, PK composta em `cargo_permissoes(cargo_id, permissao)`, índice em `cargo_permissoes(permissao)`, acrescenta `users.cargo_id` (NULL) e `users.desativado_em`
 - [ ] T005 Na MESMA migração, alargar `resource_documents_entity_type_ck` para aceitar `'user'` — **a COLUNA, não a porta** (T029 trata da porta)
-- [ ] T006 Na MESMA migração, semear os **8 cargos** com os nomes dos papéis de hoje e preencher `cargo_permissoes` a partir de `ROLE_PERMISSIONS`, **escrito literalmente no SQL** (não gerado em execução: a migração precisa ser lida e conferida por uma pessoa)
+- [ ] T006 Na MESMA migração, semear os **7 cargos** com os nomes dos **papéis atribuíveis** e preencher `cargo_permissoes` a partir de `ROLE_PERMISSIONS`, **escrito literalmente no SQL** (não gerado em execução: a migração precisa ser lida e conferida por uma pessoa). **Sete, e não oito**: o enum `app_role` tem 8 valores, mas `ROLE_PERMISSIONS` só tem 7 — `customer_viewer` não está no catálogo, e criá-lo à mão violaria o FR-017
 - [ ] T007 Na MESMA migração, `update users set cargo_id = <o cargo do seu role>` para as 34 pessoas
 - [ ] T008 **Acrescentar a entrada da `0060` em `packages/db/migrations/meta/_journal.json`** — sem ela a migração é pulada e o deploy responde sucesso (aconteceu duas vezes)
 - [ ] T009 Rodar `npx vitest run migrations-journal` e confirmar verde — é o teste que cobra T008 nos dois sentidos
@@ -79,6 +79,7 @@ qualquer código novo subir.
 - [ ] T011 Criar `packages/db/seed/029-conferir-acesso.ts` (convenção do repositório: scripts operacionais vivem em `seed/`, rodados por `tsx`): para cada pessoa, monta o conjunto **antes** (`ROLE_PERMISSIONS[users.role]`) e o **depois** (`users.cargo_id → cargo_permissoes`), e imprime uma linha por divergência
 - [ ] T012 Registrar `"db:conferir-acesso": "tsx ./seed/029-conferir-acesso.ts"` em `packages/db/package.json`
 - [ ] T013 Rodar contra **produção em leitura** e exigir a saída `34 pessoas · 34 idênticas · 0 divergentes`. Divergência ⇒ a semeadura está errada, e **nada precisa ser desfeito**: o app novo ainda não subiu e `users.role` ainda manda
+- [ ] T013a **Conferir a conta mestre pelo nome** (FR-017a): `victorti@braziltransports.com.br` tem de cair no cargo semeado de `admin`, com as **23** capacidades. O relatório de 34 linhas idênticas esconde bem uma linha específica, e esta é a que abre a porta para consertar as outras. O e-mail NÃO entra no código de autorização — é conferência, não regra (ver FR-017a)
 
 **Ponto de parada**: a virada está provada e ainda não aconteceu.
 
@@ -119,7 +120,7 @@ pessoa passa a ver exatamente isso — sem deploy nenhum.
 
 - [ ] T024 [P] [US1] Criar `packages/shared/src/auth/cargo-invariantes.ts` com a função **pura** que decide se um estado é admissível, no espírito do `pre-sm-corpo.ts` da 027, devolvendo **todos** os motivos e não o primeiro
 - [ ] T025 [US1] Criar `packages/db/src/cargos/ainda-tem-admin.ts`: a consulta `count(*)` de pessoas **ativas** cujo cargo alcança `manage_users`, chamada **dentro da transação e DEPOIS da escrita**. Verificar antes perde a corrida de duas abas rebaixando um administrador cada (research §3)
-- [ ] T026 [US1] Escrever `packages/shared/src/auth/cargo-invariantes.test.ts` cobrindo os **quatro** caminhos do FR-010: desativar o cargo, tirar a permissão, mover a última pessoa, desativá-la
+- [ ] T026 [US1] Escrever `packages/shared/src/auth/cargo-invariantes.test.ts` cobrindo os **quatro** caminhos do FR-010: desativar o cargo, tirar a permissão, mover a última pessoa, desativá-la. Um caso a mais afirma que um cargo SEMEADO é editável e renomeável como qualquer outro (FR-016) — eles são ponto de partida, não estrutura
 
 ### Dados e rotas
 
@@ -135,6 +136,8 @@ pessoa passa a ver exatamente isso — sem deploy nenhum.
 - [ ] T033 [US1] Avisar, antes de salvar, quando um cargo fica **sem nada marcado** — é permitido (todo cargo nasce assim) e parece defeito
 - [ ] T034 [US1] Apagar cargo com gente dentro **exige destino** (`moverPara`); sem destino, recusa
 - [ ] T035 [US1] Acrescentar o item "Cargos" ao `nav.ts`, grupo `sistema`, permissão `manage_users`
+- [ ] T035a [US1] **A metade SERVIDOR do FR-006**: escrever teste de rota afirmando que abrir o ENDEREÇO de uma página fora do cargo devolve 403, com o menu já a escondendo. Esconder no menu nunca é a única defesa, e é o cenário 2 da US1 (*"inclusive se digitar o endereço direto"*) — sem este teste, a única prova é o menu encolher, que não prova nada sobre quem digita a URL
+- [ ] T035b [US1] **Usuário NOVO nasce com cargo** (FR-011): a criação de usuário passa a exigir `cargoId`, recusado no servidor. `cargo_id` é NULL na coluna de propósito (research §5, por causa do app anterior), então é a aplicação que sustenta o invariante I2 até o `NOT NULL` de uma fatia futura — sem isto, FR-011 é falso para todo cadastro feito a partir de agora
 - [ ] T036 [US1] Conferir a mão pelo `quickstart.md` §4 e §5: mover alguém de cargo e ver o menu encolher **sem sair e entrar**; e os quatro caminhos do último admin recusados com motivo em português
 
 **Ponto de parada**: US1 completa. Os 20 admins já podem virar 3.
@@ -166,7 +169,7 @@ pessoa passa a ver exatamente isso — sem deploy nenhum.
 que elas conseguem fazer **não mudou**.
 
 - [ ] T049 [P] [US3] `packages/db/src/cargos/selos.ts` — criar, renomear, aplicar, retirar
-- [ ] T050 [US3] Rotas de selo (contracts). **Nenhuma escreve em `cargo_permissoes` nem em `users.cargo_id`** — é por construção que o FR-013 vale
+- [ ] T050 [US3] Rotas de selo (contracts). **Nenhuma escreve em `cargo_permissoes` nem em `users.cargo_id`** — é por construção que o FR-013 vale. Registrar em auditoria aplicar e tirar selo, com a lista antes e depois, como o `data-model.md` já previa
 - [ ] T051 [US3] Exibir os selos no mini perfil e ao lado do nome, com o **cargo ainda distinguível deles** (FR-013 é sobre acesso; este item é sobre não confundir quem lê)
 - [ ] T052 [US3] Tela de selos em `apps/web/app/(shell)/admin/cargos/` (mesma área, aba separada) — não é assunto que mereça item próprio no menu
 - [ ] T053 [P] [US3] Teste afirmando que aplicar ou retirar selo **não muda** o conjunto de permissões da pessoa
