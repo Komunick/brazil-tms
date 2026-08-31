@@ -58,21 +58,48 @@ export function displayStatusOf(
   portalStatus?: string | null,
 ): TripDisplayStatus {
   /**
-   * `at_origin` E a fila `awaiting_arrival` mostram a MESMA linha: "NA ORIGEM" (2026-08-19, a pedido).
+   * OS DOIS VOLTARAM A SER COISAS DIFERENTES (2026-08-31, a pedido) — e a fusão de 19/08 sai.
    *
-   * São dois estados de verdade diferentes — um é "o cliente escalou motorista e espera-se que ele
-   * apareça", o outro é "o caminhão chegou, com hora registrada" — e o quadro deixou de distingui-los
-   * porque a operação não distingue: para quem olha a tela, os dois querem dizer que aquela viagem
-   * está na origem.
+   * Ela juntava `at_origin` e `awaiting_arrival` no mesmo rótulo, com o argumento de que "para quem
+   * olha a tela, os dois querem dizer que a viagem está na origem". Medido em produção no dia em que
+   * o usuário reclamou:
    *
-   * O que NÃO muda: o status real da viagem, a máquina de estados, a linha do tempo da viagem e o
-   * botão de marco continuam com `at_origin` separado e escrito "Na origem". A fusão é só de
-   * EXIBIÇÃO no quadro — misturar as duas coisas apagaria a diferença entre planejado e acontecido,
-   * que é o que alimenta o cálculo de pontualidade.
+   *   de verdade em `at_origin` .................. 8
+   *   exibidas como se estivessem ................ 13
+   *   dessas, com a COLETA AINDA NO FUTURO ....... 13   ← todas
+   *
+   * Nenhuma das treze tinha chegado à hora da coleta. A `LT0Q8V02F7RF1` mostrava origem às 20:30 e a
+   * tela já dizia que ela estava lá. O rótulo tinha deixado de descrever e passado a afirmar algo
+   * falso na MAIORIA dos casos, que é o pior desfecho possível para um rótulo de status.
+   *
+   * A diferença que a operação precisa é exatamente essa: "tem motorista escalado" não é "o caminhão
+   * está no pátio". Uma decide se ainda falta despachar; a outra decide se dá para começar a
+   * carregar.
+   *
+   * `at_origin` volta a se descrever sozinho — cai no `return status` abaixo.
    */
-  if (status === "at_origin") return "awaiting_arrival";
   if (status !== "received") return status;
-  if (portalStatus === PORTAL_ATRIBUIDA) return "awaiting_arrival";
+  /**
+   * ESCALADA NO PORTAL É "ATRIBUÍDA", uma linha só (2026-08-31, a pedido).
+   *
+   * Elas nasceram separadas porque `assigned` é a atribuição feita DENTRO do TMS e esta vem do
+   * portal. A separação parecia útil — "dá para ver quais não passaram pela nossa tela" —, e o dado
+   * mostrou que ela não cumpre isso:
+   *
+   *   13 exibidas como escaladas
+   *      6  vieram de um clique NO TMS, pelo diálogo do portal
+   *      7  escaladas direto lá dentro
+   *
+   * Quase metade veio do próprio TMS. O motivo é que `enfileirarOrdemDoPortal` NÃO mexe no
+   * `current_status`: quem atribui pelo diálogo daqui deixa a viagem em `received`, igualzinho a
+   * quem nunca abriu o TMS. O chip misturava os dois e não separava nada.
+   *
+   * Para quem opera, as duas dizem a mesma coisa: tem motorista nesta viagem. Uma palavra só.
+   *
+   * O QUE SE PERDE, e fica dito: deixa de dar para ver na lista quais viagens não têm atribuição
+   * interna. Quem precisa disso de verdade é a Pré-SM, e a consulta dela já responde sozinha.
+   */
+  if (portalStatus === PORTAL_ATRIBUIDA) return "assigned";
   return portalAcceptance === ACEITACAO_PENDENTE ? "in_analysis" : "to_assign";
 }
 
@@ -85,13 +112,19 @@ export function displayStatusOf(
  */
 export const TRIP_DISPLAY_ORDER: readonly TripDisplayStatus[] = TRIP_STATUSES.flatMap((s) =>
   s === "received"
-    ? ([...TRIP_QUEUES] as TripDisplayStatus[])
-    : // `at_origin` sai da lista porque nada é exibido com esse rótulo: `displayStatusOf` o funde em
-      // `awaiting_arrival` ("NA ORIGEM"). Deixá-lo aqui criaria uma opção de filtro que não conta
-      // nada e um cartão eternamente zerado.
-      s === "at_origin"
-      ? []
-      : [s],
+    ? /**
+       * `awaiting_arrival` sai da lista em 31/08: `displayStatusOf` deixou de devolvê-lo — o portal
+       * escalado passou a exibir "Atribuída", junto do `assigned`. Deixá-lo aqui criaria um chip que
+       * nunca conta nada, que foi exatamente o defeito que a retirada do `at_origin` causou em 19/08.
+       *
+       * A FILA continua existindo como parâmetro interno (`TRIP_QUEUES`), porque é ela que o filtro
+       * usa para alcançar as viagens em `received` com motorista no portal.
+       */
+      (TRIP_QUEUES.filter((q) => q !== "awaiting_arrival") as TripDisplayStatus[])
+    : // `at_origin` VOLTA À LISTA em 31/08: ele deixou de ser fundido e agora tem rótulo próprio
+      // ("Na origem"), com 8 viagens de verdade nele no dia da medição. Tirá-lo esconderia o único
+      // estado que afirma que o caminhão chegou.
+      [s],
 );
 
 export function isTripQueue(status: TripDisplayStatus): status is TripQueue {
@@ -117,10 +150,17 @@ export function boardFilterForDisplayStatus(status: TripDisplayStatus): {
   status: TripStatus[];
   queue?: TripQueue;
 } {
+  /**
+   * "ATRIBUÍDA" É A EXCEÇÃO AGORA (31/08) — ela abrange dois status reais: `assigned`, que é a
+   * atribuição feita no TMS, e `received` com motorista no portal.
+   *
+   * Manda a FILA e nenhum status cru: `buildWhere` reconhece `queue=awaiting_arrival` e monta o `or`
+   * com os dois. Mandar `status=["assigned"]` junto cruzaria os dois filtros com E e a lista abriria
+   * menor que o número que a anunciou — foi assim que o cartão de 19/08 anunciou 2 e abriu vazio.
+   */
+  if (status === "assigned") return { status: [], queue: "awaiting_arrival" };
   if (!isTripQueue(status)) return { status: [status] };
-  return status === "awaiting_arrival"
-    ? { status: [], queue: status }
-    : { status: ["received"], queue: status };
+  return { status: ["received"], queue: status };
 }
 
 /** O mesmo recorte, escrito como trecho de URL. */

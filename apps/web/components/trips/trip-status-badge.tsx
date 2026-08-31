@@ -40,23 +40,14 @@ const STATUS_CLASS: Record<TripDisplayStatus, string> = {
   to_assign:
     "bg-violet-50 text-violet-700 border-violet-200 dark:bg-violet-500/10 dark:text-violet-300 dark:border-violet-400/20",
   /**
-   * O cliente já pôs motorista e confirmou; espera-se o comparecimento para a rota começar.
+   * NÃO APARECE MAIS NA TELA desde 31/08 — a entrada fica pelo TIPO, como a de `received`.
    *
-   * Verde-água, o mesmo tom das etapas de destino, porque aqui NÃO há trabalho de despacho pendente
-   * — é uma espera saudável. Mandar essa linha para "p/atribuir" seria pedir à operação um trabalho
-   * que o cliente já fez.
-   */
-  /**
-   * VERDE FRACO, e o rótulo virou "ETA Origem" (2026-08-23, a pedido, em duas rodadas).
+   * `displayStatusOf` deixou de devolver `awaiting_arrival`: quem o portal escalou passou a exibir
+   * "Atribuída", junto do `assigned`, e é a cor do `assigned` (violeta) que a operação vê. A FILA
+   * continua existindo por dentro com esse nome, e é ela que o filtro usa — só o rótulo sumiu.
    *
-   * Era verde-água claro, o mesmo tom das etapas de destino. Passou por verde forte e voltou para
-   * um verde claro — desta vez o verde da família, não o azul-esverdeado: o forte foi para o EM
-   * TRÂNSITO, que é o que o quadro precisa achar de longe. Aqui o caminhão ainda está a caminho, e
-   * a espera saudável não compete com quem já está na estrada.
-   *
-   * O nome mudou junto: "NA ORIGEM" dizia que o caminhão JÁ estava lá, e ele não está — está a
-   * caminho, com hora marcada. ETA Origem é o que o próprio portal chama, e em caixa normal: as
-   * outras etiquetas todas são assim, e só ela gritava.
+   * O verde que ficou aqui é do tempo em que ele se chamava "ETA Origem" e afirmava algo sobre a
+   * chegada. Quem afirma isso hoje é o `at_origin`, que tem a própria cor logo abaixo.
    */
   awaiting_arrival:
     "bg-green-100 text-green-800 border-green-200 dark:bg-green-500/15 dark:text-green-300 dark:border-green-400/25",

@@ -671,14 +671,20 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
   // contagem da ficha usa — escritos separados, a lista e o número que a anuncia divergiriam.
   if (query.queue === "awaiting_arrival") {
     /**
-     * "NA ORIGEM" abrange DOIS status reais (2026-08-19): a viagem que o cliente escalou e ainda
-     * está em `received`, e a que já chegou e está em `at_origin`. O filtro precisa dizer isso, ou
-     * quem clicar no cartão cai numa lista menor que o número que a anunciou — e a discordância
-     * entre contagem e lista é justamente o que o resto deste arquivo trabalha para impedir.
+     * "ATRIBUÍDA" abrange DOIS status reais (2026-08-31): a viagem que o TMS atribuiu, já em
+     * `assigned`, e a que o portal escalou e continua em `received`.
+     *
+     * O filtro precisa dizer os dois, ou quem clicar no cartão cai numa lista menor que o número
+     * que a anunciou — a discordância entre contagem e lista é o que o resto deste arquivo trabalha
+     * para impedir.
+     *
+     * A FILA CONTINUA SE CHAMANDO `awaiting_arrival` por dentro, e é de propósito: renomeá-la
+     * mexeria em URL guardada, em filtro lembrado no banco e em três arquivos, para trocar uma
+     * palavra que ninguém vê. O rótulo é que mudou.
      */
     conditions.push(
       or(
-        eq(trips.currentStatus, "at_origin"),
+        eq(trips.currentStatus, "assigned"),
         and(eq(trips.currentStatus, "received"), tripQueueSql("awaiting_arrival")),
       )!,
     );
@@ -826,12 +832,16 @@ const diaColetaSaoPaulo = sql<string>`(${trips}.planned_pickup_window_start AT T
 )})::date`;
 
 const displayStatusSql = sql<string>`CASE
-  -- "NA ORIGEM" e UMA linha so: a fila do portal e a chegada de verdade (2026-08-19, a pedido).
-  -- Espelha displayStatusOf; se as duas divergirem, o cartao e a lista mostram numeros diferentes
-  -- para a mesma pergunta e nenhum dos dois parece errado sozinho.
-  WHEN ${trips.currentStatus} = 'at_origin' THEN 'awaiting_arrival'
+  -- Espelha displayStatusOf. Se as duas divergirem, o cartao conta por uma regra e a lista abre por
+  -- outra — numeros diferentes para a mesma pergunta, e nenhum dos dois parecendo errado sozinho.
+  --
+  -- 31/08: a fusao de 19/08 saiu daqui tambem. Ela dizia 'at_origin' -> 'awaiting_arrival', e eu
+  -- mudei o TS sem mudar este SQL na primeira tentativa — as duas ficaram discordando por um
+  -- deploy. E o exemplo de por que a terceira escrita da mesma regra e cara.
+  --
+  -- 'at_origin' agora cai no ELSE do proprio status; o portal escalado vira 'assigned'.
   WHEN ${trips.currentStatus} <> 'received' THEN ${trips.currentStatus}::text
-  WHEN (${trips.customerFields} ->> 'Status (portal)') = 'Assigned' THEN 'awaiting_arrival'
+  WHEN (${trips.customerFields} ->> 'Status (portal)') = 'Assigned' THEN 'assigned'
   WHEN (${trips.customerFields} ->> 'Aceitação (portal)') = 'Pending' THEN 'in_analysis'
   ELSE 'to_assign'
 END`;

@@ -277,7 +277,19 @@ export async function readProgramacao(
       to_char(t.planned_pickup_window_start at time zone 'America/Sao_Paulo', 'DD/MM HH24:MI') as eta_origem,
       to_char(t.planned_pickup_window_end   at time zone 'America/Sao_Paulo', 'DD/MM HH24:MI') as cpt_origem,
       to_char(t.planned_delivery_window_end at time zone 'America/Sao_Paulo', 'DD/MM HH24:MI') as eta_destino,
-      t.planned_vehicle_type::text as perfil,
+      /*
+       * O PERFIL PREFERE O RÓTULO DO PORTAL (31/08, a pedido).
+       *
+       * O enum perde o "EXPRESSA": "CARRETA - EXPRESSA" e "CARRETA" viram os dois "carreta". Medido
+       * na listagem do portal: 34 expressas contra 17 comuns numa página de 64 — a maioria, e o TMS
+       * mostrava a mesma palavra para as duas.
+       *
+       * O enum fica de reserva para viagem que veio de import manual, que não tem rótulo do portal.
+       */
+      coalesce(
+        t.customer_fields ->> 'Perfil (portal)',
+        t.planned_vehicle_type::text
+      ) as perfil,
       t.operational_fields ->> 'solicitacao' as solicitacao,
       /*
        * A DOCA VEM DO PORTAL (30/08), com o campo digitado como reserva.
