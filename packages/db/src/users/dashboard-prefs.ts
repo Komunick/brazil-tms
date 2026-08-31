@@ -16,6 +16,20 @@ const TETO_DE_CHAVES = 60;
 export interface PainelGuardado {
   hidden: string[];
   minimized: string[];
+  /**
+   * OS FILTROS DA MINHA PROGRAMAÇÃO, e este campo FALTAVA AQUI até 31/08.
+   *
+   * A leitura já devolvia `programacao` — por um espalhamento condicional, que o TypeScript não
+   * confere contra a interface — e a gravação simplesmente não escrevia a coluna. O resultado é o
+   * pior formato de defeito que existe: a tela mandava, a rota respondia `200`, e a resposta vinha
+   * SEM os filtros; o cliente então adotava a resposta e desfazia o que a pessoa acabara de marcar.
+   *
+   * Medido em produção no dia em que o usuário reclamou: `programacao_prefs` diferente de `{}` em
+   * ZERO das 12 linhas, com a coluna existindo e a tela chamando o PUT a cada clique.
+   *
+   * Declarar o campo aqui é metade do conserto — é o que faz o compilador cobrar a outra metade.
+   */
+  programacao?: ProgramacaoPrefs;
 }
 
 /** Quem nunca personalizou não tem linha, e isso é o padrão: nada escondido, nada encolhido. */
@@ -61,15 +75,32 @@ export async function writeDashboardPrefs(
   userId: string,
   entrada: PainelGuardado,
 ): Promise<PainelGuardado> {
-  const limpo = { hidden: limpar(entrada.hidden), minimized: limpar(entrada.minimized) };
+  /**
+   * `programacao` ausente vira `{}` — e essa distinção é a que faz a cancelada nascer escondida.
+   *
+   * `{}` quer dizer "nunca mexeu", e a leitura o devolve como ausente para a tela aplicar o
+   * `PADRAO_DA_PROGRAMACAO`. Gravar um objeto de listas vazias diria outra coisa: "esta pessoa
+   * escolheu não esconder nada" — e a cancelada voltaria a aparecer para quem nunca pediu.
+   */
+  const limpo: PainelGuardado = {
+    hidden: limpar(entrada.hidden),
+    minimized: limpar(entrada.minimized),
+    ...(entrada.programacao ? { programacao: entrada.programacao } : {}),
+  };
   await db
     .insert(userDashboardPrefs)
-    .values({ userId, hiddenCards: limpo.hidden, minimizedCards: limpo.minimized })
+    .values({
+      userId,
+      hiddenCards: limpo.hidden,
+      minimizedCards: limpo.minimized,
+      programacaoPrefs: limpo.programacao ?? {},
+    })
     .onConflictDoUpdate({
       target: userDashboardPrefs.userId,
       set: {
         hiddenCards: limpo.hidden,
         minimizedCards: limpo.minimized,
+        programacaoPrefs: limpo.programacao ?? {},
         updatedAt: sql`now()`,
       },
     });

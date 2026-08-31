@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { History } from "lucide-react";
 import { normalizarPlaca } from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface PlacaSugerida {
   placa: string;
@@ -38,6 +39,7 @@ export function PlacasDoMotorista({
   driverId,
   aoEscolher,
   apenas,
+  escolhidas,
 }: {
   /**
    * A chave do motorista, nas DUAS formas que o TMS tem: o id numérico do portal (diálogo da
@@ -57,6 +59,14 @@ export function PlacasDoMotorista({
    * O diálogo do portal não passa nada: lá o campo é livre, e qualquer placa serve.
    */
   apenas?: readonly string[];
+  /**
+   * As placas que JÁ ESTÃO nos campos do formulário — aparecem marcadas.
+   *
+   * Nasceu do defeito de 31/08: clicar numa sugestão já escolhida não faz nada (de propósito, para
+   * não desmarcar sem querer), e sem uma marca isso é indistinguível de a tela ter travado. Com
+   * ela, o "não aconteceu nada" passa a se explicar sozinho — já estava lá.
+   */
+  escolhidas?: readonly string[];
 }) {
   const t = useTranslations("Trips.portalAssign");
 
@@ -90,6 +100,9 @@ export function PlacasDoMotorista({
   const todas = consulta.data?.placas ?? [];
   const permitidas = apenas ? new Set(apenas.map(normalizarPlaca)) : null;
   const placas = permitidas ? todas.filter((p) => permitidas.has(normalizarPlaca(p.placa))) : todas;
+  // Mesma normalização, mesmo motivo: `ABC-1D23` no campo e `ABC1D23` na sugestão são a mesma placa,
+  // e comparar cru deixaria de marcar justamente as que estão escolhidas.
+  const jaNoFormulario = new Set((escolhidas ?? []).map(normalizarPlaca));
 
   if (driverId.trim() === "" || placas.length === 0) return null;
 
@@ -106,7 +119,18 @@ export function PlacasDoMotorista({
             type="button"
             variant="outline"
             size="sm"
-            className="h-7 font-mono text-xs"
+            /*
+              A MARCA É A BORDA, não uma cor de fundo forte: a tira fica logo acima dos campos, e um
+              destaque competindo com eles trocaria o problema de lugar. Aqui ela só responde "esta
+              já está escolhida" — quem manda continua sendo o campo.
+
+              `aria-pressed` junto, porque a borda sozinha não chega a quem usa leitor de tela.
+            */
+            className={cn(
+              "h-7 font-mono text-xs",
+              jaNoFormulario.has(normalizarPlaca(p.placa)) && "border-primary bg-primary/10",
+            )}
+            aria-pressed={jaNoFormulario.has(normalizarPlaca(p.placa))}
             onClick={() => aoEscolher(p.placa)}
             /*
               O CONTEXTO VAI NO `title`, e não em texto solto na tela.

@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/dialog";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { PlacasDoMotorista } from "@/components/trips/placas-do-motorista";
+import { aplicarPlacaSugerida } from "@/lib/trips/placa-sugerida";
 import { MelhoresDaRota } from "@/components/trips/melhores-da-rota";
 import {
   TripsError,
@@ -217,21 +218,34 @@ export function PortalAssignDialog({
   const [vinculoSegundo, setVinculoSegundo] = useState<VinculoEscolhido | null>(null);
 
   /**
-   * O clique numa placa sugerida vai para o PRIMEIRO CAMPO VAZIO.
+   * O clique numa placa sugerida — primeiro campo vazio, e TROCA quando não há vazio.
    *
-   * Sobrescrever o campo 1 seria pior: quem já digitou o cavalo e clica numa sugestao esta querendo
-   * a CARRETA, e perderia o que acabou de escrever. Se nao houver campo vazio, a sugestao nao faz
-   * nada visivel — e isso e melhor que apagar algo em silencio.
+   * A regra mora em `aplicarPlacaSugerida`, sob teste: até 31/08 ela desistia quando tudo estava
+   * cheio, e num truck (um campo só) isso queria dizer que apenas o PRIMEIRO clique funcionava.
    *
-   * Placa repetida e ignorada: o portal recusaria o par duplicado, e recusar aqui poupa uma ordem.
+   * ── E O VÍNCULO DA POSIÇÃO SAI JUNTO ───────────────────────────────────────────────────────────
+   *
+   * `vinculoDasPlacas` é guardado por POSIÇÃO. Quando a sugestão substitui a placa de um campo, o
+   * vínculo escolhido ali descrevia o veículo ANTERIOR — mantê-lo mandaria "agregado" para um
+   * caminhão da frota sem ninguém ver. Limpar devolve o campo ao que o cadastro sabe
+   * (`jaClassificados`), que é de onde ele teria vindo se a placa nova tivesse sido escolhida do
+   * zero.
+   *
+   * Digitar por cima NÃO limpa, e é de propósito: quem corrige uma letra está falando da mesma
+   * placa. Clicar noutra sugestão é trocar de veículo.
    */
-  const preencherPrimeiroVazio = (nova: string) => {
-    setPlacas((atual) => {
-      if (atual.some((p) => normalizarPlaca(p) === normalizarPlaca(nova))) return atual;
-      const vazio = atual.findIndex((p) => normalizarPlaca(p) === "");
-      if (vazio < 0) return atual;
-      return atual.map((p, i) => (i === vazio ? normalizarPlaca(nova) : p));
-    });
+  const escolherSugestao = (nova: string) => {
+    /*
+      Calculado FORA do updater, e não dentro: o updater do `useState` roda na renderização
+      seguinte, então uma variável escrita lá dentro ainda estaria vazia na linha de baixo. Num
+      manipulador de evento, `placas` já é o valor desta renderização — que é o que o clique viu.
+    */
+    const r = aplicarPlacaSugerida(placas, nova);
+    setPlacas(r.placas);
+    const trocado = r.substituiu;
+    if (trocado != null) {
+      setVinculoDasPlacas((atual) => atual.map((v, j) => (j === trocado ? null : v)));
+    }
   };
 
   const preenchidas = placas.map(normalizarPlaca).filter(Boolean);
@@ -519,9 +533,15 @@ export function PortalAssignDialog({
               placa, que é exatamente a ordem em que a dúvida acontece. Embaixo dos campos seria uma
               resposta chegando tarde; ao lado, num diálogo estreito, empurraria os campos.
 
-              O clique preenche o PRIMEIRO campo vazio — ver `preencherPrimeiroVazio`.
+              O clique preenche o primeiro campo vazio, e TROCA quando não há vazio — ver
+              `aplicarPlacaSugerida`. A placa que já está num campo aparece marcada, para a tira
+              dizer o que está escolhido em vez de o campo lá embaixo ser a única pista.
             */}
-            <PlacasDoMotorista driverId={driverId} aoEscolher={preencherPrimeiroVazio} />
+            <PlacasDoMotorista
+              driverId={driverId}
+              aoEscolher={escolherSugestao}
+              escolhidas={preenchidas}
+            />
 
             {placas.map((placa, i) => (
               <div key={i} className="space-y-1.5">

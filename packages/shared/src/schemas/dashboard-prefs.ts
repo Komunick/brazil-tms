@@ -66,6 +66,19 @@ export const programacaoPrefsSchema = z.object({
   frentes: z.array(z.string().trim().max(40)).max(2).optional().default([]),
   /** Os status ESCONDIDOS. `cancelled` entra aqui por padrão — ver `PADRAO_DA_PROGRAMACAO`. */
   status: z.array(z.string().trim().max(40)).max(30).optional().default([]),
+  /**
+   * OS DIAS ESCONDIDOS, guardados como DESLOCAMENTO e nunca como data (31/08, a pedido).
+   *
+   * `-1` é ontem, `0` é hoje, `2` é depois de amanhã. Guardar `2026-08-31` cumpriria a letra do
+   * pedido e falharia no dia seguinte: a data guardada sairia da janela e o dia recém-chegado
+   * entraria aceso, então quem escondeu ontem e anteontem para trabalhar só com hoje teria de
+   * refazer a escolha TODA MANHÃ — que é exatamente a repetição de que o pedido veio reclamar.
+   *
+   * O deslocamento guarda a REGRA ("não quero ver o passado"), e é ela que sobrevive à virada do
+   * dia. A janela da consulta hoje vai de -2 a +7; o intervalo aceito aqui é maior de propósito,
+   * para que mexer na janela não faça o Zod recusar a preferência inteira de quem já tinha uma.
+   */
+  dias: z.array(z.number().int().min(-60).max(60)).max(40).optional().default([]),
   /** As linhas que a pessoa ocultou estão à mostra? */
   mostrarOcultas: z.boolean().optional().default(false),
 });
@@ -85,6 +98,8 @@ export type ProgramacaoPrefs = z.infer<typeof programacaoPrefsSchema>;
 export const PADRAO_DA_PROGRAMACAO: ProgramacaoPrefs = {
   frentes: [],
   status: ["cancelled"],
+  // Nenhum dia escondido: a janela inteira à vista é o que faz sentido para quem chega sem escolha.
+  dias: [],
   mostrarOcultas: false,
 };
 
