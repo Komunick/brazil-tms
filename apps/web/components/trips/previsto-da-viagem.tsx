@@ -28,14 +28,31 @@ import { SearchableSelect } from "@/components/ui/searchable-select";
  * aquele formulário mais tarde, e o que evita traduzir por nome entre os dois cadastros — tradução
  * que é frágil e já custou caro nesta base.
  */
-export function PrevistoDaViagem({ tripId, podeMexer }: { tripId: string; podeMexer: boolean }) {
+export function PrevistoDaViagem({
+  tripId,
+  podeMexer,
+  comecarEditando = false,
+  aoConcluir,
+}: {
+  tripId: string;
+  podeMexer: boolean;
+  /**
+   * Abre já no formulário, sem a linha fechada e o botão.
+   *
+   * É o que a Minha Programação usa: lá o clique VEIO de um botão que diz "Prever", e repetir o
+   * mesmo botão dentro da janela que ele abriu seria pedir a mesma decisão duas vezes.
+   */
+  comecarEditando?: boolean;
+  /** Chamado depois de gravar. Quem abriu numa janela usa isto para fechá-la. */
+  aoConcluir?: () => void;
+}) {
   const t = useTranslations("Programacao");
   const consulta = useProgramacaoDaViagem(tripId);
   const salvar = useSalvarPrevisto(tripId);
   const motoristas = usePortalDrivers();
 
   const previsto = consulta.data?.programacao ?? null;
-  const [editando, setEditando] = useState(false);
+  const [editando, setEditando] = useState(comecarEditando && podeMexer);
 
   if (consulta.isPending) return null;
 
@@ -86,9 +103,17 @@ export function PrevistoDaViagem({ tripId, podeMexer }: { tripId: string; podeMe
       carregando={motoristas.isLoading}
       salvando={salvar.isPending}
       aoSalvar={(dados) => {
-        salvar.mutate(dados, { onSuccess: () => setEditando(false) });
+        salvar.mutate(dados, {
+          onSuccess: () => {
+            setEditando(false);
+            aoConcluir?.();
+          },
+        });
       }}
-      aoCancelar={() => setEditando(false)}
+      aoCancelar={() => {
+        setEditando(false);
+        aoConcluir?.();
+      }}
     />
   );
 }
