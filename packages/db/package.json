@@ -34,7 +34,8 @@
     "db:seed:service-account": "tsx ./seed/service-account.ts",
     "db:seed:portal-fleet": "tsx ./seed/portal-fleet.ts",
     "db:seed:regioes": "tsx ./seed/station-regions.ts",
-    "db:conferir-acesso": "tsx ./seed/029-conferir-acesso.ts"
+    "db:conferir-acesso": "tsx ./seed/029-conferir-acesso.ts",
+    "db:seed:cancellation-reasons": "tsx ./seed/cancellation-reasons.ts"
   },
   "dependencies": {
     "@brazil-tms/shared": "workspace:*",
