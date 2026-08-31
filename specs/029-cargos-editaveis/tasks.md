@@ -48,9 +48,9 @@ A fase 3 é a mais arriscada **e a que menos muda**. Se ela não for invisível,
 
 **Objetivo**: o esqueleto dos arquivos, sem comportamento. Nada muda para ninguém.
 
-- [ ] T001 [P] Criar `packages/db/schema/cargos.ts` com as quatro tabelas de `data-model.md` (`cargos`, `cargo_permissoes`, `selos`, `usuario_selos`), sem tocar em `users.ts` ainda
-- [ ] T002 [P] Acrescentar `cargoId` (uuid **NULL**) e `desativadoEm` (timestamptz NULL) em `packages/db/schema/users.ts` — **sem remover `role`, sem tocar no enum `appRole`, sem tocar em `users_role_idx`**
-- [ ] T003 Exportar as tabelas novas em `packages/db/schema/index.ts`
+- [X] T001 [P] Criar `packages/db/schema/cargos.ts` com as quatro tabelas de `data-model.md` (`cargos`, `cargo_permissoes`, `selos`, `usuario_selos`), sem tocar em `users.ts` ainda
+- [X] T002 [P] Acrescentar `cargoId` (uuid **NULL**) e `desativadoEm` (timestamptz NULL) em `packages/db/schema/users.ts` — **sem remover `role`, sem tocar no enum `appRole`, sem tocar em `users_role_idx`**
+- [X] T003 Exportar as tabelas novas em `packages/db/schema/index.ts`
 
 ---
 
@@ -59,13 +59,13 @@ A fase 3 é a mais arriscada **e a que menos muda**. Se ela não for invisível,
 **Objetivo**: as tabelas existem e todo mundo já tem cargo equivalente ao papel de hoje. O app
 **anterior** continua no ar lendo `users.role`, e continua funcionando.
 
-- [ ] T004 Escrever À MÃO `packages/db/migrations/0060_cargos_e_perfil.sql`: cria as quatro tabelas, PK composta em `cargo_permissoes(cargo_id, permissao)`, índice em `cargo_permissoes(permissao)`, acrescenta `users.cargo_id` (NULL) e `users.desativado_em`
-- [ ] T005 Na MESMA migração, alargar `resource_documents_entity_type_ck` para aceitar `'user'` — **a COLUNA, não a porta** (T029 trata da porta)
-- [ ] T006 Na MESMA migração, semear os **7 cargos** com os nomes dos **papéis atribuíveis** e preencher `cargo_permissoes` a partir de `ROLE_PERMISSIONS`, **escrito literalmente no SQL** (não gerado em execução: a migração precisa ser lida e conferida por uma pessoa). **Sete, e não oito**: o enum `app_role` tem 8 valores, mas `ROLE_PERMISSIONS` só tem 7 — `customer_viewer` não está no catálogo, e criá-lo à mão violaria o FR-017
-- [ ] T007 Na MESMA migração, `update users set cargo_id = <o cargo do seu role>` para as 34 pessoas
-- [ ] T008 **Acrescentar a entrada da `0060` em `packages/db/migrations/meta/_journal.json`** — sem ela a migração é pulada e o deploy responde sucesso (aconteceu duas vezes)
-- [ ] T009 Rodar `npx vitest run migrations-journal` e confirmar verde — é o teste que cobra T008 nos dois sentidos
-- [ ] T010 [P] Escrever `packages/db/src/cargos/cargos-schema.test.ts` lendo o SQL da `0060` e afirmando que ela **não contém** `drop column role`, `drop type app_role` nem `alter column cargo_id set not null` — os três derrubariam a produção entre a migração e o restart (research §5)
+- [X] T004 Escrever À MÃO `packages/db/migrations/0060_cargos_e_perfil.sql`: cria as quatro tabelas, PK composta em `cargo_permissoes(cargo_id, permissao)`, índice em `cargo_permissoes(permissao)`, acrescenta `users.cargo_id` (NULL) e `users.desativado_em`
+- [X] T005 Na MESMA migração, alargar `resource_documents_entity_type_ck` para aceitar `'user'` — **a COLUNA, não a porta** (T029 trata da porta)
+- [X] T006 Na MESMA migração, semear os **7 cargos** com os nomes dos **papéis atribuíveis** e preencher `cargo_permissoes` a partir de `ROLE_PERMISSIONS`, **escrito literalmente no SQL** (não gerado em execução: a migração precisa ser lida e conferida por uma pessoa). **Sete, e não oito**: o enum `app_role` tem 8 valores, mas `ROLE_PERMISSIONS` só tem 7 — `customer_viewer` não está no catálogo, e criá-lo à mão violaria o FR-017
+- [X] T007 Na MESMA migração, `update users set cargo_id = <o cargo do seu role>` para as 34 pessoas
+- [X] T008 **Acrescentar a entrada da `0060` em `packages/db/migrations/meta/_journal.json`** — sem ela a migração é pulada e o deploy responde sucesso (aconteceu duas vezes)
+- [X] T009 Rodar `npx vitest run migrations-journal` e confirmar verde — é o teste que cobra T008 nos dois sentidos
+- [X] T010 [P] Escrever `packages/db/src/cargos/cargos-schema.test.ts` lendo o SQL da `0060` e afirmando que ela **não contém** `drop column role`, `drop type app_role` nem `alter column cargo_id set not null` — os três derrubariam a produção entre a migração e o restart (research §5)
 
 **Ponto de parada**: aplicável em produção com o sistema em uso. Nada mudou para ninguém.
 
