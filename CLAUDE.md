@@ -102,7 +102,7 @@ parceiro**, preenchido pelo próprio motorista. **VOLTOU A SER O TRABALHO COM DA
 
 ---
 
-## A 029 (cargos editáveis) está ENTREGUE — 59 de 60 tarefas
+## A 029 (cargos editáveis) está QUASE — 56 de 60, e o perfil ficou órfão
 
 `specs/029-cargos-editaveis/`. O acesso deixou de ser catálogo em código: quem manda são as tabelas
 `cargos` e `cargo_permissoes`, editáveis em **Sistema → Cargos**. Falta só a **T036**, a conferência
@@ -152,3 +152,12 @@ solicitação**. Nada da 029 gasta; as etapas 1 a 4 da 028 também não.
 **O tmsdev não tem viagem do dia** (o banco parou de ser alimentado em 29/08; os robôs escrevem em
 produção). Painel vazio lá é falta de dado, não regressão.
 <!-- SPECKIT END -->
+
+**O QUE NÃO ESTÁ DE PÉ, e é preciso saber antes de mexer**: o **mini perfil e a foto** (US2) têm
+componentes, rotas e job — mas **nenhuma tela importa os componentes**. `NomeClicavel` e
+`MiniPerfil` são órfãos, e não existe tela para alguém enviar a própria foto, o que deixa
+`PUT /api/me/foto` inalcançável. Descoberto em 31/08 quando o usuário perguntou onde estava o perfil.
+
+Isso é o padrão `dado-capturado-e-nunca-mostrado`: eu marquei as tarefas como feitas porque os
+ARQUIVOS existiam. O que funciona é o que roda sozinho — o job dos 90 dias e o `desativado_em`.
+**Falta decidir com o usuário ONDE** o nome vira clicável e por qual tela a foto é enviada.
