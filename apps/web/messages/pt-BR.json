@@ -103,7 +103,8 @@
     "preSmCidades": "Cidades da gerenciadora",
     "gr": "GR — Pré-SM",
     "preCadastros": "Pré-cadastros",
-    "passagemDeTurno": "Passagem de Turno"
+    "passagemDeTurno": "Passagem de Turno",
+    "cargos": "Cargos"
   },
   "FreightRates": {
     "screenTitle": "Tabela de Fretes",
@@ -463,7 +464,11 @@
     "pre_sm_cidade_desconfirmar": "Correspondência de cidade desfeita",
     "pre_sm_enviar": "Pré-SM pedida",
     "preregistration_reviewed": "Pré-cadastro conferido",
-    "preregistration_pesquisa_requested": "Pesquisa solicitada à gerenciadora"
+    "preregistration_pesquisa_requested": "Pesquisa solicitada à gerenciadora",
+    "cargo_criado": "Cargo criado",
+    "cargo_alterado": "Cargo alterado",
+    "cargo_desativado": "Cargo desativado",
+    "usuario_cargo_alterado": "Cargo do usuário alterado"
   },
   "Documents": {
     "title": "Documentos",
@@ -2506,5 +2511,33 @@
     "fechadoPelaTrava": "Fechado pela trava",
     "aberto": "aberto",
     "lhNaoEncontrada": "Não encontrei essa LH em viagem nem em oferta de spot — confira o código."
+  },
+  "Cargos": {
+    "nomeDoNovo": "Nome do cargo novo",
+    "exemploDeNome": "Ex.: Despachante",
+    "criar": "Criar cargo",
+    "nasceVazio": "Nasce sem nada marcado — quem entrar nele não verá nada até você marcar.",
+    "pessoas": "{n} pessoa(s)",
+    "capacidades": "{n} de 23 capacidades",
+    "inativo": "inativo",
+    "editar": "Editar",
+    "fechar": "Fechar",
+    "nome": "Nome",
+    "renomearNaoMudaAcesso": "Renomear não muda o acesso de ninguém — o vínculo é pelo cargo, não pelo nome.",
+    "acoes": "Ações dentro das páginas",
+    "avisoCargoVazio": "Este cargo não alcança nada. Quem estiver nele entra e não vê nenhuma tela.",
+    "salvar": "Salvar",
+    "salvando": "Salvando…",
+    "cancelar": "Cancelar",
+    "recusa": {
+      "ULTIMO_ADMIN": "Isto deixaria o sistema sem ninguém capaz de administrar usuários. Dê essa capacidade a outra pessoa antes.",
+      "CARGO_COM_PESSOAS": "Há pessoas neste cargo. Diga para qual cargo elas vão antes de desativá-lo.",
+      "ALEM_DO_PROPRIO_ACESSO": "Você não pode conceder uma capacidade que você mesmo não tem.",
+      "PERMISSAO_DESCONHECIDA": "Uma das capacidades marcadas não existe mais no sistema.",
+      "ERRO": "Não foi possível salvar. Tente novamente."
+    },
+    "desativar": "Desativar cargo",
+    "moverPara": "Mover as pessoas para",
+    "escolhaDestino": "Mover {n} pessoa(s) para…"
   }
 }
