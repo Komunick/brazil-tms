@@ -318,6 +318,19 @@ describe("pt-BR messages", () => {
    * numa caixa de diálogo cuja confirmação custa dinheiro. É o pior lugar do sistema para a pessoa
    * hesitar sobre o que está lendo.
    */
+  /**
+   * Os cinco botoes de copiar da Minha Programacao (31/08). O rotulo vira o `aria-label` e o
+   * `title`: sem ele, quem usa leitor de tela ouve "botao" cinco vezes na mesma linha, e quem passa
+   * o mouse nao descobre o que cada um copia.
+   */
+  it("Programacao has every copy-button label", () => {
+    const p = (messages as { Programacao: Record<string, unknown> }).Programacao;
+    for (const k of ["copiarLh", "copiarMotorista", "copiarCpf", "copiarTelefone", "copiarPlaca"]) {
+      expect(typeof p[k], "Programacao." + k).toBe("string");
+      expect(p[k]).not.toBe("");
+    }
+  });
+
   it("PreCadastros has every string of the paid pesquisa dialog", () => {
     const p = (messages as { PreCadastros: Record<string, unknown> }).PreCadastros;
     for (const k of [
