@@ -14,6 +14,7 @@ import { registerPreSmCarregarCadastro } from "./pre-sm/carregar-cadastro";
 import { registerCarregarPosicoes } from "./posicoes";
 import { registerCarregarCoordenadas } from "./coordenadas";
 import { registerTurnoFecharAtrasados } from "./turno";
+import { registerPerfilLimparFotos } from "./perfil/limpar-fotos";
 import { registerCnhLer } from "./cnh";
 import { registerMotoristaCadastrar } from "./motorista";
 import { registerMotoristaPesquisar } from "./motorista/pesquisa";
@@ -85,6 +86,15 @@ export async function registerJobHandlers(boss: PgBoss): Promise<void> {
    * ser botão.
    */
   await registerTurnoFecharAtrasados(boss);
+
+  /**
+   * 2026-08-31, fatia 029: o descarte da foto de perfil aos 90 dias.
+   *
+   * A foto de rosto de quem foi desativado tem prazo DECLARADO, e ele acontece sozinho — um prazo
+   * que depende de alguém lembrar não é prazo, é intenção. Ver `perfil/limpar-fotos.ts` para por
+   * que é varredura diária e não agendamento no ato da desativação.
+   */
+  await registerPerfilLimparFotos(boss);
   // Fatia 028 — lê a CNH que chega pelo formulário público. Enfileirado por envio, nunca agendado:
   // reprocessar as mesmas fotos gastaria dinheiro para chegar ao mesmo resultado.
   await registerCnhLer(boss);

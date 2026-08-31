@@ -363,3 +363,5 @@ export { lhsDoPainel, type LhDoPainel, type MedidaDoPainel } from "./trips/lhs-d
 export * from "./cargos/cargos-read";
 export * from "./cargos/cargos-write";
 export * from "./cargos/ainda-tem-admin";
+// Fatia 029 — o descarte da foto de perfil aos 90 dias.
+export * from "./perfil/fotos-vencidas";
