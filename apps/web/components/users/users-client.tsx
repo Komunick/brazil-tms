@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import { NomeClicavel } from "@/components/usuarios/nome-clicavel";
 import {
   ASSIGNABLE_ROLES,
   ROTULO_DO_SETOR,
@@ -317,7 +318,15 @@ export function UsersClient() {
             ) : (
               filtered.map((user) => (
                 <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.name}</TableCell>
+                  {/*
+                    O NOME ABRE O PERFIL (fatia 029, FR-018).
+
+                    É aqui que ele aparece listado, e é aqui que a pergunta "quem é essa pessoa?"
+                    acontece — no meio de uma lista de trinta e seis linhas quase iguais.
+                  */}
+                  <TableCell className="font-medium">
+                    <NomeClicavel userId={user.id} nome={user.name} />
+                  </TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell>
                     <Select

@@ -7,11 +7,15 @@ import { LogOut } from "lucide-react";
 import type { PermissionKey } from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
 import { MenuMovel } from "@/components/shell/menu-movel";
+import { MeuPerfil } from "@/components/usuarios/meu-perfil";
 
 export function Topbar({
+  userId,
   userName,
   permissoes,
 }: {
+  /** Quem está logado — o cartão do próprio perfil sai daqui (fatia 029). */
+  userId: string;
   userName: string;
   /** Repassada ao menu do telefone, que filtra pelo mesmo `can` do servidor. */
   permissoes: readonly PermissionKey[];
@@ -40,8 +44,11 @@ export function Topbar({
     <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b bg-background/85 px-3 backdrop-blur md:px-6">
       <div className="flex min-w-0 items-center gap-2">
         <MenuMovel permissoes={permissoes} />
-        {/* `truncate` porque nome comprido em tela estreita empurrava o botão de sair para fora. */}
-        <div className="truncate text-sm font-medium text-foreground">{userName}</div>
+        {/* O NOME ABRE O PRÓPRIO PERFIL (fatia 029) — é por onde a pessoa troca a própria foto.
+            Uma página "meu perfil" exigiria item de menu para uma tarefa que se faz uma vez, e o
+            menu já tem trinta itens. O `truncate` segue no botão: nome comprido em tela estreita
+            empurrava o "sair" para fora. */}
+        <MeuPerfil userId={userId} nome={userName} />
       </div>
       <Button variant="ghost" size="sm" onClick={signOut} disabled={loading} className="shrink-0">
         <LogOut className="mr-2 h-4 w-4" aria-hidden />

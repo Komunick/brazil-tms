@@ -2551,7 +2551,18 @@
     "titulo": "Perfil",
     "naoEncontrado": "Perfil não encontrado.",
     "semCargo": "Sem cargo definido — esta pessoa não vê nenhuma tela.",
-    "contaDesativada": "Conta desativada"
+    "contaDesativada": "Conta desativada",
+    "meuPerfil": "Meu perfil",
+    "trocarFoto": "Trocar minha foto",
+    "enviando": "Enviando…",
+    "regraDaFoto": "PNG ou JPEG, até 2 MB.",
+    "erroFoto": {
+      "FORMATO_NAO_ACEITO": "A foto precisa ser PNG ou JPEG.",
+      "FOTO_GRANDE": "A foto passa de 2 MB. Envie uma menor.",
+      "SEM_ARQUIVO": "Nenhuma foto foi escolhida.",
+      "USUARIO_DESATIVADO": "Conta desativada não recebe foto nova.",
+      "ERRO": "Não foi possível enviar. Tente de novo."
+    }
   },
   "Selos": {
     "naoDaoAcesso": "Selos são só reconhecimento: eles aparecem no perfil e NÃO dão acesso a nada. Quem decide o que a pessoa alcança é o cargo, na outra aba.",
