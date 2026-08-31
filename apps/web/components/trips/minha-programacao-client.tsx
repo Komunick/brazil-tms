@@ -5,12 +5,15 @@ import { useTranslations } from "next-intl";
 import { ChevronDown, ChevronRight, Eye, EyeOff, Palette, SlidersHorizontal } from "lucide-react";
 import { useMarcarViagem, useProgramacao } from "@/lib/trips/client";
 import { proximasFrentes } from "@/lib/trips/frentes";
+import { deslocamentoDoDia, diaDoDeslocamento } from "@/lib/trips/dias-da-programacao";
 import { usePainelDoUsuario } from "@/lib/ui/painel-do-usuario";
 import { ProgramacaoDetalhe } from "@/components/trips/programacao-detalhe";
 import { StatusDaLinha } from "@/components/trips/status-da-linha";
 import { ComentariosDaLinha } from "@/components/trips/comentarios-da-linha";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { Copiar } from "@/components/trips/copiar";
+import { PrevistoDaViagem } from "@/components/trips/previsto-da-viagem";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   REGION_ORDER,
   displayStatusOf,
@@ -218,6 +221,19 @@ export function MinhaProgramacaoClient({
    * efeito de um clique faria a pessoa clicar duas vezes — o mesmo motivo pelo qual o painel já
    * grava de forma otimista.
    */
+  /**
+   * O "hoje" da EMPRESA, não o do computador de quem olha: o servidor agrupa por São Paulo, e a
+   * tela precisa concordar com ele para não chamar de "amanhã" o que o grupo chama de hoje.
+   *
+   * Fica ACIMA das preferências de propósito: o filtro de dias guarda deslocamento, e tanto o efeito
+   * que aplica o guardado quanto o `lembrar` precisam de `hoje` já existindo. Declarado depois, o
+   * array de dependências do efeito o alcançaria antes da hora e a tela quebraria no carregamento.
+   */
+  const hoje = useMemo(
+    () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" }),
+    [],
+  );
+
   const prefs = usePainelDoUsuario();
   const [frentes, setFrentes] = useState<string[]>([]);
   const [mostrarOcultas, setMostrarOcultas] = useState(false);
@@ -225,6 +241,8 @@ export function MinhaProgramacaoClient({
   const [paletaAberta, setPaletaAberta] = useState<string | null>(null);
   const [recolhidos, setRecolhidos] = useState<Set<string>>(new Set());
   const [viagemAberta, setViagemAberta] = useState<string | null>(null);
+  /** A viagem cujo previsto está sendo definido pelo botão da própria linha. */
+  const [prevendo, setPrevendo] = useState<string | null>(null);
   const [painelDeDias, setPainelDeDias] = useState(false);
   const [diasEscondidos, setDiasEscondidos] = useState<Set<string>>(new Set());
   const [statusEscondidos, setStatusEscondidos] = useState<Set<string>>(new Set());
@@ -241,9 +259,14 @@ export function MinhaProgramacaoClient({
     if (aplicado || !prefs.carregado) return;
     setFrentes(prefs.programacao.frentes);
     setStatusEscondidos(new Set(prefs.programacao.status));
+    /*
+      Os dias voltam do DESLOCAMENTO guardado — ver `programacaoPrefsSchema`. `-1` guardado ontem
+      continua querendo dizer "ontem" hoje, que é o que faz o filtro sobreviver à virada do dia.
+    */
+    setDiasEscondidos(new Set(prefs.programacao.dias.map((d) => diaDoDeslocamento(d, hoje))));
     setMostrarOcultas(prefs.programacao.mostrarOcultas);
     setAplicado(true);
-  }, [aplicado, prefs.carregado, prefs.programacao]);
+  }, [aplicado, prefs.carregado, prefs.programacao, hoje]);
 
   /** Grava o estado final, como o resto das preferências: sem `add`/`remove`, a última vence. */
   const lembrar = (mudanca: Partial<ProgramacaoPrefs>) => {
@@ -251,9 +274,25 @@ export function MinhaProgramacaoClient({
     prefs.salvarProgramacao({
       frentes,
       status: [...statusEscondidos],
+      dias: [...diasEscondidos].map((d) => deslocamentoDoDia(d, hoje)),
       mostrarOcultas,
       ...mudanca,
     });
+  };
+
+  /**
+   * Esconder/mostrar um dia — pinta agora e grava atrás, como o resto dos filtros.
+   *
+   * Existe como função porque são DOIS botões (o dia e o "ver todos") e porque o `lembrar` precisa
+   * do conjunto NOVO: passá-lo por `mudanca` evita depender do `useState` já ter reagido, que é o
+   * mesmo cuidado do filtro de status logo abaixo.
+   */
+  const alternarDia = (dia: string) => {
+    const novo = new Set(diasEscondidos);
+    if (novo.has(dia)) novo.delete(dia);
+    else novo.add(dia);
+    setDiasEscondidos(novo);
+    lembrar({ dias: [...novo].map((d) => deslocamentoDoDia(d, hoje)) });
   };
 
   const consulta = useProgramacao(frentes, { atras: 2, adiante: 7 });
@@ -264,13 +303,6 @@ export function MinhaProgramacaoClient({
     lembrar({ frentes: proximas });
   };
   const marcar = useMarcarViagem();
-
-  const hoje = useMemo(() => {
-    // O "hoje" da EMPRESA, não o do computador de quem olha: o servidor agrupa por São Paulo, e a
-    // tela precisa concordar com ele para não chamar de "amanhã" o que o grupo chama de hoje.
-    const agora = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
-    return agora;
-  }, []);
 
   const linhas = consulta.data?.linhas ?? [];
 
@@ -421,14 +453,7 @@ export function MinhaProgramacaoClient({
                       key={dia}
                       type="button"
                       aria-pressed={!escondido}
-                      onClick={() =>
-                        setDiasEscondidos((atuais) => {
-                          const novo = new Set(atuais);
-                          if (novo.has(dia)) novo.delete(dia);
-                          else novo.add(dia);
-                          return novo;
-                        })
-                      }
+                      onClick={() => alternarDia(dia)}
                       className={cn(
                         "rounded-full border px-3 py-1 text-xs transition-colors",
                         escondido
@@ -448,7 +473,10 @@ export function MinhaProgramacaoClient({
                   type="button"
                   size="sm"
                   variant="ghost"
-                  onClick={() => setDiasEscondidos(new Set())}
+                  onClick={() => {
+                    setDiasEscondidos(new Set());
+                    lembrar({ dias: [] });
+                  }}
                 >
                   {t("verTodosOsDias")}
                 </Button>
@@ -752,7 +780,12 @@ export function MinhaProgramacaoClient({
                           <Copiar valor={l.motorista} rotulo={t("copiarMotorista")} />
                         </span>
                       ) : (
-                        <Previsto texto={l.previstoMotorista} rotulo={t("previsto")} />
+                        <Previsto
+                          texto={l.previstoMotorista}
+                          rotulo={t("previsto")}
+                          rotuloDefinir={t("prever")}
+                          aoDefinir={podeAtribuir ? () => setPrevendo(l.tripId) : undefined}
+                        />
                       )}
                       {/*
                         O CPF EMBAIXO DO NOME (31/08, a pedido).
@@ -780,7 +813,13 @@ export function MinhaProgramacaoClient({
                           <Copiar valor={l.placa} rotulo={t("copiarPlaca")} />
                         </span>
                       ) : (
-                        <Previsto texto={l.previstoPlaca} rotulo={t("previsto")} />
+                        // Sem `aoDefinir` nesta coluna: o previsto é UMA decisão (quem e com quê), e
+                        // dois convites para a mesma janela na mesma linha só ocupam espaço.
+                        <Previsto
+                          texto={l.previstoPlaca}
+                          rotulo={t("previsto")}
+                          rotuloDefinir={t("prever")}
+                        />
                       )}
                       {/*
                         A PLACA QUE NÃO FOI AO PORTAL, embaixo da que foi (30/08, a pedido).
@@ -849,6 +888,34 @@ export function MinhaProgramacaoClient({
         userId={userId}
         podeAtribuir={podeAtribuir}
       />
+
+      {/*
+        A JANELA DO PREVISTO, aberta pelo botão da linha — pequena de propósito.
+
+        O detalhe da viagem tem linha do tempo, Pré-SM e comentários; abri-lo inteiro para escrever
+        um nome é o caminho que já existia, e é o caminho que ninguém percorria. Aqui a janela faz
+        uma pergunta só e fecha ao gravar.
+
+        `key` no `tripId`: sem ela, abrir o previsto de outra viagem reaproveitaria o formulário
+        montado com os valores da anterior — o `Editor` decide o estado inicial na MONTAGEM, e é
+        essa escolha (documentada lá) que impede o laço de efeito que derrubou a atribuição em 22/08.
+      */}
+      <Dialog open={prevendo !== null} onOpenChange={(v) => !v && setPrevendo(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{t("previstoTitulo")}</DialogTitle>
+          </DialogHeader>
+          {prevendo ? (
+            <PrevistoDaViagem
+              key={prevendo}
+              tripId={prevendo}
+              podeMexer={podeAtribuir}
+              comecarEditando
+              aoConcluir={() => setPrevendo(null)}
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -860,8 +927,45 @@ export function MinhaProgramacaoClient({
  * terceiro é provável. O selo vem em `not-italic` de propósito: itálico dentro de itálico deixa
  * de ser distinção, e é a distinção inteira que este desenho está tentando fazer.
  */
-function Previsto({ texto, rotulo }: { texto: string | null; rotulo: string }) {
-  if (!texto) return <span className="text-muted-foreground">—</span>;
+function Previsto({
+  texto,
+  rotulo,
+  aoDefinir,
+  rotuloDefinir,
+}: {
+  texto: string | null;
+  rotulo: string;
+  /**
+   * O CONVITE MORA NA CÉLULA VAZIA (31/08, a pedido).
+   *
+   * Antes, definir um previsto exigia clicar na linha, abrir a janela de detalhe e achar o bloco no
+   * meio dela. Medido em produção no dia do pedido: das 310 linhas de `trip_programacao`, apenas
+   * **27** tinham previsto — contra 303 com status, que tem botão na própria linha. A diferença não
+   * é de utilidade, é de distância: o recurso que está na linha é usado, o que está a três cliques
+   * não é.
+   *
+   * A célula do motorista já estava vazia mostrando um travessão. Um travessão não convida a nada, e
+   * é justamente o lugar onde a pergunta "quem vai dirigir?" acontece.
+   */
+  aoDefinir?: () => void;
+  rotuloDefinir: string;
+}) {
+  if (!texto) {
+    if (!aoDefinir) return <span className="text-muted-foreground">—</span>;
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          // A linha inteira abre o detalhe da viagem — sem isto, o clique acionaria os dois.
+          e.stopPropagation();
+          aoDefinir();
+        }}
+        className="rounded border border-dashed px-1.5 py-0.5 text-[0.7rem] text-muted-foreground transition-colors hover:border-primary hover:text-primary"
+      >
+        {rotuloDefinir}
+      </button>
+    );
+  }
   return (
     <span className="italic text-muted-foreground">
       {texto}
