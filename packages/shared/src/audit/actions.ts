@@ -86,6 +86,8 @@ export type AuditAction =
   | "cargo.alterado"
   | "cargo.desativado"
   | "usuario.cargo_alterado"
+  | "user.foto_alterada"
+  | "user.foto_descartada"
   | "trip.create" // newValue = original_plan summary + initial status
   | "trip.plan_update" // accepted customer update to live planned_* fields (per-field prev/new)
   | "trip.fields_update" // the operation's own annotations (solicitação, checklist, SM Raster, CT-e, doca)
@@ -261,6 +263,8 @@ export const ALL_AUDIT_ACTIONS = [
   "cargo.alterado",
   "cargo.desativado",
   "usuario.cargo_alterado",
+  "user.foto_alterada",
+  "user.foto_descartada",
 ] as const satisfies readonly AuditAction[];
 
 /**

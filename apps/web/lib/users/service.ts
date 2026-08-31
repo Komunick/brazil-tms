@@ -256,7 +256,24 @@ export async function updateUser(
   const profile = await db.transaction(async (tx) => {
     const updated = await tx
       .update(users)
-      .set({ role: nextRole, status: nextStatus, setor: nextSetor, updatedAt: new Date() })
+      .set({
+        role: nextRole,
+        status: nextStatus,
+        setor: nextSetor,
+        /**
+         * O RELÓGIO DOS 90 DIAS DA FOTO (FR-024, fatia 029).
+         *
+         * Preenchido ao desativar, **zerado ao reativar** — e é assim que a reativação "para o
+         * relógio" sem nenhuma regra especial: a varredura diária filtra por esta coluna, então quem
+         * volta some do alvo sozinho.
+         *
+         * A alternativa seria agendar o descarte no ato da desativação, e ela teria de ser cancelada
+         * na reativação. Um cancelamento esquecido apaga a foto de quem voltou a trabalhar; a
+         * varredura não tem estado para esquecer.
+         */
+        desativadoEm: nextStatus === "disabled" ? new Date() : null,
+        updatedAt: new Date(),
+      })
       .where(eq(users.id, id))
       .returning();
     const row = updated[0];

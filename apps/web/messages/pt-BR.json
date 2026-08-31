@@ -468,7 +468,9 @@
     "cargo_criado": "Cargo criado",
     "cargo_alterado": "Cargo alterado",
     "cargo_desativado": "Cargo desativado",
-    "usuario_cargo_alterado": "Cargo do usuário alterado"
+    "usuario_cargo_alterado": "Cargo do usuário alterado",
+    "user_foto_alterada": "Foto de perfil alterada",
+    "user_foto_descartada": "Foto de perfil descartada (90 dias)"
   },
   "Documents": {
     "title": "Documentos",
@@ -2539,5 +2541,11 @@
     "desativar": "Desativar cargo",
     "moverPara": "Mover as pessoas para",
     "escolhaDestino": "Mover {n} pessoa(s) para…"
+  },
+  "Perfil": {
+    "titulo": "Perfil",
+    "naoEncontrado": "Perfil não encontrado.",
+    "semCargo": "Sem cargo definido — esta pessoa não vê nenhuma tela.",
+    "contaDesativada": "Conta desativada"
   }
 }

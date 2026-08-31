@@ -20,14 +20,17 @@ import { Conflict, NotFound } from "@/lib/api/respond";
 interface ResourceDocumentRow {
   id: string;
   /**
-   * A COLUNA aceita um terceiro dono desde a 028 (`preregistration`, a foto que o motorista manda
-   * pelo formulário público). Este serviço, não: todas as suas funções recebem o tipo por parâmetro
-   * já restrito a `driver | vehicle`, então uma linha de pré-cadastro nunca chega aqui.
+   * A COLUNA aceita QUATRO donos: `driver`, `vehicle`, `preregistration` (028, a foto que o
+   * motorista manda pelo formulário público) e `user` (029, a foto de perfil).
+   *
+   * Este serviço, não: todas as suas funções recebem o tipo por parâmetro já restrito a
+   * `driver | vehicle`, então nem a linha de pré-cadastro nem a de perfil chegam aqui — e a foto de
+   * perfil tem serviço próprio (`lib/perfil/foto.ts`), justamente para não passar por este.
    *
    * O tipo largo entra para dizer a verdade sobre o que vem do banco; quem estreita é `toDto`, com
    * conferência de verdade em vez de um cast mudo.
    */
-  entityType: "driver" | "vehicle" | "preregistration";
+  entityType: "driver" | "vehicle" | "preregistration" | "user";
   entityId: string;
   docType: string;
   fileName: string;
@@ -40,12 +43,14 @@ interface ResourceDocumentRow {
 
 function toDto(row: ResourceDocumentRow): ResourceDocumentDto {
   /**
-   * A fronteira entre a coluna e a tela de frota. Se uma linha de pré-cadastro chegar até aqui, é
-   * erro de programação — alguém consultou sem filtrar pelo tipo — e vale falhar alto: devolvê-la
-   * mostraria a foto de um documento pessoal numa tela que não é dela.
+   * A fronteira entre a coluna e a tela de frota. Se uma linha de pré-cadastro — ou, desde a 029, de
+   * foto de perfil — chegar até aqui, é erro de programação: alguém consultou sem filtrar pelo tipo.
+   *
+   * Vale falhar alto. Devolvê-la mostraria a foto de um documento pessoal, ou o rosto de um
+   * funcionário, numa tela que não é dela.
    */
-  if (row.entityType === "preregistration") {
-    throw new Error("Documento de pré-cadastro não pertence à tela de frota.");
+  if (row.entityType === "preregistration" || row.entityType === "user") {
+    throw new Error(`Documento de ${row.entityType} não pertence à tela de frota.`);
   }
   return {
     id: row.id,

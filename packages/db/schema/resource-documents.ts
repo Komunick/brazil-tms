@@ -30,7 +30,17 @@ export const resourceDocuments = pgTable(
      * dentro de `assertResourceDocumentParent`, que procura o pai em `drivers`/`vehicles` e não
      * acharia nada. Este tipo descreve a COLUNA; aquele descreve a porta.
      */
-    entityType: text("entity_type").$type<"driver" | "vehicle" | "preregistration">().notNull(),
+    /*
+      `user` entrou na fatia 029 — a foto de perfil (migração `0060` alargou o CHECK).
+
+      Vale para ele exatamente o que já valia para `preregistration`, e é o que o comentário acima
+      explica: este tipo descreve a COLUNA; `RESOURCE_DOCUMENT_ENTITY_TYPES` descreve a PORTA das
+      rotas de frota, e continua `driver | vehicle`. A foto entra por rota própria
+      (`lib/perfil/foto.ts`), que não passa pelo serviço de frota.
+    */
+    entityType: text("entity_type")
+      .$type<"driver" | "vehicle" | "preregistration" | "user">()
+      .notNull(),
     entityId: uuid("entity_id").notNull(),
     docType: text("doc_type").notNull(),
     fileName: text("file_name").notNull(),
