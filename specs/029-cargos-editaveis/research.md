@@ -174,8 +174,19 @@ Isto é o SC-003 na forma executável. "Ninguém perde acesso" deixa de ser prom
 
 ### O que a operação impõe
 
-`docs/OPERACAO.md`: **o `deploy.sh` NÃO aplica migração.** Migra-se à mão, e nesse momento quem está
-respondendo é o código ANTERIOR.
+**CORRIGIDO EM 31/08 — a premissa original estava errada, e a conclusão continua certa.**
+
+Eu escrevi aqui, citando `docs/OPERACAO.md`, que *"o `deploy.sh` NÃO aplica migração"*. É falso: ele
+termina em `exec bash devops/ctl.sh update`, e `cmd_update` chama `cmd_migrate` (linha 452) antes do
+build. O doc parou de ler no arquivo errado, e eu repeti. Medido: a `0060` subiu no dev **sozinha**,
+pelo deploy.
+
+**O que a correção NÃO desfaz**: a ordem real é `migrate → seed → build → restart`, e o build leva
+minutos. Nesse intervalo **o banco já é o novo e o app ainda é o antigo** — que lê `users.role` e cria
+usuário sem saber preencher `cargo_id`.
+
+Ou seja: a janela existe, é medida em minutos, e não depende de ninguém demorar para migrar. Tudo o
+que segue abaixo continua valendo, e por uma razão mais concreta do que a que eu tinha.
 
 ### Decisão: `users.role` FICA
 

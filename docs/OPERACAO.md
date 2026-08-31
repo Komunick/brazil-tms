@@ -155,11 +155,26 @@ o interruptor: é o preparo que precisa acontecer antes de ligá-lo.
 VM, que executa o `deploy.sh` do deploy correspondente. Produção tem `environment: production`, então
 o job fica **`waiting`** até alguém aprovar em Actions → *Review deployments*.
 
-> ### ⚠️ O deploy NÃO aplica migração
+> ### ⚠️ O deploy APLICA migração — e esta seção afirmava o contrário até 31/08
 >
-> O cabeçalho do `deploy.sh` diz `git pull → pnpm install → migração → build → restart`. **Não existe
-> comando de migração no arquivo.** Migre à mão, com o código antigo ainda no ar — as migrações são
-> aditivas, então o site atual convive com as colunas novas.
+> **A afirmação anterior era falsa, e agora foi medida.** Ela dizia *"não existe comando de migração
+> no arquivo"* e mandava migrar à mão. É verdade que `deploy.sh` não tem o comando — mas a última
+> linha dele é `exec bash devops/ctl.sh update`, e `cmd_update` chama `cmd_migrate` (linha 452 do
+> `ctl.sh`, idêntico nos dois deploys) **antes do build**. A leitura tinha parado no arquivo errado.
+>
+> Medido em 31/08: a migração `0060` subiu no dev **sozinha**, pelo deploy, sem ninguém migrar à mão.
+>
+> **O que muda:** não é preciso migrar à mão. O que continua valendo inteiro é **conferir** — o
+> `drizzle-kit` responde "migrations applied successfully" mesmo sem ter feito nada, e foi isso que
+> gerou os dois incidentes registrados logo abaixo.
+>
+> **O QUE NÃO MUDA, E É O MAIS IMPORTANTE:** a ordem é `migrate → seed → build → restart`. O build
+> leva minutos, e nesse intervalo **o banco já é o novo e o app ainda é o antigo**. Toda migração
+> precisa ser **aditiva** — coluna removida, ou `not null` acrescentado, derruba a produção nessa
+> janela. A instrução antiga estava errada no meio e certa no fim: o perigo existe, mas a janela é o
+> **build**, não a espera por alguém.
+>
+> Migrar antes continua sendo possível, e é o que a fatia 029 fez para conferir sem pressa:
 >
 > ```bash
 > cd /opt/brazil-tms

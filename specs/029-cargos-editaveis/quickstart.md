@@ -34,8 +34,16 @@ Os caminhos:
 | produção | `/opt/brazil-tms` | `brazil-tms-supabase-db-1` |
 
 
-O `deploy.sh` **não** aplica migração (`docs/OPERACAO.md`). A `0060` é aditiva e convive com o código
-que ainda lê `users.role`.
+**CORRIGIDO EM 31/08, e eu tinha afirmado o contrário aqui.** O deploy **aplica** a migração: o
+`deploy.sh` termina em `exec bash devops/ctl.sh update`, e `cmd_update` chama `cmd_migrate` antes do
+build. Medido: a `0060` subiu no dev sozinha, pelo deploy.
+
+Então este passo é **opcional** — serve para migrar e conferir sem a pressa do deploy. O que continua
+obrigatório é a conferência do passo 3.
+
+E o motivo de a `0060` ser aditiva **não some com a correção, fica mais concreto**: a ordem é
+`migrate → seed → build → restart`, e o build leva minutos. Nesse intervalo o banco já é o novo e o
+app ainda é o antigo — que lê `users.role` e cria usuário sem saber preencher `cargo_id`.
 
 ```bash
 cd /opt/brazil-tms

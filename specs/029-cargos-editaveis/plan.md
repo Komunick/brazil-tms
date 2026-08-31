@@ -42,7 +42,8 @@ autorização que a spec proíbe (FR-005).
 **Performance Goals**: a sessão já faz 1 consulta por requisição (`cache()` do React). O cargo entra
 **na mesma consulta**, por `join` — nenhuma ida a mais ao banco.
 
-**Constraints**: migração à mão, aditiva, aplicada com o app ANTERIOR no ar (o `deploy.sh` não migra)
+**Constraints**: migração **aditiva**, porque o deploy migra ANTES do build e o app anterior continua
+servindo durante ele (medido em 31/08 — ver research §5, corrigido)
 
 **Scale/Scope**: 34 usuários, 7 cargos semeados, 23 permissões, 30 itens de menu, 231 pontos de
 verificação
