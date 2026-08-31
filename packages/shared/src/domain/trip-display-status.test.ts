@@ -80,13 +80,31 @@ describe("displayStatusOf — chegar e ser escalada são coisas diferentes", () 
     expect(displayStatusOf("at_origin", "Accepted", "Departed")).toBe("at_origin");
   });
 
-  it("quem o PORTAL escalou fica na fila, e não afirma que chegou", () => {
-    expect(displayStatusOf("received", "Accepted", "Assigned")).toBe("awaiting_arrival");
+  /**
+   * JUNTADO em 31/08, a pedido — e por medição, não por gosto.
+   *
+   * "Escalada" (portal) e "Atribuída" (TMS) eram dois chips. A separação prometia mostrar quais
+   * viagens não passaram pela nossa tela, e o dado disse o contrário: das 13 escaladas, **6 vieram
+   * de um clique NO TMS**, pelo diálogo do portal.
+   *
+   * O motivo é que `enfileirarOrdemDoPortal` não mexe no `current_status` — quem atribui pelo
+   * diálogo daqui fica indistinguível de quem nunca abriu o TMS. O chip misturava os dois.
+   *
+   * Para quem opera, as duas dizem a mesma coisa: tem motorista nesta viagem.
+   */
+  it("quem o PORTAL escalou também é ATRIBUÍDA — uma palavra só", () => {
+    expect(displayStatusOf("received", "Accepted", "Assigned")).toBe("assigned");
   });
 
   it("`at_origin` volta à lista — é o único rótulo que afirma que o caminhão chegou", () => {
     expect(TRIP_DISPLAY_ORDER).toContain("at_origin");
-    expect(TRIP_DISPLAY_ORDER).toContain("awaiting_arrival");
+  });
+
+  it("`awaiting_arrival` sai da lista — nada mais é exibido com esse rótulo", () => {
+    // Deixá-lo criaria um chip que nunca conta nada, que foi o defeito que a retirada do
+    // `at_origin` causou em 19/08. A FILA continua existindo como parâmetro interno do filtro.
+    expect(TRIP_DISPLAY_ORDER).not.toContain("awaiting_arrival");
+    expect(TRIP_DISPLAY_ORDER).toContain("assigned");
   });
 
   it("o status REAL não é tocado — a fusão é só de exibição", () => {
@@ -106,7 +124,7 @@ describe("displayStatusOf — a terceira fila", () => {
      * cairia em "p/atribuir" e o quadro mandaria a operação escalar um motorista que o cliente já
      * escalou. A ordem dos testes é a do ciclo de vida, e é isso que este caso tranca.
      */
-    expect(displayStatusOf("received", "Accepted", "Assigned")).toBe("awaiting_arrival");
+    expect(displayStatusOf("received", "Accepted", "Assigned")).toBe("assigned");
   });
 
   it("as três filas são exaustivas e mutuamente exclusivas", () => {
@@ -120,7 +138,8 @@ describe("displayStatusOf — a terceira fila", () => {
       [null, "Assigning"],
       [null, null],
     ];
-    const filas = new Set(["in_analysis", "to_assign", "awaiting_arrival"]);
+    // `assigned` no lugar de `awaiting_arrival` desde 31/08: o rótulo mudou, o recorte não.
+    const filas = new Set(["in_analysis", "to_assign", "assigned"]);
     for (const [aceite, statusPortal] of combinacoes) {
       expect(filas.has(displayStatusOf("received", aceite, statusPortal))).toBe(true);
     }
@@ -135,14 +154,15 @@ describe("displayStatusOf — a terceira fila", () => {
  * está estranho. Foi o que aconteceu em 2026-08-19, com as duas viagens do dia em `at_origin`.
  */
 describe("boardFilterForDisplayStatus", () => {
-  it("não manda status junto com a fila NA ORIGEM — ela abrange dois status reais", () => {
-    // `status=received` cruzaria com E e cortaria justamente as viagens em `at_origin`. Quem sabe
-    // dos dois status é o `or` de `buildWhere`, e ele só é alcançado pelo parâmetro da fila.
-    expect(boardFilterForDisplayStatus("awaiting_arrival")).toEqual({
+  it("ATRIBUÍDA manda só a fila — ela abrange dois status reais", () => {
+    // `assigned` (o TMS atribuiu) e `received` com motorista no portal. Mandar o status cru junto
+    // cruzaria os dois com E e cortaria metade — foi assim que o cartão de 19/08 anunciou 2 e abriu
+    // vazio. Quem sabe dos dois é o `or` de `buildWhere`, alcançado só pelo parâmetro da fila.
+    expect(boardFilterForDisplayStatus("assigned")).toEqual({
       status: [],
       queue: "awaiting_arrival",
     });
-    expect(boardQueryForDisplayStatus("awaiting_arrival")).toBe("queue=awaiting_arrival");
+    expect(boardQueryForDisplayStatus("assigned")).toBe("queue=awaiting_arrival");
   });
 
   it("as outras duas filas continuam presas a `received`", () => {
