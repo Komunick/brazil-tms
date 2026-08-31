@@ -2,6 +2,7 @@
 // Consumers may also import via subpath exports (see package.json "exports").
 export * from "./formatting";
 export * from "./auth/permissions";
+export * from "./auth/cargo-invariantes";
 export * from "./audit/actions";
 export * from "./audit/legivel";
 export * from "./domain/trip-status";
@@ -28,6 +29,7 @@ export * from "./domain/operational-fields";
 export * from "./sla/jobs";
 export * from "./import/portal-jobs";
 export * from "./import/turno-jobs";
+export * from "./import/perfil-jobs";
 // feature 008 — documents, completion, billing readiness, rates & export.
 export * from "./domain/documents";
 export * from "./domain/billing";

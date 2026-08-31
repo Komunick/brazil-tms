@@ -16,7 +16,7 @@ import { PreSmRotasClient } from "@/components/master-data/pre-sm-rotas-client";
 export default async function PreSmRotasPage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "manage_commercial_data")) redirect("/");
+  if (!can(session.user, "manage_commercial_data")) redirect("/");
 
   const t = await getTranslations("PreSmRotas");
 

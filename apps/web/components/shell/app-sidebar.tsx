@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -31,7 +31,7 @@ import {
   Activity,
   ClipboardList,
 } from "lucide-react";
-import { can, type Role } from "@brazil-tms/shared";
+import { can, type PermissionKey } from "@brazil-tms/shared";
 import { NAV_GRUPOS, NAV_ITEMS, ordenarComFilhos } from "@/lib/nav";
 import { gravarMenuRecolhido } from "@/lib/ui/menu-recolhido";
 import { cn } from "@/lib/utils";
@@ -62,14 +62,23 @@ const ICONS: Record<string, LucideIcon> = {
 };
 
 /**
- * Role-aware navigation. Items are filtered by `can(role, permission)` — hiding is additive only;
- * the BFF stays authoritative (FR-011). Labels come from the `Nav` i18n namespace (SC-006).
+ * O menu mostra só o que o CARGO alcança — e esconder nunca é a única defesa (FR-006).
+ *
+ * Os itens são filtrados pelo MESMO `can` que o servidor usa. Quem recusa de verdade é o BFF:
+ * digitar o endereço de uma página fora do cargo continua devolvendo 403. Esconder aqui é conforto,
+ * não segurança.
+ *
+ * ── A LISTA VEM COMO ARRAY, E NÃO COMO CONJUNTO ───────────────────────────────────────────────
+ *
+ * Isto é componente de cliente, e `Set` não atravessa a fronteira do servidor para o cliente. O
+ * conjunto é remontado aqui dentro para que a filtragem passe pelo mesmo `can` — comparar com
+ * `includes` seria uma segunda implementação da regra, e duas divergem em silêncio.
  */
 export function AppSidebar({
-  role,
+  permissoes,
   recolhidoInicial = false,
 }: {
-  role: Role;
+  permissoes: readonly PermissionKey[];
   recolhidoInicial?: boolean;
 }) {
   const tCommon = useTranslations("Common");
@@ -138,7 +147,7 @@ export function AppSidebar({
           )}
         </button>
       </div>
-      <ListaDeNavegacao role={role} recolhido={recolhido} />
+      <ListaDeNavegacao permissoes={permissoes} recolhido={recolhido} />
     </aside>
   );
 }
@@ -155,18 +164,22 @@ export function AppSidebar({
  * página e continua olhando para o menu. No desktop a prop não é passada e o clique só navega.
  */
 export function ListaDeNavegacao({
-  role,
+  permissoes,
   recolhido = false,
   aoNavegar,
 }: {
-  role: Role;
+  permissoes: readonly PermissionKey[];
   recolhido?: boolean;
   aoNavegar?: () => void;
 }) {
   const t = useTranslations("Nav");
   const tGrupo = useTranslations("Nav.grupos");
   const pathname = usePathname();
-  const visibleItems = NAV_ITEMS.filter((item) => !item.permission || can(role, item.permission));
+  // Remontado uma vez por renderização, e não a cada item: são 30 itens contra um `Set` só.
+  const quemPede = useMemo(() => ({ permissoes: new Set(permissoes) }), [permissoes]);
+  const visibleItems = NAV_ITEMS.filter(
+    (item) => !item.permission || can(quemPede, item.permission),
+  );
 
   return (
     <nav

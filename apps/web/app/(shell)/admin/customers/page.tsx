@@ -7,7 +7,7 @@ import { CustomersClient } from "@/components/master-data/customers-client";
 export default async function CustomersPage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "manage_commercial_data")) redirect("/");
+  if (!can(session.user, "manage_commercial_data")) redirect("/");
 
-  return <CustomersClient canArchive={can(session.user.role, "delete_archive")} />;
+  return <CustomersClient canArchive={can(session.user, "delete_archive")} />;
 }

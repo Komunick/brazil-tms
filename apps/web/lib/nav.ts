@@ -225,6 +225,21 @@ export const NAV_ITEMS: readonly NavItem[] = [
     permission: "view_all_trips",
     grupo: "analise",
   },
+  /*
+    CARGOS (2026-08-31, fatia 029) — logo acima de "Usuários e Perfis", porque é do cargo que o
+    acesso de cada pessoa passa a sair. Quem vai mexer no que alguém alcança repara no cargo antes.
+
+    Ele NÃO aparece na tela de cargos como página marcável, e isso é de propósito: quem administra
+    usuários já o alcança por definição, e oferecer "ver a tela de cargos" como caixa separada
+    permitiria um cargo que abre a tela e não consegue salvar nada nela.
+  */
+  {
+    key: "cargos",
+    href: "/admin/cargos",
+    icon: "ShieldCheck",
+    permission: "manage_users",
+    grupo: "sistema",
+  },
   {
     key: "adminUsers",
     href: "/admin/users",

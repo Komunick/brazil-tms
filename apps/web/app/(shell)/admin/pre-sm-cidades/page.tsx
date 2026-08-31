@@ -17,7 +17,7 @@ import { PreSmCidadesClient } from "@/components/master-data/pre-sm-cidades-clie
 export default async function PreSmCidadesPage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "manage_commercial_data")) redirect("/");
+  if (!can(session.user, "manage_commercial_data")) redirect("/");
 
   const t = await getTranslations("PreSmCidades");
 

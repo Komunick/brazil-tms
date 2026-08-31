@@ -1,6 +1,8 @@
 import "server-only";
-import { and, desc, eq, ilike, ne, or } from "drizzle-orm";
+import { and, desc, eq, ilike, or } from "drizzle-orm";
 import { db, users } from "@brazil-tms/db";
+import { quantosAindaAdministram } from "@brazil-tms/db";
+import { cargoParaPapel } from "@/lib/cargos/service";
 import type { CreateUserInput, Role, Setor, UpdateUserInput } from "@brazil-tms/shared";
 import { setorValido } from "@brazil-tms/shared";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -141,7 +143,28 @@ export async function createUser(
     const profile = await db.transaction(async (tx) => {
       const inserted = await tx
         .insert(users)
-        .values({ id: authUserId, name, email, role, status, mustChangePassword })
+        /**
+         * NASCE COM CARGO (FR-011, fatia 029) — e o cargo é o que decide o que a pessoa alcança.
+         *
+         * `users.cargo_id` é NULO no banco de propósito (o app anterior precisava criar usuário
+         * durante o deploy, sem saber preencher a coluna). Até o `NOT NULL` de uma fatia futura,
+         * quem sustenta "ninguém fica sem cargo" é a APLICAÇÃO — e este é o ponto onde ela sustenta.
+         *
+         * Sem isto, todo cadastro feito a partir de agora nasceria com conjunto VAZIO: a pessoa
+         * entra, não vê nada, e ninguém liga o efeito à causa.
+         *
+         * O `role` continua sendo gravado porque a coluna continua existindo e ainda é `NOT NULL`.
+         * Ele já não decide nada.
+         */
+        .values({
+          id: authUserId,
+          name,
+          email,
+          role,
+          cargoId: await cargoParaPapel(role),
+          status,
+          mustChangePassword,
+        })
         .returning();
       const row = inserted[0];
       if (!row) throw new Error("Inserção de usuário não retornou linha.");
@@ -213,36 +236,56 @@ export async function updateUser(
   const nextSetor = input.setor !== undefined ? input.setor : (current.setor ?? null);
   const setorChanged = input.setor !== undefined && input.setor !== (current.setor ?? null);
 
-  // Does this change remove the last active admin? (disabling an admin, or moving an admin off admin)
-  const removesAdmin =
-    current.role === "admin" &&
-    current.status === "active" &&
-    ((statusChanged && nextStatus === "disabled") || (roleChanged && nextRole !== "admin"));
-
+  /**
+   * A GUARDA DO ÚLTIMO ADMINISTRADOR MUDOU DE PERGUNTA (2026-08-31, fatia 029).
+   *
+   * Ela contava `role = 'admin'`. Depois que o acesso passou a vir do CARGO, esse papel não decide
+   * mais nada — e a guarda passou a proteger o conjunto errado, dos dois lados:
+   *
+   *   • quem tem cargo com `manage_users` e papel `dispatcher` NÃO estava protegido — e isso deixa
+   *     de ser hipótese no minuto em que alguém cria o primeiro cargo próprio;
+   *   • quem tem papel `admin` e cargo sem `manage_users` estava protegido à toa.
+   *
+   * Agora a pergunta é uma só, feita no mesmo lugar que as outras três rotas usam
+   * (`quantosAindaAdministram`), DEPOIS da escrita e dentro da transação — ver `ainda-tem-admin.ts`
+   * para o porquê de depois: contar antes perde a corrida de duas abas.
+   *
+   * Some junto o `FOR UPDATE` que travava as outras linhas: ele resolvia a mesma corrida por outro
+   * caminho, e manter os dois seria manter duas respostas para a mesma pergunta.
+   */
   const profile = await db.transaction(async (tx) => {
-    if (removesAdmin) {
-      // Lock the OTHER active-admin rows and count them in code. Postgres rejects FOR UPDATE on an
-      // aggregate query, so we must select rows (not count()) here.
-      const otherActiveAdmins = await tx
-        .select({ id: users.id })
-        .from(users)
-        .where(and(eq(users.role, "admin"), eq(users.status, "active"), ne(users.id, id)))
-        .for("update");
-      if (otherActiveAdmins.length === 0) {
-        throw new Conflict(
-          "LAST_ADMIN_GUARD",
-          "Não é possível desativar ou rebaixar o último administrador ativo.",
-        );
-      }
-    }
-
     const updated = await tx
       .update(users)
-      .set({ role: nextRole, status: nextStatus, setor: nextSetor, updatedAt: new Date() })
+      .set({
+        role: nextRole,
+        status: nextStatus,
+        setor: nextSetor,
+        /**
+         * O RELÓGIO DOS 90 DIAS DA FOTO (FR-024, fatia 029).
+         *
+         * Preenchido ao desativar, **zerado ao reativar** — e é assim que a reativação "para o
+         * relógio" sem nenhuma regra especial: a varredura diária filtra por esta coluna, então quem
+         * volta some do alvo sozinho.
+         *
+         * A alternativa seria agendar o descarte no ato da desativação, e ela teria de ser cancelada
+         * na reativação. Um cancelamento esquecido apaga a foto de quem voltou a trabalhar; a
+         * varredura não tem estado para esquecer.
+         */
+        desativadoEm: nextStatus === "disabled" ? new Date() : null,
+        updatedAt: new Date(),
+      })
       .where(eq(users.id, id))
       .returning();
     const row = updated[0];
     if (!row) throw new NotFound("NOT_FOUND", "Usuário não encontrado.");
+
+    // DEPOIS da escrita — ver o comentário acima e `ainda-tem-admin.ts`.
+    if ((await quantosAindaAdministram(tx as never)) < 1) {
+      throw new Conflict(
+        "LAST_ADMIN_GUARD",
+        "Não é possível desativar a última pessoa capaz de administrar usuários.",
+      );
+    }
 
     if (roleChanged) {
       await writeAudit(tx, {
@@ -341,21 +384,24 @@ export async function deleteUser(id: string, actorUserId: string): Promise<void>
 
   try {
     await db.transaction(async (tx) => {
-      if (current.role === "admin" && current.status === "active") {
-        const otherActiveAdmins = await tx
-          .select({ id: users.id })
-          .from(users)
-          .where(and(eq(users.role, "admin"), eq(users.status, "active"), ne(users.id, id)))
-          .for("update");
-        if (otherActiveAdmins.length === 0) {
-          throw new Conflict(
-            "LAST_ADMIN_GUARD",
-            "Não é possível excluir o último administrador ativo.",
-          );
-        }
-      }
-
       await tx.delete(users).where(eq(users.id, id));
+
+      /**
+       * MESMA PERGUNTA DAS OUTRAS TRÊS ROTAS, no mesmo lugar (fatia 029).
+       *
+       * Contava `role = 'admin'` e travava as outras linhas com `FOR UPDATE`. Depois que o acesso
+       * passou a vir do cargo, o papel não decide mais nada, e essa contagem protegia o conjunto
+       * errado — ver o comentário longo em `updateUser`.
+       *
+       * A exclusão vem primeiro e a contagem depois: é o `delete` que precisa ser desfeito se ele
+       * levar o último. Contar antes perderia a corrida de duas abas.
+       */
+      if ((await quantosAindaAdministram(tx as never)) < 1) {
+        throw new Conflict(
+          "LAST_ADMIN_GUARD",
+          "Não é possível excluir a última pessoa capaz de administrar usuários.",
+        );
+      }
 
       // `entity_id` is a plain uuid (no FK), so this row outlives the profile it describes.
       await writeAudit(tx, {

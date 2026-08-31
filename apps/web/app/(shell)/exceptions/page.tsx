@@ -14,7 +14,7 @@ import { ExceptionTable } from "@/components/exceptions/exception-table";
 export default async function ExceptionsPage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "view_all_trips")) redirect("/");
+  if (!can(session.user, "view_all_trips")) redirect("/");
 
   const t = await getTranslations("Exceptions");
   const options = await getTripFilterOptions();

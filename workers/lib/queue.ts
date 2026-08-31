@@ -8,6 +8,7 @@ import {
   PORTAL_JOBS,
   PRE_SM_JOBS,
   SLA_JOBS,
+  PERFIL_JOBS,
   TURNO_JOBS,
   type BillingJobName,
   type BillingJobPayloads,
@@ -25,6 +26,8 @@ import {
   type PreSmJobPayloads,
   type SlaJobName,
   type SlaJobPayloads,
+  type PerfilJobName,
+  type PerfilJobPayloads,
   type TurnoJobName,
   type TurnoJobPayloads,
 } from "@brazil-tms/shared";
@@ -52,6 +55,8 @@ export const JOB = {
   ...PORTAL_JOBS,
   ...PRE_SM_JOBS,
   ...TURNO_JOBS,
+  // Fatia 029 — o descarte da foto de perfil aos 90 dias.
+  ...PERFIL_JOBS,
   // Fatia 028 — a leitura da CNH que chega pelo formulário público.
   ...CNH_JOBS,
   ...MOTORISTA_JOBS,
@@ -66,7 +71,8 @@ export type JobName =
   | PreSmJobName
   | TurnoJobName
   | CnhJobName
-  | MotoristaJobName;
+  | MotoristaJobName
+  | PerfilJobName;
 export type JobPayloads = ImportJobPayloads &
   SlaJobPayloads &
   BillingJobPayloads &
@@ -75,7 +81,8 @@ export type JobPayloads = ImportJobPayloads &
   PreSmJobPayloads &
   TurnoJobPayloads &
   CnhJobPayloads &
-  MotoristaJobPayloads;
+  MotoristaJobPayloads &
+  PerfilJobPayloads;
 
 /** Construct the pg-boss instance against the worker's DATABASE_URL (server/worker-only). */
 export function createBoss(): PgBoss {

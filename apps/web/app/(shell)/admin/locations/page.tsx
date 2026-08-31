@@ -7,7 +7,7 @@ import { LocationsClient } from "@/components/master-data/locations-client";
 export default async function LocationsPage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "manage_commercial_data")) redirect("/");
+  if (!can(session.user, "manage_commercial_data")) redirect("/");
 
-  return <LocationsClient canArchive={can(session.user.role, "delete_archive")} />;
+  return <LocationsClient canArchive={can(session.user, "delete_archive")} />;
 }

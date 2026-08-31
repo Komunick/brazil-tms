@@ -155,11 +155,26 @@ o interruptor: é o preparo que precisa acontecer antes de ligá-lo.
 VM, que executa o `deploy.sh` do deploy correspondente. Produção tem `environment: production`, então
 o job fica **`waiting`** até alguém aprovar em Actions → *Review deployments*.
 
-> ### ⚠️ O deploy NÃO aplica migração
+> ### ⚠️ O deploy APLICA migração — e esta seção afirmava o contrário até 31/08
 >
-> O cabeçalho do `deploy.sh` diz `git pull → pnpm install → migração → build → restart`. **Não existe
-> comando de migração no arquivo.** Migre à mão, com o código antigo ainda no ar — as migrações são
-> aditivas, então o site atual convive com as colunas novas.
+> **A afirmação anterior era falsa, e agora foi medida.** Ela dizia *"não existe comando de migração
+> no arquivo"* e mandava migrar à mão. É verdade que `deploy.sh` não tem o comando — mas a última
+> linha dele é `exec bash devops/ctl.sh update`, e `cmd_update` chama `cmd_migrate` (linha 452 do
+> `ctl.sh`, idêntico nos dois deploys) **antes do build**. A leitura tinha parado no arquivo errado.
+>
+> Medido em 31/08: a migração `0060` subiu no dev **sozinha**, pelo deploy, sem ninguém migrar à mão.
+>
+> **O que muda:** não é preciso migrar à mão. O que continua valendo inteiro é **conferir** — o
+> `drizzle-kit` responde "migrations applied successfully" mesmo sem ter feito nada, e foi isso que
+> gerou os dois incidentes registrados logo abaixo.
+>
+> **O QUE NÃO MUDA, E É O MAIS IMPORTANTE:** a ordem é `migrate → seed → build → restart`. O build
+> leva minutos, e nesse intervalo **o banco já é o novo e o app ainda é o antigo**. Toda migração
+> precisa ser **aditiva** — coluna removida, ou `not null` acrescentado, derruba a produção nessa
+> janela. A instrução antiga estava errada no meio e certa no fim: o perigo existe, mas a janela é o
+> **build**, não a espera por alguém.
+>
+> Migrar antes continua sendo possível, e é o que a fatia 029 fez para conferir sem pressa:
 >
 > ```bash
 > cd /opt/brazil-tms
@@ -177,6 +192,42 @@ o job fica **`waiting`** até alguém aprovar em Actions → *Review deployments
 > ```sql
 > select to_regclass('public.spot_offers'), to_regclass('public.bsc_snapshots');
 > ```
+
+### O ACESSO PASSOU A VIR DO BANCO (fatia 029 · migração `0060`)
+
+Até 31/08 o que cada pessoa alcançava vinha de um catálogo em **código** (`ROLE_PERMISSIONS`), e
+mudá-lo exigia deploy. O resultado, medido: **20 dos 34 usuários ativos eram `admin`**, porque quem
+precisava de uma combinação que não existia no catálogo não tinha para onde ir.
+
+Agora quem manda são as tabelas `cargos` e `cargo_permissoes`, editáveis pela tela **Sistema →
+Cargos**. Quem decide continua sendo o BFF, no mesmo `requirePermission` de sempre — mudou de onde
+ele lê.
+
+**A `0060` é aditiva, e isso não é estilo — é necessidade.** A ordem do deploy é
+`migrate → seed → build → restart`, e o build leva minutos: nesse intervalo **o banco já é o novo e o
+app ainda é o antigo**. Por isso, e sem exceção:
+
+- `users.role` **fica** (ainda `NOT NULL`), e o enum `app_role` não é tocado
+- `users.cargo_id` **nasce nulo** — o app anterior cria usuário sem saber preenchê-lo
+
+Há um teste (`packages/db/src/cargos/cargos-schema.test.ts`) que lê o SQL e proíbe as três coisas que
+derrubariam a produção nessa janela. Se ele cair, não "conserte o teste".
+
+**Depois de migrar, confira que ninguém perdeu acesso** — é leitura pura e não muda nada:
+
+```bash
+PATH=/home/ubuntu/.nvm/versions/node/v22.23.2/bin:$PATH \
+  pnpm --filter @brazil-tms/db db:conferir-acesso
+```
+
+Esperado: `N pessoas · N idênticas · 0 divergentes`, e a conta mestre
+(`victorti@braziltransports.com.br`) com **23 de 23** capacidades. Divergência **não exige desfazer
+nada** enquanto o app novo não subiu: `users.role` ainda é quem manda. Conserte a semeadura e rode de
+novo.
+
+**Sem cargo, a pessoa alcança ZERO** — nunca o papel antigo. É de propósito: um fallback faria tudo
+continuar funcionando se a leitura do cargo quebrasse, e ninguém descobriria até alguém editar um
+cargo e nada acontecer.
 
 ### `ctl.sh` (parar, subir, status)
 
@@ -207,6 +258,27 @@ cron exige reinício:
 | `sla.sweep` | `*/5` | recalcula risco de SLA e gera/resolve alertas |
 | `documents.checks` | `*/5` | confere documentos obrigatórios |
 | `portal.withdrawn` | `*/30` | **apaga** viagens que o cliente retirou do portal |
+| `perfil.limpar_fotos` | `0 7 * * *` (4h SP) | **apaga** a foto de perfil de quem está desativado há mais de 90 dias |
+
+### O descarte da foto de perfil (fatia 029)
+
+A foto de rosto de quem foi desativado tem prazo **declarado**: 90 dias. `PERFIL_LIMPAR_FOTOS_CRON`
+muda a hora.
+
+**A reativação para o relógio sozinha.** O alvo é `status = 'disabled'` **e** `desativado_em` além do
+prazo — e `desativado_em` é zerado ao reativar. Quem volta some do alvo sem nenhuma regra especial.
+(O desenho alternativo, agendar o descarte no ato da desativação, exigiria cancelar o agendamento na
+reativação — e um cancelamento esquecido apaga a foto de quem voltou a trabalhar.)
+
+**O objeto sai antes da linha.** No pior caso sobra uma linha órfã, que a varredura do dia seguinte
+limpa. Na ordem inversa sobraria um rosto guardado para sempre num bucket, sem nada apontando para
+ele. Um dos dois erros se conserta sozinho.
+
+Para conferir o agendamento:
+
+```sql
+select name, cron from pgboss.schedule where name like 'perfil%';
+```
 
 ### A varredura de retiradas
 

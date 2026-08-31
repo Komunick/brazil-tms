@@ -359,3 +359,10 @@ export { placasDoMotorista, type PlacaDoMotorista } from "./trips/placas-do-moto
 
 // As LH por trás de cada número do card da frente (2026-08-27).
 export { lhsDoPainel, type LhDoPainel, type MedidaDoPainel } from "./trips/lhs-do-painel";
+// Cargos: o acesso deixa de ser catálogo em código (fatia 029).
+export * from "./cargos/cargos-read";
+export * from "./cargos/cargos-write";
+export * from "./cargos/ainda-tem-admin";
+// Fatia 029 — o descarte da foto de perfil aos 90 dias.
+export * from "./perfil/fotos-vencidas";
+export * from "./cargos/selos";

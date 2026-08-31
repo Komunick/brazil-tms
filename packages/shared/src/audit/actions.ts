@@ -74,6 +74,23 @@ export type AuditAction =
   | "pre_sm.cidade.desconfirmar"
   // O cancelamento de uma Pré-SM já criada — e já cobrada pela gerenciadora.
   | "pre_sm.cancelar"
+  /*
+    2026-08-31, fatia 029 — o acesso deixou de ser catálogo em código e passou a ser dado editável.
+    O princípio IV da constituição exige auditar MUDANÇA DE PERMISSÃO, e agora ela acontece pela
+    tela: criar cargo, mudar o que ele alcança, desativá-lo, mover pessoa de um cargo para outro.
+
+    "cargo.alterado" guarda a LISTA INTEIRA antes e depois, nunca a diferença — só assim se responde
+    "o que este cargo alcançava no dia 12?" sem somar todas as alterações desde o começo.
+  */
+  | "cargo.criado"
+  | "cargo.alterado"
+  | "cargo.desativado"
+  | "usuario.cargo_alterado"
+  | "user.foto_alterada"
+  | "user.foto_descartada"
+  | "selo.criado"
+  | "selo.apagado"
+  | "usuario.selos_alterados"
   | "trip.create" // newValue = original_plan summary + initial status
   | "trip.plan_update" // accepted customer update to live planned_* fields (per-field prev/new)
   | "trip.fields_update" // the operation's own annotations (solicitação, checklist, SM Raster, CT-e, doca)
@@ -245,6 +262,15 @@ export const ALL_AUDIT_ACTIONS = [
   "pre_sm.cidade.confirmar",
   "pre_sm.cidade.desconfirmar",
   "pre_sm.cancelar",
+  "cargo.criado",
+  "cargo.alterado",
+  "cargo.desativado",
+  "usuario.cargo_alterado",
+  "user.foto_alterada",
+  "user.foto_descartada",
+  "selo.criado",
+  "selo.apagado",
+  "usuario.selos_alterados",
 ] as const satisfies readonly AuditAction[];
 
 /**

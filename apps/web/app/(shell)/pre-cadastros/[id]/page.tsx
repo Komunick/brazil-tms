@@ -14,7 +14,7 @@ import { ConferenciaClient } from "@/components/pre-cadastros/conferencia-client
 export default async function ConferenciaPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "manage_fleet_data")) redirect("/");
+  if (!can(session.user, "manage_fleet_data")) redirect("/");
 
   const { id } = await params;
   const t = await getTranslations("PreCadastros");

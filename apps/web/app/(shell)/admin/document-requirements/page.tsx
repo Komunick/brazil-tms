@@ -14,7 +14,7 @@ import { DocumentTypeAdmin } from "@/components/documents/document-type-admin";
 export default async function DocumentRequirementsPage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "manage_commercial_data")) redirect("/");
+  if (!can(session.user, "manage_commercial_data")) redirect("/");
 
   const t = await getTranslations("Documents.requirementsAdmin");
   const options = await getTripFilterOptions();

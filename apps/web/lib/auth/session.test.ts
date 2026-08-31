@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { PermissionKey } from "@brazil-tms/shared";
 import {
   SET_PASSWORD_PATH,
   decideAccess,
@@ -19,6 +20,22 @@ const baseProfile: ProfileRow = {
   status: "active",
   mustChangePassword: false,
   lastLoginAt: null,
+  // O cargo entrou na fatia 029; a lista vem do `join` da sessão.
+  permissoes: ["view_all_trips"],
+  cargo: "Despachante",
+};
+
+/**
+ * A LINHA DO BANCO e o USUÁRIO DA SESSÃO deixaram de ter a mesma forma (fatia 029).
+ *
+ * `ProfileRow.permissoes` é a lista que vem do `array_agg`; `SessionUser.permissoes` é o conjunto
+ * que `can` consulta. Espalhar um no outro funcionava enquanto os dois eram idênticos, e agora o
+ * compilador cobra a diferença — que é justamente a conversão que `evaluateProfile` faz.
+ */
+const baseUser: SessionUser = {
+  ...baseProfile,
+  status: "active",
+  permissoes: new Set<PermissionKey>(["view_all_trips"]),
 };
 
 describe("evaluateProfile — status gating", () => {
@@ -64,6 +81,8 @@ describe("isOnboardingIncomplete (BFF + shell gate)", () => {
     name: "Teste",
     email: "teste@example.com",
     role: "dispatcher",
+    permissoes: new Set<PermissionKey>(["view_all_trips"]),
+    cargo: "Despachante",
     status: "active",
     mustChangePassword: false,
     lastLoginAt: null,
@@ -84,7 +103,7 @@ describe("isOnboardingIncomplete (BFF + shell gate)", () => {
 describe("decideAccess — must_change_password gating (FR-013a)", () => {
   const authed = (mustChange: boolean): SessionResult => ({
     authenticated: true,
-    user: { ...baseProfile, status: "active", mustChangePassword: mustChange },
+    user: { ...baseUser, status: "active", mustChangePassword: mustChange },
   });
 
   it("unauthenticated → redirect_login", () => {
@@ -106,7 +125,7 @@ describe("decideAccess — must_change_password gating (FR-013a)", () => {
   it("pending user (invite not yet completed) on a normal route → redirect_set_password", () => {
     const pending: SessionResult = {
       authenticated: true,
-      user: { ...baseProfile, status: "pending", mustChangePassword: false },
+      user: { ...baseUser, status: "pending", mustChangePassword: false },
     };
     expect(decideAccess(pending)).toBe("redirect_set_password");
   });
@@ -114,7 +133,7 @@ describe("decideAccess — must_change_password gating (FR-013a)", () => {
   it("pending user on the password-flow route → allow", () => {
     const pending: SessionResult = {
       authenticated: true,
-      user: { ...baseProfile, status: "pending", mustChangePassword: false },
+      user: { ...baseUser, status: "pending", mustChangePassword: false },
     };
     expect(decideAccess(pending, { isPasswordFlowRoute: true })).toBe("allow");
   });

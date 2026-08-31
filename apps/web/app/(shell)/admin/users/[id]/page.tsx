@@ -11,7 +11,7 @@ export default async function AdminUserDetailPage({
 }) {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "manage_users")) redirect("/");
+  if (!can(session.user, "manage_users")) redirect("/");
 
   const { id } = await params;
   return <UserDetailClient userId={id} />;
