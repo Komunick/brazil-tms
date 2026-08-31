@@ -136,8 +136,8 @@ pessoa passa a ver exatamente isso — sem deploy nenhum.
 - [X] T033 [US1] Avisar, antes de salvar, quando um cargo fica **sem nada marcado** — é permitido (todo cargo nasce assim) e parece defeito
 - [X] T034 [US1] Apagar cargo com gente dentro **exige destino** (`moverPara`); sem destino, recusa
 - [X] T035 [US1] Acrescentar o item "Cargos" ao `nav.ts`, grupo `sistema`, permissão `manage_users`
-- [ ] T035a [US1] **A metade SERVIDOR do FR-006**: escrever teste de rota afirmando que abrir o ENDEREÇO de uma página fora do cargo devolve 403, com o menu já a escondendo. Esconder no menu nunca é a única defesa, e é o cenário 2 da US1 (*"inclusive se digitar o endereço direto"*) — sem este teste, a única prova é o menu encolher, que não prova nada sobre quem digita a URL
-- [ ] T035b [US1] **Usuário NOVO nasce com cargo** (FR-011): a criação de usuário passa a exigir `cargoId`, recusado no servidor. `cargo_id` é NULL na coluna de propósito (research §5, por causa do app anterior), então é a aplicação que sustenta o invariante I2 até o `NOT NULL` de uma fatia futura — sem isto, FR-011 é falso para todo cadastro feito a partir de agora
+- [X] T035a [US1] **A metade SERVIDOR do FR-006**: escrever teste de rota afirmando que abrir o ENDEREÇO de uma página fora do cargo devolve 403, com o menu já a escondendo. Esconder no menu nunca é a única defesa, e é o cenário 2 da US1 (*"inclusive se digitar o endereço direto"*) — sem este teste, a única prova é o menu encolher, que não prova nada sobre quem digita a URL
+- [X] T035b [US1] **Usuário NOVO nasce com cargo** (FR-011): a criação de usuário passa a exigir `cargoId`, recusado no servidor. `cargo_id` é NULL na coluna de propósito (research §5, por causa do app anterior), então é a aplicação que sustenta o invariante I2 até o `NOT NULL` de uma fatia futura — sem isto, FR-011 é falso para todo cadastro feito a partir de agora
 - [ ] T036 [US1] Conferir a mão pelo `quickstart.md` §4 e §5: mover alguém de cargo e ver o menu encolher **sem sair e entrar**; e os quatro caminhos do último admin recusados com motivo em português
 
 **Ponto de parada**: US1 completa. Os 20 admins já podem virar 3.
