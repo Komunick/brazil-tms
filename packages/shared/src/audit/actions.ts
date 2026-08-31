@@ -62,6 +62,9 @@ export type AuditAction =
   // campo mexido — é o que separa "o modelo errou" de "o motorista mandou errado", meses depois.
   | "preregistration.reviewed"
   | "preregistration.sent"
+  // A METADE COBRADA. Este registro existe para a fatura ter dono: quem apertou, quando, e com
+  // quais opções pagas marcadas. Sem ele o gasto é anônimo por construção.
+  | "preregistration.pesquisa_requested"
   // 026 — a ponte rota → modelo de Pré-SM. Confirmar AUTORIZA GASTO: a gerenciadora cobra por
   // solicitação, e uma rota confirmada passa a gerar Pré-SM sozinha. Quem confirmou fica registrado.
   | "pre_sm.modelo.confirmar"
@@ -235,6 +238,7 @@ export const ALL_AUDIT_ACTIONS = [
   "preregistration.archive",
   "preregistration.reviewed",
   "preregistration.sent",
+  "preregistration.pesquisa_requested",
   "pre_sm.modelo.confirmar",
   "pre_sm.modelo.desconfirmar",
   "pre_sm.enviar",

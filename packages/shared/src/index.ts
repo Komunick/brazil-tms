@@ -40,6 +40,7 @@ export * from "./schemas/pre-cadastro";
 export * from "./domain/cnh-lida";
 export * from "./domain/cnh-jobs";
 export * from "./domain/motorista-corpo";
+export * from "./domain/pesquisa-corpo";
 export * from "./domain/cidade-ibge";
 export * from "./schemas/trip";
 export * from "./schemas/trip-assignment";

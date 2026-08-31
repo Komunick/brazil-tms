@@ -45,6 +45,15 @@ export interface CnhJobPayloads {
  */
 export const MOTORISTA_JOBS = {
   motoristaCadastrar: "motorista.cadastrar",
+  /**
+   * O PEDIDO DE PESQUISA — a metade COBRADA (31/08, etapa 6).
+   *
+   * Fila própria, e nunca um lote: um job por clique, com o alvo no payload. O `motorista.cadastrar`
+   * ao lado processa em lote porque é de graça; aqui um laço seria uma conta crescendo sozinha.
+   *
+   * E NÃO EXISTE VARREDURA que a enfileire. O único caminho até esta fila é um botão.
+   */
+  motoristaPesquisar: "motorista.pesquisar",
 } as const;
 
 export type MotoristaJobName = (typeof MOTORISTA_JOBS)[keyof typeof MOTORISTA_JOBS];
@@ -62,6 +71,24 @@ export interface MotoristaCadastrarPayload {
   preRegistrationId?: string;
 }
 
+/**
+ * UM MOTORISTA POR VEZ, com quem pediu e o que ele marcou.
+ *
+ * `solicitadoPor` viaja no payload em vez de o job descobrir sozinho: o job roda depois do clique,
+ * e é o clique que tem dono. Sem isso, o registro diria "o worker pediu", que não responde nada
+ * quando a fatura chegar.
+ */
+export interface MotoristaPesquisarPayload {
+  preRegistrationId: string;
+  solicitadoPor: string;
+  vinculo: "F" | "A" | "T";
+  /** As três que encarecem. Sem padrão aqui: o que a pessoa marcou é o que vai. */
+  expressa: boolean;
+  pesquisaPlus: boolean;
+  biometrica: boolean;
+}
+
 export interface MotoristaJobPayloads {
   "motorista.cadastrar": MotoristaCadastrarPayload;
+  "motorista.pesquisar": MotoristaPesquisarPayload;
 }
