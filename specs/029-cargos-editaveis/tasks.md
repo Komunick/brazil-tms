@@ -113,29 +113,29 @@ pessoa passa a ver exatamente isso — sem deploy nenhum.
 
 ### O catálogo que a tela mostra
 
-- [ ] T022 [P] [US1] Criar `packages/shared/src/auth/catalogo-de-acesso.ts`: **áreas e páginas derivadas do `nav.ts`** (agrupadas pelo `grupo` que ele já declara), mais as **ações** que nenhum item de menu reivindica (`cancel_trip`, `delete_archive`, `export_billing`, `resolve_dispute`), estas com rótulo próprio em pt-BR
-- [ ] T023 [US1] Escrever `packages/shared/src/auth/catalogo-de-acesso.test.ts` afirmando que **toda `PermissionKey` aparece em exatamente um lugar** — página ou ação, nunca nos dois, nunca em nenhum. Uma permissão nova **derruba a CI** até alguém a colocar; sem isto ela fica inalcançável para quem não é admin, sem erro nenhum
+- [X] T022 [P] [US1] Criar `packages/shared/src/auth/catalogo-de-acesso.ts`: **áreas e páginas derivadas do `nav.ts`** (agrupadas pelo `grupo` que ele já declara), mais as **ações** que nenhum item de menu reivindica (`cancel_trip`, `delete_archive`, `export_billing`, `resolve_dispute`), estas com rótulo próprio em pt-BR
+- [X] T023 [US1] Escrever `packages/shared/src/auth/catalogo-de-acesso.test.ts` afirmando que **toda `PermissionKey` aparece em exatamente um lugar** — página ou ação, nunca nos dois, nunca em nenhum. Uma permissão nova **derruba a CI** até alguém a colocar; sem isto ela fica inalcançável para quem não é admin, sem erro nenhum
 
 ### A trava do último admin — UMA vez
 
-- [ ] T024 [P] [US1] Criar `packages/shared/src/auth/cargo-invariantes.ts` com a função **pura** que decide se um estado é admissível, no espírito do `pre-sm-corpo.ts` da 027, devolvendo **todos** os motivos e não o primeiro
-- [ ] T025 [US1] Criar `packages/db/src/cargos/ainda-tem-admin.ts`: a consulta `count(*)` de pessoas **ativas** cujo cargo alcança `manage_users`, chamada **dentro da transação e DEPOIS da escrita**. Verificar antes perde a corrida de duas abas rebaixando um administrador cada (research §3)
-- [ ] T026 [US1] Escrever `packages/shared/src/auth/cargo-invariantes.test.ts` cobrindo os **quatro** caminhos do FR-010: desativar o cargo, tirar a permissão, mover a última pessoa, desativá-la. Um caso a mais afirma que um cargo SEMEADO é editável e renomeável como qualquer outro (FR-016) — eles são ponto de partida, não estrutura
+- [X] T024 [P] [US1] Criar `packages/shared/src/auth/cargo-invariantes.ts` com a função **pura** que decide se um estado é admissível, no espírito do `pre-sm-corpo.ts` da 027, devolvendo **todos** os motivos e não o primeiro
+- [X] T025 [US1] Criar `packages/db/src/cargos/ainda-tem-admin.ts`: a consulta `count(*)` de pessoas **ativas** cujo cargo alcança `manage_users`, chamada **dentro da transação e DEPOIS da escrita**. Verificar antes perde a corrida de duas abas rebaixando um administrador cada (research §3)
+- [X] T026 [US1] Escrever `packages/shared/src/auth/cargo-invariantes.test.ts` cobrindo os **quatro** caminhos do FR-010: desativar o cargo, tirar a permissão, mover a última pessoa, desativá-la. Um caso a mais afirma que um cargo SEMEADO é editável e renomeável como qualquer outro (FR-016) — eles são ponto de partida, não estrutura
 
 ### Dados e rotas
 
-- [ ] T027 [P] [US1] `packages/db/src/cargos/cargos-read.ts` — listar cargos com a **contagem de pessoas** em cada (FR-008)
-- [ ] T028 [US1] `packages/db/src/cargos/cargos-write.ts` — criar, renomear, gravar permissões (estado final, sem `add`/`remove`), desativar. **Único lugar que chama T025.** Auditoria com a **lista inteira** antes e depois, nunca a diferença (FR-026)
-- [ ] T029 [US1] Rotas de `contracts/cargos-api.md`: `GET/POST /api/cargos`, `PUT/DELETE /api/cargos/[id]`, `PUT /api/users/[id]/cargo`. Recusas `422` com `ULTIMO_ADMIN`, `CARGO_COM_PESSOAS`, `ALEM_DO_PROPRIO_ACESSO`, `PERMISSAO_DESCONHECIDA`
-- [ ] T030 [US1] A resposta devolve **o que ficou guardado**, não o que foi mandado — a tela não pode seguir achando que gravou outra coisa (foi o defeito de `programacao_prefs`, invertido)
-- [ ] T031 [US1] Impedir que alguém conceda o que ele mesmo não alcança (FR-012), no servidor
+- [X] T027 [P] [US1] `packages/db/src/cargos/cargos-read.ts` — listar cargos com a **contagem de pessoas** em cada (FR-008)
+- [X] T028 [US1] `packages/db/src/cargos/cargos-write.ts` — criar, renomear, gravar permissões (estado final, sem `add`/`remove`), desativar. **Único lugar que chama T025.** Auditoria com a **lista inteira** antes e depois, nunca a diferença (FR-026)
+- [X] T029 [US1] Rotas de `contracts/cargos-api.md`: `GET/POST /api/cargos`, `PUT/DELETE /api/cargos/[id]`, `PUT /api/users/[id]/cargo`. Recusas `422` com `ULTIMO_ADMIN`, `CARGO_COM_PESSOAS`, `ALEM_DO_PROPRIO_ACESSO`, `PERMISSAO_DESCONHECIDA`
+- [X] T030 [US1] A resposta devolve **o que ficou guardado**, não o que foi mandado — a tela não pode seguir achando que gravou outra coisa (foi o defeito de `programacao_prefs`, invertido)
+- [X] T031 [US1] Impedir que alguém conceda o que ele mesmo não alcança (FR-012), no servidor
 
 ### Tela
 
-- [ ] T032 [US1] `apps/web/app/(shell)/admin/cargos/page.tsx` + cliente: lista com contagem, criar, renomear, e o painel de marcação em áreas/ações vindo de T022
-- [ ] T033 [US1] Avisar, antes de salvar, quando um cargo fica **sem nada marcado** — é permitido (todo cargo nasce assim) e parece defeito
-- [ ] T034 [US1] Apagar cargo com gente dentro **exige destino** (`moverPara`); sem destino, recusa
-- [ ] T035 [US1] Acrescentar o item "Cargos" ao `nav.ts`, grupo `sistema`, permissão `manage_users`
+- [X] T032 [US1] `apps/web/app/(shell)/admin/cargos/page.tsx` + cliente: lista com contagem, criar, renomear, e o painel de marcação em áreas/ações vindo de T022
+- [X] T033 [US1] Avisar, antes de salvar, quando um cargo fica **sem nada marcado** — é permitido (todo cargo nasce assim) e parece defeito
+- [X] T034 [US1] Apagar cargo com gente dentro **exige destino** (`moverPara`); sem destino, recusa
+- [X] T035 [US1] Acrescentar o item "Cargos" ao `nav.ts`, grupo `sistema`, permissão `manage_users`
 - [ ] T035a [US1] **A metade SERVIDOR do FR-006**: escrever teste de rota afirmando que abrir o ENDEREÇO de uma página fora do cargo devolve 403, com o menu já a escondendo. Esconder no menu nunca é a única defesa, e é o cenário 2 da US1 (*"inclusive se digitar o endereço direto"*) — sem este teste, a única prova é o menu encolher, que não prova nada sobre quem digita a URL
 - [ ] T035b [US1] **Usuário NOVO nasce com cargo** (FR-011): a criação de usuário passa a exigir `cargoId`, recusado no servidor. `cargo_id` é NULL na coluna de propósito (research §5, por causa do app anterior), então é a aplicação que sustenta o invariante I2 até o `NOT NULL` de uma fatia futura — sem isto, FR-011 é falso para todo cadastro feito a partir de agora
 - [ ] T036 [US1] Conferir a mão pelo `quickstart.md` §4 e §5: mover alguém de cargo e ver o menu encolher **sem sair e entrar**; e os quatro caminhos do último admin recusados com motivo em português
