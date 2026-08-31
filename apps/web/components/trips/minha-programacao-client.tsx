@@ -9,6 +9,8 @@ import { deslocamentoDoDia, diaDoDeslocamento } from "@/lib/trips/dias-da-progra
 import { usePainelDoUsuario } from "@/lib/ui/painel-do-usuario";
 import { ProgramacaoDetalhe } from "@/components/trips/programacao-detalhe";
 import { StatusDaLinha } from "@/components/trips/status-da-linha";
+import { SmDaLinha } from "@/components/trips/sm-da-linha";
+import { ArrowLeftRight } from "lucide-react";
 import { ComentariosDaLinha } from "@/components/trips/comentarios-da-linha";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { Copiar } from "@/components/trips/copiar";
@@ -658,11 +660,19 @@ export function MinhaProgramacaoClient({
                       A caixinha abre para baixo e some ao escolher — a linha não cresce.
                     */}
                     <TableCell className="p-1">
-                      <StatusDaLinha
-                        tripId={l.tripId}
-                        status={l.statusOperacional}
-                        podeMarcar={podeAtribuir}
-                      />
+                      {/*
+                        O SM FICA AO LADO DO STATUS (31/08, a pedido), e não dentro dele: o status é
+                        uma escada (a enviar → enviado → prog OK) e a SM convive com qualquer degrau.
+                        Como quinto valor, a tela teria de escolher entre dizer uma coisa ou a outra.
+                      */}
+                      <div className="flex items-center gap-1">
+                        <StatusDaLinha
+                          tripId={l.tripId}
+                          status={l.statusOperacional}
+                          podeMarcar={podeAtribuir}
+                        />
+                        <SmDaLinha tripId={l.tripId} sm={l.sm} podeMarcar={podeAtribuir} />
+                      </div>
                     </TableCell>
 
                     <TableCell className="font-mono text-xs">
@@ -777,6 +787,49 @@ export function MinhaProgramacaoClient({
                       {l.motorista ? (
                         <span className="inline-flex items-center gap-1">
                           {l.motorista}
+                          {/*
+                            O MOTORISTA FOI TROCADO (31/08, a pedido).
+
+                            Medido antes de construir: 48 viagens tiveram mais de uma atribuição
+                            concluída, e em 32 o motorista de fato mudou. O ícone só aparece nessas —
+                            trocar só a placa não é troca de motorista, e o balão fala do anterior.
+
+                            O dado estava em `portal_commands` desde agosto, com o motorista, quem
+                            pediu e quando, e nenhuma tela o mostrava.
+                          */}
+                          {l.trocouMotorista ? (
+                            /*
+                              O `title` vai no `span`, e não no ícone: o componente do lucide não
+                              aceita a prop e o balão simplesmente não apareceria — sem erro, porque
+                              props desconhecidas somem em silêncio no React.
+                            */
+                            <span
+                              className="inline-flex"
+                              aria-label={t("motoristaTrocado")}
+                              title={[
+                                l.motoristaAnterior
+                                  ? t("motoristaAnterior", { nome: l.motoristaAnterior })
+                                  : null,
+                                l.trocadoPor ? t("quemAlterou", { nome: l.trocadoPor }) : null,
+                                l.trocadoEm
+                                  ? new Date(l.trocadoEm).toLocaleString("pt-BR", {
+                                      timeZone: "America/Sao_Paulo",
+                                      day: "2-digit",
+                                      month: "2-digit",
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join("\n")}
+                            >
+                              <ArrowLeftRight
+                                className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400"
+                                aria-hidden
+                              />
+                            </span>
+                          ) : null}
                           <Copiar valor={l.motorista} rotulo={t("copiarMotorista")} />
                         </span>
                       ) : (

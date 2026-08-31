@@ -101,7 +101,8 @@ export async function salvarPrevisto(
      * status, e nessas o CHECK passa. Duas instruções, nenhuma condição no código.
      */
     await db.execute(sql`
-      delete from trip_programacao where trip_id = ${tripId} and status is null
+      delete from trip_programacao
+       where trip_id = ${tripId} and status is null and sm is null
     `);
     await db.execute(sql`
       update trip_programacao
@@ -148,6 +149,7 @@ export async function marcarStatus(
        where trip_id = ${tripId}
          and nullif(btrim(portal_driver_id), '') is null
          and nullif(btrim(placa), '') is null
+         and sm is null
     `);
     await db.execute(sql`
       update trip_programacao
@@ -170,4 +172,49 @@ export async function marcarStatus(
 function limpar(v: string | null | undefined): string | null {
   const s = String(v ?? "").trim();
   return s === "" ? null : s;
+}
+
+/**
+ * Marca a SM da viagem — sim, não, ou limpa (2026-08-31, a pedido).
+ *
+ * ── A MESMA FORMA DE `marcarStatus`, E PELA MESMA RAZÃO ───────────────────────────────────────
+ *
+ * Limpar (`null`) apaga a linha se ela ficaria sem NADA — sem previsto, sem placa e sem status —,
+ * porque uma linha que não diz nada é uma linha que a trava do banco recusa. Com qualquer outra
+ * coisa presente, só o campo da SM é zerado.
+ *
+ * ── E OS OUTROS DOIS CAMINHOS DE LIMPEZA GANHARAM `and sm is null` ────────────────────────────
+ *
+ * `salvarPrevisto` e `marcarStatus` apagavam a linha quando o resto estava vazio. Sem essa condição,
+ * limpar o status de uma viagem apagaria junto uma SM marcada — e ninguém ligaria uma coisa à outra:
+ * a pessoa tirou o "Enviado" e o "SM: Sim" sumiu.
+ */
+export async function marcarSm(
+  tripId: string,
+  userId: string,
+  sm: boolean | null,
+): Promise<void> {
+  if (sm === null) {
+    await db.execute(sql`
+      delete from trip_programacao
+       where trip_id = ${tripId}
+         and nullif(btrim(portal_driver_id), '') is null
+         and nullif(btrim(placa), '') is null
+         and status is null
+    `);
+    await db.execute(sql`
+      update trip_programacao
+         set sm = null, sm_por_user_id = null, sm_em = null
+       where trip_id = ${tripId}
+    `);
+    return;
+  }
+
+  await db
+    .insert(tripProgramacao)
+    .values({ tripId, sm, smPorUserId: userId, smEm: sql`now()` })
+    .onConflictDoUpdate({
+      target: tripProgramacao.tripId,
+      set: { sm, smPorUserId: userId, smEm: sql`now()` },
+    });
 }

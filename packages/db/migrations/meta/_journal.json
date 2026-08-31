@@ -428,6 +428,13 @@
       "when": 1788184800009,
       "tag": "0060_cargos_e_perfil",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1788271200009,
+      "tag": "0061_sm_da_programacao",
+      "breakpoints": true
     }
   ]
 }
