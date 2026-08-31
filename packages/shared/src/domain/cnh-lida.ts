@@ -155,7 +155,7 @@ export function camposDaLeitura(lida: CnhLida): CamposDoPreCadastro {
 }
 
 /**
- * Funde a leitura ao que JÁ se sabe, e o que já se sabe SEMPRE vence.
+ * Funde a leitura ao que JÁ se sabe. O que uma PESSOA disse vence; o que uma leitura VELHA disse, não.
  *
  * O motorista digitou o próprio CPF e o próprio celular; a leitura da foto não substitui isso. Duas
  * razões, e a segunda é a que importa: o CPF digitado é o que decidiu se este é cadastro novo ou
@@ -164,6 +164,26 @@ export function camposDaLeitura(lida: CnhLida): CamposDoPreCadastro {
  *
  * Um campo que a leitura não conseguiu ler NÃO apaga o que já existia: `null` da leitura sobre um
  * valor existente é ruído, não informação.
+ *
+ * ── MAS LEITURA VELHA NÃO É "O QUE JÁ SE SABE" (2026-08-30) ───────────────────────────────────
+ *
+ * Esta função dizia "o que já se sabe SEMPRE vence", e isso incluía o resultado de uma leitura
+ * anterior. O custo apareceu no primeiro cadastro real: o prompt foi corrigido, a releitura passou
+ * a acertar 18 de 18, e SEIS campos errados continuaram no lugar — categoria, cidade natal,
+ * nascimento, primeira habilitação, renach e órgão emissor. A releitura não conseguia consertar
+ * nada, que é o oposto do motivo de ela existir.
+ *
+ * Agora a precedência segue a PROCEDÊNCIA, e ela é uma escada de confiança:
+ *
+ *   digitado / declarado / cep / existente   >   leitura nova   >   leitura velha
+ *
+ * O que uma pessoa afirmou continua intocado — é exatamente a proteção original, e o reenvio de um
+ * motorista segue sem apagar a correção do escritório. O que muda é só o caso em que as DUAS pontas
+ * são `cnh`: aí a mais recente vale, porque foi feita com um prompt melhor, uma foto melhor, ou
+ * as duas coisas.
+ *
+ * O campo TENTADO E NÃO LIDO (`origem: null`) também cede: ele não afirma nada, e mantê-lo por cima
+ * de uma leitura que finalmente conseguiu ler seria guardar a ausência em vez do dado.
  */
 export function fundirCampos(
   existentes: CamposDoPreCadastro,
@@ -171,7 +191,15 @@ export function fundirCampos(
 ): CamposDoPreCadastro {
   const saida: CamposDoPreCadastro = { ...daLeitura };
   for (const [chave, campo] of Object.entries(existentes)) {
-    if (campo && campo.valor != null) saida[chave] = campo;
+    if (!campo || campo.valor == null) continue;
+    /**
+     * A ÚNICA exceção: o existente veio de uma leitura, e a leitura NOVA leu o mesmo campo.
+     *
+     * Aí quem vale é a nova. Fora disso — pessoa que digitou, motorista que declarou, CEP, cadastro
+     * antigo — o existente vence como sempre venceu.
+     */
+    const substituivel = campo.origem === "cnh" && daLeitura[chave]?.valor != null;
+    if (!substituivel) saida[chave] = campo;
   }
   // Um campo que só a leitura tentou e não leu continua assinalado, para a tela poder mostrá-lo.
   for (const [chave, campo] of Object.entries(daLeitura)) {

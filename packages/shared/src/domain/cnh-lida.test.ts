@@ -244,3 +244,62 @@ describe("os campos declarados pelo motorista", () => {
     expect(fundido.rg).toEqual({ valor: "2098431", origem: "cnh" });
   });
 });
+
+/**
+ * LEITURA VELHA CEDE À NOVA; O QUE UMA PESSOA DISSE, NÃO (30/08).
+ *
+ * O caso que fez isto existir: o prompt da CNH foi corrigido, a releitura passou a acertar 18 de 18,
+ * e SEIS campos errados continuaram no lugar — porque "o que já se sabe sempre vence" incluía o
+ * resultado da leitura anterior. A releitura não conseguia consertar nada, que é o oposto do motivo
+ * de ela existir.
+ */
+describe("a releitura corrige a leitura anterior", () => {
+  it("substitui um valor cuja origem é `cnh` — o defeito de 30/08", () => {
+    const antes: CamposDoPreCadastro = { categoria: { valor: "D", origem: "cnh" } };
+    const nova: CamposDoPreCadastro = { categoria: { valor: "AE", origem: "cnh" } };
+    expect(fundirCampos(antes, nova).categoria).toEqual({ valor: "AE", origem: "cnh" });
+  });
+
+  /**
+   * A proteção original, intacta: um reenvio do motorista não pode apagar o que o escritório já
+   * corrigiu olhando o documento. É o caso em que a máquina NÃO tem a palavra final.
+   */
+  it("NÃO substitui o que uma pessoa digitou", () => {
+    const antes: CamposDoPreCadastro = { categoria: { valor: "AE", origem: "digitado" } };
+    const nova: CamposDoPreCadastro = { categoria: { valor: "D", origem: "cnh" } };
+    expect(fundirCampos(antes, nova).categoria).toEqual({ valor: "AE", origem: "digitado" });
+  });
+
+  it("NÃO substitui o que o motorista declarou no formulário", () => {
+    const antes: CamposDoPreCadastro = { cpf: { valor: "07600530570", origem: "declarado" } };
+    const nova: CamposDoPreCadastro = { cpf: { valor: "00758815433", origem: "cnh" } };
+    // O caso REAL: a CNH traz um CPF diferente do digitado. O digitado manda — ele é a chave pela
+    // qual o pré-cadastro foi criado —, e a divergência é acusada em separado, não sobrescrita.
+    expect(fundirCampos(antes, nova).cpf).toEqual({ valor: "07600530570", origem: "declarado" });
+  });
+
+  /**
+   * `null` da leitura sobre um valor existente continua sendo RUÍDO, não informação — inclusive
+   * quando o existente também veio de uma leitura. Uma foto pior não pode apagar o que a anterior
+   * conseguiu ler.
+   */
+  it("uma leitura que NÃO leu não apaga a que leu", () => {
+    const antes: CamposDoPreCadastro = { renach: { valor: "BA711866475", origem: "cnh" } };
+    const nova: CamposDoPreCadastro = { renach: { valor: null, origem: null } };
+    expect(fundirCampos(antes, nova).renach).toEqual({ valor: "BA711866475", origem: "cnh" });
+  });
+
+  it("o campo tentado e não lido cede quando a nova finalmente lê", () => {
+    const antes: CamposDoPreCadastro = { numeroSeguranca: { valor: null, origem: null } };
+    const nova: CamposDoPreCadastro = { numeroSeguranca: { valor: "91262888055", origem: "cnh" } };
+    expect(fundirCampos(antes, nova).numeroSeguranca).toEqual({
+      valor: "91262888055",
+      origem: "cnh",
+    });
+  });
+
+  it("campo que só o existente tem continua lá", () => {
+    const antes: CamposDoPreCadastro = { celular: { valor: "71999720309", origem: "declarado" } };
+    expect(fundirCampos(antes, {}).celular).toEqual({ valor: "71999720309", origem: "declarado" });
+  });
+});
