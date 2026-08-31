@@ -23,7 +23,7 @@ import { DashboardWidgets } from "@/components/trips/dashboard/widgets";
 export default async function HomePage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "view_all_trips")) redirect("/");
+  if (!can(session.user, "view_all_trips")) redirect("/");
 
   // O título e o subtítulo mudaram de casa (2026-08-23): moram no `DashboardWidgets`, para o botão
   // de personalizar poder sentar na mesma linha deles. Ver o comentário lá.

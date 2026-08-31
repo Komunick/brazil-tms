@@ -14,7 +14,7 @@ import { FilaGrClient } from "@/components/gr/fila-gr-client";
 export default async function GrPage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "assign_resources")) redirect("/");
+  if (!can(session.user, "assign_resources")) redirect("/");
 
   const t = await getTranslations("GR");
 

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import * as Dialog from "@radix-ui/react-dialog";
 import { Menu, X } from "lucide-react";
-import type { Role } from "@brazil-tms/shared";
+import type { PermissionKey } from "@brazil-tms/shared";
 import { ListaDeNavegacao } from "@/components/shell/app-sidebar";
 
 /**
@@ -32,7 +32,7 @@ import { ListaDeNavegacao } from "@/components/shell/app-sidebar";
  * aparelho e qualquer navegação que não venha de um clique na lista. Sem ele, a pessoa volta uma
  * página e continua olhando para o menu aberto.
  */
-export function MenuMovel({ role }: { role: Role }) {
+export function MenuMovel({ permissoes }: { permissoes: readonly PermissionKey[] }) {
   // Duas origens de propósito: "Abrir/Fechar menu" são rótulos do shell e já viviam em `Shell`;
   // o nome do app é `Common`, o mesmo que a barra lateral usa no cabeçalho dela.
   const t = useTranslations("Shell");
@@ -76,7 +76,7 @@ export function MenuMovel({ role }: { role: Role }) {
 
           {/* Nunca recolhida: a gaveta é chamada por quem quer LER os nomes. Uma coluna de ícones
               num telefone seria a pior das duas opções — ocupa a tela e não diz o que faz. */}
-          <ListaDeNavegacao role={role} aoNavegar={() => setAberto(false)} />
+          <ListaDeNavegacao permissoes={permissoes} aoNavegar={() => setAberto(false)} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

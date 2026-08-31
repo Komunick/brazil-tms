@@ -81,7 +81,25 @@ export const ALL_PERMISSIONS: readonly PermissionKey[] = [
 // Admin is a superset of every permission (matrix invariant).
 const ADMIN_PERMISSIONS = new Set<PermissionKey>(ALL_PERMISSIONS);
 
-/** role -> granted permissions (✓ and ◐ both count as granted; see permission-matrix.md). */
+/**
+ * SEMENTE DA MIGRAÇÃO `0060` — e **fora do caminho de execução** desde 31/08 (fatia 029).
+ *
+ * Isto foi, até a 029, a fonte da autorização: `can(papel, chave)` lia daqui, e mudar o que alguém
+ * alcançava exigia um deploy. O resultado, medido: **20 dos 34 usuários ativos eram `admin`**, porque
+ * quem precisava de uma combinação que não existia neste objeto não tinha para onde ir.
+ *
+ * Hoje quem manda são as tabelas `cargos` e `cargo_permissoes`, e este objeto sobrevive por dois
+ * motivos, os dois de conferência:
+ *
+ *   1. a migração `0060` foi semeada a partir dele, e `cargos-schema.test.ts` compara o SQL com ele
+ *      cargo a cargo — é o que garante que ninguém perdeu acesso na virada;
+ *   2. `db:conferir-acesso` o usa como o lado "antes" da comparação contra o banco de verdade.
+ *
+ * **NENHUM código de execução pode voltar a lê-lo para decidir acesso.** Quem está sem cargo tem
+ * conjunto vazio (`SEM_CAPACIDADES`), e não o papel antigo. Ver o comentário de `can`.
+ *
+ * (✓ e ◐ contam as duas como concedidas; ver `contracts/permission-matrix.md`.)
+ */
 export const ROLE_PERMISSIONS: Record<Role, ReadonlySet<PermissionKey>> = {
   admin: ADMIN_PERMISSIONS,
   operations_manager: new Set<PermissionKey>([
@@ -146,7 +164,47 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlySet<PermissionKey>> = {
   executive_viewer: new Set<PermissionKey>(["view_all_trips", "view_freight_rates"]),
 };
 
-/** Pure permission check. Returns false for any unknown role. */
-export function can(role: Role, permission: PermissionKey): boolean {
-  return ROLE_PERMISSIONS[role]?.has(permission) ?? false;
+/**
+ * QUEM ESTÁ PEDINDO — e tudo o que `can` precisa saber sobre a pessoa.
+ *
+ * Não é o usuário inteiro de propósito: `can` é uma função pura sobre um CONJUNTO, e receber o
+ * usuário convidaria a decidir por nome, por e-mail ou por papel em algum lugar. Recebendo só as
+ * capacidades, não há o que consultar além delas.
+ */
+export interface Principal {
+  readonly permissoes: ReadonlySet<PermissionKey>;
 }
+
+/**
+ * A VERIFICAÇÃO DE PERMISSÃO — agora sobre o CONJUNTO, e não sobre o papel (2026-08-31, fatia 029).
+ *
+ * ── POR QUE A ASSINATURA MUDOU, E POR QUE ISSO É A PROTEÇÃO E NÃO O CUSTO ─────────────────────
+ *
+ * O conjunto passou a vir do cargo, que é dado no banco. Manter `can(papel, chave)` viva ao lado
+ * criaria DOIS caminhos de autorização — o novo, que a tela de cargos governa, e o antigo, que
+ * ninguém mais edita — e o antigo continuaria compilando para sempre. Quem escrevesse a próxima tela
+ * escolheria o errado sem nenhum aviso.
+ *
+ * Trocar a assinatura faz o COMPILADOR apontar cada um dos 62 pontos que chamavam isto direto. Foi a
+ * troca que tornou a migração segura, e não um detalhe de estilo: um `tsc` limpo é a prova de que
+ * nenhum ficou para trás.
+ *
+ * ── E `ROLE_PERMISSIONS` SAI DAQUI ────────────────────────────────────────────────────────────
+ *
+ * Ela continua exportada porque a migração `0060` foi semeada a partir dela e há testes que a
+ * comparam com o SQL. Mas NENHUM código de execução pode voltar a lê-la para decidir acesso: quem
+ * está sem cargo tem conjunto VAZIO, e não o papel antigo. Um fallback esconderia exatamente o
+ * defeito que mais importa — se a leitura do cargo quebrasse, tudo continuaria funcionando e ninguém
+ * saberia que a autorização voltou a ser a de código, até alguém editar um cargo e nada acontecer.
+ */
+export function can(principal: Principal, permission: PermissionKey): boolean {
+  return principal.permissoes.has(permission);
+}
+
+/**
+ * O conjunto vazio, nomeado — para quem está sem cargo.
+ *
+ * Existe para que a ausência seja escrita como ausência, e não como um `new Set()` solto que o
+ * leitor precisa interpretar. Falha FECHADA: entra no sistema e não vê nada.
+ */
+export const SEM_CAPACIDADES: ReadonlySet<PermissionKey> = new Set<PermissionKey>();

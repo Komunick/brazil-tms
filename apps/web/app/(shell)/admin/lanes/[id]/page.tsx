@@ -11,8 +11,8 @@ export default async function LaneDetailPage({
 }) {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "manage_commercial_data")) redirect("/");
+  if (!can(session.user, "manage_commercial_data")) redirect("/");
 
   const { id } = await params;
-  return <LaneDetailClient laneId={id} canArchive={can(session.user.role, "delete_archive")} />;
+  return <LaneDetailClient laneId={id} canArchive={can(session.user, "delete_archive")} />;
 }

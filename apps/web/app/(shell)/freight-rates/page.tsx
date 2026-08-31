@@ -12,7 +12,7 @@ import { FreightRatesClient } from "@/components/freight-rates/freight-rates-cli
 export default async function FreightRatesPage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "view_freight_rates")) redirect("/");
+  if (!can(session.user, "view_freight_rates")) redirect("/");
 
   const t = await getTranslations("FreightRates");
 
@@ -22,7 +22,7 @@ export default async function FreightRatesPage() {
         <h1 className="text-2xl font-semibold">{t("screenTitle")}</h1>
         <p className="text-muted-foreground">{t("description")}</p>
       </header>
-      <FreightRatesClient canImport={can(session.user.role, "import_freight_rates")} />
+      <FreightRatesClient canImport={can(session.user, "import_freight_rates")} />
     </div>
   );
 }

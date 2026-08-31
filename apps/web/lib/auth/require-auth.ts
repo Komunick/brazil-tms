@@ -36,7 +36,13 @@ export class OnboardingRequired extends Error {
 
 export interface AuthContext {
   userId: string;
+  /**
+   * O papel antigo. **Não decide mais nada** — quem decide é `permissoes` (fatia 029). Continua aqui
+   * porque a coluna continua existindo e algumas telas ainda o exibem.
+   */
   role: Role;
+  /** O que esta pessoa alcança, vindo do cargo dela. Vazio quando não há cargo. */
+  permissoes: ReadonlySet<PermissionKey>;
   status: UserStatus;
   user: SessionUser;
 }
@@ -56,10 +62,25 @@ export async function requireAuth(
   if (!opts.allowIncompleteOnboarding && isOnboardingIncomplete(user)) {
     throw new OnboardingRequired();
   }
-  return { userId: user.id, role: user.role, status: user.status, user };
+  return {
+    userId: user.id,
+    role: user.role,
+    permissoes: user.permissoes,
+    status: user.status,
+    user,
+  };
 }
 
-/** Assert a permission on an already-resolved context. Throws `Forbidden` (403) if denied. */
+/**
+ * A ÚNICA porta de autorização do BFF — e os 169 pontos que a chamam não mudaram uma linha.
+ *
+ * Esta função já era o ponto de estrangulamento antes da fatia 029; o que mudou foi **de onde ela
+ * lê**: de um `Record` em código para o cargo da pessoa, no banco. Quem decide continua sendo o BFF,
+ * no mesmo lugar (princípio IV da constituição).
+ *
+ * `ctx` satisfaz `Principal` por ter `permissoes` — é por isso que a troca de assinatura do `can`
+ * não tocou em nenhum destes 169 pontos, e tocou nos 62 que liam o papel direto.
+ */
 export function requirePermission(ctx: AuthContext, key: PermissionKey): void {
-  if (!can(ctx.role, key)) throw new Forbidden();
+  if (!can(ctx, key)) throw new Forbidden();
 }

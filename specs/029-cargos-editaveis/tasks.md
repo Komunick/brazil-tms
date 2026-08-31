@@ -90,14 +90,14 @@ qualquer código novo subir.
 **Objetivo**: o BFF passa a ler o conjunto das tabelas. **Comportamento idêntico ao de hoje** —
 essa invisibilidade é o critério de sucesso desta fase.
 
-- [ ] T014 Em `packages/shared/src/auth/permissions.ts`, trocar a assinatura de `can(papel, chave)` para `can(principal, chave)`, onde `principal` é `{ permissoes: ReadonlySet<PermissionKey> }`. **Não deixar a assinatura antiga viva ao lado** — duas funções são os dois caminhos de autorização que o FR-005 proíbe
-- [ ] T015 No mesmo arquivo, marcar `ROLE_PERMISSIONS` como **semente da migração**, fora do caminho de execução, com o comentário dizendo que nenhum código de runtime pode voltar a lê-la
-- [ ] T016 Em `apps/web/lib/auth/session.ts`, trazer as permissões no **mesmo `select`** de `loadSession`, por `join` com `cargo_permissoes` — sem consulta adicional (a sessão já lê o banco a cada requisição, e é isso que faz FR-007 sair de graça)
-- [ ] T017 **Cargo ausente ⇒ conjunto VAZIO.** Nunca `ROLE_PERMISSIONS[role]`. Um fallback esconderia o defeito mais importante: tudo continuaria funcionando e ninguém saberia que a tabela nova não está sendo lida (research §1)
-- [ ] T018 Em `apps/web/lib/auth/require-auth.ts`, `AuthContext` ganha `permissoes` e `requirePermission` passa a chamar `can(ctx, chave)`. **Os 169 pontos NÃO são tocados**
-- [ ] T019 Atualizar os **62** `can(role, …)` diretos que o compilador apontar — quase todos em `page.tsx`, decidindo o que a tela desenha. Conferir que o `tsc` fica limpo nos quatro pacotes: é o compilador provando que nenhum ficou para trás
-- [ ] T020 [P] Escrever `apps/web/lib/auth/sem-cargo.test.ts` afirmando que um usuário sem `cargo_id` recebe conjunto **vazio** e é recusado em toda permissão — o teste que tranca T017
-- [ ] T021 Fazer `GET /api/me` devolver `cargo` e `permissoes` (contracts). A tela usa **a mesma lista** que o servidor usa para decidir; duas listas seriam dois caminhos
+- [X] T014 Em `packages/shared/src/auth/permissions.ts`, trocar a assinatura de `can(papel, chave)` para `can(principal, chave)`, onde `principal` é `{ permissoes: ReadonlySet<PermissionKey> }`. **Não deixar a assinatura antiga viva ao lado** — duas funções são os dois caminhos de autorização que o FR-005 proíbe
+- [X] T015 No mesmo arquivo, marcar `ROLE_PERMISSIONS` como **semente da migração**, fora do caminho de execução, com o comentário dizendo que nenhum código de runtime pode voltar a lê-la
+- [X] T016 Em `apps/web/lib/auth/session.ts`, trazer as permissões no **mesmo `select`** de `loadSession`, por `join` com `cargo_permissoes` — sem consulta adicional (a sessão já lê o banco a cada requisição, e é isso que faz FR-007 sair de graça)
+- [X] T017 **Cargo ausente ⇒ conjunto VAZIO.** Nunca `ROLE_PERMISSIONS[role]`. Um fallback esconderia o defeito mais importante: tudo continuaria funcionando e ninguém saberia que a tabela nova não está sendo lida (research §1)
+- [X] T018 Em `apps/web/lib/auth/require-auth.ts`, `AuthContext` ganha `permissoes` e `requirePermission` passa a chamar `can(ctx, chave)`. **Os 169 pontos NÃO são tocados**
+- [X] T019 Atualizar os **62** `can(role, …)` diretos que o compilador apontar — quase todos em `page.tsx`, decidindo o que a tela desenha. Conferir que o `tsc` fica limpo nos quatro pacotes: é o compilador provando que nenhum ficou para trás
+- [X] T020 [P] Escrever `apps/web/lib/auth/sem-cargo.test.ts` afirmando que um usuário sem `cargo_id` recebe conjunto **vazio** e é recusado em toda permissão — o teste que tranca T017
+- [ ] T021 **ADIADA PARA A FASE 5, com motivo** (31/08): `GET /api/me` não existe hoje, e o shell já recebe as capacidades como PROPS do servidor — a barra lateral e o menu do telefone filtram com o mesmo `can`. Criar a rota agora seria um endpoint que ninguém chama (princípio I). Ela entra quando a tela de cargos precisar ler isso do cliente. Quando entrar, devolve **a mesma lista** que o servidor usa para decidir: duas listas seriam dois caminhos
 
 **Ponto de parada**: comportamento idêntico ao de antes, lido de outro lugar. Se alguém notar
 diferença, é defeito.

@@ -14,7 +14,7 @@ import { MinhaProgramacaoClient } from "@/components/trips/minha-programacao-cli
 export default async function MinhaProgramacaoPage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "view_all_trips")) redirect("/");
+  if (!can(session.user, "view_all_trips")) redirect("/");
 
   const t = await getTranslations("Programacao");
 
@@ -33,7 +33,7 @@ export default async function MinhaProgramacaoPage() {
       */}
       <MinhaProgramacaoClient
         userId={session.user.id}
-        podeAtribuir={can(session.user.role, "assign_resources")}
+        podeAtribuir={can(session.user, "assign_resources")}
       />
     </div>
   );

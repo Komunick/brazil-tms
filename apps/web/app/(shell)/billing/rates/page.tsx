@@ -13,7 +13,7 @@ import { RateAdmin } from "@/components/billing/rate-admin";
 export default async function RatesPage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "edit_rates")) redirect("/");
+  if (!can(session.user, "edit_rates")) redirect("/");
 
   const t = await getTranslations("Rates");
   const options = await getTripFilterOptions();

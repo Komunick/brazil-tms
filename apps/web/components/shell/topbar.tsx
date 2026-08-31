@@ -4,11 +4,18 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { LogOut } from "lucide-react";
-import type { Role } from "@brazil-tms/shared";
+import type { PermissionKey } from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
 import { MenuMovel } from "@/components/shell/menu-movel";
 
-export function Topbar({ userName, role }: { userName: string; role: Role }) {
+export function Topbar({
+  userName,
+  permissoes,
+}: {
+  userName: string;
+  /** Repassada ao menu do telefone, que filtra pelo mesmo `can` do servidor. */
+  permissoes: readonly PermissionKey[];
+}) {
   const t = useTranslations("Shell");
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -32,7 +39,7 @@ export function Topbar({ userName, role }: { userName: string; role: Role }) {
     // custam 48px — num aparelho de 390px é um oitavo da tela gasto em margem.
     <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-2 border-b bg-background/85 px-3 backdrop-blur md:px-6">
       <div className="flex min-w-0 items-center gap-2">
-        <MenuMovel role={role} />
+        <MenuMovel permissoes={permissoes} />
         {/* `truncate` porque nome comprido em tela estreita empurrava o botão de sair para fora. */}
         <div className="truncate text-sm font-medium text-foreground">{userName}</div>
       </div>
