@@ -252,6 +252,38 @@ export async function setMotorista(
 }
 
 /**
+ * PEDE A PESQUISA DE UM MOTORISTA (2026-08-31, fatia 028, etapa 6).
+ *
+ * ⚠️ **Isto CUSTA DINHEIRO.** É a outra metade da fatia: o `setMotorista` acima é de graça e cria a
+ * pessoa; esta chamada é a que a gerenciadora cobra, por solicitação. Não existe homologação
+ * (`CodErro 100`, medido), então a PRIMEIRA execução já é uma cobrança real.
+ *
+ * Por isso ela não tem job de varredura e nunca é chamada por um laço: só por um clique, com quem
+ * apertou gravado ANTES da chamada e com a linha reivindicada por `WHERE pesquisa_solicitada_em IS
+ * NULL` — ver `reivindicarPesquisa`. Automatizar gasto é como uma conta cresce sem ninguém decidir.
+ *
+ * ── OS PARÂMETROS QUE MUDAM O PREÇO NÃO TÊM PADRÃO AQUI ───────────────────────────────────────
+ *
+ * `Expressa`, `PesquisaPlus` e `PesquisaBiometrica` são S/N e cada um encarece. Esta função não
+ * escolhe nenhum: quem chama passa o que a pessoa marcou na tela. Um padrão escondido aqui seria
+ * dinheiro gasto por uma decisão que ninguém tomou.
+ *
+ * ── O RETORNO TRAZ MAIS DO QUE "DEU CERTO" ───────────────────────────────────────────────────
+ *
+ * `Codigo` é o número da pesquisa — é por ele que se acompanha o desfecho depois, com o
+ * `getResultadoPesquisaConsulta`. `Situacao` diz em que pé está (EP em pesquisa, AD adequado ao
+ * risco, NA inconclusivo…). E `PhotocheckUrl` é um link que o CONDUTOR precisa abrir para validar
+ * a biometria — se ele vier e ninguém mandar ao motorista, a pesquisa fica parada esperando algo
+ * que ele não sabe que existe.
+ */
+export async function setSolicitacaoPesquisaConsulta(
+  cred: Credenciais,
+  pedido: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  return chamar<Record<string, unknown>>("setSolicitacaoPesquisaConsulta", { ...cred, ...pedido });
+}
+
+/**
  * CRIA A PRÉ-SM (2026-08-26, fatia 027).
  *
  * ⚠️ **Isto CUSTA DINHEIRO.** A gerenciadora cobra por solicitação, e não existe ambiente de

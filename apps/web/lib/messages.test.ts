@@ -313,6 +313,36 @@ describe("pt-BR messages", () => {
    * Todo campo que a conferência edita precisa de rótulo: o componente cai no nome cru da chave, e
    * `numeroSeguranca` acima de um campo de texto não diz a ninguém o que procurar na CNH.
    */
+  /**
+   * A TELA QUE GASTA precisa de todos os seus textos: um rótulo faltando ali vira uma chave crua
+   * numa caixa de diálogo cuja confirmação custa dinheiro. É o pior lugar do sistema para a pessoa
+   * hesitar sobre o que está lendo.
+   */
+  it("PreCadastros has every string of the paid pesquisa dialog", () => {
+    const p = (messages as { PreCadastros: Record<string, unknown> }).PreCadastros;
+    for (const k of [
+      "pedirPesquisa",
+      "pesquisaTitulo",
+      "pesquisaAviso",
+      "pesquisaVinculo",
+      "pesquisaVinculoF",
+      "pesquisaVinculoA",
+      "pesquisaVinculoT",
+      "pesquisaOpcoes",
+      "pesquisaOpcao_expressa",
+      "pesquisaOpcao_pesquisaPlus",
+      "pesquisaOpcao_biometrica",
+      "pesquisaConfirmar",
+      "pesquisaPedida",
+      "pesquisaFalhou",
+    ]) {
+      expect(typeof p[k], `PreCadastros.${k}`).toBe("string");
+      expect(p[k]).not.toBe("");
+    }
+    // O aviso de custo tem de DIZER que custa — é a única proteção antes do clique.
+    expect(String(p.pesquisaAviso).toUpperCase()).toContain("COBRAD");
+  });
+
   it("PreCadastros.campo covers every field the review screen edits", () => {
     const p = (
       messages as { PreCadastros: { campo: Record<string, string>; origem: Record<string, string> } }

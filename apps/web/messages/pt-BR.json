@@ -462,7 +462,8 @@
     "pre_sm_cidade_confirmar": "Correspondência de cidade confirmada",
     "pre_sm_cidade_desconfirmar": "Correspondência de cidade desfeita",
     "pre_sm_enviar": "Pré-SM pedida",
-    "preregistration_reviewed": "Pré-cadastro conferido"
+    "preregistration_reviewed": "Pré-cadastro conferido",
+    "preregistration_pesquisa_requested": "Pesquisa solicitada à gerenciadora"
   },
   "Documents": {
     "title": "Documentos",
@@ -2385,7 +2386,21 @@
       "celular": "Celular",
       "possuiMopp": "Possui MOPP (sim/não)",
       "validadeMopp": "Validade do MOPP"
-    }
+    },
+    "pedirPesquisa": "Pedir pesquisa",
+    "pesquisaTitulo": "Pedir pesquisa à gerenciadora",
+    "pesquisaAviso": "Esta solicitação é COBRADA pela gerenciadora. Não há como desfazer.",
+    "pesquisaVinculo": "Vínculo do motorista",
+    "pesquisaVinculoF": "Frota",
+    "pesquisaVinculoA": "Agregado",
+    "pesquisaVinculoT": "Terceiro",
+    "pesquisaOpcoes": "Opções (cada uma encarece a solicitação)",
+    "pesquisaOpcao_expressa": "Expressa — resultado mais rápido",
+    "pesquisaOpcao_pesquisaPlus": "Pesquisa+ — verificação ampliada",
+    "pesquisaOpcao_biometrica": "Análise biométrica — o motorista recebe um link de photocheck",
+    "pesquisaConfirmar": "Pedir e pagar",
+    "pesquisaPedida": "Pesquisa pedida. O resultado aparece aqui em instantes.",
+    "pesquisaFalhou": "Não foi possível pedir a pesquisa."
   },
   "GR": {
     "title": "GR — Pré-SM",
