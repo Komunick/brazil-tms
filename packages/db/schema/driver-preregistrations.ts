@@ -69,6 +69,18 @@ export const driverPreregistrations = pgTable(
     conferidoEm: timestamp("conferido_em", { withTimezone: true }),
     enviadoPor: uuid("enviado_por").references(() => users.id),
     enviadoEm: timestamp("enviado_em", { withTimezone: true }),
+    /**
+     * O PEDIDO DE PESQUISA — a metade COBRADA (31/08).
+     *
+     * `pesquisaSolicitadaEm` é gravada ANTES da chamada, com `WHERE ... IS NULL`: quem consegue
+     * gravar é quem chama. Um segundo clique — outra aba, outro operador, um duplo-clique —
+     * encontra a linha já reivindicada e desiste sem gastar.
+     *
+     * Mesmo padrão do `enviadoEm` acima, e a diferença é o que está em jogo: lá um reenvio criaria
+     * uma duplicata que dá para arquivar; aqui ele vira uma linha na fatura.
+     */
+    pesquisaSolicitadaPor: uuid("pesquisa_solicitada_por").references(() => users.id),
+    pesquisaSolicitadaEm: timestamp("pesquisa_solicitada_em", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

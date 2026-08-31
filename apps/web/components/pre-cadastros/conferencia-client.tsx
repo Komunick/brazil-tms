@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ExternalLink, FileImage, Save, Send } from "lucide-react";
+import { ArrowLeft, ExternalLink, FileImage, Save, Search, Send } from "lucide-react";
 import {
   formatDateTime,
   motivosDeNaoCadastrar,
@@ -16,7 +16,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { avisar } from "@/lib/ui/avisos";
+import { cn } from "@/lib/utils";
 
 /**
  * A CONFERÊNCIA — documento de um lado, campos do outro (fatia 028, etapa 4).
@@ -57,6 +66,8 @@ interface Conferencia {
   pendenciaToxicologico: boolean;
   enviadoEm: string | null;
   cadastro: { em: string; motivos?: string[]; erro?: string } | null;
+  /** O pedido de pesquisa — a metade cobrada. Presente = já foi pedida, não peça de novo. */
+  pesquisa: { em: string; motivos?: string[]; erro?: string; resposta?: Record<string, unknown> } | null;
   recebidoEm: string;
 }
 
@@ -219,6 +230,35 @@ export function ConferenciaClient({ id }: { id: string }): React.ReactElement {
       await queryClient.invalidateQueries({ queryKey: ["pre-cadastros"] });
     },
     onError: () => avisar({ tipo: "erro", texto: t("envioFalhou") }),
+  });
+
+  const [pedindoPesquisa, setPedindoPesquisa] = useState(false);
+  /**
+   * ⚠️ A ÚNICA MUTAÇÃO DESTA TELA QUE GASTA DINHEIRO.
+   *
+   * O aviso diz "pedida", não "feita": a rota devolve 202 e a cobrança acontece quando o worker
+   * chamar. E o resultado — código, situação e o link de photocheck, quando houver — aparece no
+   * polling, que é onde ele é verdade.
+   */
+  const pesquisar = useMutation({
+    mutationFn: async (escolhas: {
+      vinculo: "F" | "A" | "T";
+      expressa: boolean;
+      pesquisaPlus: boolean;
+      biometrica: boolean;
+    }) => {
+      const res = await fetch(`/api/pre-cadastros/${id}/pesquisa`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(escolhas),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+    },
+    onSuccess: async () => {
+      avisar({ tipo: "ok", texto: t("pesquisaPedida") });
+      await queryClient.invalidateQueries({ queryKey: ["pre-cadastro", id] });
+    },
+    onError: () => avisar({ tipo: "erro", texto: t("pesquisaFalhou") }),
   });
 
   if (consulta.isLoading) return <Skeleton className="h-96 w-full" />;
@@ -407,8 +447,149 @@ export function ConferenciaClient({ id }: { id: string }): React.ReactElement {
             <Send />
             {t("enviarParaGerenciadora")}
           </Button>
+          {/*
+            A PESQUISA SÓ APARECE DEPOIS DO ENVIO, e é o inverso do botão ao lado.
+
+            Enviar é de graça e não some depois de feito; pedir pesquisa CUSTA e some assim que foi
+            pedida. Um botão de gastar que continua ali depois de usado é um convite a gastar duas
+            vezes — e a trava de verdade está no banco, mas a tela não deve empurrar para ela.
+
+            Antes do envio ele nem existe: não há a quem pesquisar na gerenciadora, e mostrar o botão
+            desabilitado só faria alguém perguntar por que não funciona.
+          */}
+          {jaFoi && !item.pesquisa ? (
+            <Button variant="destructive" onClick={() => setPedindoPesquisa(true)}>
+              <Search />
+              {t("pedirPesquisa")}
+            </Button>
+          ) : null}
         </div>
       </div>
+
+      <DialogDaPesquisa
+        aberto={pedindoPesquisa}
+        aoFechar={() => setPedindoPesquisa(false)}
+        aoConfirmar={(escolhas) => {
+          setPedindoPesquisa(false);
+          pesquisar.mutate(escolhas);
+        }}
+        pendente={pesquisar.isPending}
+      />
     </div>
+  );
+}
+
+/**
+ * O DIÁLOGO DA PESQUISA — a única tela do sistema que gasta dinheiro ao confirmar.
+ *
+ * Ele existe porque a pesquisa não é um clique: exige duas decisões que ninguém pode tomar pelo
+ * usuário. O VÍNCULO (frota, agregado ou terceiro) é obrigatório no método e o formulário público
+ * não o pergunta — o motorista não sabe se é frota ou agregado, quem sabe é quem contrata. E as
+ * TRÊS OPÇÕES PAGAS mudam o valor cobrado.
+ *
+ * ── NENHUMA OPÇÃO PAGA VEM MARCADA ────────────────────────────────────────────────────────────
+ *
+ * O padrão é o mais barato. Marcar por conveniência seria escolher gastar mais em nome de quem não
+ * escolheu — e o erro seria invisível, porque a diferença só aparece na fatura.
+ *
+ * ── O VÍNCULO TAMBÉM NÃO TEM PADRÃO ───────────────────────────────────────────────────────────
+ *
+ * "Terceiro" seria o chute cômodo. Mas o vínculo vai junto na pesquisa e é o que a gerenciadora usa
+ * para classificar a pessoa: errar aqui é pesquisar sob a regra errada, e ninguém descobre olhando
+ * a tela. Sem escolha, o botão não libera.
+ */
+function DialogDaPesquisa({
+  aberto,
+  aoFechar,
+  aoConfirmar,
+  pendente,
+}: {
+  aberto: boolean;
+  aoFechar: () => void;
+  aoConfirmar: (e: {
+    vinculo: "F" | "A" | "T";
+    expressa: boolean;
+    pesquisaPlus: boolean;
+    biometrica: boolean;
+  }) => void;
+  pendente: boolean;
+}) {
+  const t = useTranslations("PreCadastros");
+  const [vinculo, setVinculo] = useState<"F" | "A" | "T" | null>(null);
+  const [expressa, setExpressa] = useState(false);
+  const [pesquisaPlus, setPesquisaPlus] = useState(false);
+  const [biometrica, setBiometrica] = useState(false);
+
+  return (
+    <Dialog open={aberto} onOpenChange={(o) => !o && aoFechar()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("pesquisaTitulo")}</DialogTitle>
+          {/* O aviso de custo é a primeira coisa que se lê, não uma nota de rodapé. */}
+          <DialogDescription className="text-destructive font-medium">
+            {t("pesquisaAviso")}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <span className="text-sm font-medium">{t("pesquisaVinculo")}</span>
+            <div className="flex flex-wrap gap-1.5">
+              {(["F", "A", "T"] as const).map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={vinculo === v}
+                  onClick={() => setVinculo(v)}
+                  className={cn(
+                    "rounded border px-3 py-1 text-sm transition-colors",
+                    vinculo === v
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-input hover:bg-muted",
+                  )}
+                >
+                  {t(`pesquisaVinculo${v}`)}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <span className="text-sm font-medium">{t("pesquisaOpcoes")}</span>
+            {(
+              [
+                ["expressa", expressa, setExpressa],
+                ["pesquisaPlus", pesquisaPlus, setPesquisaPlus],
+                ["biometrica", biometrica, setBiometrica],
+              ] as const
+            ).map(([chave, valor, set]) => (
+              <label key={chave} className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={valor}
+                  onChange={(e) => set(e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>{t(`pesquisaOpcao_${chave}`)}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={aoFechar}>
+            {t("cancelar")}
+          </Button>
+          {/* Sem vínculo o botão não libera — ver o cabeçalho: não há chute cômodo aqui. */}
+          <Button
+            variant="destructive"
+            disabled={!vinculo || pendente}
+            onClick={() => vinculo && aoConfirmar({ vinculo, expressa, pesquisaPlus, biometrica })}
+          >
+            {t("pesquisaConfirmar")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { CamposDoPreCadastro } from "@brazil-tms/shared";
 import { db } from "../client";
 import {
@@ -353,6 +353,8 @@ export interface PreCadastroParaConferencia {
   pendenciaToxicologico: boolean;
   enviadoEm: string | null;
   cadastro: ItemDaFila["cadastro"];
+  /** O pedido de PESQUISA — a metade cobrada. Presente = já foi pedida, não peça de novo. */
+  pesquisa: { em: string; motivos?: string[]; erro?: string; resposta?: Record<string, unknown> } | null;
   recebidoEm: string;
 }
 
@@ -399,7 +401,7 @@ export async function preCadastroParaConferencia(
     : [];
 
   const todos = (linha.campos ?? {}) as Record<string, unknown>;
-  const { leituraCnh, cadastroGerenciadora, ...campos } = todos;
+  const { leituraCnh, cadastroGerenciadora, pesquisaGerenciadora, ...campos } = todos;
   const dados = (ultimo?.dados ?? {}) as Record<string, unknown>;
 
   return {
@@ -416,6 +418,7 @@ export async function preCadastroParaConferencia(
     pendenciaToxicologico: linha.pendenciaToxicologico,
     enviadoEm: linha.enviadoEm?.toISOString() ?? null,
     cadastro: (cadastroGerenciadora as ItemDaFila["cadastro"]) ?? null,
+    pesquisa: (pesquisaGerenciadora as PreCadastroParaConferencia["pesquisa"]) ?? null,
     recebidoEm: linha.criadoEm.toISOString(),
   };
 }
@@ -621,4 +624,105 @@ export async function gravarFalhaDoCadastro(
       updatedAt: new Date(),
     })
     .where(eq(driverPreregistrations.id, id));
+}
+
+/**
+ * REIVINDICA A LINHA ANTES DE GASTAR (31/08, fatia 028, etapa 6).
+ *
+ * A pesquisa é COBRADA por solicitação e não existe homologação. Esta função é a única trava que
+ * vale: grava `pesquisa_solicitada_em` com `WHERE pesquisa_solicitada_em IS NULL`, e quem conseguir
+ * gravar é quem pode chamar.
+ *
+ * ── POR QUE VERIFICAR ANTES NÃO BASTARIA ──────────────────────────────────────────────────────
+ *
+ * Entre "olhei e estava livre" e "chamei" cabe a segunda aba, o segundo operador e o duplo-clique.
+ * Só a escrita condicional é atômica — o `UPDATE` do Postgres decide sozinho quem chegou primeiro,
+ * e o segundo recebe zero linhas.
+ *
+ * A verificação em `motivosDeNaoPesquisar` continua existindo, mas para EXPLICAR na tela. Ela não
+ * garante nada, e o comentário lá diz isso.
+ *
+ * ── QUEM PEDIU FICA GRAVADO NA MESMA ESCRITA ──────────────────────────────────────────────────
+ *
+ * Não numa segunda instrução: se a gravação do autor pudesse falhar em separado, existiria um
+ * estado em que a linha está reivindicada e o gasto é anônimo — que é exatamente o que estas
+ * colunas existem para evitar.
+ *
+ * Devolve `false` quando alguém chegou antes. Não é erro: é o desfecho normal do segundo clique, e
+ * quem chama simplesmente não gasta.
+ */
+export async function reivindicarPesquisa(id: string, actorUserId: string): Promise<boolean> {
+  const linhas = await db
+    .update(driverPreregistrations)
+    .set({
+      pesquisaSolicitadaEm: new Date(),
+      pesquisaSolicitadaPor: actorUserId,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(driverPreregistrations.id, id),
+        isNull(driverPreregistrations.pesquisaSolicitadaEm),
+        // Pesquisar quem nunca foi criado na gerenciadora é gastar por nada.
+        isNotNull(driverPreregistrations.enviadoEm),
+        isNull(driverPreregistrations.arquivadoEm),
+      ),
+    )
+    .returning({ id: driverPreregistrations.id });
+  return linhas.length > 0;
+}
+
+/**
+ * DEVOLVE A REIVINDICAÇÃO quando a chamada NÃO chegou a acontecer.
+ *
+ * Só para falha ANTES da gerenciadora responder — rede caiu, credencial faltando, corpo recusado
+ * pela nossa própria validação. Aí não houve cobrança, e manter a linha reivindicada travaria para
+ * sempre um pedido que ninguém fez.
+ *
+ * ── E NUNCA DEPOIS DE ELA RESPONDER ───────────────────────────────────────────────────────────
+ *
+ * Se a gerenciadora respondeu qualquer coisa — inclusive erro —, a solicitação pode ter sido
+ * contabilizada, e liberar a linha convidaria alguém a pedir de novo. Na dúvida entre travar um
+ * pedido legítimo e gastar duas vezes, trava: destravar é uma conversa, a cobrança é uma fatura.
+ */
+export async function devolverReivindicacaoDaPesquisa(id: string): Promise<void> {
+  await db
+    .update(driverPreregistrations)
+    .set({ pesquisaSolicitadaEm: null, pesquisaSolicitadaPor: null, updatedAt: new Date() })
+    .where(eq(driverPreregistrations.id, id));
+}
+
+/** O que a gerenciadora respondeu ao pedido de pesquisa, cru, junto do que foi pedido. */
+export async function gravarResultadoDaPesquisa(
+  id: string,
+  actorUserId: string,
+  detalhe: Record<string, unknown>,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [antes] = await tx
+      .select({ campos: driverPreregistrations.campos })
+      .from(driverPreregistrations)
+      .where(eq(driverPreregistrations.id, id))
+      .limit(1);
+
+    await tx
+      .update(driverPreregistrations)
+      .set({
+        campos: {
+          ...((antes?.campos ?? {}) as Record<string, unknown>),
+          pesquisaGerenciadora: { em: new Date().toISOString(), ...detalhe },
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(driverPreregistrations.id, id));
+
+    await writeAudit(tx, {
+      entityType: "driver_preregistration",
+      entityId: id,
+      action: "preregistration.pesquisa_requested",
+      previousValue: null,
+      newValue: detalhe,
+      actorUserId,
+    });
+  });
 }

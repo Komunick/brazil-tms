@@ -127,8 +127,14 @@ const valor = (c: CamposDoPreCadastro, chave: string): string | null => {
   return v != null && v.trim() !== "" ? v.trim() : null;
 };
 
-/** Onze dígitos com verificador — a mesma conta do `cpfSchema`, sem depender do Zod aqui. */
-function cpfValido(bruto: string | null): boolean {
+/**
+ * Onze dígitos com verificador — a mesma conta do `cpfSchema`, sem depender do Zod aqui.
+ *
+ * EXPORTADA em 31/08 para o `pesquisa-corpo.ts` usá-la. Copiar seria o erro clássico deste
+ * repositório: duas contas de CPF divergem em silêncio, e a divergência só aparece no dia em que
+ * uma aceita o que a outra recusa — com dinheiro em jogo, na pesquisa.
+ */
+export function cpfValido(bruto: string | null): boolean {
   if (!bruto) return false;
   const d = bruto.replace(/\D+/g, "");
   if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
