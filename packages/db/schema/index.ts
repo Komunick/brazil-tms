@@ -58,3 +58,5 @@ export * from "./pre-sm-route-links";
 export * from "./pre-sm-city-links";
 // A passagem de turno — o diário de cada setor (2026-08-26).
 export * from "./passagem-de-turno";
+// Cargos, selos e o que cada cargo alcança — o acesso deixa de ser catálogo em código (2026-08-31).
+export * from "./cargos";
