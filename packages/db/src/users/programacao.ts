@@ -188,6 +188,34 @@ export interface LinhaDaProgramacao {
    * normal da esmagadora maioria das linhas.
    */
   statusOperacional: "A_ENVIAR" | "ENVIADO" | "PROG_OK" | "NO_SHOW" | null;
+  /**
+   * A SM foi emitida? Ela é montada na TELA a partir das marcas, e não vem desta consulta — mas o
+   * campo mora aqui porque é aqui que a LINHA é descrita. Ver o comentário logo abaixo.
+   */
+  sm: boolean | null;
+  /*
+    A SM NÃO VEM POR AQUI, e é de propósito (31/08).
+
+    Ela muda por gesto humano e é lida da consulta LEVE (`marcasDaProgramacao`), junto do status e
+    pelo mesmo motivo: este quadro recarrega de minuto em minuto, e quem marca precisa ver o efeito
+    agora — e a colega ao lado também, antes de marcar a mesma viagem.
+
+    Trazê-la aqui também criaria duas fontes para o mesmo campo, e a desta seria sempre a mais velha.
+
+    A TROCA DE MOTORISTA abaixo é o oposto e por isso fica: ela muda quando uma atribuição vai ao
+    portal, não por um clique nesta tela — a cadência do quadro é a certa para ela.
+  */
+  /**
+   * O MOTORISTA FOI TROCADO depois de já ter sido atribuído (2026-08-31, a pedido).
+   *
+   * Medido em produção antes de construir: 48 viagens tiveram mais de uma atribuição concluída, e em
+   * **32** o motorista de fato mudou. Só essas ganham o ícone — trocar só a placa não é troca de
+   * motorista, e o balão fala de motorista anterior.
+   */
+  trocouMotorista: boolean;
+  motoristaAnterior: string | null;
+  trocadoPor: string | null;
+  trocadoEm: string | null;
   previstoMotorista: string | null;
   previstoPlaca: string | null;
   /** Quantos recados a viagem tem. É só o número: o texto se lê abrindo a LH. */
@@ -255,6 +283,10 @@ export async function readProgramacao(
     cor: string | null;
     oculta: boolean;
     status_operacional: string | null;
+    trocou_motorista: boolean | null;
+    motorista_anterior: string | null;
+    trocado_por: string | null;
+    trocado_em: Date | null;
     previsto_motorista: string | null;
     previsto_placa: string | null;
     comentarios: number;
@@ -331,6 +363,19 @@ export async function readProgramacao(
         para não criar. A linha continua no banco: se a atribuição cair, o previsto reaparece.
       */
       pv.status as status_operacional,
+      /*
+        A TROCA DE MOTORISTA, tirada do histórico que já existe.
+
+        A tabela portal_commands guarda uma linha por atribuição concluída, com o motorista, quem
+        pediu e quando. Comparar a última com a anterior responde as três perguntas do balão sem
+        nenhuma coluna nova — o dado estava lá desde agosto e nenhuma tela o mostrava.
+
+        "is distinct from" e não "<>": com nulo dos dois lados, o "<>" devolve NULL e a troca sumiria.
+      */
+      tr.trocou as trocou_motorista,
+      tr.anterior_nome as motorista_anterior,
+      tr.por_nome as trocado_por,
+      tr.quando as trocado_em,
       case when nullif(btrim(t.customer_fields ->> 'Motorista (portal)'), '') is null
            then dpv.name end as previsto_motorista,
       case when nullif(btrim(t.customer_fields ->> 'Placa (portal)'), '') is null
@@ -349,6 +394,27 @@ export async function readProgramacao(
       on m.nome = upper(btrim(t.customer_fields ->> 'Motorista (portal)'))
     left join ${userWatchedTrips} w on w.trip_id = t.id and w.user_id = ${userId}
     left join trip_programacao pv on pv.trip_id = t.id
+    /*
+      Um "left join lateral" com LIMIT 1: interessa só a ÚLTIMA troca, e a esmagadora maioria das
+      viagens tem uma atribuição só — o lateral não paga nada por elas.
+    */
+    left join lateral (
+      select (a.anterior is not null and a.anterior is distinct from a.driver_id) as trocou,
+             da.name as anterior_nome,
+             u.name  as por_nome,
+             a.requested_at as quando
+        from (
+          select pc.driver_id, pc.requested_by, pc.requested_at,
+                 lag(pc.driver_id) over (order by pc.requested_at) as anterior
+            from portal_commands pc
+           where pc.trip_id = t.id and pc.action = 'assign' and pc.status = 'done'
+             and pc.driver_id is not null
+        ) a
+        left join drivers da on da.portal_driver_id = a.anterior::text
+        left join users u on u.id = a.requested_by
+       order by a.requested_at desc
+       limit 1
+    ) tr on true
     -- O nome sai do cadastro na leitura, nunca de uma copia guardada: "portal_driver_id" e a chave
     -- estavel, e um nome copiado envelheceria sem que ninguém soubesse de onde veio.
     left join drivers dpv on dpv.portal_driver_id = pv.portal_driver_id
@@ -415,6 +481,12 @@ export async function readProgramacao(
 
     oculta: r.oculta,
 
+    // Sempre nulo AQUI: quem preenche é a tela, a partir das marcas. Ver o tipo lá em cima.
+    sm: null,
+    trocouMotorista: r.trocou_motorista === true,
+    motoristaAnterior: r.motorista_anterior,
+    trocadoPor: r.trocado_por,
+    trocadoEm: r.trocado_em ? new Date(r.trocado_em).toISOString() : null,
     statusOperacional:
       (r.status_operacional as "A_ENVIAR" | "ENVIADO" | "PROG_OK" | "NO_SHOW" | null) ?? null,
     previstoMotorista: r.previsto_motorista,

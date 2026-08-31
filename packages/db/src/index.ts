@@ -69,7 +69,7 @@ export {
   type CancellationOptionItem,
 } from "./trips/trip-cancellation";
 export { addTripNote } from "./trips/trip-events";
-export { lerProgramacaoDaViagem, salvarPrevisto, marcarStatus } from "./trips/trip-programacao";
+export { lerProgramacaoDaViagem, salvarPrevisto, marcarStatus, marcarSm } from "./trips/trip-programacao";
 export type { ProgramacaoDaViagem } from "./trips/trip-programacao";
 export { listarPlacasDoPortal } from "./trips/portal-placas";
 export { marcasDaProgramacao } from "./users/marcas-da-programacao";
