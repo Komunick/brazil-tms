@@ -48,6 +48,25 @@ export async function writePortalFacts(
   if (portal.plateLabel) fields["Placa (portal)"] = portal.plateLabel;
   if (portal.operatorLabel) fields["Operador (portal)"] = portal.operatorLabel;
   /**
+   * O PERFIL COMO O PORTAL O ESCREVE — e a diferença é o "EXPRESSA" (31/08, a pedido).
+   *
+   * `planned_vehicle_type` guarda o ENUM, e o enum não tem essa palavra: `vehicleTypeFrom` converte
+   * "CARRETA - EXPRESSA" e "CARRETA" no mesmo `carreta`, jogando fora o que distingue as duas.
+   *
+   * Medido na listagem do portal em 31/08, numa página de 64 viagens:
+   *
+   *   CARRETA - EXPRESSA .... 34      CARRETA ... 17
+   *   TRUCK - EXPRESSA ......  6      TRUCK .....  6      TOCO ... 1
+   *
+   * Sessenta e dois por cento das carretas são expressas, e o TMS mostrava "carreta" em todas. O
+   * dado chegava em toda atualização e ninguém o lia — o mesmo padrão da doca e da placa interna.
+   *
+   * Guardado CRU, como o portal escreve. Uma normalização nossa ("Carreta Expressa") criaria um
+   * segundo vocabulário para a mesma coisa, e o dia em que eles inventarem um terceiro tipo a gente
+   * descobre pelo texto, não por uma conversão que o transformou em `null`.
+   */
+  if (portal.vehicleLabel) fields["Perfil (portal)"] = portal.vehicleLabel;
+  /**
    * A DOCA DE SAÍDA — onde a viagem carregou (30/08, a pedido).
    *
    * Da ORIGEM, que é a primeira perna: é lá que se carrega, e foi lá que o portal a registrou nas
