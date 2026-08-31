@@ -3,6 +3,7 @@ import { ACTIVE_TRIP_STATUSES, type TripQueue } from "@brazil-tms/shared";
 import { db } from "../client";
 import { alerts, importRows, tripEvents, trips } from "../../schema";
 import { writeAudit } from "../audit/write-audit";
+import { cancelTrip } from "./trip-cancellation";
 
 /**
  * A viagem que o cliente RETIROU (2026-08-18).
@@ -111,6 +112,14 @@ export interface RetiradasResumo {
   candidatas: number;
   /** Quantas foram efetivamente apagadas. */
   removidas: number;
+  /**
+   * Quantas foram CANCELADAS em vez de apagadas — as que tinham ordem de portal (31/08).
+   *
+   * Apagar levaria junto o registro de que alguém nosso aceitou aquela carga, e é justamente esse
+   * registro que explica um compromisso assumido. Cancelada some do quadro do dia e o histórico fica.
+   */
+  canceladas: number;
+  canceladasIds: string[];
   /** Verdadeiro quando o robô não está alimentando — nada é cancelado. Ver `feedEstaFresco`. */
   barradoPeloFeed: boolean;
   /** Verdadeiro quando havia mais candidatas que o teto — o resto fica para a varredura seguinte. */
@@ -158,12 +167,35 @@ export async function feedEstaFresco(minimo = MINIMO_VISTAS_NA_HORA): Promise<bo
 /** Horas sem aparecer em NENHUMA listagem até a ausência valer como retirada. */
 export const SILENCIO_HORAS = 3;
 
+/**
+ * DEPOIS DE QUANTO TEMPO UMA VIAGEM ACEITA DEIXA DE SER INTOCÁVEL (2026-08-31, a pedido).
+ *
+ * A trava de 28/08 dizia: viagem com ordem de portal NUNCA é removida, porque aceitar é compromisso
+ * com o cliente e ela some do portal por motivo nosso — a aba do Aceito era lida com 7 dias à frente
+ * contra os 30 do Planejado, e carga distante deixava de ser vista.
+ *
+ * Aquele motivo acabou: a leitura foi corrigida. E medido em 31/08, **385 das 387 viagens aceitas
+ * foram vistas nas últimas duas horas** — o robô enxerga o Aceito normalmente. As duas exceções eram
+ * fantasmas: aceitas em 28/08, sumidas do portal uma hora depois, uma delas com coleta no mesmo dia
+ * em que foi encontrada, e nenhuma com qualquer rastro operacional.
+ *
+ * A trava virou abrigo: ela guardava para sempre viagens que o cliente retirou, e ninguém no TMS
+ * podia agir sobre elas.
+ *
+ * DOIS DIAS, e não três horas como o silêncio comum: o compromisso do aceite merece uma margem bem
+ * maior que a proposta que ninguém tocou. Dois dias é tempo de qualquer intermitência do robô passar
+ * — o mais longo que ele já ficou fora foi de horas.
+ */
+export const SILENCIO_DA_ACEITA_HORAS = 48;
+
 export async function marcarRetiradasDoPortal(
   actorUserId: string,
   opcoes: {
     diasAtras?: number;
     diasAdiante?: number;
     silencioHoras?: number;
+    /** Ver `SILENCIO_DA_ACEITA_HORAS` — quanto a ordem de portal protege. */
+    silencioDaAceitaHoras?: number;
     teto?: number;
     minimoVistas?: number;
   } = {},
@@ -177,6 +209,7 @@ export async function marcarRetiradasDoPortal(
   // meia dúzia de viagens; com o mínimo de produção fixo, todo caso cairia no "robô parado" e o
   // teste do caminho normal viraria uma tautologia verde que não prova nada.
   const minimoVistas = opcoes.minimoVistas ?? MINIMO_VISTAS_NA_HORA;
+  const silencioDaAceitaHoras = opcoes.silencioDaAceitaHoras ?? SILENCIO_DA_ACEITA_HORAS;
 
   const candidatas = await db
     .select({ id: trips.id, externalTripId: trips.externalTripId })
@@ -214,7 +247,7 @@ export async function marcarRetiradasDoPortal(
   const externalTripIds = candidatas.map((c) => c.externalTripId ?? "(sem id)");
   const base = { candidatas: candidatas.length, externalTripIds };
   if (candidatas.length === 0) {
-    return { ...base, removidas: 0, barradoPeloFeed: false, limitadoPeloTeto: false };
+    return { ...base, removidas: 0, canceladas: 0, canceladasIds: [], barradoPeloFeed: false, limitadoPeloTeto: false };
   }
 
   /**
@@ -226,7 +259,14 @@ export async function marcarRetiradasDoPortal(
    * a operação com a aparência de trabalho.
    */
   if (!(await feedEstaFresco(minimoVistas))) {
-    return { ...base, removidas: 0, barradoPeloFeed: true, limitadoPeloTeto: false };
+    return {
+      ...base,
+      removidas: 0,
+      canceladas: 0,
+      canceladasIds: [],
+      barradoPeloFeed: true,
+      limitadoPeloTeto: false,
+    };
   }
 
   // O teto agora limita o TRABALHO, não julga se ele deve acontecer: o excedente fica para a
@@ -260,6 +300,13 @@ export async function marcarRetiradasDoPortal(
       externalTripId: trips.externalTripId,
       customerId: trips.customerId,
       vistaEm: trips.portalLastSeenAt,
+      /*
+        QUAL DOS DOIS CAMINHOS a viagem segue: com ordem de portal, é CANCELADA; sem, é apagada.
+
+        É a mesma distinção que o usuário fez à mão em 31/08 nas duas primeiras: apagar levaria junto
+        o registro de que alguém nosso aceitou aquela carga.
+      */
+      temOrdem: sql<boolean>`EXISTS (SELECT 1 FROM portal_commands p WHERE p.trip_id = ${trips.id})`,
     })
     .from(trips)
     .where(
@@ -294,16 +341,77 @@ export async function marcarRetiradasDoPortal(
          * porque a chave estrangeira as segurou. A `LT1Q8S02F13N1`, que veio do spot e não chegou
          * a ter ordem, foi apagada às 10:00 — 3,3 horas depois de nascer.
          */
-        sql`NOT EXISTS (SELECT 1 FROM portal_commands p WHERE p.trip_id = ${trips.id})`,
+        /**
+         * ── E ELA DEIXOU DE SER ABSOLUTA (2026-08-31) ─────────────────────────────────────────
+         *
+         * A regra acima guardava a viagem aceita PARA SEMPRE. Isso resolveu o incidente de 28/08 e
+         * criou outro: a viagem que o cliente retira DEPOIS do aceite ficava no TMS eternamente,
+         * cobrando atenção num quadro onde ninguém podia agir sobre ela.
+         *
+         * Encontradas em 31/08 pelo usuário: `LT0Q8V02F17J1`, aceita às 10:28 de 28/08, sumida do
+         * portal às 11:36 do mesmo dia — e com coleta marcada para as 20:00 de 31/08. E
+         * `LT0Q9502F19L1`, igual. Nenhuma com motorista, comentário, evento ou alerta.
+         *
+         * Agora a ordem de portal protege por DOIS DIAS. Passado isso, sem atribuição e sem nenhum
+         * outro rastro, ela entra — mas por outro caminho: é CANCELADA, não apagada (ver abaixo).
+         */
+        sql`(
+          NOT EXISTS (SELECT 1 FROM portal_commands p WHERE p.trip_id = ${trips.id})
+          OR ${trips.portalLastSeenAt} < now() - make_interval(hours => ${silencioDaAceitaHoras})
+        )`,
       ),
     );
 
   if (semTraco.length === 0) {
-    return { ...base, removidas: 0, barradoPeloFeed: false, limitadoPeloTeto: false };
+    return { ...base, removidas: 0, canceladas: 0, canceladasIds: [], barradoPeloFeed: false, limitadoPeloTeto: false };
   }
 
-  const removiveis = semTraco.map((r) => r.id);
+  /**
+   * OS DOIS DESTINOS (2026-08-31).
+   *
+   * Sem ordem de portal, ela nunca chegou a ser uma viagem — é a proposta retirada antes de qualquer
+   * coisa acontecer, e some. Com ordem, alguém nosso aceitou: some do quadro do dia como CANCELADA,
+   * e o registro do compromisso fica.
+   */
+  const paraCancelar = semTraco.filter((r) => r.temOrdem);
+  const paraApagar = semTraco.filter((r) => !r.temOrdem);
+  const removiveis = paraApagar.map((r) => r.id);
   const agora = Date.now();
+
+  /**
+   * O CANCELAMENTO USA O MESMO CAMINHO DE UMA PESSOA, e não um `update` cru.
+   *
+   * `cancelTrip` grava o evento, a auditoria e a transição de status. Um `update` direto deixaria a
+   * viagem cancelada sem nada explicando por quê — e "por que essa não rodou?" é exatamente a
+   * pergunta que o cancelamento existe para responder.
+   *
+   * Um a um e com `try`: uma falha não pode levar as outras, porque são clientes e cargas diferentes.
+   * A mais provável é `CANCELLATION_NOT_CONFIGURED` — a tabela de motivos esteve VAZIA em produção
+   * até 31/08, e o botão de cancelar do TMS nunca tinha funcionado.
+   */
+  const canceladas: string[] = [];
+  for (const t of paraCancelar) {
+    try {
+      await cancelTrip(
+        t.id,
+        {
+          reasonCode: "cancelled_by_customer",
+          billingImpact: "no_charge",
+          responsibleParty: "customer_caused",
+        },
+        actorUserId,
+      );
+      canceladas.push(t.externalTripId ?? "(sem id)");
+    } catch (e) {
+      console.error(
+        JSON.stringify({
+          varredura: "portal.withdrawn",
+          naoCancelou: t.externalTripId,
+          erro: e instanceof Error ? e.message : String(e),
+        }),
+      );
+    }
+  }
 
   await db.transaction(async (tx) => {
     /**
@@ -315,7 +423,7 @@ export async function marcarRetiradasDoPortal(
      * Escrita antes do `DELETE` e na MESMA transação — se a remoção falhar, o registro cai junto e
      * não sobra auditoria de uma remoção que não houve.
      */
-    for (const t of semTraco) {
+    for (const t of paraApagar) {
       await writeAudit(tx, {
         entityType: "trip",
         entityId: t.id,
@@ -354,8 +462,12 @@ export async function marcarRetiradasDoPortal(
     candidatas: candidatas.length,
     // O resumo lista o que FOI removido, não o que se cogitou remover: é este número que vai para o
     // log do worker, e é por ele que alguém procura uma LH que sumiu do quadro.
-    externalTripIds: semTraco.map((t) => t.externalTripId ?? "(sem id)"),
+    externalTripIds: paraApagar.map((t) => t.externalTripId ?? "(sem id)"),
     removidas: removiveis.length,
+    // Separadas no resumo porque são coisas diferentes: uma some do banco, a outra some do quadro do
+    // dia e continua existindo. Somar as duas num número só esconderia qual foi qual no log.
+    canceladas: canceladas.length,
+    canceladasIds: canceladas,
     barradoPeloFeed: false,
     limitadoPeloTeto: candidatas.length > teto,
   };
