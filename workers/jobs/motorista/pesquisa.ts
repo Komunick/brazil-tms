@@ -108,6 +108,12 @@ export async function registerMotoristaPesquisar(boss: PgBoss): Promise<void> {
        * alguém fará diante da fatura é "quem pediu, e pediu o quê".
        */
       await gravarResultadoDaPesquisa(payload.preRegistrationId, payload.solicitadoPor, {
+        /*
+         * O VÍNCULO É GUARDADO, e não como registro histórico: o `getResultadoPesquisaConsulta`
+         * pergunta por CPF + VÍNCULO, não pelo código que a solicitação devolveu. Sem ele guardado
+         * não há como perguntar o resultado daquilo que se pagou.
+         */
+        vinculo: payload.vinculo,
         opcoes,
         resposta,
       });
@@ -120,6 +126,12 @@ export async function registerMotoristaPesquisar(boss: PgBoss): Promise<void> {
        * `IntegraRecusou` É resposta dela: a linha continua travada de propósito.
        */
       await gravarResultadoDaPesquisa(payload.preRegistrationId, payload.solicitadoPor, {
+        /*
+         * O VÍNCULO É GUARDADO, e não como registro histórico: o `getResultadoPesquisaConsulta`
+         * pergunta por CPF + VÍNCULO, não pelo código que a solicitação devolveu. Sem ele guardado
+         * não há como perguntar o resultado daquilo que se pagou.
+         */
+        vinculo: payload.vinculo,
         opcoes,
         erro: recusa
           ? `gerenciadora recusou (CodErro ${(erro as IntegraRecusou).codErro}): ${(erro as IntegraRecusou).msgErro}`

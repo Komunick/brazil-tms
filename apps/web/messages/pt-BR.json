@@ -2402,7 +2402,17 @@
     "pesquisaOpcao_biometrica": "Análise biométrica — o motorista recebe um link de photocheck",
     "pesquisaConfirmar": "Pedir e pagar",
     "pesquisaPedida": "Pesquisa pedida. O resultado aparece aqui em instantes.",
-    "pesquisaFalhou": "Não foi possível pedir a pesquisa."
+    "pesquisaFalhou": "Não foi possível pedir a pesquisa.",
+    "situacao": {
+      "SP": "Sem pesquisa",
+      "EP": "Em pesquisa",
+      "AP": "Aguardando pesquisa",
+      "NA": "Inconclusivo",
+      "AD": "Adequado ao risco",
+      "EX": "Expirado",
+      "AC": "A consultar",
+      "B": "Análise biométrica"
+    }
   },
   "GR": {
     "title": "GR — Pré-SM",

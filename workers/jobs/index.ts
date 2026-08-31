@@ -17,6 +17,7 @@ import { registerTurnoFecharAtrasados } from "./turno";
 import { registerCnhLer } from "./cnh";
 import { registerMotoristaCadastrar } from "./motorista";
 import { registerMotoristaPesquisar } from "./motorista/pesquisa";
+import { registerMotoristaResultado } from "./motorista/resultado";
 
 /**
  * Registry of import job handlers (feature 004, research R3). The bootstrap (`workers/index.ts`)
@@ -91,4 +92,5 @@ export async function registerJobHandlers(boss: PgBoss): Promise<void> {
   // solicitação de pesquisa, que custa, continua sendo clique de uma pessoa e não passa por aqui.
   await registerMotoristaCadastrar(boss);
   await registerMotoristaPesquisar(boss);
+  await registerMotoristaResultado(boss);
 }
