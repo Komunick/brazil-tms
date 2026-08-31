@@ -1,4 +1,4 @@
-import type { Role } from "@brazil-tms/shared";
+import { SEM_CAPACIDADES, type PermissionKey, type Role } from "@brazil-tms/shared";
 
 export type UserStatus = "pending" | "active" | "disabled";
 
@@ -6,7 +6,21 @@ export interface SessionUser {
   id: string;
   name: string;
   email: string;
+  /**
+   * O papel ANTIGO. Continua aqui porque a coluna continua existindo e alguma tela ainda o exibe —
+   * mas **ele não decide mais nada**. Quem decide é `permissoes`, e é isso que `can` recebe.
+   *
+   * A remoção é assunto de uma fatia futura, depois de a produção ter rodado no cargo.
+   */
   role: Role;
+  /**
+   * O QUE ESTA PESSOA ALCANÇA — vindo do cargo dela, lido a cada requisição (fatia 029).
+   *
+   * **Vazio quando não há cargo, e NUNCA o papel antigo.** Ver `evaluateProfile` para o porquê.
+   */
+  permissoes: ReadonlySet<PermissionKey>;
+  /** O nome do cargo, para a tela poder dizer "sem cargo definido" em vez de só não mostrar nada. */
+  cargo: string | null;
   status: UserStatus;
   mustChangePassword: boolean;
   lastLoginAt: Date | null;
@@ -21,6 +35,9 @@ export interface ProfileRow {
   status: string;
   mustChangePassword: boolean;
   lastLoginAt: Date | null;
+  /** As capacidades do cargo, resolvidas no MESMO `select` da sessão — sem consulta a mais. */
+  permissoes: readonly string[];
+  cargo: string | null;
 }
 
 export type SessionResult =
@@ -51,6 +68,25 @@ export function evaluateProfile(
       name: profile.name,
       email: profile.email,
       role: profile.role,
+      /**
+       * SEM CARGO ⇒ CONJUNTO VAZIO. Nunca `ROLE_PERMISSIONS[profile.role]`.
+       *
+       * A tentação do fallback é grande e é errada: se a leitura do cargo quebrar — um `join` mal
+       * escrito, uma tabela vazia, uma migração que não subiu —, cair no papel antigo faria TUDO
+       * continuar funcionando. Ninguém descobriria que a autorização voltou a ser a de código, até
+       * alguém editar um cargo e nada acontecer.
+       *
+       * Vazio é barulhento: a pessoa entra, não vê nada, e a tela diz "sem cargo definido". Um
+       * defeito que aparece em minutos vale mais que um que dorme por meses.
+       *
+       * Vazio também é o lado CERTO de errar num modelo de autorização: o outro lado é conceder o
+       * que ninguém pediu.
+       */
+      permissoes:
+        profile.permissoes.length > 0
+          ? new Set(profile.permissoes as PermissionKey[])
+          : SEM_CAPACIDADES,
+      cargo: profile.cargo,
       status,
       mustChangePassword: profile.mustChangePassword,
       lastLoginAt: profile.lastLoginAt,

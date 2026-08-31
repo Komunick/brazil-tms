@@ -14,7 +14,7 @@ import { ExportPanel } from "@/components/billing/export-panel";
 export default async function BillingPage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "view_all_trips")) redirect("/");
+  if (!can(session.user, "view_all_trips")) redirect("/");
 
   const t = await getTranslations("Billing");
   const options = await getTripFilterOptions();

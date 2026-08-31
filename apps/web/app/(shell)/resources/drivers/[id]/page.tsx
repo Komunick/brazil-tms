@@ -11,10 +11,10 @@ export default async function DriverDetailPage({
 }) {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "manage_fleet_data")) redirect("/");
+  if (!can(session.user, "manage_fleet_data")) redirect("/");
 
   const { id } = await params;
   return (
-    <DriverDetailClient driverId={id} canArchive={can(session.user.role, "delete_archive")} />
+    <DriverDetailClient driverId={id} canArchive={can(session.user, "delete_archive")} />
   );
 }

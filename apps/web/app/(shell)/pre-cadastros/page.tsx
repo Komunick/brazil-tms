@@ -19,7 +19,7 @@ import { FilaPreCadastrosClient } from "@/components/pre-cadastros/fila-pre-cada
 export default async function PreCadastrosPage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "manage_fleet_data")) redirect("/");
+  if (!can(session.user, "manage_fleet_data")) redirect("/");
 
   const t = await getTranslations("PreCadastros");
 

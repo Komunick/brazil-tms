@@ -11,7 +11,7 @@ import { AuditClient } from "@/components/audit/audit-client";
 export default async function AuditPage() {
   const s = await verifySession();
   if (!s.authenticated) redirect("/login");
-  if (!can(s.user.role, "view_audit_log")) redirect("/");
+  if (!can(s.user, "view_audit_log")) redirect("/");
 
   return <AuditClient />;
 }

@@ -27,7 +27,7 @@ import { PassagemDeTurnoClient } from "@/components/passagem-de-turno/passagem-d
 export default async function PassagemDeTurnoPage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "view_all_trips")) redirect("/");
+  if (!can(session.user, "view_all_trips")) redirect("/");
 
   const agora = turnoDe(new Date());
   const meuSetor = await setorDoUsuario(session.user.id);

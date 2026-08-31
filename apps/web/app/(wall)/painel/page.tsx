@@ -20,7 +20,7 @@ export default async function PainelPage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
   if (decideAccess(session) === "redirect_set_password") redirect("/auth/set-password");
-  if (!can(session.user.role, "view_all_trips")) redirect("/");
+  if (!can(session.user, "view_all_trips")) redirect("/");
 
   return <Wallboard />;
 }

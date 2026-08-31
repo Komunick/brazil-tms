@@ -7,7 +7,7 @@ import { ImportHistoryClient } from "@/components/imports/import-history-client"
 export default async function ImportHistoryPage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "import_trips")) redirect("/");
+  if (!can(session.user, "import_trips")) redirect("/");
 
   return <ImportHistoryClient />;
 }

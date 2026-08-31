@@ -14,7 +14,7 @@ import { SlaRuleAdmin } from "@/components/sla-rules/sla-rule-admin";
 export default async function SlaRulesPage() {
   const session = await verifySession();
   if (!session.authenticated) redirect("/login");
-  if (!can(session.user.role, "manage_commercial_data")) redirect("/");
+  if (!can(session.user, "manage_commercial_data")) redirect("/");
 
   const t = await getTranslations("Sla.rules");
   const options = await getTripFilterOptions();
