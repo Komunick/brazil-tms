@@ -146,11 +146,23 @@ pessoa passa a ver exatamente isso — sem deploy nenhum.
 
 ## Fase 6 (US2 · P2): O mini perfil e a foto
 
+> **REABERTA EM 31/08 — os componentes ficaram ÓRFÃOS.**
+>
+> T037, T038 e T039 foram marcadas como feitas porque os ARQUIVOS existiam. Nenhuma tela os importa:
+> `grep -rn NomeClicavel apps/web` não devolve nada além da própria definição.
+>
+> É o padrão `dado-capturado-e-nunca-mostrado`: "o código faz X" não prova que alguém VÊ X. O que
+> está de pé e funcionando é o que roda sozinho — o job dos 90 dias e o `desativado_em`. O que
+> depende de uma tela para existir não existe.
+>
+> **Falta decidir com o usuário ONDE**: em que listas o nome vira clicável, e por qual tela alguém
+> envia a própria foto (não há tela de "meu perfil" — sem ela, `PUT /api/me/foto` é inalcançável).
+
 **Teste independente**: clicar num nome em qualquer lista, ver o cartão certo; trocar a própria foto.
 
-- [X] T037 [P] [US2] `apps/web/components/usuarios/mini-perfil.tsx` — cartão com foto, nome, cargo e selos. **Não** mostra e-mail nem a lista de permissões: responde "quem é", não "o que alcança"
-- [X] T038 [P] [US2] `apps/web/components/usuarios/nome-clicavel.tsx` — o nome vira botão onde ele aparece
-- [X] T039 [US2] `GET /api/users/[id]/perfil` (contracts). Conta desativada volta `ativo: false`, e o cartão diz isso em vez de abrir vazio
+- [ ] T037 [P] [US2] `apps/web/components/usuarios/mini-perfil.tsx` — cartão com foto, nome, cargo e selos. **Não** mostra e-mail nem a lista de permissões: responde "quem é", não "o que alcança"
+- [ ] T038 [P] [US2] `apps/web/components/usuarios/nome-clicavel.tsx` — o nome vira botão onde ele aparece
+- [ ] T039 [US2] `GET /api/users/[id]/perfil` (contracts). Conta desativada volta `ativo: false`, e o cartão diz isso em vez de abrir vazio
 - [X] T040 [US2] Iniciais quando não há foto, distinguíveis entre pessoas — **nunca** um mesmo ícone genérico para todos (FR-020)
 - [X] T041 [US2] Acrescentar o ramo `user` em `assertResourceDocumentParent` (`apps/web/lib/master-data/resource-documents-service.ts`), procurando em `users`; o equivalente a `archivedAt` aqui é `status = 'disabled'` — desativado não recebe foto nova
 - [X] T042 [US2] **NÃO alargar `RESOURCE_DOCUMENT_ENTITY_TYPES`.** Ele é a PORTA das rotas de frota e continua `driver|vehicle`; alargá-lo faria a rota de frota procurar o pai em `drivers`/`vehicles` e não achar (research §6, e o comentário no schema avisa)
