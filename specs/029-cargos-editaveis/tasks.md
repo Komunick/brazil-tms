@@ -76,8 +76,8 @@ A fase 3 é a mais arriscada **e a que menos muda**. Se ela não for invisível,
 **Objetivo**: transformar "ninguém perde acesso" de promessa em saída de terminal. Roda ANTES de
 qualquer código novo subir.
 
-- [ ] T011 Criar `packages/db/seed/029-conferir-acesso.ts` (convenção do repositório: scripts operacionais vivem em `seed/`, rodados por `tsx`): para cada pessoa, monta o conjunto **antes** (`ROLE_PERMISSIONS[users.role]`) e o **depois** (`users.cargo_id → cargo_permissoes`), e imprime uma linha por divergência
-- [ ] T012 Registrar `"db:conferir-acesso": "tsx ./seed/029-conferir-acesso.ts"` em `packages/db/package.json`
+- [X] T011 Criar `packages/db/seed/029-conferir-acesso.ts` (convenção do repositório: scripts operacionais vivem em `seed/`, rodados por `tsx`): para cada pessoa, monta o conjunto **antes** (`ROLE_PERMISSIONS[users.role]`) e o **depois** (`users.cargo_id → cargo_permissoes`), e imprime uma linha por divergência
+- [X] T012 Registrar `"db:conferir-acesso": "tsx ./seed/029-conferir-acesso.ts"` em `packages/db/package.json`
 - [ ] T013 Rodar contra **produção em leitura** e exigir a saída `34 pessoas · 34 idênticas · 0 divergentes`. Divergência ⇒ a semeadura está errada, e **nada precisa ser desfeito**: o app novo ainda não subiu e `users.role` ainda manda
 - [ ] T013a **Conferir a conta mestre pelo nome** (FR-017a): `victorti@braziltransports.com.br` tem de cair no cargo semeado de `admin`, com as **23** capacidades. O relatório de 34 linhas idênticas esconde bem uma linha específica, e esta é a que abre a porta para consertar as outras. O e-mail NÃO entra no código de autorização — é conferência, não regra (ver FR-017a)
 

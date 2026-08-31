@@ -20,7 +20,19 @@ Guarde essa saída. É contra ela que a virada é conferida.
 
 ---
 
-## 2. Migrar à mão, com o app anterior no ar
+## 2. Migrar à mão — **no dev primeiro**, com o app anterior no ar
+
+**A ordem é dev, depois produção** (a pedido, 31/08). O dev tem os mesmos papéis e a mesma linha de
+`customer_viewer` desativada que produção tem, então o que quebrar lá quebraria aqui. Só depois de a
+conferência do passo 3 fechar no dev é que a mesma sequência roda em produção.
+
+Os caminhos:
+
+| | pasta | contêiner do Postgres |
+|---|---|---|
+| dev | `/home/ubuntu/komunick/repos/brazil-tms` | `brazil-tms-dev-supabase-db-1` |
+| produção | `/opt/brazil-tms` | `brazil-tms-supabase-db-1` |
+
 
 O `deploy.sh` **não** aplica migração (`docs/OPERACAO.md`). A `0060` é aditiva e convive com o código
 que ainda lê `users.role`.
