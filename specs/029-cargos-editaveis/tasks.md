@@ -151,9 +151,9 @@ pessoa passa a ver exatamente isso — sem deploy nenhum.
 - [ ] T037 [P] [US2] `apps/web/components/usuarios/mini-perfil.tsx` — cartão com foto, nome, cargo e selos. **Não** mostra e-mail nem a lista de permissões: responde "quem é", não "o que alcança"
 - [ ] T038 [P] [US2] `apps/web/components/usuarios/nome-clicavel.tsx` — o nome vira botão onde ele aparece
 - [ ] T039 [US2] `GET /api/users/[id]/perfil` (contracts). Conta desativada volta `ativo: false`, e o cartão diz isso em vez de abrir vazio
-- [ ] T040 [US2] Iniciais quando não há foto, distinguíveis entre pessoas — **nunca** um mesmo ícone genérico para todos (FR-020)
-- [ ] T041 [US2] Acrescentar o ramo `user` em `assertResourceDocumentParent` (`apps/web/lib/master-data/resource-documents-service.ts`), procurando em `users`; o equivalente a `archivedAt` aqui é `status = 'disabled'` — desativado não recebe foto nova
-- [ ] T042 [US2] **NÃO alargar `RESOURCE_DOCUMENT_ENTITY_TYPES`.** Ele é a PORTA das rotas de frota e continua `driver|vehicle`; alargá-lo faria a rota de frota procurar o pai em `drivers`/`vehicles` e não achar (research §6, e o comentário no schema avisa)
+- [X] T040 [US2] Iniciais quando não há foto, distinguíveis entre pessoas — **nunca** um mesmo ícone genérico para todos (FR-020)
+- [X] T041 [US2] Acrescentar o ramo `user` em `assertResourceDocumentParent` (`apps/web/lib/master-data/resource-documents-service.ts`), procurando em `users`; o equivalente a `archivedAt` aqui é `status = 'disabled'` — desativado não recebe foto nova
+- [X] T042 [US2] **NÃO alargar `RESOURCE_DOCUMENT_ENTITY_TYPES`.** Ele é a PORTA das rotas de frota e continua `driver|vehicle`; alargá-lo faria a rota de frota procurar o pai em `drivers`/`vehicles` e não achar (research §6, e o comentário no schema avisa)
 - [ ] T043 [US2] Rotas próprias da foto: `PUT /api/me/foto`, `PUT /api/users/[id]/foto` (`manage_users`), `GET /api/users/[id]/foto` com link de curta duração — **nunca** endereço público permanente
 - [ ] T044 [US2] Recusar `413` acima do teto e `415` fora dos formatos, **sem guardar nada** (FR-021)
 - [ ] T045 [US2] Preencher `users.desativado_em` ao desativar e **zerá-lo ao reativar** — é assim que a reativação para o relógio dos 90 dias, sem código especial

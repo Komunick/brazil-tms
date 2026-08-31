@@ -54,7 +54,15 @@ export function documentStorageKey(tripId: string, documentId: string, ext: stri
  * (`resources/<entityType>/<entityId>/<documentId>.<ext>`; same private documents bucket as 008).
  */
 export function resourceDocumentStorageKey(
-  entityType: "driver" | "vehicle" | "preregistration",
+  /*
+    `user` entrou na fatia 029 — a foto de perfil.
+
+    É a COLUNA que se alargou, e não a PORTA: `RESOURCE_DOCUMENT_ENTITY_TYPES`, o vocabulário que as
+    rotas de FROTA aceitam no segmento de URL, continua `driver | vehicle`. A foto entra por rota
+    própria. Alargar os dois faria a rota de frota procurar o pai em `drivers`/`vehicles` e não
+    achar — ver o comentário em `schema/resource-documents.ts`.
+  */
+  entityType: "driver" | "vehicle" | "preregistration" | "user",
   entityId: string,
   documentId: string,
   ext: string,
