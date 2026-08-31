@@ -54,6 +54,9 @@ export {
   marcarVistasNoPortal,
   marcarRetiradasDoPortal,
   SILENCIO_HORAS,
+  // A constante irmã, que faltava: sem ela, quem for medir a regra da viagem aceita precisa
+  // recopiar o 48 — e duas cópias de um prazo divergem no primeiro ajuste.
+  SILENCIO_DA_ACEITA_HORAS,
   TETO,
   type RetiradasResumo,
 } from "./trips/portal-withdrawn";
