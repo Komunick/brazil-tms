@@ -97,7 +97,7 @@ essa invisibilidade é o critério de sucesso desta fase.
 - [X] T018 Em `apps/web/lib/auth/require-auth.ts`, `AuthContext` ganha `permissoes` e `requirePermission` passa a chamar `can(ctx, chave)`. **Os 169 pontos NÃO são tocados**
 - [X] T019 Atualizar os **62** `can(role, …)` diretos que o compilador apontar — quase todos em `page.tsx`, decidindo o que a tela desenha. Conferir que o `tsc` fica limpo nos quatro pacotes: é o compilador provando que nenhum ficou para trás
 - [X] T020 [P] Escrever `apps/web/lib/auth/sem-cargo.test.ts` afirmando que um usuário sem `cargo_id` recebe conjunto **vazio** e é recusado em toda permissão — o teste que tranca T017
-- [ ] T021 **ADIADA PARA A FASE 5, com motivo** (31/08): `GET /api/me` não existe hoje, e o shell já recebe as capacidades como PROPS do servidor — a barra lateral e o menu do telefone filtram com o mesmo `can`. Criar a rota agora seria um endpoint que ninguém chama (princípio I). Ela entra quando a tela de cargos precisar ler isso do cliente. Quando entrar, devolve **a mesma lista** que o servidor usa para decidir: duas listas seriam dois caminhos
+- [X] T021 **DISPENSADA** (31/08, ao fechar a fatia): `GET /api/me` não foi feita, e a fatia inteira subiu sem ela. O shell recebe as capacidades como PROPS do servidor, a tela de cargos monta o catálogo no servidor, e o mini perfil tem rota própria — nenhuma tela precisou ler o próprio acesso pelo cliente. Criá-la teria sido um endpoint que ninguém chama (princípio I). Fica registrada como dispensada, e não como esquecida: se uma tela futura precisar, o contrato já está escrito em `contracts/cargos-api.md`
 
 **Ponto de parada**: comportamento idêntico ao de antes, lido de outro lugar. Se alguém notar
 diferença, é defeito.
@@ -178,10 +178,10 @@ que elas conseguem fazer **não mudou**.
 
 ## Fase 8: Fechamento
 
-- [ ] T054 Rodar os quatro `tsc`, `npx vitest run` e **`npx eslint .` da RAIZ** — `pnpm -r lint` não cobre `scripts/` e já deixou a CI vermelha
-- [ ] T055 Rodar `db:conferir-acesso` **de novo**, agora com o app novo no ar, e confirmar que continua 34 de 34
-- [ ] T056 Renumerar a migração se `0060` tiver sido tomada no `dev` — **só no merge**, nunca antes
-- [ ] T057 Registrar em `docs/OPERACAO.md` que a `0060` é aditiva e roda com o app anterior no ar, e que `users.role` segue vivo à espera de uma fatia futura
+- [X] T054 Rodar os quatro `tsc`, `npx vitest run` e **`npx eslint .` da RAIZ** — `pnpm -r lint` não cobre `scripts/` e já deixou a CI vermelha
+- [X] T055 Rodar `db:conferir-acesso` **de novo**, agora com o app novo no ar, e confirmar que continua 34 de 34
+- [X] T056 Renumerar a migração se `0060` tiver sido tomada no `dev` — **só no merge**, nunca antes
+- [X] T057 Registrar em `docs/OPERACAO.md` que a `0060` é aditiva e roda com o app anterior no ar, e que `users.role` segue vivo à espera de uma fatia futura
 
 ---
 

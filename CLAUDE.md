@@ -73,62 +73,82 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/029-cargos-editaveis/plan.md` — **cargos editáveis, mini perfil e
-selos**. O acesso ao TMS deixa de ser catálogo em código e passa a ser dado editável por um admin.
+Active feature plan: `specs/028-fila-cadastro-motorista/plan.md` — o **pré-cadastro de motorista
+parceiro**, preenchido pelo próprio motorista. **VOLTOU A SER O TRABALHO COM DATA**: o evento é
+**10/09/2026**, com mais de 50 motoristas e ninguém do escritório presente.
 
-**O NÚMERO QUE JUSTIFICA A FATIA**: dos 34 usuários ativos, **20 são `admin`** (14 `dispatcher`, 1
-`operations_manager`, e ZERO nos outros quatro papéis). Quando o papel fixo não coube, a pessoa
-virou admin — e hoje 20 pessoas podem apagar arquivo e exportar faturamento porque precisavam ver a
-Expedição.
+**O que falta nela**, e as duas primeiras travam o resto:
 
-**A DESCOBERTA QUE DEFINE O DESENHO**: `requirePermission(ctx, chave)` já é ponto de estrangulamento
-único — **169** dos 231 usos passam por ele; os outros **62** chamam `can(papel, chave)` direto. E
-`loadSession` lê a linha do usuário no Postgres **a cada requisição**, não de um token. Por isso
-FR-007 (mudança de cargo valer sem sair e entrar) **sai de graça**.
+1. A **divergência de CPF** do primeiro cadastro real (Alexandre): `007.588.154-33` na CNH contra
+   `076.005.305-70` digitado — os dois válidos. Precisa ser resolvida com o motorista.
+2. O **primeiro `setMotorista` de verdade**, que nunca rodou. É **de graça** (decisão D7).
+3. A **PR #6 do site** (`site-brazil-transports`), com o `min` nas datas, ainda aberta.
 
-**AS CINCO ARMADILHAS desta fatia**:
+**ARMADILHAS da 028** — as cinco que quebram de verdade:
 
-1. **Fallback silencioso para o papel antigo.** Sem cargo, o conjunto é **vazio** — nunca
-   `ROLE_PERMISSIONS[role]`. O fallback esconderia justamente o defeito que mais importa: tudo
-   continuaria funcionando e ninguém saberia que a tabela nova não está sendo lida.
-2. **Remover `users.role` nesta leva.** A migração roda com o app ANTERIOR no ar (`deploy.sh` não
-   migra), e ele lê a coluna. Derrubá-la derruba a produção. `cargo_id` também nasce NULO, pelo mesmo
-   motivo: o app anterior cria usuário sem saber preenchê-lo.
-3. **Trava do último admin em quatro lugares.** São quatro caminhos (apagar cargo, tirar a permissão,
-   mover a última pessoa, desativá-la) e UMA função pura, chamada de um ponto só, **dentro da
-   transação e DEPOIS da escrita** — verificar antes perde a corrida de duas abas.
-4. **Alargar a PORTA junto com a COLUNA.** `resource_documents` passa a aceitar `user` no CHECK, mas
-   `RESOURCE_DOCUMENT_ENTITY_TYPES` (o vocabulário das rotas de frota) **continua `driver|vehicle`**.
-   A foto tem rota própria.
-5. **Migração sem entrada no `meta/_journal.json`** é pulada, e o deploy responde sucesso.
+1. **A resposta da rota é IDÊNTICA nos três casos de CPF** (novo · já na fila · já é motorista).
+   Diferenciar — no corpo, no código ou no tempo — transforma o formulário numa máquina de
+   descobrir quem é motorista da empresa. Há teste afirmando isso byte a byte; se cair, não
+   "conserte o teste".
+2. **O TMS revalida TUDO**, mesmo o que o formulário já validou.
+3. **`drizzle-kit generate` NÃO serve aqui.** Migração à mão, renumerada só no merge, e **entrada no
+   `meta/_journal.json` é obrigatória** — sem ela a migração é pulada e o deploy responde sucesso.
+4. **Descartar ARQUIVA, não apaga** (princípio III). O índice único de CPF é parcial por isso.
+5. **Campo não lido fica VAZIO e assinalado, nunca inventado.**
 
-**A PROVA DE QUE NINGUÉM PERDE ACESSO** é executável, não é promessa:
-`scripts/029-conferir-acesso.ts` compara pessoa a pessoa o conjunto de antes (`ROLE_PERMISSIONS`) com
-o de depois (as tabelas), em leitura pura contra produção. **34 de 34 idênticos** antes de qualquer
-código novo subir.
-
-**O que NÃO se reescreve**: os 169 `requirePermission` · a fatia **025** (bucket privado, histórico,
-link curto), que é onde a foto entra · `nav.ts`, de onde o catálogo de áreas é DERIVADO (um teste
-afirma que toda `PermissionKey` aparece em exatamente um lugar da tela, senão a CI cai).
+**A divisão entre dois repositórios**: o formulário vive em `site-brazil-transports` (servidor
+144.24.36.23, não clonado aqui). O TMS é **banco e API**, e entrega para lá o **contrato**
+(`contracts/pre-cadastro.md`), nunca código.
 
 ---
 
-**EM ESPERA, e as duas têm data ou dívida:**
+## A 029 (cargos editáveis) está ENTREGUE — 59 de 60 tarefas
 
-**A 028 (pré-cadastro de motorista)** está pausada por decisão do usuário em 31/08 — mas **tem prazo:
-10/09/2026**, evento com mais de 50 motoristas e ninguém do escritório. Plano em
-`specs/028-fila-cadastro-motorista/plan.md`; o formulário vive em `site-brazil-transports` (outro
-repositório) e o TMS entrega para lá o **contrato**, nunca código. Pendências dela: a divergência de
-CPF do primeiro cadastro real, e o primeiro `setMotorista` de verdade (que é de graça).
+`specs/029-cargos-editaveis/`. O acesso deixou de ser catálogo em código: quem manda são as tabelas
+`cargos` e `cargo_permissoes`, editáveis em **Sistema → Cargos**. Falta só a **T036**, a conferência
+à mão na tela, que é do usuário.
 
-**A 027 (aba GR)** está pausada. E **a 026 está no `dev` e NÃO deve ser promovida como está** — ela
-cria a Pré-SM via `setPreSMdeModelo`, e a gerenciadora respondeu em 25/08 que tem de ser pelo
-`setPreSM`. A 027 substitui esse miolo; o resto da 026 sobrevive inteiro (vínculo A/F/T, migrações
-`0046`/`0047`, `trip_pre_sm`, o cancelamento, a tela de conferência, o cliente da Integra).
+**O que era, e por que mudou**: dos 34 usuários ativos, **20 eram `admin`** — porque o catálogo vivia
+em código e quem precisava de uma combinação inexistente virava admin. E o motivo que olha para a
+frente (usuário, 31/08): **vão entrar sistemas de outros setores no TMS**.
+
+**O QUE NÃO SE REESCREVE, e o porquê de cada um:**
+
+- **`requirePermission` é o ponto único de autorização.** 169 chamadas passam por ele e não foram
+  tocadas. `can` recebe o CONJUNTO (`Principal`), nunca o papel — a troca de assinatura foi o que
+  fez o compilador achar os 62 pontos diretos, e é o que impede um segundo caminho de decisão.
+- **Sem cargo ⇒ conjunto VAZIO**, nunca `ROLE_PERMISSIONS[role]`. Um fallback faria tudo continuar
+  funcionando se a leitura do cargo quebrasse. `apps/web/lib/auth/sem-cargo.test.ts` tranca isso.
+- **`ROLE_PERMISSIONS` é SEMENTE**, fora do caminho de execução: a migração `0060` foi semeada dela,
+  e `db:conferir-acesso` a usa como o lado "antes" da comparação.
+- **A trava do último admin é UMA função + UM ponto**, contada no banco **depois da escrita** —
+  contar antes perde a corrida de duas abas. Vale para os quatro caminhos do FR-010.
+- **`users.role` continua vivo** e não decide nada. Removê-lo é fatia futura: o deploy migra ANTES
+  do build, e durante o build o app antigo ainda serve.
+- **Selo nunca concede acesso**, e `selos.test.ts` prova por CONSTRUÇÃO (varre o código procurando o
+  vocabulário de acesso), não por exemplo.
+- **A foto usa a máquina da 025** (bucket, chave, link curto) mas NÃO o serviço de frota: alargou-se
+  a COLUNA (`entity_type` aceita `user`) e **não** a PORTA (`RESOURCE_DOCUMENT_ENTITY_TYPES`).
+
+**Dois padrões que esta fatia deixou, e que voltam a morder:**
+
+- **Teste que lê código-fonte precisa ignorar COMENTÁRIO.** Aconteceu duas vezes: a asserção pegava a
+  frase que explica a regra, e "consertar" seria apagar o porquê.
+- **Teste prova o que se entende; SIMULAÇÃO revela o que não se entende.** A migração rodada no dev
+  dentro de uma transação desfeita achou uma pessoa ficando sem cargo (`customer_viewer`), e rodar a
+  consulta da sessão pelo drizzle achou uma data voltando como string num campo tipado `Date`.
+
+---
+
+**A 027 (aba GR) está PAUSADA**, não cancelada. E **a 026 está no `dev` e NÃO deve ser promovida como
+está** — ela cria a Pré-SM via `setPreSMdeModelo`, e a gerenciadora respondeu em 25/08 que tem de ser
+pelo `setPreSM`. A 027 substitui esse miolo; o resto da 026 sobrevive inteiro.
 
 **Validar sem gastar**: não há homologação (`CodErro 100`, medido) e a gerenciadora **cobra por
-solicitação**. Nada da 029 gasta; tudo das etapas 1 a 4 da 028 também não.
+solicitação**. Nada da 029 gasta; as etapas 1 a 4 da 028 também não.
 
-**Ler manual em PDF**: use o **PDF**, não conversão. `pdftotext -layout` + `iconv -f LATIN1`. A
-conversão HTML perde tabelas inteiras e já levou a duas conclusões erradas por ausência.
+**Ler manual em PDF**: use o **PDF**, não conversão. `pdftotext -layout` + `iconv -f LATIN1`.
+
+**O tmsdev não tem viagem do dia** (o banco parou de ser alimentado em 29/08; os robôs escrevem em
+produção). Painel vazio lá é falta de dado, não regressão.
 <!-- SPECKIT END -->
