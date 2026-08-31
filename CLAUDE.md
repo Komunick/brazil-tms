@@ -102,7 +102,7 @@ parceiro**, preenchido pelo próprio motorista. **VOLTOU A SER O TRABALHO COM DA
 
 ---
 
-## A 029 (cargos editáveis) está ENTREGUE — 59 de 60 tarefas
+## A 029 (cargos editáveis) está ENTREGUE — 59 de 60
 
 `specs/029-cargos-editaveis/`. O acesso deixou de ser catálogo em código: quem manda são as tabelas
 `cargos` e `cargo_permissoes`, editáveis em **Sistema → Cargos**. Falta só a **T036**, a conferência
@@ -152,3 +152,11 @@ solicitação**. Nada da 029 gasta; as etapas 1 a 4 da 028 também não.
 **O tmsdev não tem viagem do dia** (o banco parou de ser alimentado em 29/08; os robôs escrevem em
 produção). Painel vazio lá é falta de dado, não regressão.
 <!-- SPECKIT END -->
+
+**O PERFIL FICOU ÓRFÃO POR ALGUMAS HORAS, e o guarda que sobrou disso vale saber**: os componentes
+do mini perfil existiam e nenhuma tela os importava — `grep` só devolvia a própria definição. Hoje o
+nome é clicável na lista de Usuários e na BARRA DE TOPO (que é por onde se troca a própria foto), e
+`lib/ui/componentes-tem-dono.test.ts` cai se algum voltar a ficar sem dono.
+
+Foi o quinto caso de `dado-capturado-e-nunca-mostrado` no projeto: "o código faz X" não prova que
+alguém VÊ X. Marcar tarefa porque o ARQUIVO existe é como se erra.

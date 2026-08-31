@@ -146,20 +146,26 @@ pessoa passa a ver exatamente isso — sem deploy nenhum.
 
 ## Fase 6 (US2 · P2): O mini perfil e a foto
 
-> **ELES FICARAM ÓRFÃOS POR ALGUMAS HORAS, EM 31/08 — e vale ficar registrado.**
+> **ELES FICARAM ÓRFÃOS, E DEPOIS FORAM LIGADOS — 31/08, no mesmo dia.**
 >
-> T037, T038 e T039 foram marcadas como feitas porque os ARQUIVOS existiam. Nenhuma tela os
+> T037, T038 e T039 chegaram a ser marcadas como feitas porque os ARQUIVOS existiam. Nenhuma tela os
 > importava: `grep -rn NomeClicavel apps/web` só devolvia a própria definição. O usuário perguntou
 > "cadê a parte do perfil?" e a resposta era: em lugar nenhum.
 >
-> É o padrão `dado-capturado-e-nunca-mostrado` — "o código faz X" não prova que alguém VÊ X.
+> É o padrão `dado-capturado-e-nunca-mostrado` — "o código faz X" não prova que alguém VÊ X. E a
+> parte que FUNCIONAVA era justamente a que não depende de tela: o job dos 90 dias e o
+> `desativado_em`.
 >
-> **Ligados agora**: o nome na lista de Usuários e Perfis, e o nome na BARRA DE TOPO (o "Victor TI"
-> do canto), que é por onde a pessoa troca a própria foto. E entrou um guarda —
-> `lib/ui/componentes-tem-dono.test.ts` — que cai se algum deles voltar a ficar sem dono.
+> **Onde ficaram**: o nome na lista de Usuários e Perfis, e o nome na BARRA DE TOPO (o "Victor TI" do
+> canto superior esquerdo), que é por onde a pessoa troca a própria foto — apontado pelo usuário.
 >
-> O guarda, por sua vez, foi escrito primeiro em `components/` e **não rodava**: o vitest do `web` só
-> recolhe teste dentro de `lib`. Descoberto ao rodá-lo, que é o mínimo que se faz com teste novo.
+> **O guarda**: `lib/ui/componentes-tem-dono.test.ts` cai se algum componente de
+> `components/usuarios/` voltar a ficar sem dono. Provado nos dois sentidos: desligado, cai;
+> religado, passa.
+>
+> E ele mesmo quase nasceu inútil — escrito primeiro em `components/`, NÃO RODAVA, porque o vitest
+> do `web` só recolhe teste dentro de `lib`. Apareceu ao rodá-lo, que é o mínimo que se faz com um
+> teste novo.
 
 **Teste independente**: clicar num nome em qualquer lista, ver o cartão certo; trocar a própria foto.
 
