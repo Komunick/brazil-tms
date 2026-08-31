@@ -1,4 +1,4 @@
-import { and, desc, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { CamposDoPreCadastro } from "@brazil-tms/shared";
 import { db } from "../client";
 import {
@@ -724,5 +724,67 @@ export async function gravarResultadoDaPesquisa(
       newValue: detalhe,
       actorUserId,
     });
+  });
+}
+
+/**
+ * OS ARQUIVOS DE UM PRÉ-CADASTRO, para irem anexados ao `setMotorista` (31/08).
+ *
+ * O manual exige os documentos quando o cadastro vai para o módulo de Pesquisa e Consulta — coluna
+ * `Obr. P&C`, pág. 52 — e é o nosso caso. Sem eles, a pesquisa (a metade que custa) nasce
+ * incompleta.
+ *
+ * Do ÚLTIMO envio, como todo o resto desta tela: se a pessoa mandou de novo por ter tirado uma foto
+ * melhor, é a foto nova que deve ir.
+ *
+ * Devolve a CHAVE e o TIPO, não o binário: baixar é trabalho do worker, que é quem tem a chave de
+ * serviço. Esta função responde "quais arquivos", não "o conteúdo deles".
+ */
+export async function arquivosDoPreCadastro(
+  preregistrationId: string,
+): Promise<{ chave: string; contentType: string; descricao: string }[]> {
+  const [ultimo] = await db
+    .select({
+      cnh: driverPreregistrationSubmissions.documentoCnhId,
+      comprovante: driverPreregistrationSubmissions.documentoComprovanteId,
+    })
+    .from(driverPreregistrationSubmissions)
+    .where(eq(driverPreregistrationSubmissions.preregistrationId, preregistrationId))
+    .orderBy(desc(driverPreregistrationSubmissions.recebidoEm))
+    .limit(1);
+
+  if (!ultimo) return [];
+
+  /**
+   * A DESCRIÇÃO acompanha o id, e não é enfeite: ela é o título que aparece na aba de documentos da
+   * gerenciadora. Dois anexos sem nome obrigam quem confere lá a abrir os dois para saber qual é
+   * qual — e quem confere lá é a auditoria que decide a pesquisa.
+   */
+  const alvos = [
+    { id: ultimo.cnh, descricao: "CNH" },
+    { id: ultimo.comprovante, descricao: "Comprovante de residencia" },
+  ].filter((a): a is { id: string; descricao: string } => Boolean(a.id));
+
+  if (alvos.length === 0) return [];
+
+  const linhas = await db
+    .select({
+      id: resourceDocuments.id,
+      chave: resourceDocuments.fileStorageKey,
+      contentType: resourceDocuments.contentType,
+    })
+    .from(resourceDocuments)
+    .where(
+      inArray(
+        resourceDocuments.id,
+        alvos.map((a) => a.id),
+      ),
+    );
+
+  // A ORDEM segue `alvos`, não o que o banco devolveu: a CNH vem primeiro porque é o documento que
+  // a auditoria abre primeiro, e um `IN` não promete ordem nenhuma.
+  return alvos.flatMap((a) => {
+    const l = linhas.find((x) => x.id === a.id);
+    return l ? [{ chave: l.chave, contentType: l.contentType, descricao: a.descricao }] : [];
   });
 }

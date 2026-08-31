@@ -2328,7 +2328,9 @@
       "sem_formulario_cnh": "nº do formulário da CNH",
       "sem_seguranca_cnh": "nº de segurança da CNH",
       "sem_renach": "Renach",
-      "sem_mopp": "MOPP (sim/não)"
+      "sem_mopp": "MOPP (sim/não)",
+      "sem_documentos": "a CNH ou o comprovante não subiram",
+      "documentos_grandes": "os arquivos somam mais do que cabe numa chamada"
     },
     "conferir": "Conferir",
     "ver": "Ver",

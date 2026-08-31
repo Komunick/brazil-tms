@@ -35,11 +35,18 @@ const COMPLETO: CamposDoPreCadastro = {
   possuiMopp: campo("nao"),
 };
 
+/** Dois anexos pequenos, como os reais medidos (57 KB e 292 KB antes do Base64). */
+const ANEXOS = [
+  { Descricao: "CNH", Extensao: "PDF", Documento: "JVBERi0xLjQK" },
+  { Descricao: "Comprovante de residencia", Extensao: "JPEG", Documento: "/9j/4AAQSkZJRg==" },
+];
+
 const PRONTO: DadosParaSetMotorista = {
   campos: COMPLETO,
   codIbgeNatal: 2910800,
   codIbgeResidencia: 2927408,
   cpfDivergente: false,
+  documentos: ANEXOS,
 };
 
 describe("o que impede o envio", () => {
@@ -182,5 +189,61 @@ describe("o corpo montado", () => {
     expect(corpo.Numero).toBe("120");
     expect(corpo.Bairro).toBe("Stiep");
     expect(corpo.CEP).toBe("41770395");
+  });
+});
+
+/**
+ * OS ANEXOS SÃO OBRIGATÓRIOS PARA O NOSSO CASO (31/08, lido no PDF, pág. 52).
+ *
+ * O bloco `Documentos` marca `N` na coluna `Obr.` e **`S`** na `Obr. P&C`, cujo rodapé diz: "campos
+ * obrigatórios quando o cadastro de motorista é destinado ao módulo de Pesquisa e Consulta".
+ *
+ * É o nosso caso, e responde a pergunta que estava aberta desde o começo da fatia — a resposta
+ * estava na mesma coluna que já tinha mudado os obrigatórios de 8 para 23.
+ */
+describe("os anexos", () => {
+  it("vão no corpo, na chave que o exemplo do manual mostra", () => {
+    expect(corpoDoMotorista(PRONTO).Documentos).toEqual(ANEXOS);
+  });
+
+  it("a chave existe mesmo vazia — o exemplo do manual a traz assim", () => {
+    // Omitir um campo que o exemplo mostra é o tipo de diferença que produz uma recusa sem dizer
+    // qual campo faltou — e sem homologação não há como descobrir por tentativa.
+    const c = corpoDoMotorista({ ...PRONTO, documentos: [] });
+    expect(c.Documentos).toEqual([]);
+    expect("Documentos" in c).toBe(true);
+  });
+
+  it("sem anexo NENHUM o envio é bloqueado — a pesquisa nasceria incompleta", () => {
+    expect(motivosDeNaoCadastrar({ ...PRONTO, documentos: [] })).toEqual(["sem_documentos"]);
+  });
+
+  /**
+   * O teto é conferido sobre o tamanho JÁ EM BASE64, que é o que de fato viaja. Medir o arquivo cru
+   * esconderia 33% do peso — e o pior caso permitido hoje (dois arquivos de 10 MB) são 27 MB num
+   * único JSON, que qualquer proxy no caminho derruba.
+   */
+  it("bloqueia quando os anexos passam do teto, medindo o Base64", () => {
+    const gigante = [{ Descricao: "CNH", Extensao: "PDF", Documento: "A".repeat(9 * 1024 * 1024) }];
+    expect(motivosDeNaoCadastrar({ ...PRONTO, documentos: gigante })).toEqual(["documentos_grandes"]);
+  });
+
+  it("os tamanhos REAIS medidos passam folgado", () => {
+    // 380 KB + 75 KB em Base64 — os dois documentos que chegaram de verdade.
+    const reais = [
+      { Descricao: "CNH", Extensao: "PDF", Documento: "A".repeat(380 * 1024) },
+      { Descricao: "Comprovante", Extensao: "JPEG", Documento: "A".repeat(75 * 1024) },
+    ];
+    expect(motivosDeNaoCadastrar({ ...PRONTO, documentos: reais })).toEqual([]);
+  });
+
+  it("falta de anexo NÃO esconde os outros motivos", () => {
+    const m = motivosDeNaoCadastrar({
+      ...PRONTO,
+      documentos: [],
+      campos: { ...COMPLETO, rg: { valor: null, origem: null } },
+    });
+    expect(m).toContain("sem_rg");
+    expect(m).toContain("sem_documentos");
   });
 });

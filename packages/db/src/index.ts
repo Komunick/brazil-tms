@@ -44,6 +44,7 @@ export {
   reivindicarPesquisa,
   devolverReivindicacaoDaPesquisa,
   gravarResultadoDaPesquisa,
+  arquivosDoPreCadastro,
 } from "./pre-cadastro/fila";
 export type { CandidatoAoCadastro } from "./pre-cadastro/fila";
 export { preCadastroParaConferencia, salvarCamposConferidos } from "./pre-cadastro/fila";

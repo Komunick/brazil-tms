@@ -57,6 +57,14 @@ export const MOTIVOS_DE_NAO_CADASTRAR = [
   "sem_seguranca_cnh",
   "sem_renach",
   "sem_mopp",
+  /**
+   * OS ANEXOS FALTANDO ou grandes demais (31/08).
+   *
+   * Obrigatórios pela coluna `Obr. P&C` do manual: sem eles a pesquisa — a metade que custa — nasce
+   * incompleta. Bloquear aqui é mais barato do que descobrir depois de pagar.
+   */
+  "sem_documentos",
+  "documentos_grandes",
 ] as const;
 
 export type MotivoDeNaoCadastrar = (typeof MOTIVOS_DE_NAO_CADASTRAR)[number];
@@ -120,7 +128,54 @@ export interface DadosParaSetMotorista {
   codIbgeResidencia: number | null;
   /** `true` quando o CPF impresso no documento não bate com o digitado. Ver `cnh-lida.ts`. */
   cpfDivergente: boolean;
+  /**
+   * OS ANEXOS — e eles são OBRIGATÓRIOS para o nosso caso (31/08, lido no PDF, pág. 52).
+   *
+   * A tabela do `setMotorista` tem duas colunas de obrigatoriedade, e o bloco `Documentos` marca
+   * `N` na primeira e **`S`** na segunda. O rodapé explica a segunda: *"campos obrigatórios quando o
+   * cadastro de motorista é destinado ao módulo de Pesquisa e Consulta"* — que é exatamente o nosso.
+   *
+   * Isso responde a pergunta que estava aberta desde o começo da fatia ("os arquivos são exigidos
+   * para a pesquisa?"). Estava escrito no rodapé da tabela o tempo todo, na coluna que ninguém tinha
+   * lido — a mesma coluna `Obr. P&C` que já tinha mudado 8 campos obrigatórios para 23.
+   *
+   * Sem eles a pesquisa nasce incompleta, e a pesquisa é a metade que CUSTA.
+   */
+  documentos: DocumentoParaEnvio[];
 }
+
+/**
+ * Um anexo pronto para o corpo: título, extensão e o arquivo em Base64.
+ *
+ * Os nomes são os do manual, em português e sem acento, como ele os escreve. Traduzi-los aqui
+ * obrigaria a destraduzir na montagem.
+ */
+export interface DocumentoParaEnvio {
+  Descricao: string;
+  /** PDF, XLSX, XLS, DOC, DOCX, PNG, JPEG, JPG — a lista fechada do manual. */
+  Extensao: string;
+  Documento: string;
+}
+
+/**
+ * As extensões que a gerenciadora aceita (manual, pág. 52). Fechada de propósito: um tipo fora dela
+ * seria recusado do outro lado, e é melhor descobrir aqui, com o motivo escrito, do que numa recusa
+ * que fala de outra coisa.
+ */
+export const EXTENSOES_ACEITAS = ["PDF", "XLSX", "XLS", "DOC", "DOCX", "PNG", "JPEG", "JPG"] as const;
+
+/**
+ * O TETO DO QUE VAI NUMA CHAMADA — 8 MB somando os anexos já em Base64.
+ *
+ * O manual não diz o limite deles, então este número é NOSSO e conservador. A conta que o justifica:
+ * o teto por arquivo é 10 MB, são dois arquivos, e o Base64 infla 33% — o pior caso permitido hoje
+ * são 27 MB num único JSON, que qualquer proxy no caminho derruba.
+ *
+ * Na prática os arquivos são pequenos porque o formulário comprime: os reais medidos são 57 KB e
+ * 292 KB, que viram 75 KB e 380 KB. O teto existe para o caso raro, e quando ele bater a pessoa vê
+ * o motivo na tela em vez de uma falha de rede sem explicação.
+ */
+export const TETO_DOS_ANEXOS_BYTES = 8 * 1024 * 1024;
 
 const valor = (c: CamposDoPreCadastro, chave: string): string | null => {
   const v = c[chave]?.valor;
@@ -192,6 +247,17 @@ export function motivosDeNaoCadastrar(d: DadosParaSetMotorista): MotivoDeNaoCada
   if (!valor(c, "renach")) m.push("sem_renach");
   // Declaração, não documento: basta ter sido respondida.
   if (!valor(c, "possuiMopp")) m.push("sem_mopp");
+
+  /**
+   * OS ANEXOS, pela coluna `Obr. P&C` do manual — ver `DadosParaSetMotorista.documentos`.
+   *
+   * Vazio bloqueia porque a pesquisa nasceria incompleta. E o teto é conferido sobre o tamanho JÁ
+   * EM BASE64, que é o que de fato viaja: medir o arquivo cru esconderia 33% do peso.
+   */
+  if (d.documentos.length === 0) m.push("sem_documentos");
+  else if (d.documentos.reduce((n, a) => n + a.Documento.length, 0) > TETO_DOS_ANEXOS_BYTES) {
+    m.push("documentos_grandes");
+  }
 
   return m;
 }
@@ -269,6 +335,8 @@ export interface CorpoDoMotorista {
   CodIBGECidade: number;
   CEP: string;
   Celular: string;
+  /** Os anexos exigidos pela coluna `Obr. P&C` — ver `DadosParaSetMotorista.documentos`. */
+  Documentos: DocumentoParaEnvio[];
 }
 
 /** `30 = MOTORISTA` na tabela PROFISSOES. Medido, não suposto. */
@@ -325,5 +393,15 @@ export function corpoDoMotorista(d: DadosParaSetMotorista): CorpoDoMotorista {
     CodIBGECidade: d.codIbgeResidencia!,
     CEP: v("cep"),
     Celular: v("celular").replace(/\D+/g, ""),
+    /**
+     * OS ANEXOS, no fim do corpo como o exemplo do manual os mostra (`"Documentos": []`).
+     *
+     * A lista vai como veio: quem monta os anexos é o job, que tem acesso aos arquivos; esta função
+     * continua pura e testável sem tocar em disco nem em rede.
+     *
+     * Nunca é `undefined` — o exemplo do manual traz a chave mesmo vazia, e omitir um campo que o
+     * exemplo mostra é o tipo de diferença que produz uma recusa sem dizer qual campo faltou.
+     */
+    Documentos: d.documentos,
   };
 }
