@@ -421,6 +421,13 @@
       "when": 1788098400009,
       "tag": "0059_pedido_de_pesquisa",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1788184800009,
+      "tag": "0060_cargos_e_perfil",
+      "breakpoints": true
     }
   ]
 }
