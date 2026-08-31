@@ -450,3 +450,28 @@ export async function getRotaComKML(
   });
   return (r.Rotas ?? [])[0] ?? null;
 }
+
+/**
+ * O RESULTADO DA PESQUISA — e este é de GRAÇA (31/08, fatia 028, etapa 7).
+ *
+ * `get*`, como `getCidades`, `getTabela` e `getPosicoes`: leitura não custa. É o que permite este
+ * ser um job agendado, ao contrário do `setSolicitacaoPesquisaConsulta`, que só sai de um clique.
+ *
+ * ── PERGUNTA POR CPF E VÍNCULO, não pelo código ───────────────────────────────────────────────
+ *
+ * O manual (pág. 150) pede `Identificacao` + `Vinculo`, e não o `Codigo` que a solicitação
+ * devolveu. Por isso o vínculo escolhido no pedido PRECISA ficar guardado: sem ele não há como
+ * perguntar pelo resultado do que se pagou.
+ *
+ * ── O QUE ELE TRAZ ALÉM DO STATUS ─────────────────────────────────────────────────────────────
+ *
+ * `Justificativas` é a lista do que impediu a aprovação, com código e descrição por extenso — "favor
+ * anexar no sistema a cópia atualizada do documento", "nº do RENAVAM incorreto". É a informação que
+ * hoje só existe abrindo a tela deles, e é ela que diz o que fazer para destravar.
+ */
+export async function getResultadoPesquisaConsulta(
+  cred: Credenciais,
+  pedido: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  return chamar<Record<string, unknown>>("getResultadoPesquisaConsulta", { ...cred, ...pedido });
+}

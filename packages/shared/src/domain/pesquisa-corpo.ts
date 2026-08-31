@@ -155,3 +155,33 @@ export const SITUACOES_DA_PESQUISA: Record<string, string> = {
   AC: "A consultar",
   B: "Análise biométrica",
 };
+
+/**
+ * AS SITUAÇÕES QUE NÃO MUDAM MAIS — quando parar de perguntar (31/08).
+ *
+ * `AD` (adequado ao risco), `NA` (inconclusivo) e `EX` (expirado) são desfechos: a gerenciadora não
+ * volta atrás sozinha. `EP`, `AP`, `AC`, `SP` e `B` ainda andam, e é por elas que vale perguntar de
+ * novo.
+ *
+ * Existe para o job agendado saber quando soltar a linha. Sem esta lista ele perguntaria para
+ * sempre sobre cadastros resolvidos — de graça, mas gastando tempo e log de todo mundo.
+ *
+ * Situação DESCONHECIDA não entra aqui, e isso é deliberado: ela continua sendo perguntada. Se a
+ * gerenciadora inventar um código novo, o pior desfecho é uma pergunta a mais — nunca uma pesquisa
+ * dada como resolvida sem estar.
+ */
+export const SITUACOES_FINAIS = ["AD", "NA", "EX"] as const;
+
+export function pesquisaAcabou(situacao: string | null | undefined): boolean {
+  return situacao != null && (SITUACOES_FINAIS as readonly string[]).includes(situacao);
+}
+
+/** O corpo da consulta de resultado (manual, pág. 150). Pergunta por CPF e vínculo, não pelo código. */
+export function corpoDoResultado(cpf: string, vinculo: VinculoDaPesquisa): Record<string, unknown> {
+  return {
+    CodFilial: COD_FILIAL,
+    TipoIdentificacao: "P",
+    Identificacao: cpf.replace(/\D/g, ""),
+    Vinculo: vinculo,
+  };
+}

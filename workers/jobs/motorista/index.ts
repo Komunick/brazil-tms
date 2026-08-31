@@ -5,14 +5,17 @@ import {
   indexarCidades,
   motivosDeNaoCadastrar,
   type CamposDoPreCadastro,
+  type DocumentoParaEnvio,
   type MotoristaCadastrarPayload,
 } from "@brazil-tms/shared";
 import {
+  arquivosDoPreCadastro,
   candidatosAoCadastro,
   gravarFalhaDoCadastro,
   marcarCadastroEnviado,
   resolvePortalActorId,
 } from "@brazil-tms/db";
+import { documentsBucket, downloadObject } from "@brazil-tms/db/storage";
 import { JOB, work } from "../../lib/queue";
 import { credenciaisDaIntegra, getCidades, IntegraRecusou, setMotorista } from "../../lib/integra/cliente";
 
@@ -79,11 +82,24 @@ export async function registerMotoristaCadastrar(boss: PgBoss): Promise<void> {
        * Os DOIS códigos IBGE vêm de lugares diferentes, e trocá-los passaria despercebido: a natal
        * sai da CNH, a de residência do CEP. Ver `cidade-ibge.ts`.
        */
+      /**
+       * OS ANEXOS — obrigatórios para o nosso caso (31/08, PDF pág. 52, coluna `Obr. P&C`).
+       *
+       * Baixados aqui, e não na função pura: ela decide, o worker busca. É a mesma divisão do resto
+       * da fatia — o que fala com o mundo não decide nada.
+       *
+       * Uma falha ao baixar deixa a lista VAZIA de propósito, e aí `motivosDeNaoCadastrar` bloqueia
+       * com `sem_documentos`. Mandar o cadastro sem os arquivos seria pior: ele nasceria na
+       * gerenciadora aparentemente pronto, e a pesquisa — que CUSTA — viria incompleta.
+       */
+      const documentos = await anexosDoPreCadastro(c.id);
+
       const dados = {
         campos,
         codIbgeNatal: ibgeDaCidade(v("cidadeNatal"), v("ufNatal"), indice),
         codIbgeResidencia: ibgeDaCidade(v("cidade"), v("uf"), indice),
         cpfDivergente: c.cpfDivergente,
+        documentos,
       };
 
       const motivos = motivosDeNaoCadastrar(dados);
@@ -116,3 +132,57 @@ export async function registerMotoristaCadastrar(boss: PgBoss): Promise<void> {
     }
   });
 }
+
+/**
+ * BAIXA OS ANEXOS e os converte para o formato do manual (31/08).
+ *
+ * ── A EXTENSÃO SAI DO CONTENT-TYPE, não do nome do arquivo ────────────────────────────────────
+ *
+ * O nome vem do celular do motorista e mente com facilidade — o primeiro cadastro real chegou com
+ * um PDF do app da CNH salvo com nome de foto. O `content_type` foi medido no upload e é o que a
+ * gente sabe de verdade.
+ *
+ * A lista de extensões é FECHADA no manual. Um tipo fora dela seria recusado do outro lado, e é
+ * melhor deixar o arquivo de fora aqui — com o bloqueio explicando — do que provocar uma recusa
+ * que fala de outra coisa.
+ *
+ * ── FALHA AO BAIXAR NÃO VIRA ENVIO SEM ANEXO ──────────────────────────────────────────────────
+ *
+ * Um arquivo que não desce simplesmente não entra na lista, e a lista curta faz
+ * `motivosDeNaoCadastrar` bloquear. É o desfecho certo: um cadastro criado sem os documentos parece
+ * pronto e não é, e quem descobre é a pesquisa, depois de cobrada.
+ */
+async function anexosDoPreCadastro(preregistrationId: string): Promise<DocumentoParaEnvio[]> {
+  const arquivos = await arquivosDoPreCadastro(preregistrationId);
+  const anexos: DocumentoParaEnvio[] = [];
+
+  for (const a of arquivos) {
+    const extensao = EXTENSAO_POR_TIPO[a.contentType];
+    if (!extensao) continue;
+    try {
+      const binario = await downloadObject(a.chave, documentsBucket());
+      anexos.push({
+        Descricao: a.descricao,
+        Extensao: extensao,
+        Documento: binario.toString("base64"),
+      });
+    } catch (erro) {
+      // Contado no log e fora da lista — quem bloqueia é o motivo, não uma exceção aqui.
+      console.error(`[motorista.cadastrar] anexo ${a.descricao} não baixou:`, erro);
+    }
+  }
+  return anexos;
+}
+
+/**
+ * O tipo medido no upload → a extensão que o manual aceita.
+ *
+ * Mapa fechado, e um tipo desconhecido não entra: `EXTENSOES_ACEITAS` é a lista do manual, e
+ * inventar uma sigla fora dela é apostar que o outro lado tolera.
+ */
+const EXTENSAO_POR_TIPO: Record<string, string> = {
+  "application/pdf": "PDF",
+  "image/jpeg": "JPEG",
+  "image/jpg": "JPG",
+  "image/png": "PNG",
+};

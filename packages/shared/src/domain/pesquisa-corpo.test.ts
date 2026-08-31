@@ -4,6 +4,8 @@ import {
   corpoDaPesquisa,
   motivosDeNaoPesquisar,
   SITUACOES_DA_PESQUISA,
+  corpoDoResultado,
+  pesquisaAcabou,
   type DadosParaPesquisa,
 } from "./pesquisa-corpo";
 
@@ -134,5 +136,44 @@ describe("as situações que a gerenciadora devolve", () => {
    */
   it("não inventa tradução para código que o manual não lista", () => {
     expect(SITUACOES_DA_PESQUISA.ZZ).toBeUndefined();
+  });
+});
+
+/**
+ * QUANDO PARAR DE PERGUNTAR (31/08, etapa 7).
+ *
+ * O job agendado busca o resultado de graça a cada meia hora. Sem esta lista ele perguntaria para
+ * sempre sobre cadastros já resolvidos.
+ */
+describe("as situações finais", () => {
+  it("os três desfechos param a busca", () => {
+    for (const s of ["AD", "NA", "EX"]) expect(pesquisaAcabou(s)).toBe(true);
+  });
+
+  it("o que ainda anda continua sendo perguntado", () => {
+    for (const s of ["EP", "AP", "AC", "SP", "B"]) expect(pesquisaAcabou(s)).toBe(false);
+  });
+
+  /**
+   * Código DESCONHECIDO continua sendo perguntado, e é deliberado: se a gerenciadora inventar um
+   * status novo, o pior que acontece é uma pergunta a mais — nunca uma pesquisa dada como resolvida
+   * sem estar, que seria alguém esperando por um desfecho que nunca chega.
+   */
+  it("situação desconhecida NÃO conta como desfecho", () => {
+    expect(pesquisaAcabou("ZZ")).toBe(false);
+    expect(pesquisaAcabou(null)).toBe(false);
+    expect(pesquisaAcabou(undefined)).toBe(false);
+  });
+});
+
+describe("o corpo da consulta de resultado", () => {
+  it("pergunta por CPF e vínculo, não pelo código devolvido", () => {
+    const c = corpoDoResultado("076.005.305-70", "A");
+    expect(c).toEqual({
+      CodFilial: 9332,
+      TipoIdentificacao: "P",
+      Identificacao: "07600530570",
+      Vinculo: "A",
+    });
   });
 });

@@ -54,6 +54,8 @@ export const MOTORISTA_JOBS = {
    * E NÃO EXISTE VARREDURA que a enfileire. O único caminho até esta fila é um botão.
    */
   motoristaPesquisar: "motorista.pesquisar",
+  /** O resultado da pesquisa. LEITURA, de graça — por isso pode ser agendado (etapa 7). */
+  motoristaResultado: "motorista.resultado",
 } as const;
 
 export type MotoristaJobName = (typeof MOTORISTA_JOBS)[keyof typeof MOTORISTA_JOBS];
@@ -91,4 +93,5 @@ export interface MotoristaPesquisarPayload {
 export interface MotoristaJobPayloads {
   "motorista.cadastrar": MotoristaCadastrarPayload;
   "motorista.pesquisar": MotoristaPesquisarPayload;
+  "motorista.resultado": Record<string, never>;
 }
