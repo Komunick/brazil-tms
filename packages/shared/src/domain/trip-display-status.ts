@@ -58,19 +58,26 @@ export function displayStatusOf(
   portalStatus?: string | null,
 ): TripDisplayStatus {
   /**
-   * `at_origin` E a fila `awaiting_arrival` mostram a MESMA linha: "NA ORIGEM" (2026-08-19, a pedido).
+   * OS DOIS VOLTARAM A SER COISAS DIFERENTES (2026-08-31, a pedido) — e a fusão de 19/08 sai.
    *
-   * São dois estados de verdade diferentes — um é "o cliente escalou motorista e espera-se que ele
-   * apareça", o outro é "o caminhão chegou, com hora registrada" — e o quadro deixou de distingui-los
-   * porque a operação não distingue: para quem olha a tela, os dois querem dizer que aquela viagem
-   * está na origem.
+   * Ela juntava `at_origin` e `awaiting_arrival` no mesmo rótulo, com o argumento de que "para quem
+   * olha a tela, os dois querem dizer que a viagem está na origem". Medido em produção no dia em que
+   * o usuário reclamou:
    *
-   * O que NÃO muda: o status real da viagem, a máquina de estados, a linha do tempo da viagem e o
-   * botão de marco continuam com `at_origin` separado e escrito "Na origem". A fusão é só de
-   * EXIBIÇÃO no quadro — misturar as duas coisas apagaria a diferença entre planejado e acontecido,
-   * que é o que alimenta o cálculo de pontualidade.
+   *   de verdade em `at_origin` .................. 8
+   *   exibidas como se estivessem ................ 13
+   *   dessas, com a COLETA AINDA NO FUTURO ....... 13   ← todas
+   *
+   * Nenhuma das treze tinha chegado à hora da coleta. A `LT0Q8V02F7RF1` mostrava origem às 20:30 e a
+   * tela já dizia que ela estava lá. O rótulo tinha deixado de descrever e passado a afirmar algo
+   * falso na MAIORIA dos casos, que é o pior desfecho possível para um rótulo de status.
+   *
+   * A diferença que a operação precisa é exatamente essa: "tem motorista escalado" não é "o caminhão
+   * está no pátio". Uma decide se ainda falta despachar; a outra decide se dá para começar a
+   * carregar.
+   *
+   * `at_origin` volta a se descrever sozinho — cai no `return status` abaixo.
    */
-  if (status === "at_origin") return "awaiting_arrival";
   if (status !== "received") return status;
   if (portalStatus === PORTAL_ATRIBUIDA) return "awaiting_arrival";
   return portalAcceptance === ACEITACAO_PENDENTE ? "in_analysis" : "to_assign";
@@ -86,12 +93,10 @@ export function displayStatusOf(
 export const TRIP_DISPLAY_ORDER: readonly TripDisplayStatus[] = TRIP_STATUSES.flatMap((s) =>
   s === "received"
     ? ([...TRIP_QUEUES] as TripDisplayStatus[])
-    : // `at_origin` sai da lista porque nada é exibido com esse rótulo: `displayStatusOf` o funde em
-      // `awaiting_arrival` ("NA ORIGEM"). Deixá-lo aqui criaria uma opção de filtro que não conta
-      // nada e um cartão eternamente zerado.
-      s === "at_origin"
-      ? []
-      : [s],
+    : // `at_origin` VOLTA À LISTA em 31/08: ele deixou de ser fundido e agora tem rótulo próprio
+      // ("Na origem"), com 8 viagens de verdade nele no dia da medição. Tirá-lo esconderia o único
+      // estado que afirma que o caminhão chegou.
+      [s],
 );
 
 export function isTripQueue(status: TripDisplayStatus): status is TripQueue {

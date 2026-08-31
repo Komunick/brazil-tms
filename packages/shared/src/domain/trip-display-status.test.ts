@@ -63,21 +63,29 @@ describe("displayStatusOf", () => {
   });
 });
 
-describe("displayStatusOf — 'NA ORIGEM' é uma linha só", () => {
-  it("a viagem que já CHEGOU aparece na mesma fila da que foi escalada", () => {
-    /**
-     * Decisão de 2026-08-19, do usuário: a operação não distingue "o cliente escalou motorista" de
-     * "o caminhão chegou" — para quem olha o quadro, as duas querem dizer que a viagem está na
-     * origem. Antes eram duas linhas, e uma delas se chamava "Na origem", o que tornava a lista de
-     * filtros ambígua depois do renomeio.
-     */
-    expect(displayStatusOf("at_origin", null)).toBe("awaiting_arrival");
-    expect(displayStatusOf("at_origin", "Accepted", "Departed")).toBe("awaiting_arrival");
+describe("displayStatusOf — chegar e ser escalada são coisas diferentes", () => {
+  /**
+   * INVERTIDO em 2026-08-31, a pedido. A decisão de 19/08 fundia os dois com o argumento de que "a
+   * operação não distingue" — e o uso mostrou o contrário.
+   *
+   * Medido em produção no dia da reclamação: 8 viagens de verdade em `at_origin` e outras 13
+   * exibidas como se estivessem, TODAS com a coleta ainda no futuro. A `LT0Q8V02F7RF1` tinha origem
+   * às 20:30 e a tela já dizia que ela estava lá.
+   *
+   * O rótulo tinha deixado de descrever e passado a AFIRMAR algo falso na maioria dos casos, que é o
+   * pior desfecho possível para um rótulo de status.
+   */
+  it("quem CHEGOU se descreve sozinho — não vira fila", () => {
+    expect(displayStatusOf("at_origin", null)).toBe("at_origin");
+    expect(displayStatusOf("at_origin", "Accepted", "Departed")).toBe("at_origin");
+  });
+
+  it("quem o PORTAL escalou fica na fila, e não afirma que chegou", () => {
     expect(displayStatusOf("received", "Accepted", "Assigned")).toBe("awaiting_arrival");
   });
 
-  it("`at_origin` sai da lista de exibição, senão vira um filtro que nunca conta nada", () => {
-    expect(TRIP_DISPLAY_ORDER).not.toContain("at_origin");
+  it("`at_origin` volta à lista — é o único rótulo que afirma que o caminhão chegou", () => {
+    expect(TRIP_DISPLAY_ORDER).toContain("at_origin");
     expect(TRIP_DISPLAY_ORDER).toContain("awaiting_arrival");
   });
 
