@@ -168,11 +168,11 @@ pessoa passa a ver exatamente isso — sem deploy nenhum.
 **Teste independente**: criar selo, aplicar a duas pessoas, ver nos dois perfis — e confirmar que o
 que elas conseguem fazer **não mudou**.
 
-- [ ] T049 [P] [US3] `packages/db/src/cargos/selos.ts` — criar, renomear, aplicar, retirar
-- [ ] T050 [US3] Rotas de selo (contracts). **Nenhuma escreve em `cargo_permissoes` nem em `users.cargo_id`** — é por construção que o FR-013 vale. Registrar em auditoria aplicar e tirar selo, com a lista antes e depois, como o `data-model.md` já previa
-- [ ] T051 [US3] Exibir os selos no mini perfil e ao lado do nome, com o **cargo ainda distinguível deles** (FR-013 é sobre acesso; este item é sobre não confundir quem lê)
-- [ ] T052 [US3] Tela de selos em `apps/web/app/(shell)/admin/cargos/` (mesma área, aba separada) — não é assunto que mereça item próprio no menu
-- [ ] T053 [P] [US3] Teste afirmando que aplicar ou retirar selo **não muda** o conjunto de permissões da pessoa
+- [X] T049 [P] [US3] `packages/db/src/cargos/selos.ts` — criar, renomear, aplicar, retirar
+- [X] T050 [US3] Rotas de selo (contracts). **Nenhuma escreve em `cargo_permissoes` nem em `users.cargo_id`** — é por construção que o FR-013 vale. Registrar em auditoria aplicar e tirar selo, com a lista antes e depois, como o `data-model.md` já previa
+- [X] T051 [US3] Exibir os selos no mini perfil e ao lado do nome, com o **cargo ainda distinguível deles** (FR-013 é sobre acesso; este item é sobre não confundir quem lê)
+- [X] T052 [US3] Tela de selos em `apps/web/app/(shell)/admin/cargos/` (mesma área, aba separada) — não é assunto que mereça item próprio no menu
+- [X] T053 [P] [US3] Teste afirmando que aplicar ou retirar selo **não muda** o conjunto de permissões da pessoa
 
 ---
 

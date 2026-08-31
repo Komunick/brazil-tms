@@ -470,7 +470,10 @@
     "cargo_desativado": "Cargo desativado",
     "usuario_cargo_alterado": "Cargo do usuário alterado",
     "user_foto_alterada": "Foto de perfil alterada",
-    "user_foto_descartada": "Foto de perfil descartada (90 dias)"
+    "user_foto_descartada": "Foto de perfil descartada (90 dias)",
+    "selo_criado": "Selo criado",
+    "selo_apagado": "Selo apagado",
+    "usuario_selos_alterados": "Selos do usuário alterados"
   },
   "Documents": {
     "title": "Documentos",
@@ -2540,12 +2543,31 @@
     },
     "desativar": "Desativar cargo",
     "moverPara": "Mover as pessoas para",
-    "escolhaDestino": "Mover {n} pessoa(s) para…"
+    "escolhaDestino": "Mover {n} pessoa(s) para…",
+    "abaCargos": "Cargos",
+    "abaSelos": "Selos"
   },
   "Perfil": {
     "titulo": "Perfil",
     "naoEncontrado": "Perfil não encontrado.",
     "semCargo": "Sem cargo definido — esta pessoa não vê nenhuma tela.",
     "contaDesativada": "Conta desativada"
+  },
+  "Selos": {
+    "naoDaoAcesso": "Selos são só reconhecimento: eles aparecem no perfil e NÃO dão acesso a nada. Quem decide o que a pessoa alcança é o cargo, na outra aba.",
+    "nomeDoNovo": "Nome do selo",
+    "exemploDeNome": "Ex.: Beta tester",
+    "cor": "Cor",
+    "criar": "Criar selo",
+    "pessoas": "{n} pessoa(s)",
+    "apagar": "Apagar",
+    "cores": {
+      "vermelho": "Vermelho",
+      "ambar": "Âmbar",
+      "verde": "Verde",
+      "azul": "Azul",
+      "roxo": "Roxo",
+      "cinza": "Cinza"
+    }
   }
 }
