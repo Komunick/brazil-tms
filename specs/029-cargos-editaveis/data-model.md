@@ -66,9 +66,16 @@ que torna FR-013 verificável: não existe caminho de `usuario_selos` até uma p
 
 `role` continua existindo, `NOT NULL`, com o índice `users_role_idx`, e o enum `app_role` intacto.
 
-A migração roda **com o app anterior no ar** (`deploy.sh` não migra), e esse app lê `role`. Derrubar a
-coluna aqui derruba a produção entre a migração e o restart. A remoção é assunto de uma fatia futura,
-depois de a produção ter rodado no cargo.
+A migração roda **com o app anterior no ar**, e esse app lê `role`. Derrubar a coluna aqui derruba a
+produção. A remoção é assunto de uma fatia futura, depois de a produção ter rodado no cargo.
+
+**Corrigido em 31/08**: eu dizia aqui que "o `deploy.sh` não migra", citando `docs/OPERACAO.md`. É
+falso — ele termina em `exec bash devops/ctl.sh update`, e `cmd_update` chama `cmd_migrate` antes do
+build. A leitura tinha parado no arquivo errado, e o `OPERACAO.md` foi corrigido junto.
+
+**A exigência não muda; a janela fica mais concreta.** A ordem é `migrate → seed → build → restart`,
+e o build leva minutos: nesse intervalo o banco já é o novo e o app ainda é o antigo. O perigo era
+real, só que ele não depende de alguém demorar para migrar — ele é o tempo do build.
 
 `setor` segue ortogonal ao cargo, como já é ao papel — o comentário no schema explica, e nada aqui
 muda isso.
