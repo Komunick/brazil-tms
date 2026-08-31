@@ -788,3 +788,42 @@ export async function arquivosDoPreCadastro(
     return l ? [{ chave: l.chave, contentType: l.contentType, descricao: a.descricao }] : [];
   });
 }
+
+/**
+ * AS PESQUISAS QUE AINDA ANDAM — para o job agendado perguntar o resultado (31/08, etapa 7).
+ *
+ * Reivindicadas (`pesquisa_solicitada_em` não nula) e sem desfecho gravado. O desfecho vive em
+ * `campos.pesquisaGerenciadora.acabou`, escrito pelo próprio job quando a situação vira AD, NA ou
+ * EX — ver `pesquisaAcabou`.
+ *
+ * O FILTRO É NA CONSULTA, não em JavaScript depois: quando houver centenas de cadastros resolvidos,
+ * trazê-los todos para descartar em memória seria varrer a tabela inteira a cada ciclo. É a mesma
+ * razão do `candidatosAoCadastro` logo acima.
+ */
+export async function pesquisasEmAndamento(
+  limite = 50,
+): Promise<{ id: string; cpf: string; vinculo: string | null }[]> {
+  const linhas = await db
+    .select({
+      id: driverPreregistrations.id,
+      cpf: driverPreregistrations.cpf,
+      campos: driverPreregistrations.campos,
+    })
+    .from(driverPreregistrations)
+    .where(
+      and(
+        isNull(driverPreregistrations.arquivadoEm),
+        isNotNull(driverPreregistrations.pesquisaSolicitadaEm),
+        sql`coalesce((${driverPreregistrations.campos} -> 'pesquisaGerenciadora' ->> 'acabou')::boolean, false) = false`,
+      ),
+    )
+    .orderBy(driverPreregistrations.pesquisaSolicitadaEm)
+    .limit(limite);
+
+  return linhas.map((l) => {
+    const p = ((l.campos ?? {}) as Record<string, unknown>).pesquisaGerenciadora as
+      | { vinculo?: string }
+      | undefined;
+    return { id: l.id, cpf: l.cpf, vinculo: p?.vinculo ?? null };
+  });
+}

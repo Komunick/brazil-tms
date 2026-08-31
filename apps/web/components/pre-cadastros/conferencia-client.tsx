@@ -67,7 +67,14 @@ interface Conferencia {
   enviadoEm: string | null;
   cadastro: { em: string; motivos?: string[]; erro?: string } | null;
   /** O pedido de pesquisa — a metade cobrada. Presente = já foi pedida, não peça de novo. */
-  pesquisa: { em: string; motivos?: string[]; erro?: string; resposta?: Record<string, unknown> } | null;
+  pesquisa: {
+    em: string;
+    motivos?: string[];
+    erro?: string;
+    situacao?: string | null;
+    acabou?: boolean;
+    resposta?: Record<string, unknown>;
+  } | null;
   recebidoEm: string;
 }
 
@@ -108,6 +115,25 @@ export const GRUPOS: { titulo: string; campos: CampoDoCadastro[] }[] = [
 ];
 
 const TODOS_OS_CAMPOS = GRUPOS.flatMap((g) => g.campos);
+
+/**
+ * O QUE IMPEDIU A APROVAÇÃO, por extenso.
+ *
+ * A gerenciadora devolve uma lista com código e descrição — "nº do RENAVAM incorreto", "favor
+ * anexar no sistema a cópia atualizada do documento". É a informação que hoje só existe abrindo a
+ * tela deles, e é ela que diz o que fazer.
+ *
+ * Devolve vazio quando não há: um `title` vazio some sozinho, e um "sem justificativas" seria
+ * ruído em cima da imensa maioria dos casos, que são os aprovados.
+ */
+function justificativasDe(resposta: Record<string, unknown> | undefined): string | undefined {
+  const lista = (resposta?.Justificativas ?? []) as { Descricao?: string }[];
+  if (!Array.isArray(lista) || lista.length === 0) return undefined;
+  return lista
+    .map((j) => j?.Descricao)
+    .filter(Boolean)
+    .join("\n\n");
+}
 
 export function ConferenciaClient({ id }: { id: string }): React.ReactElement {
   const t = useTranslations("PreCadastros");
@@ -471,6 +497,26 @@ export function ConferenciaClient({ id }: { id: string }): React.ReactElement {
             Antes do envio ele nem existe: não há a quem pesquisar na gerenciadora, e mostrar o botão
             desabilitado só faria alguém perguntar por que não funciona.
           */}
+          {/*
+            O RESULTADO DA PESQUISA, ao lado dos botões.
+
+            Sem ele o job agendado seria código morto: ele busca de graça a cada meia hora, e se
+            ninguém vê o que ele trouxe, a pessoa continua abrindo a tela da gerenciadora — que é
+            exatamente a ida e volta que a fatia veio eliminar.
+
+            As JUSTIFICATIVAS entram no `title` porque são o que diz O QUE FAZER para destravar
+            ("favor anexar a cópia atualizada do documento"), e cabem mal numa linha.
+          */}
+          {item.pesquisa?.situacao ? (
+            <Badge
+              variant={item.pesquisa.acabou ? "secondary" : "outline"}
+              title={justificativasDe(item.pesquisa.resposta)}
+            >
+              {t.has(`situacao.${item.pesquisa.situacao}`)
+                ? t(`situacao.${item.pesquisa.situacao}`)
+                : item.pesquisa.situacao}
+            </Badge>
+          ) : null}
           {jaFoi && !item.pesquisa ? (
             <Button variant="destructive" onClick={() => setPedindoPesquisa(true)}>
               <Search />
