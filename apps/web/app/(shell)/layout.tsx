@@ -26,7 +26,11 @@ export default async function ShellLayout({ children }: { children: ReactNode })
       <div className="flex min-w-0 flex-1 flex-col">
         {/* O cargo desce até aqui porque a barra de topo hospeda a navegação do telefone, e a lista
             de itens é filtrada por permissão — ver `MenuMovel`. */}
-        <Topbar userName={session.user.name} permissoes={[...session.user.permissoes]} />
+        <Topbar
+          userId={session.user.id}
+          userName={session.user.name}
+          permissoes={[...session.user.permissoes]}
+        />
         {/* `p-4 md:p-6`: no telefone, 24px de cada lado saíam da largura útil do conteúdo. */}
         <main className="flex-1 p-4 md:p-6">{children}</main>
       </div>
