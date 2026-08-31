@@ -2,6 +2,7 @@
 // Consumers may also import via subpath exports (see package.json "exports").
 export * from "./formatting";
 export * from "./auth/permissions";
+export * from "./auth/cargo-invariantes";
 export * from "./audit/actions";
 export * from "./audit/legivel";
 export * from "./domain/trip-status";

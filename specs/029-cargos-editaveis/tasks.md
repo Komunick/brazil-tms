@@ -113,14 +113,14 @@ pessoa passa a ver exatamente isso — sem deploy nenhum.
 
 ### O catálogo que a tela mostra
 
-- [ ] T022 [P] [US1] Criar `packages/shared/src/auth/catalogo-de-acesso.ts`: **áreas e páginas derivadas do `nav.ts`** (agrupadas pelo `grupo` que ele já declara), mais as **ações** que nenhum item de menu reivindica (`cancel_trip`, `delete_archive`, `export_billing`, `resolve_dispute`), estas com rótulo próprio em pt-BR
-- [ ] T023 [US1] Escrever `packages/shared/src/auth/catalogo-de-acesso.test.ts` afirmando que **toda `PermissionKey` aparece em exatamente um lugar** — página ou ação, nunca nos dois, nunca em nenhum. Uma permissão nova **derruba a CI** até alguém a colocar; sem isto ela fica inalcançável para quem não é admin, sem erro nenhum
+- [X] T022 [P] [US1] Criar `packages/shared/src/auth/catalogo-de-acesso.ts`: **áreas e páginas derivadas do `nav.ts`** (agrupadas pelo `grupo` que ele já declara), mais as **ações** que nenhum item de menu reivindica (`cancel_trip`, `delete_archive`, `export_billing`, `resolve_dispute`), estas com rótulo próprio em pt-BR
+- [X] T023 [US1] Escrever `packages/shared/src/auth/catalogo-de-acesso.test.ts` afirmando que **toda `PermissionKey` aparece em exatamente um lugar** — página ou ação, nunca nos dois, nunca em nenhum. Uma permissão nova **derruba a CI** até alguém a colocar; sem isto ela fica inalcançável para quem não é admin, sem erro nenhum
 
 ### A trava do último admin — UMA vez
 
-- [ ] T024 [P] [US1] Criar `packages/shared/src/auth/cargo-invariantes.ts` com a função **pura** que decide se um estado é admissível, no espírito do `pre-sm-corpo.ts` da 027, devolvendo **todos** os motivos e não o primeiro
-- [ ] T025 [US1] Criar `packages/db/src/cargos/ainda-tem-admin.ts`: a consulta `count(*)` de pessoas **ativas** cujo cargo alcança `manage_users`, chamada **dentro da transação e DEPOIS da escrita**. Verificar antes perde a corrida de duas abas rebaixando um administrador cada (research §3)
-- [ ] T026 [US1] Escrever `packages/shared/src/auth/cargo-invariantes.test.ts` cobrindo os **quatro** caminhos do FR-010: desativar o cargo, tirar a permissão, mover a última pessoa, desativá-la. Um caso a mais afirma que um cargo SEMEADO é editável e renomeável como qualquer outro (FR-016) — eles são ponto de partida, não estrutura
+- [X] T024 [P] [US1] Criar `packages/shared/src/auth/cargo-invariantes.ts` com a função **pura** que decide se um estado é admissível, no espírito do `pre-sm-corpo.ts` da 027, devolvendo **todos** os motivos e não o primeiro
+- [X] T025 [US1] Criar `packages/db/src/cargos/ainda-tem-admin.ts`: a consulta `count(*)` de pessoas **ativas** cujo cargo alcança `manage_users`, chamada **dentro da transação e DEPOIS da escrita**. Verificar antes perde a corrida de duas abas rebaixando um administrador cada (research §3)
+- [X] T026 [US1] Escrever `packages/shared/src/auth/cargo-invariantes.test.ts` cobrindo os **quatro** caminhos do FR-010: desativar o cargo, tirar a permissão, mover a última pessoa, desativá-la. Um caso a mais afirma que um cargo SEMEADO é editável e renomeável como qualquer outro (FR-016) — eles são ponto de partida, não estrutura
 
 ### Dados e rotas
 
