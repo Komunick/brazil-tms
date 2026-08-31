@@ -2155,7 +2155,12 @@
     "marcarStatus": "Marcar status",
     "semStatus": "Sem status",
     "doca": "Doca {n}",
-    "placaInternaDetalhe": "Placa que NÃO foi ao portal — controle interno. Ex.: carreta que rodou no lugar do truck."
+    "placaInternaDetalhe": "Placa que NÃO foi ao portal — controle interno. Ex.: carreta que rodou no lugar do truck.",
+    "copiarLh": "Copiar a LH",
+    "copiarMotorista": "Copiar o nome do motorista",
+    "copiarCpf": "Copiar o CPF",
+    "copiarTelefone": "Copiar o telefone",
+    "copiarPlaca": "Copiar a placa"
   },
   "HistoricoMotorista": {
     "titulo": "Histórico do motorista",

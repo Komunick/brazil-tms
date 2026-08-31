@@ -10,6 +10,7 @@ import { ProgramacaoDetalhe } from "@/components/trips/programacao-detalhe";
 import { StatusDaLinha } from "@/components/trips/status-da-linha";
 import { ComentariosDaLinha } from "@/components/trips/comentarios-da-linha";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
+import { Copiar } from "@/components/trips/copiar";
 import {
   REGION_ORDER,
   displayStatusOf,
@@ -136,6 +137,41 @@ const statusDaLinha = (l: {
   portalStatus: string | null;
 }): TripDisplayStatus =>
   displayStatusOf(l.status as TripStatus, l.acceptanceStatus, l.portalStatus);
+
+/**
+ * "07600530570" → "076.005.305-70".
+ *
+ * Guardado sem pontuação, lido com. O botão ao lado copia os DÍGITOS, não a versão pontuada: quem
+ * cola num campo de CPF de outro sistema quer o número, e a pontuação é o que costuma ser recusado.
+ */
+function cpfLegivel(cpf: string): string {
+  return cpf.length === 11
+    ? `${cpf.slice(0, 3)}.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-${cpf.slice(9)}`
+    : cpf;
+}
+
+/**
+ * A VIAGEM JÁ SAIU DA ESTAÇÃO — e a doca deixa de ser instrução (31/08, a pedido).
+ *
+ * Enquanto o veículo está na origem, a doca diz ONDE ir. Depois que ele parte, ela vira história, e
+ * história ocupando espaço numa linha de quinze colunas é ruído sobre quem ainda está carregando.
+ *
+ * `in_transit` em diante. `at_destination` e o resto entram porque quem chegou também já saiu — o
+ * que interessa lá é a descarga, não a doca de origem.
+ *
+ * O dado continua GRAVADO: some da tela, não do banco. O faturamento o encontra.
+ */
+const DEPOIS_DA_ESTACAO = new Set([
+  "in_transit",
+  "at_destination",
+  "unloading",
+  "unloaded",
+  "completed",
+  "billing_pending",
+  "billing_ready",
+  "billed",
+  "cancelled",
+]);
 
 /** ONTEM/HOJE/AMANHÃ por extenso; do terceiro dia em diante a data já diz mais que a palavra. */
 function rotuloDoDia(dia: string, hoje: string, t: (k: string) => string): string {
@@ -542,7 +578,12 @@ export function MinhaProgramacaoClient({
                 {doDia.map((l) => (
                   <TableRow
                     key={l.tripId}
-                    className={cn(classeDaCor(l.cor), l.oculta && "opacity-40")}
+                    /*
+                      `group` é o que faz os botões de copiar aparecerem no hover DA LINHA — eles
+                      nascem `opacity-0` e sobem com `group-hover`. Sem esta classe aqui, os cinco
+                      botões ficariam invisíveis para sempre, e o recurso seria código morto.
+                    */
+                    className={cn("group", classeDaCor(l.cor), l.oculta && "opacity-40")}
                   >
                     {/* A paleta abre na própria linha: pintar é gesto de tela, não vale uma janela. */}
                     <TableCell className="p-1">
@@ -611,6 +652,10 @@ export function MinhaProgramacaoClient({
                       >
                         {l.externalTripId ?? "—"}
                       </button>
+                      {/* A LH é o que se leva para o portal — é o campo mais copiado da tela. */}
+                      {l.externalTripId ? (
+                        <Copiar valor={l.externalTripId} rotulo={t("copiarLh")} className="ml-1" />
+                      ) : null}
                       {/*
                         O RECADO ABRE NO PRÓPRIO MARCADOR (2026-08-26, a pedido).
 
@@ -659,8 +704,29 @@ export function MinhaProgramacaoClient({
                         Só aparece quando está preenchida: um "Doca —" em cada linha do quadro seria
                         ruído em cima de um dado que quase sempre não existe ainda.
                       */}
-                      <div className="flex flex-wrap items-center gap-1">
-                        {l.doca ? (
+                      {/*
+                        EM CIMA DO STATUS, SEMPRE — `flex-col` e não `flex-wrap` (31/08, a pedido).
+
+                        Com `flex-wrap` a doca ficava ao lado quando havia largura, e embaixo quando
+                        não havia: a mesma tela mudava de forma conforme o monitor, e quem trabalha
+                        em dois computadores via dois layouts. Coluna fixa é previsível.
+
+                        `items-start` para o selo não esticar até a largura da célula.
+                      */}
+                      <div className="flex flex-col items-start gap-1">
+                        {/*
+                          E SOME DEPOIS QUE A VIAGEM SAI (31/08, a pedido).
+
+                          A doca responde "onde está carregando". Assim que o veículo entra em
+                          trânsito, ela deixa de ser instrução e vira história — e história ocupando
+                          espaço numa linha de quinze colunas é ruído sobre quem ainda está na
+                          estação.
+
+                          Sumir da TELA, não do banco: `plates_internas` e `Doca (portal)` continuam
+                          gravados, e o faturamento os encontra. Medido em 30/08: 49 de 53 viagens
+                          já partidas mantiveram a doca guardada.
+                        */}
+                        {l.doca && !DEPOIS_DA_ESTACAO.has(l.status) ? (
                           <span className="rounded border px-1 py-0.5 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
                             {t("doca", { n: l.doca })}
                           </span>
@@ -681,14 +747,38 @@ export function MinhaProgramacaoClient({
                     */}
                     <TableCell className="text-xs">
                       {l.motorista ? (
-                        l.motorista
+                        <span className="inline-flex items-center gap-1">
+                          {l.motorista}
+                          <Copiar valor={l.motorista} rotulo={t("copiarMotorista")} />
+                        </span>
                       ) : (
                         <Previsto texto={l.previstoMotorista} rotulo={t("previsto")} />
                       )}
+                      {/*
+                        O CPF EMBAIXO DO NOME (31/08, a pedido).
+
+                        Ele já vinha na consulta e nenhuma coluna o mostrava. É o que a gerenciadora
+                        e o portal pedem para achar a pessoa, e sem ele aqui a busca era pelo nome —
+                        que é chave frágil e já custou três motoristas que existiam e o sistema
+                        jurava não existirem.
+
+                        Embaixo e em tom secundário: quem lê a coluna procura o NOME. O CPF é para
+                        levar a outro lugar, e é por isso que ele nasce com o botão de copiar ao
+                        lado em vez de convidar a digitação.
+                      */}
+                      {l.cpf ? (
+                        <span className="text-muted-foreground flex items-center gap-1 font-mono text-[0.65rem]">
+                          {cpfLegivel(l.cpf)}
+                          <Copiar valor={l.cpf} rotulo={t("copiarCpf")} />
+                        </span>
+                      ) : null}
                     </TableCell>
                     <TableCell className="whitespace-nowrap font-mono text-xs">
                       {l.placa ? (
-                        l.placa
+                        <span className="inline-flex items-center gap-1">
+                          {l.placa}
+                          <Copiar valor={l.placa} rotulo={t("copiarPlaca")} />
+                        </span>
                       ) : (
                         <Previsto texto={l.previstoPlaca} rotulo={t("previsto")} />
                       )}
@@ -710,15 +800,21 @@ export function MinhaProgramacaoClient({
                           title={t("placaInternaDetalhe")}
                         >
                           + {l.placaInterna}
+                          {/* Copiável como a de cima: o faturamento leva as DUAS. */}
+                          <Copiar valor={l.placaInterna} rotulo={t("copiarPlaca")} />
                         </span>
                       ) : null}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-xs">
                       {/* Discar no celular, copiar no computador — o `tel:` faz as duas. */}
                       {l.telefone ? (
-                        <a className="underline underline-offset-2" href={`tel:${l.telefone}`}>
-                          {l.telefone}
-                        </a>
+                        <span className="inline-flex items-center gap-1">
+                          <a className="underline underline-offset-2" href={`tel:${l.telefone}`}>
+                            {l.telefone}
+                          </a>
+                          {/* Discar resolve no celular; copiar resolve no WhatsApp Web. */}
+                          <Copiar valor={l.telefone} rotulo={t("copiarTelefone")} />
+                        </span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
