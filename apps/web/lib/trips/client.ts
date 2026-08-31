@@ -482,7 +482,13 @@ export function useProgramacao(
     const porViagem = new Map(lista.map((m) => [m.tripId, m]));
     return doQuadro.map((l) => {
       const m = porViagem.get(l.tripId);
-      return { ...l, statusOperacional: m?.status ?? null, comentarios: m?.comentarios ?? 0 };
+      // O SM entra pelo MESMO caminho do status, e pelo mesmo motivo — ver o comentário acima.
+      return {
+        ...l,
+        statusOperacional: m?.status ?? null,
+        sm: m?.sm ?? null,
+        comentarios: m?.comentarios ?? 0,
+      };
     });
   }, [quadro.data, marcas.data]);
 
@@ -613,6 +619,57 @@ export function useMarcarStatus(tripId: string) {
      * marcas), e recarregar centenas de linhas a cada clique era exatamente o desperdício que a
      * separação veio resolver.
      */
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: [...PROGRAMACAO, "marcas"] });
+    },
+  });
+}
+
+/**
+ * A SM DA LINHA — mesmo verbo, mesma escrita otimista, mesmo silêncio (2026-08-31).
+ *
+ * Espelha `useMarcarStatus` de perto, e é de propósito: são dois cliques irmãos na mesma linha, e o
+ * que vale para um vale para o outro.
+ */
+export function useMarcarSm(tripId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: { silencioso: true },
+    mutationFn: async (sm: boolean | null) =>
+      asJson<{ programacao: ProgramacaoDaViagem | null }>(
+        await fetch(`/api/trips/${tripId}/programacao`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sm }),
+        }),
+      ),
+    onMutate: async (sm) => {
+      const chave = [...PROGRAMACAO, "marcas"];
+      await queryClient.cancelQueries({ queryKey: chave });
+      const antes = queryClient.getQueryData<{ marcas: MarcaDaProgramacao[] }>(chave);
+      if (antes) {
+        const outras = antes.marcas.filter((m) => m.tripId !== tripId);
+        const minha = antes.marcas.find((m) => m.tripId === tripId);
+        /*
+          Tirar a SM não pode tirar a linha das marcas quando ela ainda tem status ou comentário — a
+          mesma correção que o status já carregava, e pelo mesmo motivo: o selo do outro sumiria
+          junto até a próxima leitura do quadro.
+        */
+        const status = minha?.status ?? null;
+        const comentarios = minha?.comentarios ?? 0;
+        const some = sm === null && status === null && comentarios === 0;
+        queryClient.setQueryData(chave, {
+          marcas: some ? outras : [...outras, { tripId, status, sm, comentarios }],
+        });
+      }
+      return { antes };
+    },
+    onError: (_erro, _v, ctx) => {
+      if (ctx?.antes) queryClient.setQueryData([...PROGRAMACAO, "marcas"], ctx.antes);
+    },
+    onSuccess: (dados) => {
+      queryClient.setQueryData([...TRIPS_ROOT, tripId, "programacao"], dados);
+    },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: [...PROGRAMACAO, "marcas"] });
     },

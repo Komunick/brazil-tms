@@ -27,8 +27,17 @@ import { tripComments, tripProgramacao } from "../../schema";
  *
  * Este teste não substitui rodar a migração. Ele pega o esquecimento, que é o erro comum.
  */
-describe("as migrações 0050+0051 e o schema", () => {
-  const migracoes = ["0050_previsto_e_comentario", "0051_status_da_programacao"]
+describe("as migrações da programação e o schema", () => {
+  /*
+    A `0061` entrou em 31/08 com a SM. Ler as três juntas é o que mantém a afirmação verdadeira: o
+    teste diz "toda coluna do schema existe nas migrações", e sem a nova ele passaria a acusar como
+    ausente uma coluna que existe — ensinando quem vier depois a desconfiar dele.
+  */
+  const migracoes = [
+    "0050_previsto_e_comentario",
+    "0051_status_da_programacao",
+    "0061_sm_da_programacao",
+  ]
     .map((tag) => readFileSync(join(__dirname, `../../migrations/${tag}.sql`), "utf8"))
     .join("\n");
 

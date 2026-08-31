@@ -2171,7 +2171,13 @@
     "copiarMotorista": "Copiar o nome do motorista",
     "copiarCpf": "Copiar o CPF",
     "copiarTelefone": "Copiar o telefone",
-    "copiarPlaca": "Copiar a placa"
+    "copiarPlaca": "Copiar a placa",
+    "smPergunta": "A SM foi emitida?",
+    "smSim": "SM Sim",
+    "smNao": "SM Não",
+    "motoristaTrocado": "Motorista alterado",
+    "motoristaAnterior": "Motorista anterior: {nome}",
+    "quemAlterou": "Quem alterou: {nome}"
   },
   "HistoricoMotorista": {
     "titulo": "Histórico do motorista",

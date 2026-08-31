@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import type { StatusDaProgramacao } from "@brazil-tms/shared";
 import { trips } from "./trips";
 import { users } from "./users";
@@ -81,6 +81,22 @@ export const tripProgramacao = pgTable(
     status: text("status").$type<StatusDaProgramacao>(),
     statusPorUserId: uuid("status_por_user_id").references(() => users.id),
     statusEm: timestamp("status_em", { withTimezone: true }),
+    /**
+     * A SM FOI EMITIDA? (2026-08-31, a pedido) — três estados, e o nulo é um deles.
+     *
+     * `null` = ninguém disse nada, e é a esmagadora maioria das linhas. `true` = emitida.
+     * `false` = NÃO emitida, e essa é uma afirmação: alguém olhou e disse que não.
+     *
+     * Um booleano com default `false` apagaria a diferença, e o quadro passaria a dizer "não
+     * emitida" para milhares de viagens que ninguém olhou.
+     *
+     * Coluna própria e não um quinto valor de `status`: aquilo é uma ESCADA (a enviar → enviado →
+     * prog OK), e a SM convive com qualquer degrau. No mesmo enum, a tela teria de escolher entre
+     * mostrar o status ou mostrar a SM.
+     */
+    sm: boolean("sm"),
+    smPorUserId: uuid("sm_por_user_id").references(() => users.id),
+    smEm: timestamp("sm_em", { withTimezone: true }),
   },
   (table) => [
     /**
@@ -92,7 +108,7 @@ export const tripProgramacao = pgTable(
      */
     check(
       "trip_programacao_algo_ck",
-      sql`nullif(btrim(${table.portalDriverId}), '') IS NOT NULL OR nullif(btrim(${table.placa}), '') IS NOT NULL OR ${table.status} IS NOT NULL`,
+      sql`nullif(btrim(${table.portalDriverId}), '') IS NOT NULL OR nullif(btrim(${table.placa}), '') IS NOT NULL OR ${table.status} IS NOT NULL OR ${table.sm} IS NOT NULL`,
     ),
     /**
      * O CHECK trava a lista, e não é preciosismo: este valor PINTA a linha. Um `PROG 0K` com zero

@@ -43,6 +43,14 @@ import type { StatusDaProgramacao } from "@brazil-tms/shared";
 export interface MarcaDaProgramacao {
   tripId: string;
   status: StatusDaProgramacao | null;
+  /**
+   * A SM saiu? (2026-08-31) — vem por AQUI, e não pelo quadro, pelo mesmo motivo do status.
+   *
+   * Ela muda por gesto humano, agora, e duas pessoas trabalham o mesmo quadro. Vindo só na consulta
+   * grande, a colega ao lado só veria a marcação no minuto seguinte — e as duas emitiriam a mesma SM,
+   * que é exatamente o desperdício que este arquivo existe para evitar.
+   */
+  sm: boolean | null;
   comentarios: number;
 }
 
@@ -50,17 +58,19 @@ export async function marcasDaProgramacao(): Promise<MarcaDaProgramacao[]> {
   const linhas = await db.execute<{
     trip_id: string;
     status: string | null;
+    sm: boolean | null;
     comentarios: number;
   }>(sql`
     with marcadas as (
       -- As duas fontes de marca, unidas: uma viagem pode ter status, comentário, ou os dois.
-      select trip_id from trip_programacao where status is not null
+      select trip_id from trip_programacao where status is not null or sm is not null
       union
       select trip_id from trip_comments where apagado_em is null
     )
     select
       m.trip_id,
       p.status,
+      p.sm,
       (select count(*)::int from trip_comments tc
         where tc.trip_id = m.trip_id and tc.apagado_em is null) as comentarios
     from marcadas m
@@ -77,6 +87,7 @@ export async function marcasDaProgramacao(): Promise<MarcaDaProgramacao[]> {
   return linhas.map((r) => ({
     tripId: r.trip_id,
     status: (r.status as StatusDaProgramacao | null) ?? null,
+    sm: r.sm,
     comentarios: Number(r.comentarios ?? 0),
   }));
 }

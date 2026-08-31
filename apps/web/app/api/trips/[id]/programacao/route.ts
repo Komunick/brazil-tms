@@ -4,6 +4,7 @@ import {
   STATUS_DA_PROGRAMACAO,
   lerProgramacaoDaViagem,
   marcarStatus,
+  marcarSm,
   salvarPrevisto,
 } from "@brazil-tms/db";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
@@ -44,6 +45,19 @@ const previstoSchema = z.object({
  */
 const statusSchema = z.object({
   status: z.enum(STATUS_DA_PROGRAMACAO).nullable(),
+});
+
+/**
+ * A SM da linha (2026-08-31) — três estados, e o `null` é um deles.
+ *
+ * `true` = emitida · `false` = NÃO emitida, que é uma afirmação de quem olhou · `null` = tirar a
+ * marcação, voltando ao "ninguém disse nada".
+ *
+ * O campo é OPCIONAL no esquema porque este corpo divide o verbo com o do status: a ausência é o que
+ * distingue os dois gestos. `undefined` quer dizer "esta requisição não é sobre a SM".
+ */
+const smSchema = z.object({
+  sm: z.boolean().nullable().optional(),
 });
 
 export async function GET(
@@ -104,8 +118,26 @@ export async function PATCH(
     const ctx = await requireAuth();
     requirePermission(ctx, "assign_resources");
     const { id } = await params;
-    const { status } = statusSchema.parse(await request.json().catch(() => ({})));
+    /*
+      O CORPO É LIDO UMA VEZ SÓ — `request.json()` consome o fluxo, e uma segunda chamada devolve
+      erro. Lido aqui, decidido abaixo.
 
+      ── O MESMO VERBO SERVE AOS DOIS GESTOS ─────────────────────────────────────────────────────
+
+      Um PATCH por campo (`/status` e `/sm`) daria duas rotas quase idênticas para dois cliques
+      irmãos na mesma linha. O corpo traz `status` OU `sm`, nunca os dois: mandar os dois obrigaria a
+      tela a saber do outro campo ao mexer num só, que é exatamente o defeito descrito acima sobre o
+      previsto.
+    */
+    const corpo: unknown = await request.json().catch(() => ({}));
+
+    const comSm = smSchema.safeParse(corpo);
+    if (comSm.success && comSm.data.sm !== undefined) {
+      await marcarSm(id, ctx.userId, comSm.data.sm);
+      return NextResponse.json({ programacao: await lerProgramacaoDaViagem(id) });
+    }
+
+    const { status } = statusSchema.parse(corpo);
     await marcarStatus(id, ctx.userId, status);
     return NextResponse.json({ programacao: await lerProgramacaoDaViagem(id) });
   } catch (error) {
