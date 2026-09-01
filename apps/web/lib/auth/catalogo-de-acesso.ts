@@ -74,6 +74,17 @@ export const ROTULO_DA_ACAO: Record<string, string> = {
   export_billing: "Exportar faturamento",
   manage_trips: "Criar e transicionar viagem",
   import_freight_rates: "Substituir a tabela de fretes",
+  /*
+    O rótulo diz "PARA A EQUIPE" porque é o que o poder tem de diferente (030, 01/09).
+
+    Aceitar já é irreversível; ignorar passou a tirar a oferta da tela de TODOS. Quem marca esta
+    caixa está dando a alguém o poder de decidir sozinho que a empresa não pega um frete — e ninguém
+    mais fica sabendo que ele existiu, a não ser no registro.
+
+    "Decidir oferta de spot" sozinho soaria como "olhar as ofertas", que é outra coisa e já vem de
+    `view_all_trips`.
+  */
+  decidir_spot: "Aceitar e ignorar oferta de spot — para a equipe",
 };
 
 /**

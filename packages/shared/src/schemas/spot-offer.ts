@@ -43,3 +43,20 @@ export const spotOfferBodySchema = z.object({
 });
 
 export type SpotOfferBody = z.infer<typeof spotOfferBodySchema>;
+
+/**
+ * O CORPO DE "IGNORAR" (2026-09-01, fatia 030).
+ *
+ * O motivo é OPCIONAL, e o opcional é a decisão. Obrigar a escrever faria a operação digitar "n"
+ * para se livrar do campo — e um registro cheio de "n" é pior que um vazio, porque parece
+ * informação e ninguém desconfia dele. Em branco, o registro ainda diz quem e quando.
+ *
+ * O teto de 200 caracteres não é economia de espaço: é o tamanho de uma frase. Quem precisa
+ * escrever mais que isso está registrando um caso que merece a tela de ocorrências, não um campo
+ * de descarte.
+ */
+export const dispensarBodySchema = z.object({
+  motivo: z.string().trim().max(200).optional(),
+});
+
+export type DispensarBody = z.infer<typeof dispensarBodySchema>;

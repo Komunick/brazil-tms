@@ -50,7 +50,28 @@ export type PermissionKey =
   // added by 016 (freight rate lookup): internal agregados rate table — view for the 7 internal
   // roles, replace-by-upload mirrors the "edit_rates" precedent (Admin + Finance):
   | "view_freight_rates"
-  | "import_freight_rates";
+  | "import_freight_rates"
+  /**
+   * DECIDIR SOBRE A OFERTA DE SPOT — aceitar ou tirar da tela de todos (030, 2026-09-01).
+   *
+   * ── POR QUE UMA CHAVE PRÓPRIA, E NÃO `assign_resources` ───────────────────────────────────────
+   *
+   * O aceite do cartão nasceu reusando `assign_resources`, a mesma da atribuição, com o argumento de
+   * que "quem decide se a empresa faz a viagem é quem decide quem a faz". Isso valia enquanto
+   * ignorar era um gesto sobre a PRÓPRIA tela.
+   *
+   * Deixou de valer quando o usuário decidiu (01/09) que **ignorar tira a oferta da tela de TODOS**.
+   * O gesto virou uma decisão sobre o frete da empresa: quem ignora está dizendo "esta a gente não
+   * pega", e ninguém mais a vê. São 18 despachantes com `assign_resources` hoje — dar a todos o
+   * poder de descartar oferta para a equipe inteira é outra coisa que atribuir motorista.
+   *
+   * ── E POR QUE ISSO NÃO É UM SEGUNDO CAMINHO DE AUTORIZAÇÃO ────────────────────────────────────
+   *
+   * A rota de aceite continua sendo UMA (`/api/trips/[id]/portal-action`), com o `requirePermission`
+   * que ela já tinha. Esta chave é uma condição A MAIS, aplicada só quando a decisão vem do cartão
+   * de spot — não um caminho paralelo. Ver o comentário da rota.
+   */
+  | "decidir_spot";
 
 export const ALL_PERMISSIONS: readonly PermissionKey[] = [
   "manage_users",
@@ -76,6 +97,7 @@ export const ALL_PERMISSIONS: readonly PermissionKey[] = [
   "manage_trips",
   "view_freight_rates",
   "import_freight_rates",
+  "decidir_spot",
 ];
 
 // Admin is a superset of every permission (matrix invariant).

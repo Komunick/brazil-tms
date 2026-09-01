@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronDown, Gavel } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { SpotOfferView } from "@brazil-tms/db";
 import { useSpotOffers } from "@/lib/trips/client";
 import { estadoInicial, novasOfertas } from "@/lib/spot/ofertas";
 import { tocarAviso } from "@/lib/spot/som";
 import { avisarNoSistema } from "@/lib/spot/aviso-do-sistema";
 import { EVENTO_ENSAIO } from "@/lib/spot/ensaio";
+import { useEsteira } from "@/lib/spot/esteira";
 import { CartaoDaOferta } from "./cartao-da-oferta";
 
 /**
@@ -54,6 +55,10 @@ import { CartaoDaOferta } from "./cartao-da-oferta";
  * portal diz `Accepted`. Não havendo o ramo, não há um segundo motivo capaz de entrar nele, e é
  * assim que o "só some quando o portal confirmar" fica garantido por construção.
  */
+/** As duas cores que a camada usa. O resto do laranja mora no cartão. */
+const LARANJA = "#EE4D2D";
+const LARANJA_ESCURO = "#D73211";
+
 export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
   const t = useTranslations("Spot");
   const { data, refetch } = useSpotOffers();
@@ -71,6 +76,16 @@ export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
   const [recolhido, setRecolhido] = useState(false);
   const [enviando, setEnviando] = useState<string | null>(null);
   const [saindo, setSaindo] = useState<Set<string>>(new Set());
+  /**
+   * QUANTOS CARTÕES ESTÃO COM UMA PERGUNTA ABERTA — e por que a esteira precisa saber.
+   *
+   * O mouse em cima já pausa a faixa. Mas quem aperta Aceitar e AFASTA o mouse para ler a pergunta
+   * veria o cartão deslizar embaixo dela, levando a confirmação junto. É um caso real e o contador
+   * é o menor jeito de cobri-lo: o cartão avisa quando abre e quando fecha, e a esteira só anda com
+   * ele em zero.
+   */
+  const [ocupados, setOcupados] = useState(0);
+  const { ref: esteira, pausar, soltar } = useEsteira(ocupados > 0);
 
   const naTela = useMemo(
     () => [...ensaios, ...ofertas].filter((o) => !saindo.has(o.id)),
@@ -139,14 +154,18 @@ export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
    * A oferta de ensaio não vai ao servidor: ela nunca existiu lá.
    */
   const ignorar = useCallback(
-    async (oferta: SpotOfferView) => {
+    async (oferta: SpotOfferView, motivo: string | null) => {
       setSaindo((s) => new Set(s).add(oferta.id));
       if (oferta.id.startsWith("ensaio-")) {
         setEnsaios((atuais) => atuais.filter((o) => o.id !== oferta.id));
         return;
       }
       try {
-        await fetch(`/api/spot-offers/${oferta.id}/dispensar`, { method: "POST" });
+        await fetch(`/api/spot-offers/${oferta.id}/dispensar`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ motivo }),
+        });
       } catch {
         // Falhou: o cartão volta, porque o servidor não gravou e a leitura seguinte o trará.
         setSaindo((s) => {
@@ -190,28 +209,64 @@ export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
 
   if (naTela.length === 0) return null;
 
+  /*
+    ── RECOLHIDO: UM PAINEL NA DIREITA, e não um botão solto (2026-09-01, a pedido) ─────────────
+
+    Recolher era um comprimido no canto que só dizia "3 esperando". Escondia demais: quem recolheu
+    para atribuir perdia de vista QUAIS ofertas estavam paradas, e voltava a abrir tudo só para
+    lembrar. O painel mantém a lista à mão — LH, rota e horário — e ainda deixa decidir dali.
+
+    Ele fica na direita, encostado, ocupando uma faixa estreita. É o desenho que o usuário aprovou:
+    a esteira sai do caminho, e a informação não sai junto.
+  */
   if (recolhido) {
     return (
       <div className="pointer-events-none fixed inset-0 z-50">
-        <button
-          type="button"
-          onClick={() => setRecolhido(false)}
-          className="pointer-events-auto absolute bottom-5 right-5 flex items-center gap-2.5 rounded-full px-4 py-2.5 text-sm font-bold shadow-[0_12px_28px_-14px_rgba(0,0,0,0.8)]"
-          style={{
-            background: "linear-gradient(160deg, #12283F, #0C1A2B)",
-            outline: "3px solid #1B7A3D",
-            color: "#EEF3F8",
-          }}
+        <aside
+          className="pointer-events-auto absolute bottom-4 right-4 top-4 flex w-[300px] flex-col overflow-hidden rounded-2xl border-2 bg-card shadow-[0_20px_44px_-16px_rgba(0,0,0,0.5)]"
+          style={{ borderColor: LARANJA }}
+          role="status"
+          aria-live="polite"
         >
-          <Gavel className="h-4 w-4" style={{ color: "#F2C230" }} aria-hidden />
-          <span
-            className="rounded-full px-2 font-extrabold tabular-nums"
-            style={{ background: "#F2C230", color: "#2A1F00" }}
+          <div
+            className="flex shrink-0 items-center justify-between gap-2 px-3 py-2 text-xs font-extrabold text-white"
+            style={{ background: LARANJA }}
           >
-            {naTela.length}
-          </span>
-          {t("esperandoDecisao")}
-        </button>
+            <span className="flex items-center gap-2">
+              <span
+                className="rounded-full bg-white px-2 font-black tabular-nums"
+                style={{ color: LARANJA_ESCURO }}
+              >
+                {naTela.length}
+              </span>
+              {t("esperandoDecisao")}
+            </span>
+            <button
+              type="button"
+              onClick={() => setRecolhido(false)}
+              className="flex items-center gap-1 rounded-md border border-white/60 bg-white/20 px-2 py-0.5 font-bold hover:bg-white/30"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+              {t("abrir")}
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-2 overflow-y-auto p-2.5">
+            {naTela.map((oferta) => (
+              <ItemRecolhido
+                key={oferta.id}
+                oferta={oferta}
+                podeDecidir={podeDecidir}
+                /*
+                  Decidir daqui ABRE a esteira antes de perguntar. A confirmação de dois gestos e o
+                  campo de motivo vivem no cartão inteiro, e reproduzi-los aqui seria uma segunda
+                  cópia dos mesmos dois gestos — que divergiriam no primeiro ajuste.
+                */
+                aoDecidir={() => setRecolhido(false)}
+              />
+            ))}
+          </div>
+        </aside>
       </div>
     );
   }
@@ -220,87 +275,128 @@ export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
 
   return (
     /*
-      A CAMADA É TRANSPARENTE AO MOUSE. Só os cartões recebem clique, e não há fundo nenhum pintado
-      atrás deles — quem está atribuindo continua lendo, clicando e digitando no que está embaixo.
+      ── A ESTEIRA, no rodapé e na horizontal (2026-09-01, a pedido) ──────────────────────────────
+
+      Os cartões acumulam para a DIREITA em vez de dividirem o meio da tela. Quando não cabem, a
+      faixa anda sozinha — ver `useEsteira`.
+
+      A CAMADA CONTINUA TRANSPARENTE AO MOUSE: só os cartões recebem clique, e não há fundo pintado
+      atrás deles. Quem está atribuindo continua lendo, clicando e digitando no que está embaixo.
       É o FR-003, e há um Playwright que o prova preenchendo um campo com cartões na tela.
     */
     <div
-      className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-50 pb-3 pt-2"
       role="status"
       aria-live="polite"
     >
-      <div className="flex max-h-full w-full max-w-[960px] flex-col gap-3 overflow-y-auto">
-        {/* A barra só aparece com mais de um: com um cartão só ela seria enfeite. */}
-        {naTela.length > 1 ? (
-          <div
-            className="pointer-events-auto flex shrink-0 items-center justify-between gap-3 rounded-xl border px-3 py-1.5 text-xs font-semibold"
-            style={{
-              background: "rgba(12,26,43,0.92)",
-              borderColor: "rgba(238,243,248,0.16)",
-              color: "#EEF3F8",
-            }}
+      <div className="pointer-events-auto mx-4 mb-2 flex items-center justify-between gap-3">
+        <span
+          className="flex items-center gap-2 rounded-full py-1 pl-1.5 pr-3 text-xs font-extrabold text-white"
+          style={{ background: LARANJA }}
+        >
+          <span
+            className="rounded-full bg-white px-2 font-black tabular-nums"
+            style={{ color: LARANJA_ESCURO }}
           >
-            <span className="flex items-center gap-2 tracking-wide">
-              <span
-                className="rounded-full px-2 font-extrabold tabular-nums"
-                style={{ background: "#F2C230", color: "#2A1F00" }}
-              >
-                {naTela.length}
-              </span>
-              {t("esperandoDecisao")}
-            </span>
-            <button
-              type="button"
-              onClick={() => setRecolhido(true)}
-              className="flex items-center gap-1.5 rounded-md border px-2.5 py-1"
-              style={{ borderColor: "rgba(238,243,248,0.28)", color: "#93A9BF" }}
-            >
-              <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-              {t("recolher")}
-            </button>
-          </div>
-        ) : null}
+            {naTela.length}
+          </span>
+          {t("esperandoDecisao")}
+        </span>
 
-        {/*
-          UM cartão ocupa o meio como antes; DOIS ou mais dividem em duas colunas e descem em linhas.
-          Passando da altura, o conjunto rola dentro da própria camada — sem esconder nenhum, que é
-          o que a fila antiga fazia.
-        */}
-        <div className={`grid gap-3 ${compacto ? "sm:grid-cols-2" : "grid-cols-1"}`}>
-          {naTela.map((oferta) => (
+        <button
+          type="button"
+          onClick={() => setRecolhido(true)}
+          className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-extrabold text-white shadow-[0_3px_10px_-3px_rgba(238,77,45,0.7)]"
+          style={{ background: LARANJA }}
+        >
+          {t("recolher")}
+          <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+        </button>
+      </div>
+
+      <div
+        ref={esteira}
+        onMouseEnter={pausar}
+        onMouseLeave={soltar}
+        onFocusCapture={pausar}
+        onBlurCapture={soltar}
+        className="pointer-events-auto flex gap-3 overflow-x-auto px-4 pb-1.5 pt-1"
+      >
+        {naTela.map((oferta) => (
+          <div key={oferta.id} className="w-[408px] shrink-0">
             <CartaoDaOferta
-              key={oferta.id}
               oferta={oferta}
-              /*
-                Sem `tripId` não há a quem endereçar a ordem, e o próprio cartão diz isso. A
-                autoridade continua sendo o servidor: `podeAceitar` só decide o que o botão mostra.
-              */
               podeDecidir={podeDecidir}
               enviando={enviando === oferta.id}
               onAceitar={() => void aceitar(oferta)}
-              onIgnorar={() => void ignorar(oferta)}
+              onIgnorar={(motivo) => void ignorar(oferta, motivo)}
+              aoOcuparse={(ocupado) => setOcupados((n) => Math.max(0, n + (ocupado ? 1 : -1)))}
+              /*
+                COMPACTO SÓ QUANDO ANDA. Com um ou dois cartões a esteira está parada e cabe tudo;
+                a partir daí ela se move, e o cartão menor é o que faz mais de um caber na vista de
+                uma vez — quem decide precisa comparar duas ofertas, não ler uma de cada vez.
+              */
               compacto={compacto}
             />
-          ))}
-        </div>
-
-        {/* Um cartão sozinho também precisa poder sair da frente. */}
-        {naTela.length === 1 ? (
-          <button
-            type="button"
-            onClick={() => setRecolhido(true)}
-            className="pointer-events-auto mx-auto flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold"
-            style={{
-              background: "rgba(12,26,43,0.92)",
-              borderColor: "rgba(238,243,248,0.24)",
-              color: "#93A9BF",
-            }}
-          >
-            <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-            {t("recolher")}
-          </button>
-        ) : null}
+          </div>
+        ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * UMA LINHA DO PAINEL RECOLHIDO — o suficiente para reconhecer a oferta e decidir voltar a ela.
+ *
+ * Traz LH, rota e o STA. Não traz os botões de decisão de verdade: a confirmação de dois gestos e o
+ * campo de motivo vivem no cartão, e reproduzi-los aqui criaria uma segunda cópia dos mesmos dois
+ * gestos. Quem quer decidir abre — é um clique, e o clique já estava lá.
+ */
+function ItemRecolhido({
+  oferta,
+  podeDecidir,
+  aoDecidir,
+}: {
+  oferta: SpotOfferView;
+  podeDecidir: boolean;
+  aoDecidir: () => void;
+}) {
+  const t = useTranslations("Spot");
+  const enviado = oferta.estado === "enviado";
+
+  return (
+    <div
+      className="flex flex-col gap-1 rounded-xl border border-l-4 p-2.5"
+      style={{ borderLeftColor: enviado ? "#12925A" : LARANJA }}
+    >
+      <span
+        className="text-[0.72rem] font-black tracking-[0.06em] tabular-nums"
+        style={{ color: LARANJA_ESCURO }}
+      >
+        {oferta.tripNumber}
+      </span>
+      <span className="text-[0.72rem] font-semibold leading-snug">{oferta.route}</span>
+      {oferta.originArrival ? (
+        <span className="text-[0.64rem] text-muted-foreground">
+          {t("originArrival")} {oferta.originArrival}
+          {oferta.vehicle ? ` · ${oferta.vehicle}` : ""}
+        </span>
+      ) : null}
+
+      {enviado ? (
+        <span className="text-[0.64rem] font-extrabold text-success">
+          {oferta.decidiuNome ? t("aceitoPor", { nome: oferta.decidiuNome }) : t("esperandoDecisao")}
+        </span>
+      ) : podeDecidir ? (
+        <button
+          type="button"
+          onClick={aoDecidir}
+          className="mt-0.5 self-start rounded px-2 py-0.5 text-[0.66rem] font-extrabold text-white"
+          style={{ background: LARANJA }}
+        >
+          {t("decidir")}
+        </button>
+      ) : null}
     </div>
   );
 }

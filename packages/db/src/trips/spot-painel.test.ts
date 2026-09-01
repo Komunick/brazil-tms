@@ -80,16 +80,19 @@ describe("as duas leituras são assimétricas de propósito", () => {
   });
 
   /**
-   * A DISPENSA: o cartão ESCONDE, o painel MARCA. É o FR-019 — ignorar limpa a tela de quem clicou,
-   * e não apaga a prova de que a oferta chegou.
+   * A DISPENSA: o cartão ESCONDE, o painel MARCA — e a assimetria sobreviveu à inversão de 01/09.
+   *
+   * Quando ignorar valia só para quem clicava, o painel marcava "ignorado por você". Agora a decisão
+   * é da equipe e ele marca QUEM ignorou, com o motivo. O que não mudou é o essencial: a linha
+   * continua listada, porque o painel é o registro do dia e ignorar não apaga a prova de que a
+   * oferta chegou.
    */
-  it("o cartão esconde o dispensado; o painel apenas marca", () => {
-    expect(cartao).toMatch(/!\s*r\.dispensadaPorMim/);
-    expect(fonte).toContain("dispensadaPorMim");
-    expect(
-      fonte,
-      "o painel passou a FILTRAR a dispensa — ela ali só marca, ver FR-019",
-    ).not.toMatch(/filter\([^)]*dispensadaPorMim/);
+  it("o cartão esconde o ignorado; o painel apenas marca quem ignorou", () => {
+    expect(cartao).toMatch(/!\s*r\.dispensada\b/);
+    expect(fonte).toContain("ignoradaPor");
+    expect(fonte, "o painel passou a FILTRAR a dispensa — ali ela só marca").not.toMatch(
+      /filter\([^)]*ignoradaPor/,
+    );
   });
 });
 
