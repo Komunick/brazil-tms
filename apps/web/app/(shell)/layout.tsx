@@ -48,13 +48,26 @@ export default async function ShellLayout({ children }: { children: ReactNode })
        * O painel de parede tem o seu próprio (`(wall)`), porque não passa por este shell.
        */}
       {/*
-        A PERMISSÃO DESCE DO SERVIDOR, e é a mesma que a tela de viagem já exige para aceitar
-        (`assign_resources`) — nenhuma chave nova nasceu nesta fatia. Quem não a tem continua VENDO
-        a oferta e não vê o botão de aceitar, o que é o pedido: a informação é de todos, a decisão
-        não. E o botão escondido não é a garantia: a rota de aceite recusa no servidor de qualquer
-        forma, pelo `requirePermission` que ela já tinha.
+        A PERMISSÃO DESCE DO SERVIDOR, e é `decidir_spot` — a MESMA que as rotas exigem.
+
+        ── O DEFEITO QUE ISTO CORRIGE (2026-09-01) ──────────────────────────────────────────────
+
+        Aqui dizia `assign_resources`, e o comentário defendia a escolha afirmando que "nenhuma chave
+        nova nasceu nesta fatia". Era verdade quando foi escrito e deixou de ser: a decisão da equipe
+        (migração 0063) criou `decidir_spot` e as DUAS rotas passaram a exigi-la — `POST
+        /api/spot-offers/:id/dispensar` e o `origem: "oferta_spot"` do `portal-action`. A tela ficou
+        para trás e ninguém percebeu, porque quem testou era administrador e tem as duas.
+
+        Medido em produção antes da correção: **18 pessoas** — os 17 do cargo Despachante e 1 de
+        Gerente de operações — tinham `assign_resources` e NÃO tinham `decidir_spot`. Para elas os
+        dois botões apareciam LIGADOS e o servidor devolvia 403 no clique. Pior que o botão ausente:
+        o botão ligado promete que dá.
+
+        O botão travado nunca foi a garantia — as rotas recusam de qualquer forma. Mas a tela e o
+        servidor discordarem sobre QUEM DECIDE é um defeito por si só, e `chave-da-decisao.test.ts`
+        passa a derrubar a build se as duas voltarem a divergir.
       */}
-      <OfertaDeSpot podeDecidir={session.user.permissoes.has("assign_resources")} />
+      <OfertaDeSpot podeDecidir={session.user.permissoes.has("decidir_spot")} />
     </div>
   );
 }

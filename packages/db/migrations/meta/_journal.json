@@ -449,6 +449,13 @@
       "when": 1788444000009,
       "tag": "0063_spot_decisao_da_equipe",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1788530400009,
+      "tag": "0064_cargos_multiplos",
+      "breakpoints": true
     }
   ]
 }

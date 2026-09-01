@@ -33,12 +33,24 @@ type Transacao = { execute: <T>(query: ReturnType<typeof sql>) => Promise<T[]> }
  * como rede de segurança — e um cargo desativado não concede nada a ninguém.
  */
 export async function quantosAindaAdministram(tx: Transacao): Promise<number> {
+  /*
+    CONTA PESSOAS, NÃO VÍNCULOS — e o `distinct` passou a ser obrigatório em 2026-09-01.
+
+    Com um cargo por pessoa, `count(*)` já contava gente. Com vários cargos, alguém que tenha DOIS
+    cargos administradores apareceria duas vezes — e a trava passaria a achar que há dois admins
+    onde há um. O último administrador poderia então ser removido, deixando o TMS sem ninguém capaz
+    de mexer em usuário e sem ninguém capaz de consertar isso.
+
+    É o tipo de erro que só aparece no dia em que acontece, e nesse dia não há como desfazer pela
+    tela.
+  */
   const linhas = await tx.execute<{ n: number }>(sql`
-    select count(*)::int as n
+    select count(distinct u.id)::int as n
       from users u
-      join cargos c on c.id = u.cargo_id and c.ativo
+      join usuario_cargos uc on uc.user_id = u.id
+      join cargos c on c.id = uc.cargo_id and c.ativo
       join cargo_permissoes cp
-        on cp.cargo_id = u.cargo_id and cp.permissao = ${CAPACIDADE_DE_ADMINISTRAR}
+        on cp.cargo_id = uc.cargo_id and cp.permissao = ${CAPACIDADE_DE_ADMINISTRAR}
      where u.status = 'active'
   `);
   return linhas[0]?.n ?? 0;

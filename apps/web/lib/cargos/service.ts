@@ -14,7 +14,7 @@ import {
   desativarCargo,
   gravarCargo,
   listarCargos,
-  moverPessoaDeCargo,
+  definirCargosDaPessoa,
   quantasPessoasNoCargo,
   quantosAindaAdministram,
   SemAdministrador,
@@ -54,7 +54,19 @@ export const gravarCargoSchema = z.object({
   permissoes: permissoes.default([]),
 });
 export const desativarCargoSchema = z.object({ moverPara: z.string().uuid().nullable().default(null) });
-export const moverPessoaSchema = z.object({ cargoId: z.string().uuid() });
+/**
+ * OS CARGOS DE UMA PESSOA — vários desde 2026-09-01.
+ *
+ * Lista, e não um id: uma pessoa do setor GR que também cuida do spot precisa dos dois. Lista VAZIA
+ * é permitida e significa "sem acesso" — recusá-la obrigaria a inventar um cargo para quem está
+ * sendo desligado, e o conjunto vazio já é o estado seguro (ver `sem-cargo.test.ts`).
+ *
+ * O teto de 10 não é regra de negócio: é o que impede um corpo absurdo de virar uma consulta
+ * absurda. Ninguém acumula dez funções.
+ */
+export const moverPessoaSchema = z.object({
+  cargoIds: z.array(z.string().uuid()).max(10),
+});
 
 /**
  * Confere o que dá para conferir sem escrever, e lança com TODOS os motivos.
@@ -127,11 +139,22 @@ export async function desativar(
   }
 }
 
-export async function moverPessoa(ctx: AuthContext, userId: string, cargoId: string) {
-  const ativos = await cargosAtivos([cargoId]);
-  if (!ativos.has(cargoId)) throw new RecusaDeCargo(["PERMISSAO_DESCONHECIDA"]);
+/**
+ * DEFINE O CONJUNTO de cargos de uma pessoa — vários desde 2026-09-01.
+ *
+ * O nome ficou `moverPessoa` por ser o que a rota já chamava, mas o que ele faz mudou: não move
+ * mais de um cargo para outro, e sim substitui a lista inteira.
+ */
+export async function moverPessoa(ctx: AuthContext, userId: string, cargoIds: string[]) {
+  /*
+    CARGO DESATIVADO NÃO ENTRA. Ele não concede nada — a leitura da sessão exige `c.ativo` —, e
+    deixá-lo entrar criaria um vínculo que a tela mostraria como acesso e a sessão ignoraria. Duas
+    telas dizendo coisas diferentes sobre o mesmo acesso é o pior desfecho possível aqui.
+  */
+  const ativos = await cargosAtivos(cargoIds);
+  if (cargoIds.some((id) => !ativos.has(id))) throw new RecusaDeCargo(["PERMISSAO_DESCONHECIDA"]);
   try {
-    await moverPessoaDeCargo(userId, cargoId, ctx.userId);
+    await definirCargosDaPessoa(userId, cargoIds, ctx.userId);
   } catch (e) {
     if (e instanceof SemAdministrador) throw new RecusaDeCargo(["ULTIMO_ADMIN"]);
     throw e;

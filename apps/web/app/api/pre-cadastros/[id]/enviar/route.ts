@@ -9,9 +9,21 @@ export const dynamic = "force-dynamic";
 /**
  * ENVIAR UM PRÉ-CADASTRO À GERENCIADORA (fatia 028, etapa 5).
  *
- * O caminho normal é automático: a leitura da CNH termina e o envio é enfileirado sozinho. Este
- * botão é para o OUTRO caso — o cadastro que parou por faltar alguma coisa, alguém resolveu, e
- * agora precisa de um empurrão. Sem ele, o que falhou uma vez ficaria parado para sempre.
+ * ESTE É O ÚNICO GATILHO. Não existe caminho automático — e o comentário que estava aqui dizia o
+ * contrário, o que é perigoso justamente por ser sobre a decisão de segurança da fatia.
+ *
+ * O envio automático chegou a existir: a leitura da CNH terminava e o cadastro seguia sozinho. Foi
+ * DESLIGADO em 30/08, por decisão do usuário, e a razão está escrita em `workers/jobs/cnh/index.ts`:
+ * uma leitura completa e ERRADA — um dígito trocado num RG — é plausível o bastante para passar por
+ * todos os motivos de bloqueio e criar uma pessoa errada na gerenciadora, sem ninguém ver.
+ *
+ * "Campo não lido fica vazio e assinalado" protege contra o que o modelo não leu. Nada protege
+ * contra o que ele leu errado com confiança, a não ser alguém olhando o documento ao lado.
+ *
+ * Por isso o caminho até a gerenciadora passa obrigatoriamente pela tela de conferência, e passa
+ * por ESTRUTURA e não por disciplina: este botão é o único lugar que enfileira o job. Medido em
+ * 01/09 — `cnh.ler` rodou 16 vezes em produção e `motorista.cadastrar` foi enfileirado ZERO vezes,
+ * que é exatamente o desenho funcionando.
  *
  * ── ENFILEIRA, NÃO CHAMA ──────────────────────────────────────────────────────────────────────
  *

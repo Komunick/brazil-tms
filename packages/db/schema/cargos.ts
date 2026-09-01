@@ -132,3 +132,47 @@ export const usuarioSelos = pgTable(
     index("usuario_selos_selo_idx").on(table.seloId),
   ],
 );
+
+/**
+ * OS CARGOS DE UMA PESSOA — vários, desde 2026-09-01.
+ *
+ * ── POR QUE ISTO EXISTE, e o que ele substitui ────────────────────────────────────────────────
+ *
+ * A fatia 029 pôs `users.cargo_id`: um cargo por pessoa, decidido contra o modelo de somar. O caso
+ * que derrubou a decisão apareceu no dia seguinte e é concreto — alguém do setor GR que também
+ * cuida do spot. Com um cargo só, dar-lhe o SPOT tira a GR, e não há como existir a pessoa que faz
+ * as duas coisas.
+ *
+ * As capacidades passam a ser a UNIÃO dos cargos. `users.cargo_id` continua na tabela e para de
+ * decidir acesso — sai numa fatia futura, porque o deploy migra antes do build e o app anterior
+ * ainda o lê durante a construção.
+ *
+ * ── O QUE ISSO CUSTA, e não some por a decisão ter mudado ─────────────────────────────────────
+ *
+ * "Por que fulano consegue cancelar?" passa a ter mais de uma resposta possível. A tela que mostra
+ * o acesso de alguém precisa dizer QUAL cargo concede cada capacidade — senão a pergunta fica sem
+ * dono, que foi exatamente o receio registrado na 029.
+ *
+ * ── A CASCATA VAI NOS DOIS LADOS, e aqui isso é certo ─────────────────────────────────────────
+ *
+ * Diferente da dispensa de spot, este vínculo não é um FATO histórico: é o estado atual do acesso.
+ * Apagar a pessoa ou o cargo deve levar o vínculo junto — um vínculo órfão só poderia conceder
+ * acesso a ninguém, ou por ninguém.
+ */
+export const usuarioCargos = pgTable(
+  "usuario_cargos",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    cargoId: uuid("cargo_id")
+      .notNull()
+      .references(() => cargos.id, { onDelete: "cascade" }),
+    criadoEm: timestamp("criado_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ name: "usuario_cargos_pk", columns: [table.userId, table.cargoId] }),
+    // A trava do último admin pergunta "quem está NESTE cargo?" — e a PK composta não serve a ela.
+    index("usuario_cargos_cargo_idx").on(table.cargoId),
+  ],
+);
