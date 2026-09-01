@@ -425,3 +425,97 @@
     }
   }
 }
+
+/**
+ * O ALARME DA OFERTA DE SPOT (2026-09-01, fatia 030).
+ *
+ * O cartão de oferta FICA na tela até alguém decidir — ele parou de sair sozinho em trinta segundos.
+ * Isso muda o que um alarme pode custar: piscar por meio minuto é ênfase; piscar por duas horas numa
+ * sexta cheia é o que faz a sala pedir para desligar o aviso, e aviso desligado não avisa mais nada.
+ *
+ * Por isso as três animações abaixo só rodam enquanto a oferta é NOVA — a classe é retirada pelo
+ * componente depois de três minutos, que é a janela medida em que a operação de fato decide (os
+ * onze aceites reais de LH de spot saíram de zero a três minutos depois do aviso). Passado o prazo,
+ * fica só a cor da marca: o cartão continua lá, sem gritar.
+ *
+ * ── E QUEM NÃO QUER MOVIMENTO ─────────────────────────────────────────────────────────────────
+ *
+ * Com `prefers-reduced-motion` nenhuma delas roda, e a moldura fica ACESA no vermelho de alerta,
+ * parada. É a mesma informação sem o movimento — sumir com o alarme junto com a animação seria
+ * esconder a urgência de quem pediu outra coisa.
+ */
+@keyframes oferta-alarme {
+  0%,
+  100% {
+    border-color: #ee4d2d;
+  }
+  50% {
+    border-color: #e02020;
+    box-shadow:
+      0 0 0 6px rgba(224, 32, 32, 0.18),
+      0 24px 50px -20px rgba(0, 0, 0, 0.45);
+  }
+}
+
+.animate-oferta-alarme {
+  animation: oferta-alarme 1.1s ease-in-out infinite;
+}
+
+/* O mascote balança no mesmo sentido que as linhas de movimento do desenho já sugerem. */
+@keyframes oferta-mascote {
+  0%,
+  100% {
+    transform: rotate(-3.5deg) translateY(0);
+  }
+  50% {
+    transform: rotate(3.5deg) translateY(-2px);
+  }
+}
+
+.animate-oferta-mascote {
+  animation: oferta-mascote 0.85s ease-in-out infinite;
+}
+
+/* A bandeira ondula; o mastro acompanha de leve, senão ela parece solta no ar. */
+@keyframes oferta-bandeira {
+  0%,
+  100% {
+    transform: rotate(-8deg) skewY(0deg);
+  }
+  50% {
+    transform: rotate(10deg) skewY(-6deg);
+  }
+}
+
+.animate-oferta-bandeira {
+  animation: oferta-bandeira 0.85s ease-in-out infinite;
+}
+
+@keyframes oferta-bandeira-mastro {
+  0%,
+  100% {
+    transform: rotate(-2deg);
+  }
+  50% {
+    transform: rotate(2deg);
+  }
+}
+
+.animate-oferta-bandeira-mastro {
+  transform-origin: bottom center;
+  animation: oferta-bandeira-mastro 0.85s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-oferta-alarme {
+    animation: none;
+    /* Acesa e parada: a urgência continua dita, sem movimento. */
+    border-color: #e02020 !important;
+  }
+
+  .animate-oferta-mascote,
+  .animate-oferta-bandeira,
+  .animate-oferta-bandeira-mastro {
+    animation: none;
+  }
+}

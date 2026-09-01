@@ -1998,7 +1998,6 @@
     "systemTestBody": "Se você está lendo isto, os avisos de spot vão chegar aqui.",
     "ensaio": "Ensaiar",
     "ensaioDica": "Mostra o cartão, toca o som e dispara a notificação — sem gravar oferta nenhuma e sem tocar no portal.",
-    "price": "Preço",
     "aceitar": "Aceitar",
     "ignorar": "Ignorar",
     "recolher": "Recolher",
@@ -2021,7 +2020,9 @@
       "sem_viagem": "Ensaiar: sem viagem",
       "enviado": "Ensaiar: enviado",
       "recusado": "Ensaiar: recusado"
-    }
+    },
+    "spotNaTela": "Spot na tela",
+    "clienteDoSpot": "Shopee"
   },
   "Wallboard": {
     "title": "Brazil Transports · Torre",
