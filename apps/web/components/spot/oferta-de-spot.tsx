@@ -271,21 +271,33 @@ export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
     );
   }
 
-  const compacto = naTela.length > 1;
+  /*
+    OS CARTÕES FICAM GRANDES, sempre (2026-09-01, correção a pedido).
+
+    A esteira nasceu no rodapé e com o cartão encolhido a partir do segundo — a ideia era caber mais
+    de um na vista. Estava errado, e o usuário corrigiu: o pedido sempre foi o cartão GRANDE, NO MEIO
+    da tela. Encolher para caber mais é resolver o problema errado; quem decide um leilão lê UMA
+    oferta de cada vez, e a esteira já existe justamente para as outras não sumirem.
+  */
+  const compacto = false;
 
   return (
     /*
-      ── A ESTEIRA, no rodapé e na horizontal (2026-09-01, a pedido) ──────────────────────────────
+      ── A ESTEIRA, NO MEIO DA TELA e na horizontal (2026-09-01, a pedido) ────────────────────────
 
-      Os cartões acumulam para a DIREITA em vez de dividirem o meio da tela. Quando não cabem, a
+      Os cartões acumulam para a DIREITA em vez de dividirem o espaço entre si. Quando não cabem, a
       faixa anda sozinha — ver `useEsteira`.
+
+      ELA FICA NO MEIO, e não no rodapé. A primeira versão a pôs embaixo, para ocupar menos; o
+      usuário corrigiu, e a razão é a mesma do cartão grande — este aviso precisa que alguém VIRE A
+      CABEÇA, e rodapé é onde mora o que não pede atenção.
 
       A CAMADA CONTINUA TRANSPARENTE AO MOUSE: só os cartões recebem clique, e não há fundo pintado
       atrás deles. Quem está atribuindo continua lendo, clicando e digitando no que está embaixo.
       É o FR-003, e há um Playwright que o prova preenchendo um campo com cartões na tela.
     */
     <div
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-50 pb-3 pt-2"
+      className="pointer-events-none fixed inset-0 z-50 flex flex-col justify-center"
       role="status"
       aria-live="polite"
     >
@@ -322,8 +334,14 @@ export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
         onBlurCapture={soltar}
         className="pointer-events-auto flex gap-3 overflow-x-auto px-4 pb-1.5 pt-1"
       >
+        {/*
+          560 px por cartão — o inteiro, e não o encolhido.
+
+          Numa tela de 1920 cabem três; numa de 1366, dois. É de propósito: quem decide um leilão lê
+          UMA oferta de cada vez, e as outras não somem — a esteira anda até elas.
+        */}
         {naTela.map((oferta) => (
-          <div key={oferta.id} className="w-[408px] shrink-0">
+          <div key={oferta.id} className="w-[560px] shrink-0">
             <CartaoDaOferta
               oferta={oferta}
               podeDecidir={podeDecidir}
