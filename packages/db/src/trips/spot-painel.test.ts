@@ -112,3 +112,85 @@ describe("a derivação usada pelas duas telas", () => {
     ).toBe("esperando");
   });
 });
+
+/**
+ * AS COLUNAS DAS LATERAIS PRECISAM EXISTIR — o guarda que nasceu de derrubar a produção.
+ *
+ * ── O QUE ACONTECEU, em 2026-09-01 ────────────────────────────────────────────────────────────
+ *
+ * Uma substituição por script falhou em silêncio no meio da consulta do painel: o `jsonb_build_object`
+ * passou a ler `d.por`, e a lateral que deveria produzir essa coluna continuou devolvendo
+ * `true as dispensada`. O painel inteiro parou em produção com `column d.por does not exist`.
+ *
+ * NADA PEGOU, e é isso que importa aqui:
+ *
+ *   · os testes deste arquivo leem o SQL como TEXTO — nenhum o executa;
+ *   · o TypeScript não confere consulta dentro de uma template string;
+ *   · o `pnpm build` compilou;
+ *   · a simulação que rodei naquele dia era da MIGRAÇÃO, não desta leitura.
+ *
+ * Foi preciso alguém abrir a tela para descobrir.
+ *
+ * ── O QUE ESTE GUARDA FAZ, e o que ele NÃO faz ────────────────────────────────────────────────
+ *
+ * Ele confere que toda coluna citada como `<alias>.<coluna>` de uma lateral está entre as que aquela
+ * lateral produz. É barato e pega exatamente a classe de erro acima — a metade que ficou para trás.
+ *
+ * Ele NÃO substitui executar. Só o banco sabe se a consulta inteira é válida; o certo, quando se
+ * mexer aqui, continua sendo rodá-la contra o dev antes de subir.
+ */
+describe("as laterais do painel produzem as colunas que a consulta lê", () => {
+  const fonteCrua = readFileSync(join(__dirname, "programacao.ts"), "utf8");
+
+  /** `left join lateral ( … ) X on true` → o corpo e o apelido de cada uma. */
+  const laterais = [...fonteCrua.matchAll(/left join lateral \(([\s\S]*?)\)\s*(\w+) on true/g)];
+
+  it("encontra as laterais — senão o teste passaria sem olhar nada", () => {
+    expect(laterais.length).toBeGreaterThanOrEqual(2);
+  });
+
+  for (const [, corpo, apelido] of laterais) {
+    it(`a lateral \`${apelido}\` produz tudo o que \`${apelido}.\` pede`, () => {
+      /*
+        O que ela PRODUZ: os `as <nome>` e as colunas selecionadas sem apelido. Comentários saem
+        antes, senão a frase que explica a regra entraria na conta.
+      */
+      const semComentario = (corpo ?? "")
+        .replace(/\/\*[\s\S]*?\*\//g, " ")
+        .replace(/--.*$/gm, " ");
+      const produz = new Set(
+        [...semComentario.matchAll(/\bas\s+(\w+)/gi)].map((m) => m[1]!.toLowerCase()),
+      );
+      // `select sd.motivo` produz a coluna `motivo`, sem `as`.
+      for (const m of semComentario.matchAll(/select\s+([\s\S]*?)\bfrom\b/gi)) {
+        for (const campo of (m[1] ?? "").split(",")) {
+          const nome = /(\w+)\s*$/.exec(campo.trim())?.[1];
+          if (nome) produz.add(nome.toLowerCase());
+        }
+      }
+
+      /* O que a consulta PEDE daquele apelido, fora do corpo da própria lateral. */
+      const foraDaLateral = fonteCrua.replace(corpo ?? "", " ");
+      const pede = new Set(
+        /*
+          `\\b` e `\\w` ESCAPADOS — e isto quase custou o guarda inteiro.
+
+          A primeira versão escreveu o padrão num template literal como `\b…\.(\w+)`. Ali `\b` é o
+          caractere de BACKSPACE e `\w` é a letra `w` — o regex virou outra coisa, não achou nada, e
+          o guarda passou verde COM o defeito reintroduzido. Um guarda que nunca reprova não é
+          guarda, e este só foi flagrado porque a verificação nos dois sentidos é obrigatória aqui.
+        */
+        [...foraDaLateral.matchAll(new RegExp(`\\b${apelido}\\.(\\w+)`, "g"))].map((m) =>
+          m[1]!.toLowerCase(),
+        ),
+      );
+
+      const faltando = [...pede].filter((c) => !produz.has(c));
+      expect(
+        faltando,
+        `a consulta lê ${apelido}.${faltando.join(`, ${apelido}.`)} e a lateral não produz. ` +
+          "Foi exatamente assim que o painel caiu em 01/09.",
+      ).toEqual([]);
+    });
+  }
+});
