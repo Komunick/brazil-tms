@@ -18,8 +18,8 @@ export async function PUT(
     const ctx = await requireAuth();
     requirePermission(ctx, "manage_users");
     const { id } = await params;
-    const { cargoId } = moverPessoaSchema.parse(await request.json());
-    await moverPessoa(ctx, id, cargoId);
+    const { cargoIds } = moverPessoaSchema.parse(await request.json());
+    await moverPessoa(ctx, id, cargoIds);
     return NextResponse.json({ ok: true });
   } catch (error) {
     if (error instanceof RecusaDeCargo) {

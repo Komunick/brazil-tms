@@ -210,10 +210,15 @@
     "searchPlaceholder": "Buscar por nome ou e-mail",
     "loadError": "Não foi possível carregar os usuários.",
     "saveError": "Não foi possível salvar. Tente novamente.",
-    "setor": "Setor (passagem de turno)",
+    "setor": "Setor",
     "changeSetor": "Alterar setor",
     "semSetor": "Sem setor",
-    "setorAjuda": "Define qual faixa da passagem de turno esta pessoa pode editar. Sem setor, ela lê o diário inteiro e não edita nada."
+    "setorAjuda": "Define qual faixa da passagem de turno esta pessoa pode editar. Sem setor, ela lê o diário inteiro e não edita nada.",
+    "cargos": "Cargos",
+    "changeCargos": "Alterar cargos",
+    "semCargo": "Sem cargo",
+    "ultimoAdmin": "Não dá para tirar: seria o último cargo que administra o sistema.",
+    "cargoFalhou": "Não deu para salvar os cargos. Tente de novo."
   },
   "Audit": {
     "title": "Auditoria",

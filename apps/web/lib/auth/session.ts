@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { eq, sql } from "drizzle-orm";
-import { cargos, db, users } from "@brazil-tms/db";
+import { db, users } from "@brazil-tms/db";
 import type { Role } from "@brazil-tms/shared";
 import { createSupabaseServerClient } from "../supabase/server";
 import { evaluateProfile, type ProfileRow, type SessionResult } from "./session-core";
@@ -49,14 +49,33 @@ async function loadSession(): Promise<SessionResult> {
       status: users.status,
       mustChangePassword: users.mustChangePassword,
       lastLoginAt: users.lastLoginAt,
-      cargo: cargos.nome,
-      permissoes: sql<string[]>`coalesce(
-        (select array_agg(cp.permissao) from cargo_permissoes cp where cp.cargo_id = ${users.cargoId}),
-        '{}'
-      )`.as("permissoes"),
+      /**
+       * OS CARGOS DA PESSOA, e as capacidades como UNIÃO deles (2026-09-01).
+       *
+       * Era um cargo só, lido por `users.cargo_id`. Uma pessoa do setor GR que também cuida do spot
+       * não cabia nesse modelo: dar-lhe o SPOT tirava a GR — e foi exatamente para poder ter as
+       * duas funções que os cargos foram criados.
+       *
+       * `distinct` na união porque a mesma capacidade pode vir de dois cargos, e a sessão precisa de
+       * um CONJUNTO. Sem ele, `manage_users` viria duas vezes para quem tem dois cargos que a têm.
+       *
+       * CARGO DESATIVADO NÃO CONCEDE, e a trava é o `and c.ativo` aqui — não a tela. Desativar um
+       * cargo tem de tirar o acesso de quem o tem, inclusive de quem já está com a sessão aberta.
+       */
+      cargo: sql<string | null>`(
+        select string_agg(c.nome, ', ' order by c.nome)
+          from usuario_cargos uc join cargos c on c.id = uc.cargo_id and c.ativo
+         where uc.user_id = ${users.id}
+      )`.as("cargo"),
+      permissoes: sql<string[]>`coalesce((
+        select array_agg(distinct cp.permissao)
+          from usuario_cargos uc
+          join cargos c on c.id = uc.cargo_id and c.ativo
+          join cargo_permissoes cp on cp.cargo_id = uc.cargo_id
+         where uc.user_id = ${users.id}
+      ), '{}')`.as("permissoes"),
     })
     .from(users)
-    .leftJoin(cargos, eq(cargos.id, users.cargoId))
     .where(eq(users.id, authUserId))
     .limit(1);
   const row = rows[0];

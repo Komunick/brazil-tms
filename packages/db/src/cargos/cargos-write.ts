@@ -127,8 +127,23 @@ export async function desativarCargo(
     const antes = await retrato(tx as typeof db, cargoId);
     if (!antes) throw new Error("CARGO_NAO_ENCONTRADO");
 
+    /*
+      MOVER É ACRESCENTAR O NOVO, e não trocar (2026-09-01).
+
+      Com um cargo por pessoa, "mover" era um `update` do vínculo único. Com vários, trocar apagaria
+      os OUTROS cargos de quem estava neste — alguém do GR que também cuidava do spot perderia o GR
+      ao se desativar o cargo SPOT, que é o oposto do que "mover para outro cargo" promete.
+
+      O vínculo com o cargo desativado FICA. Ele não concede nada (a leitura da sessão exige
+      `c.ativo`), e apagá-lo levaria junto a resposta para "quem estava neste cargo em março?".
+    */
     if (moverPara) {
-      await tx.update(users).set({ cargoId: moverPara }).where(eq(users.cargoId, cargoId));
+      await tx.execute(sql`
+        insert into usuario_cargos (user_id, cargo_id)
+        select uc.user_id, ${moverPara}::uuid
+          from usuario_cargos uc where uc.cargo_id = ${cargoId}
+        on conflict do nothing
+      `);
     }
     await tx
       .update(cargos)
@@ -154,28 +169,57 @@ export async function desativarCargo(
  * A mudança vale na PRÓXIMA REQUISIÇÃO dessa pessoa, sem ela sair e entrar: a sessão lê o banco a
  * cada requisição, e nunca leu de um token.
  */
-export async function moverPessoaDeCargo(
+export async function definirCargosDaPessoa(
   userId: string,
-  cargoId: string,
+  cargoIds: string[],
   autorId: string,
 ): Promise<void> {
   await db.transaction(async (tx) => {
-    const [antes] = await tx
-      .select({ cargoId: users.cargoId })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
+    const antes = await tx.execute<{ cargo_id: string }>(sql`
+      select cargo_id from usuario_cargos where user_id = ${userId} order by cargo_id
+    `);
 
-    await tx.update(users).set({ cargoId }).where(eq(users.id, userId));
+    /*
+      SUBSTITUI O CONJUNTO INTEIRO — apaga e insere, dentro da transação.
 
+      A alternativa era calcular o que entrou e o que saiu e mexer só nisso. Ela erra de um jeito
+      silencioso: qualquer vínculo que a tela não conhecesse (criado por outra aba, por exemplo)
+      sobreviveria à edição, e a pessoa ficaria com um acesso que ninguém marcou.
+
+      Trocar o conjunto faz a tela ser a verdade — e é o que "estes são os cargos dela" quer dizer.
+    */
+    await tx.execute(sql`delete from usuario_cargos where user_id = ${userId}`);
+    if (cargoIds.length > 0) {
+      await tx.execute(sql`
+        insert into usuario_cargos (user_id, cargo_id)
+        select ${userId}::uuid, c.id from cargos c
+         where c.id = any(${sql.raw(`ARRAY[${cargoIds.map((id) => `'${id}'`).join(",")}]::uuid[]`)})
+           and c.ativo
+      `);
+    }
+
+    /*
+      `users.cargo_id` CONTINUA SENDO ESCRITO, e não decide mais nada.
+
+      O deploy migra antes do build, e durante a construção o app ANTERIOR ainda lê esta coluna para
+      montar a sessão. Deixá-la desatualizada nesses minutos tiraria o acesso de quem fosse editado
+      justo aí. Ela guarda o PRIMEIRO cargo — arbitrário de propósito, porque é um valor de
+      compatibilidade, não uma escolha. Sai numa fatia futura.
+    */
+    await tx
+      .update(users)
+      .set({ cargoId: cargoIds[0] ?? null })
+      .where(eq(users.id, userId));
+
+    // Depois da escrita, dentro da transação: contar antes perde a corrida de duas abas.
     if ((await quantosAindaAdministram(tx as never)) < 1) throw new SemAdministrador();
 
     await writeAudit(tx, {
       entityType: "user",
       entityId: userId,
       action: "usuario.cargo_alterado",
-      previousValue: { cargoId: antes?.cargoId ?? null },
-      newValue: { cargoId },
+      previousValue: { cargoIds: antes.map((l) => l.cargo_id) },
+      newValue: { cargoIds },
       actorUserId: autorId,
     });
   });
@@ -184,8 +228,10 @@ export async function moverPessoaDeCargo(
 /** Quantas pessoas ATIVAS estão num cargo — o que decide se apagar exige destino (FR-011). */
 export async function quantasPessoasNoCargo(cargoId: string): Promise<number> {
   const linhas = await db.execute<{ n: number }>(sql`
-    select count(*)::int as n from users
-     where cargo_id = ${cargoId} and status = 'active'
+    select count(*)::int as n
+      from usuario_cargos uc
+      join users u on u.id = uc.user_id
+     where uc.cargo_id = ${cargoId} and u.status = 'active'
   `);
   return linhas[0]?.n ?? 0;
 }

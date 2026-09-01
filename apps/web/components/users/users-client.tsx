@@ -14,6 +14,7 @@ import {
   type Setor,
 } from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
+import { CargosDaPessoa } from "./cargos-da-pessoa";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -48,6 +49,8 @@ export interface UserProfile {
   status: string;
   /** O setor da passagem de turno. Nulo é o normal — a maioria das contas não faz turno. */
   setor: Setor | null;
+  /** Os cargos da pessoa — vários desde 01/09. É a UNIÃO deles que decide o acesso. */
+  cargoIds?: string[];
   mustChangePassword: boolean;
   lastLoginAt: string | null;
   createdAt: string;
@@ -299,6 +302,7 @@ export function UsersClient() {
                 que a pessoa pode fazer.
               */}
               <TableHead>{t("setor")}</TableHead>
+              <TableHead>{t("cargos")}</TableHead>
               <TableHead>{t("status")}</TableHead>
               <TableHead>{t("lastLogin")}</TableHead>
               <TableHead>{tCommon("actions")}</TableHead>
@@ -379,6 +383,20 @@ export function UsersClient() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </TableCell>
+                  {/*
+                    OS CARGOS, e é aqui que o acesso de verdade se decide (2026-09-01).
+
+                    O papel ao lado não decide mais nada desde a fatia 029 — quem decide é o conjunto
+                    de capacidades dos cargos, e desde hoje ele é a UNIÃO de vários. Esta coluna é a
+                    única desta tela que muda o que a pessoa PODE fazer.
+                  */}
+                  <TableCell>
+                    <CargosDaPessoa
+                      userId={user.id}
+                      cargoIds={user.cargoIds ?? []}
+                      disabled={pending}
+                    />
                   </TableCell>
                   <TableCell>
                     <Badge variant={STATUS_VARIANT[user.status] ?? "outline"}>
