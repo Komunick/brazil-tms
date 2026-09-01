@@ -60,6 +60,19 @@ export async function POST(
     const { id } = await params;
     const body = portalActionBodySchema.parse(await request.json());
 
+    /**
+     * DECIDIR PELO CARTÃO DE SPOT EXIGE UMA CHAVE A MAIS (2026-09-01, fatia 030).
+     *
+     * Não é um segundo caminho de autorização — é UMA condição adicional sobre o caminho que já
+     * existe. A rota continua sendo esta, com o mesmo `requirePermission` acima, o mesmo guarda de
+     * cabimento e a mesma auditoria. O que muda é que decidir um LEILÃO é outro ato: quem aceita
+     * pelo cartão está tomando a oferta para a empresa em segundos, sem a lista à vista.
+     *
+     * São 18 despachantes com `assign_resources` hoje. Sem esta linha, o botão ficaria escondido
+     * para eles na tela e a rota continuaria aberta — e botão escondido nunca foi garantia.
+     */
+    if (body.origem === "oferta_spot") requirePermission(ctx, "decidir_spot");
+
     const item = await enfileirarOrdemDoPortal({
       tripId: id,
       action: body.action,

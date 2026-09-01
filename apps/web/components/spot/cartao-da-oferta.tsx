@@ -113,7 +113,7 @@ export interface CartaoDaOfertaProps {
   /** Está enviando a ordem AGORA (entre o clique e a resposta). Trava o botão. */
   enviando: boolean;
   onAceitar: () => void;
-  onIgnorar: () => void;
+  onIgnorar: (motivo: string | null) => void;
   /** Compacto quando há vários na tela: mesma informação, menos respiro. */
   compacto: boolean;
 }
@@ -136,6 +136,9 @@ export function CartaoDaOferta({
    * compartilhado faria confirmar um e ver a pergunta aparecer em todos.
    */
   const [confirmando, setConfirmando] = useState(false);
+  /** O segundo gesto do Ignorar, e o que a pessoa escreveu nele. Ver o bloco lá embaixo. */
+  const [ignorando, setIgnorando] = useState(false);
+  const [motivo, setMotivo] = useState("");
 
   const erro = explicar(oferta.erroDoPortal);
 
@@ -374,26 +377,90 @@ export function CartaoDaOferta({
           </div>
         ) : null}
 
-        {!confirmando ? (
-          <div className="flex w-full gap-2.5">
-            {podeDecidir ? (
+        {/*
+          IGNORAR TAMBÉM PEDE CONFIRMAÇÃO, e aceita um MOTIVO — opcional (2026-09-01).
+
+          Ele passou a tirar a oferta da tela de todos, então virou uma decisão como o aceite: um
+          clique não pode bastar. E o motivo é o que responde, depois, "por que não pegamos aquela?".
+
+          OPCIONAL DE PROPÓSITO: obrigar a escrever faria a operação digitar "n" para se livrar do
+          campo, e um registro cheio de "n" é pior que um vazio — parece informação, e ninguém
+          desconfia dele. Em branco, o registro ainda guarda quem e quando.
+        */}
+        {podeDecidir && ignorando ? (
+          <div className="flex w-full flex-col gap-2.5 rounded-xl border bg-muted/40 p-3">
+            <p className="m-0 text-sm leading-snug">
+              {t.rich("confirmarIgnorar", {
+                lh: oferta.tripNumber ?? "",
+                forte: (c) => <strong>{c}</strong>,
+              })}
+            </p>
+            <label className="text-[0.62rem] font-extrabold uppercase tracking-[0.1em] text-muted-foreground">
+              {t("motivoOpcional")}
+            </label>
+            <textarea
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              maxLength={200}
+              rows={2}
+              placeholder={t("motivoExemplo")}
+              className="w-full resize-y rounded-lg border bg-background p-2 text-xs"
+            />
+            <div className="flex gap-2">
               <button
                 type="button"
-                disabled={!oferta.podeAceitar || enviando}
-                onClick={() => setConfirmando(true)}
-                title={oferta.podeAceitar ? undefined : t("aceiteIndisponivel")}
-                className="flex-1 rounded-xl px-4 py-3 text-sm font-extrabold text-white transition-colors disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
-                style={oferta.podeAceitar ? { background: MARCA.laranja } : undefined}
+                disabled={enviando}
+                onClick={() => {
+                  setIgnorando(false);
+                  onIgnorar(motivo.trim() || null);
+                }}
+                className="flex-1 rounded-lg bg-muted-foreground px-4 py-2 text-sm font-extrabold text-background disabled:opacity-60"
               >
-                {oferta.estado === "recusado" ? t("tentarDeNovo") : t("aceitar")}
+                {t("ignorar")}
               </button>
-            ) : null}
+              <button
+                type="button"
+                onClick={() => setIgnorando(false)}
+                className="rounded-lg border px-4 py-2 text-sm font-semibold text-muted-foreground"
+              >
+                {t("voltar")}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {/*
+          OS DOIS BOTÕES APARECEM PARA TODO MUNDO, travados para quem não tem `decidir_spot`.
+
+          Decisão do usuário (01/09), e ela tem um ganho concreto sobre escondê-los: quem não decide
+          passa a SABER que a decisão existe. O botão cinza com o motivo escrito ensina a quem pedir
+          — escondido, a operação acharia que o cartão é só aviso, que era o problema antes desta
+          fatia. Recolher continua funcionando para todos.
+        */}
+        {!confirmando && !ignorando ? (
+          <div className="flex w-full gap-2.5">
             <button
               type="button"
-              onClick={onIgnorar}
-              className={`rounded-xl border-[1.5px] px-5 py-3 text-sm font-semibold text-muted-foreground hover:text-foreground ${
-                podeDecidir ? "" : "flex-1"
-              }`}
+              disabled={!podeDecidir || !oferta.podeAceitar || enviando}
+              onClick={() => setConfirmando(true)}
+              title={
+                !podeDecidir
+                  ? t("semPermissaoDeDecidir")
+                  : oferta.podeAceitar
+                    ? undefined
+                    : t("aceiteIndisponivel")
+              }
+              className="flex-1 rounded-xl px-4 py-3 text-sm font-extrabold text-white transition-colors disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+              style={podeDecidir && oferta.podeAceitar ? { background: MARCA.laranja } : undefined}
+            >
+              {oferta.estado === "recusado" ? t("tentarDeNovo") : t("aceitar")}
+            </button>
+            <button
+              type="button"
+              disabled={!podeDecidir}
+              onClick={() => setIgnorando(true)}
+              title={podeDecidir ? undefined : t("semPermissaoDeDecidir")}
+              className="rounded-xl border-[1.5px] px-5 py-3 text-sm font-semibold text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
               {t("ignorar")}
             </button>

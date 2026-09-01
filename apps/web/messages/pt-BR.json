@@ -473,7 +473,8 @@
     "user_foto_descartada": "Foto de perfil descartada (90 dias)",
     "selo_criado": "Selo criado",
     "selo_apagado": "Selo apagado",
-    "usuario_selos_alterados": "Selos do usuário alterados"
+    "usuario_selos_alterados": "Selos do usuário alterados",
+    "spot_offer_ignorada": "Oferta de spot ignorada"
   },
   "Documents": {
     "title": "Documentos",
@@ -2013,7 +2014,6 @@
     "semViagemAinda": "A viagem ainda não chegou no TMS. O botão liga sozinho assim que ela chegar.",
     "aceiteIndisponivel": "Não dá para aceitar esta oferta agora.",
     "aguardandoPortalCurto": "esperando o portal",
-    "ignoradoPorVoce": "ignorado por você",
     "confirmarAceiteCurto": "Aceitar a {lh}? Não tem volta.",
     "ensaioEstado": {
       "esperando": "Ensaiar: esperando",
@@ -2022,7 +2022,12 @@
       "recusado": "Ensaiar: recusado"
     },
     "spotNaTela": "Spot na tela",
-    "clienteDoSpot": "Shopee"
+    "clienteDoSpot": "Shopee",
+    "ignoradoPor": "ignorado por {nome}",
+    "confirmarIgnorar": "Tirar a <forte>{lh}</forte> da tela de todos? Ela some para a equipe inteira.",
+    "motivoOpcional": "Motivo · opcional",
+    "motivoExemplo": "Ex.: sem caminhão na região, prazo curto…",
+    "semPermissaoDeDecidir": "Só quem tem a permissão de decidir oferta de spot pode aceitar ou ignorar."
   },
   "Wallboard": {
     "title": "Brazil Transports · Torre",

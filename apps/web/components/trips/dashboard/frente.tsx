@@ -565,9 +565,19 @@ function AcaoDaLinha({
         registro. A linha fica, assinalada, e continua podendo ser aceita — a prova de que a oferta
         chegou não se apaga por alguém não ter querido esta.
       */}
-      {oferta.dispensadaPorMim || ignoradaAgora ? (
-        <span className="rounded-full bg-muted px-1.5 py-px text-[0.6rem] font-semibold uppercase tracking-wide text-muted-foreground">
-          {t("ignoradoPorVoce")}
+      {/*
+        QUEM IGNOROU, e não "ignorado por você" (2026-09-01).
+
+        A dispensa passou a valer para a equipe, então o nome de quem decidiu é a informação — é ele
+        que responde "por que não pegamos aquela?". O motivo vai no `title`: nem sempre existe, e
+        posto na linha ocuparia espaço para dizer que não há nada a dizer.
+      */}
+      {oferta.ignoradaPor || ignoradaAgora ? (
+        <span
+          className="rounded-full bg-muted px-1.5 py-px text-[0.6rem] font-semibold uppercase tracking-wide text-muted-foreground"
+          title={oferta.motivoDoDescarte ?? undefined}
+        >
+          {t("ignoradoPor", { nome: oferta.ignoradaPor ?? "você" })}
         </span>
       ) : null}
 
@@ -585,7 +595,7 @@ function AcaoDaLinha({
         IGNORAR DAQUI TIRA O CARTÃO DO MEIO, e não esta linha — ver o comentário da função.
         Some depois de clicado, porque o gesto não se repete: o selo passa a dizer o que houve.
       */}
-      {podeMandar && !confirmando && !oferta.dispensadaPorMim && !ignoradaAgora ? (
+      {podeMandar && !confirmando && !oferta.ignoradaPor && !ignoradaAgora ? (
         <button
           type="button"
           disabled={enviando}

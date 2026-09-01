@@ -139,14 +139,18 @@ export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
    * A oferta de ensaio não vai ao servidor: ela nunca existiu lá.
    */
   const ignorar = useCallback(
-    async (oferta: SpotOfferView) => {
+    async (oferta: SpotOfferView, motivo: string | null) => {
       setSaindo((s) => new Set(s).add(oferta.id));
       if (oferta.id.startsWith("ensaio-")) {
         setEnsaios((atuais) => atuais.filter((o) => o.id !== oferta.id));
         return;
       }
       try {
-        await fetch(`/api/spot-offers/${oferta.id}/dispensar`, { method: "POST" });
+        await fetch(`/api/spot-offers/${oferta.id}/dispensar`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ motivo }),
+        });
       } catch {
         // Falhou: o cartão volta, porque o servidor não gravou e a leitura seguinte o trará.
         setSaindo((s) => {
@@ -278,7 +282,7 @@ export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
               podeDecidir={podeDecidir}
               enviando={enviando === oferta.id}
               onAceitar={() => void aceitar(oferta)}
-              onIgnorar={() => void ignorar(oferta)}
+              onIgnorar={(motivo) => void ignorar(oferta, motivo)}
               compacto={compacto}
             />
           ))}

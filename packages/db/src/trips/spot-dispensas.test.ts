@@ -15,10 +15,19 @@ import { spotOfferDispensas } from "../../schema";
  * consulta contra o banco de produção — depois do deploy, longe de quem escreveu.
  */
 describe("a migração da dispensa e o schema", () => {
-  const migracao = readFileSync(
-    join(__dirname, "../../migrations/0062_dispensa_de_oferta.sql"),
-    "utf8",
-  );
+  /**
+   * AS DUAS MIGRAÇÕES SÃO LIDAS JUNTAS, e a forma final é a soma delas.
+   *
+   * A `0062` criou a tabela com chave `(oferta, pessoa)`, de quando ignorar limpava só a tela de
+   * quem clicava. A `0063` encolheu a chave para a oferta e acrescentou o `motivo`, quando a decisão
+   * passou a valer para a equipe.
+   *
+   * Conferir só a primeira acusaria como ausente uma coluna que EXISTE — e um guarda que acusa o
+   * certo ensina quem vier depois a desconfiar dele, que é o pior estado em que ele pode ficar.
+   */
+  const migracao = ["0062_dispensa_de_oferta", "0063_spot_decisao_da_equipe"]
+    .map((tag) => readFileSync(join(__dirname, `../../migrations/${tag}.sql`), "utf8"))
+    .join("\n");
 
   /** Os nomes de coluna que o drizzle vai usar na consulta — a verdade do lado do código. */
   const colunasDe = (tabela: object): string[] =>
@@ -31,9 +40,17 @@ describe("a migração da dispensa e o schema", () => {
 
   it("toda coluna do schema existe na migração", () => {
     const colunas = colunasDe(spotOfferDispensas);
-    // Se a lista vier vazia, o teste passaria sem provar nada — é o modo clássico de um guarda
-    // ficar verde por acidente.
-    expect(colunas.length).toBe(3);
+    /*
+      AS COLUNAS ESPERADAS, por NOME e não por contagem.
+
+      A primeira versão contava (`toBe(3)`), e a conta quebrou no dia seguinte quando o `motivo`
+      entrou — sem dizer nada útil, só "esperava 3, veio 4". Por nome, o teste continua pegando o
+      esquecimento e ainda diz QUAL coluna apareceu ou sumiu.
+
+      A lista existe também contra o caso em que ela vier vazia: aí o laço abaixo não rodaria e o
+      guarda passaria sem provar nada, que é o modo clássico de um teste ficar verde por acidente.
+    */
+    expect(colunas.sort()).toEqual(["dispensada_em", "motivo", "spot_offer_id", "user_id"]);
     for (const coluna of colunas) {
       expect(migracao, `spot_offer_dispensas.${coluna} não está na migração`).toContain(
         `"${coluna}"`,
@@ -96,12 +113,20 @@ describe("readSpotOffersToday exclui o que não é decisão de ninguém", () => 
   });
 
   /**
-   * FR-018: a dispensa é filtrada no SERVIDOR. Filtrar na tela faria o ignorar depender de cada uma
-   * das três telas lembrar de filtrar, e morreria ao recarregar — a oferta voltaria.
+   * A dispensa continua filtrada no SERVIDOR — o que mudou foi DE QUEM ela vale (2026-09-01).
+   *
+   * O campo era `dispensadaPorMim` e escondia só de quem tinha clicado. Ignorar virou uma decisão da
+   * equipe, tomada por quem tem `decidir_spot`, e a oferta sai da tela de todos — então o campo
+   * perdeu o dono e virou `dispensada`.
+   *
+   * Filtrar aqui e não na tela continua valendo pelo mesmo motivo de antes: na tela, o ignorar
+   * dependeria de cada uma das três telas lembrar de filtrar.
    */
-  it("a oferta dispensada por quem pergunta não é devolvida", () => {
-    expect(fonte, "o filtro da dispensa saiu do servidor — ver FR-018").toMatch(
-      /!\s*r\.dispensadaPorMim/,
-    );
+  it("a oferta ignorada não é devolvida a ninguém", () => {
+    expect(fonte, "o filtro da dispensa saiu do servidor").toMatch(/!\s*r\.dispensada\b/);
+    expect(
+      fonte,
+      "voltou a filtrar por pessoa — a decisão vale para a equipe desde 01/09",
+    ).not.toMatch(/dispensadaPorMim/);
   });
 });
