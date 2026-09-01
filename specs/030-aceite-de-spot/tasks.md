@@ -38,8 +38,8 @@
 
 ## Phase 1 · Setup
 
-- [ ] T001 Conferir que a branch é `030-aceite-de-spot` e que ela saiu do `dev`, e que a última migração numerada continua sendo `packages/db/migrations/0061_sm_da_programacao.sql` — se outra fatia tiver entrado no `dev` antes, a numeração desta muda e a renumeração acontece só no merge
-- [ ] T002 [P] Ler `apps/web/components/spot/oferta-de-spot.tsx` inteiro antes de tocá-lo: os comentários dele defendem o comportamento que esta fatia troca (sair em 30 s, cortina, um de cada vez), e cada um desses comentários precisa ser REESCRITO junto com o código, não apagado — o porquê antigo vira o porquê novo
+- [x] T001 Conferir que a branch é `030-aceite-de-spot` e que ela saiu do `dev`, e que a última migração numerada continua sendo `packages/db/migrations/0061_sm_da_programacao.sql` — se outra fatia tiver entrado no `dev` antes, a numeração desta muda e a renumeração acontece só no merge
+- [x] T002 [P] Ler `apps/web/components/spot/oferta-de-spot.tsx` inteiro antes de tocá-lo: os comentários dele defendem o comportamento que esta fatia troca (sair em 30 s, cortina, um de cada vez), e cada um desses comentários precisa ser REESCRITO junto com o código, não apagado — o porquê antigo vira o porquê novo
 
 ---
 
@@ -57,27 +57,27 @@ o que esconder.
 
 ### A tabela da dispensa (etapa 1)
 
-- [ ] T003 Escrever À MÃO `packages/db/migrations/0062_dispensa_de_oferta.sql` criando `spot_offer_dispensas` com `spot_offer_id uuid REFERENCES "spot_offers"("id") ON DELETE CASCADE`, `user_id uuid REFERENCES "users"("id")` **sem cascade**, `dispensada_em timestamptz not null default now()` e **chave primária composta `(spot_offer_id, user_id)`** — o comentário do arquivo deve explicar por que a cascata é obrigatória pela oferta e proibida pelo autor (data-model §1)
-- [ ] T004 Acrescentar a entrada de `0062_dispensa_de_oferta` em `packages/db/migrations/meta/_journal.json`, **no mesmo commit da T003** — sem ela a migração é pulada em silêncio e o deploy responde sucesso
-- [ ] T005 Declarar a tabela em `packages/db/schema/spot-offers.ts` (mesmo arquivo da oferta, porque é a mesma história), com PK composta e sem índice extra — a leitura é `not exists (… where spot_offer_id = ? and user_id = ?)`, que é o prefixo da PK; um índice por `user_id` seria especulação
+- [x] T003 Escrever À MÃO `packages/db/migrations/0062_dispensa_de_oferta.sql` criando `spot_offer_dispensas` com `spot_offer_id uuid REFERENCES "spot_offers"("id") ON DELETE CASCADE`, `user_id uuid REFERENCES "users"("id")` **sem cascade**, `dispensada_em timestamptz not null default now()` e **chave primária composta `(spot_offer_id, user_id)`** — o comentário do arquivo deve explicar por que a cascata é obrigatória pela oferta e proibida pelo autor (data-model §1)
+- [x] T004 Acrescentar a entrada de `0062_dispensa_de_oferta` em `packages/db/migrations/meta/_journal.json`, **no mesmo commit da T003** — sem ela a migração é pulada em silêncio e o deploy responde sucesso
+- [x] T005 Declarar a tabela em `packages/db/schema/spot-offers.ts` (mesmo arquivo da oferta, porque é a mesma história), com PK composta e sem índice extra — a leitura é `not exists (… where spot_offer_id = ? and user_id = ?)`, que é o prefixo da PK; um índice por `user_id` seria especulação
 - [ ] T006 [P] Escrever `packages/db/src/trips/spot-dispensas.test.ts` conferindo que migração e schema concordam: toda coluna do schema aparece na migração com aspas, a PK é composta, a cascata está na oferta e **não** está no autor
 - [ ] T007 Rodar `pnpm --filter @brazil-tms/db db:migrate` no dev e conferir com `grep -c "0062_dispensa_de_oferta" packages/db/migrations/meta/_journal.json` (tem de ser 1) e com a tabela existindo e vazia
 
 ### A derivação do estado (etapa 2) — o coração da fatia
 
-- [ ] T008 Criar `packages/shared/src/domain/spot-decisao.ts` com a função pura que recebe `{ tripId, aceitacaoDoPortal, ordemAberta, ultimaFalha }` e devolve um de `sem_viagem | esperando | enviado | recusado | aceito`, conforme a tabela do data-model §2. O comentário do arquivo MUST dizer, com o motivo, que **`aceito` nunca é escrito por nós** — ele é lido do que o portal disse, e é por não haver onde gravá-lo que o FR-014 fica provado por construção
-- [ ] T009 [P] Escrever `packages/shared/src/domain/spot-decisao.test.ts` com um caso por linha da tabela, e o caso que mais importa: **`Accepted` vence TODAS as outras entradas** — viagem aceita com ordem falhada pendurada continua sendo `aceito`, porque a verdade é do portal e a ordem é só o nosso pedido
-- [ ] T010 [P] Escrever em `packages/shared/src/domain/spot-decisao.test.ts` o guarda do invariante **I1**: varrer o código-fonte de `packages/db/src` e `apps/web/app/api` procurando escrita do vocabulário de `aceito` sobre a oferta, e falhar se aparecer. **Ignorar comentários antes de asseverar** — esta base já teve duas vezes um teste que pegava a frase que EXPLICA a regra, e "consertá-lo" teria apagado o porquê
-- [ ] T011 Exportar a função e o tipo do estado em `packages/shared/src/index.ts` (ou no barril de `domain`, seguindo o que os vizinhos fazem) — **nenhum chamador ainda**
+- [x] T008 Criar `packages/shared/src/domain/spot-decisao.ts` com a função pura que recebe `{ tripId, aceitacaoDoPortal, ordemAberta, ultimaFalha }` e devolve um de `sem_viagem | esperando | enviado | recusado | aceito`, conforme a tabela do data-model §2. O comentário do arquivo MUST dizer, com o motivo, que **`aceito` nunca é escrito por nós** — ele é lido do que o portal disse, e é por não haver onde gravá-lo que o FR-014 fica provado por construção
+- [x] T009 [P] Escrever `packages/shared/src/domain/spot-decisao.test.ts` com um caso por linha da tabela, e o caso que mais importa: **`Accepted` vence TODAS as outras entradas** — viagem aceita com ordem falhada pendurada continua sendo `aceito`, porque a verdade é do portal e a ordem é só o nosso pedido
+- [x] T010 [P] Escrever em `packages/shared/src/domain/spot-decisao.test.ts` o guarda do invariante **I1**: varrer o código-fonte de `packages/db/src` e `apps/web/app/api` procurando escrita do vocabulário de `aceito` sobre a oferta, e falhar se aparecer. **Ignorar comentários antes de asseverar** — esta base já teve duas vezes um teste que pegava a frase que EXPLICA a regra, e "consertá-lo" teria apagado o porquê
+- [x] T011 Exportar a função e o tipo do estado em `packages/shared/src/index.ts` (ou no barril de `domain`, seguindo o que os vizinhos fazem) — **nenhum chamador ainda**
 
 ### A leitura passa a trazer o estado (etapa 3)
 
-- [ ] T012 Estender `packages/db/src/trips/spot-offers.ts` (`readSpotOffersToday`) com `left join` para `trips` por `external_trip_id = trip_number` e um lateral para a última ordem de aceite em `portal_commands`, devolvendo as quatro entradas da derivação. Manter o teto de 30 e o recorte do dia em São Paulo
-- [ ] T013 Aplicar a derivação da T008 no mapeamento para `SpotOfferView`, acrescentando `estado`, `tripId`, `podeAceitar`, `decidiuUserId`, `decidiuNome` e `erroDoPortal` (contrato §1). **NESTA FASE A LISTA CONTINUA COMPLETA** — a exclusão do que já foi aceito é a T017a, na Fase 3, e a razão está lá
-- [ ] T014 Ajustar `apps/web/app/api/spot-offers/route.ts` para devolver os campos novos, mantendo `requirePermission(ctx, "view_all_trips")` — nenhuma permissão nova nasce nesta fatia
+- [x] T012 Estender `packages/db/src/trips/spot-offers.ts` (`readSpotOffersToday`) com `left join` para `trips` por `external_trip_id = trip_number` e um lateral para a última ordem de aceite em `portal_commands`, devolvendo as quatro entradas da derivação. Manter o teto de 30 e o recorte do dia em São Paulo
+- [x] T013 Aplicar a derivação da T008 no mapeamento para `SpotOfferView`, acrescentando `estado`, `tripId`, `podeAceitar`, `decidiuUserId`, `decidiuNome` e `erroDoPortal` (contrato §1). **NESTA FASE A LISTA CONTINUA COMPLETA** — a exclusão do que já foi aceito é a T017a, na Fase 3, e a razão está lá
+- [x] T014 Ajustar `apps/web/app/api/spot-offers/route.ts` para devolver os campos novos, mantendo `requirePermission(ctx, "view_all_trips")` — nenhuma permissão nova nasce nesta fatia
 - [ ] T015 [P] Escrever `packages/db/src/trips/spot-offers.test.ts` afirmando que a derivação é aplicada a cada linha e que os campos novos aparecem com os nomes do contrato
 - [ ] T016 Conferir que **a tela não mudou**: subir o app e olhar o cartão de hoje, que deve ignorar os campos novos e se comportar exatamente como antes. Se algo mudou visualmente nesta etapa, algo saiu do lugar
-- [ ] T017 Medir de novo o custo da consulta com `explain (analyze, buffers)` contra a produção e comparar com a referência de **2,5 ms** — ela roda de 5 em 5 segundos, com a aba escondida, em toda tela aberta
+- [x] T017 Medir de novo o custo da consulta com `explain (analyze, buffers)` contra a produção e comparar com a referência de **2,5 ms** — ela roda de 5 em 5 segundos, com a aba escondida, em toda tela aberta
 
 **Checkpoint**: dá para parar aqui. Nada mudou para ninguém.
 
