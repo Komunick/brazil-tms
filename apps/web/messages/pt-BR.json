@@ -2027,7 +2027,9 @@
     "confirmarIgnorar": "Tirar a <forte>{lh}</forte> da tela de todos? Ela some para a equipe inteira.",
     "motivoOpcional": "Motivo · opcional",
     "motivoExemplo": "Ex.: sem caminhão na região, prazo curto…",
-    "semPermissaoDeDecidir": "Só quem tem a permissão de decidir oferta de spot pode aceitar ou ignorar."
+    "semPermissaoDeDecidir": "Só quem tem a permissão de decidir oferta de spot pode aceitar ou ignorar.",
+    "abrir": "Abrir",
+    "decidir": "Decidir"
   },
   "Wallboard": {
     "title": "Brazil Transports · Torre",
