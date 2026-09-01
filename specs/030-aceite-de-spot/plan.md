@@ -113,6 +113,11 @@ mudariam o que o cartão de hoje recebe, e a promessa desta etapa é que nada mu
 A camada perde a cortina, os cartões param na tela e dividem o espaço, e ganham Aceitar (dois
 gestos), Ignorar e Recolher. O aceite chama a rota que já existe.
 
+**E é aqui que entram as duas coisas que a etapa 3 não podia fazer**, porque as duas mudariam o que
+o cartão de hoje recebe: **excluir da lista as ofertas já aceitas** (é assim que o cartão sai da
+tela, e é a garantia por construção do FR-014) e **esconder o que a pessoa dispensou** (junto com o
+Ignorar que gera a dispensa).
+
 ### 5 · O Painel do dia (US3)
 
 O `CardsDeSpot` ganha o terceiro estado do pontinho e a ação na linha, lendo a MESMA derivação da
@@ -144,9 +149,10 @@ de voltar.
 6. **NENHUM ACEITE DE TESTE.** Aceitar não tem volta. O caminho de escrita é exercitado contra uma
    viagem que NÃO está pendente, onde `impedimentoDaAcao` recusa antes de qualquer coisa sair — o
    que prova o guarda sem gastar. O desenho é exercitado pelo ensaio que já existe.
-7. **A JANELA DO DIA É UM LIMITE REAL, e precisa ser declarado.** `readSpotOffersToday` recorta pelo
-   dia em São Paulo. Uma oferta não decidida some na virada do dia — o que é uma exceção ao FR-001.
-   É deliberado (leilão de ontem é leilão morto) e está escrito, não escondido.
+7. **A JANELA DO DIA É UM LIMITE REAL, e está declarado.** `readSpotOffersToday` recorta pelo dia em
+   São Paulo. Uma oferta não decidida some na virada do dia — o que é uma exceção ao FR-001. É
+   deliberado (leilão de ontem é leilão morto), e está escrito **no próprio FR-001, num caso de borda
+   e no recorte do SC-002** — não só aqui. Nenhuma tarefa deve "consertar" isso.
 
 ## Project Structure
 

@@ -186,7 +186,9 @@ noutra aba, passa ao estado "enviado" — provando que é o mesmo estado, e não
 - **FR-013**: Ordem enviada com sucesso NÃO MUST bastar para tirar o cartão da tela. Ele MUST
   permanecer, assinalado como enviado e com quem decidiu, até a confirmação do portal.
 - **FR-014**: O cartão MUST sair da tela de todas as pessoas, e de todos os painéis, quando a leitura
-  do portal trouxer a viagem como aceita — e por nenhum outro motivo.
+  do portal trouxer a viagem como aceita — e por **nenhuma outra decisão**. A única outra coisa que o
+  tira de todas as telas é a virada do dia (FR-001), que não é decisão de ninguém: é o recorte da
+  leitura. Nada mais pode tirá-lo, e em particular **não** o sucesso da ordem (FR-013).
 - **FR-015**: Recusado o aceite pelo portal, o cartão MUST mostrar a recusa com o código devolvido e
   MUST voltar a permitir nova tentativa ou o descarte pela pessoa. A recusa NÃO MUST fazer o cartão
   sair sozinho.
@@ -238,9 +240,11 @@ noutra aba, passa ao estado "enviado" — provando que é o mesmo estado, e não
 
 - **SC-001**: Uma pessoa consegue aceitar uma oferta de spot **sem sair da tela em que está** e sem
   procurar o número da LH em lista nenhuma — em no máximo dois gestos a partir do cartão.
-- **SC-002**: Nenhuma oferta desaparece da tela sem que alguém tenha decidido sobre ela: em uma
-  jornada de observação, o número de ofertas que saíram da tela é igual ao número de ofertas aceitas
-  mais o de ignoradas por aquela pessoa.
+- **SC-002**: Nenhuma oferta desaparece da tela sem que alguém tenha decidido sobre ela: **dentro de
+  um mesmo dia**, o número de ofertas que saíram da tela é igual ao número de ofertas aceitas mais o
+  de ignoradas por aquela pessoa. O recorte de um dia não é folga — é a exceção do FR-001: na virada
+  do dia as ofertas não decididas saem, e uma medição que atravessasse a meia-noite reprovaria o
+  sistema por fazer o que foi decidido que ele faça.
 - **SC-003**: Uma oferta aceita por uma pessoa deixa de aparecer para todas as demais em até um
   minuto após o portal confirmar, e não antes disso.
 - **SC-004**: Uma oferta ignorada por uma pessoa continua visível para as demais em 100% dos casos.

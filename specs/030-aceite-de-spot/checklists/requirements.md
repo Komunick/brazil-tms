@@ -46,6 +46,22 @@
    decisão — e recolher é exatamente isso. A contradição foi desfeita separando *tirar da lista* de
    *encolher*: recolher não é saída, é tamanho.
 
+**O `/speckit-analyze` rodou DUAS vezes, e a segunda achou defeito que a primeira criou.** Vale
+registrar porque é um padrão, não um acidente:
+
+- **Primeira passada — 3 HIGH e 2 MEDIUM.** Um número aritmeticamente impossível nos casos de borda
+  (a oferta chegando antes da viagem "em 16 de 98 casos, e em 82 deles…"); o FR-001 prometendo que o
+  cartão fica até ser decidido, com a exceção da virada do dia declarada só no plano; e a promessa de
+  que as fases 1 a 3 não mudam nada, que era falsa porque excluir as ofertas já aceitas mudaria o que
+  o cartão de HOJE recebe.
+- **Segunda passada — 1 HIGH, filho da correção anterior.** Ao declarar a exceção da virada do dia no
+  FR-001, o **SC-002** ficou para trás afirmando uma igualdade que a exceção quebra: uma medição que
+  atravessasse a meia-noite reprovaria o sistema por fazer o que foi decidido que ele faça.
+
+**A lição, que já mordeu esta base outras vezes: corrigir uma afirmação não corrige as outras que
+dependiam dela.** Requisito e critério de sucesso medem a mesma coisa por ângulos diferentes, e
+consertar só um deixa o outro mentindo — sem nenhum sintoma até alguém medir.
+
 **Números que a spec afirma e que vieram de medição em produção (01/09)**, não de estimativa —
 qualquer artefato seguinte deve bater com eles:
 

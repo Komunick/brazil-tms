@@ -21,9 +21,10 @@ existem. Nenhuma coluna nossa guarda "aceita", "enviada" ou "recusada".
 | `recusado` | a última ordem de aceite está `failed`; `last_error` diz o quê |
 | `aceito` | `customer_fields->>'Aceitação (portal)' = 'Accepted'` — **e a oferta sai da lista** |
 
-**Rationale**: o FR-014 diz que o cartão sai "quando a leitura trouxer a viagem como aceita, e por
-nenhum outro motivo". A forma de garantir isso não é disciplina, é ausência: se não existe coluna
-onde gravar "aceita", não existe segundo gatilho possível. E o caso comum já é o que quebraria uma
+**Rationale**: o FR-014 diz que o cartão sai de todas as telas "quando a leitura do portal trouxer a
+viagem como aceita, e por nenhuma outra decisão" — a virada do dia, que é recorte de leitura e não
+decisão de ninguém, é a única outra coisa que o tira. A forma de garantir isso não é disciplina, é
+ausência: se não existe coluna onde gravar "aceita", não existe segunda DECISÃO possível. E o caso comum já é o que quebraria uma
 cópia — das 19 ofertas dos últimos dois dias, quase todas foram aceitas **direto no portal**, sem
 passar pelo TMS. Uma coluna nossa continuaria dizendo "esperando" para sempre.
 
