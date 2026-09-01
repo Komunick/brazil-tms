@@ -141,16 +141,31 @@ pnpm --filter web test:e2e -- spot
 
 ## O que NÃO fazer
 
+**As sete primeiras são as sete armadilhas do plano, na mesma ordem** — esta lista e a de lá são a
+mesma lista, escrita como proibição. As três últimas vêm do contrato e do research.
+
 1. **Não gravar "aceita" em coluna nossa.** Se surgir a vontade, releia o R1: das 19 ofertas de dois
    dias, quase todas foram aceitas direto no portal. Uma cópia nossa diria "esperando" para sempre.
-2. **Não criar rota de aceite por oferta.** O FR-009 proíbe, e a razão é que o guarda, o índice de
+2. **Não deixar a cortina voltar.** O `boxShadow: 0 0 0 9999px …` é fácil de reintroduzir sem
+   perceber, porque "melhora o contraste" — e com o cartão parado ele apaga o TMS o dia inteiro.
+   Existe um guarda de código para isso; se ele acusar, o errado é a cortina, não o teste.
+3. **Não devolver um "fechar" que apaga o cartão sem decisão.** Fechar sem decidir é o que hoje faz a
+   oferta passar batido. Recolher encolhe e mantém a contagem à vista — não é saída, é tamanho.
+4. **Não transformar `estadoInicial`/`novasOfertas` na memória da decisão.** Elas são a memória do
+   SOM, e só dela: apitar uma vez por oferta. Recarregar a página traria tudo de volta como novidade.
+5. **Não usar `drizzle-kit generate`.** O journal tem mais de sessenta entradas e ele diffa contra um
+   snapshot antigo, recriando tabelas de produção. E **não esquecer a entrada no `meta/_journal.json`**
+   — sem ela a migração é pulada e o deploy responde sucesso.
+6. **Não aceitar nada de verdade para testar.** Nem uma. Ver a regra número um.
+7. **Não "consertar" a janela do dia.** O recorte por dia em São Paulo faz a oferta não decidida sumir
+   na virada. É a única exceção declarada ao FR-001, está na spec e no R10, e é deliberada.
+8. **Não criar rota de aceite por oferta.** O FR-009 proíbe, e a razão é que o guarda, o índice de
    ordem única e a auditoria moram todos no caminho que já existe.
-3. **Não usar `drizzle-kit generate`.** O journal tem mais de sessenta entradas e ele diffa contra um
-   snapshot antigo, recriando tabelas de produção.
-4. **Não fazer o cartão sumir quando o `POST` responde sucesso.** Ordem aceita pelo robô não é viagem
+9. **Não fazer o cartão sumir quando o `POST` responde sucesso.** Ordem aceita pelo robô não é viagem
    aceita pelo portal — 4 das 17 ordens voltaram recusadas.
-5. **Não traduzir toda mensagem de erro do portal.** Código desconhecido mostra o texto cru. Um
-   "não foi possível aceitar" genérico apaga a única pista do caso novo.
-6. **Não guardar o recolhido.** Recolher guardado é o X de volta, com o agravante de sobreviver ao
-   reinício.
-7. **Não aceitar nada de verdade para testar.** Nem uma. Ver a regra número um.
+10. **Não traduzir toda mensagem de erro do portal, e não guardar o recolhido.** Código desconhecido
+    mostra o texto cru — um "não foi possível aceitar" genérico apaga a única pista do caso novo. E
+    recolher guardado é o X de volta, com o agravante de sobreviver ao reinício.
+11. **Não "uniformizar" o `aceito` entre as duas leituras.** Ele **nunca** aparece na resposta de
+    `/api/spot-offers` (é o cartão saindo da tela) e **sempre** aparece no painel (é o registro do
+    dia). Parece incoerência e é o FR-014.

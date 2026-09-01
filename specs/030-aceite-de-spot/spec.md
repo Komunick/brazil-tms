@@ -124,8 +124,13 @@ noutra aba, passa ao estado "enviado" — provando que é o mesmo estado, e não
   código devolvido. Sumir em silêncio faria alguém acreditar que pegou o frete.
 - **Duas pessoas aceitam a mesma oferta ao mesmo tempo.** Só uma ordem pode existir por viagem; a
   segunda encontra o caminho fechado e a tela diz que já há decisão em andamento, com quem a tomou.
-- **A oferta chega antes da viagem.** Medido: aconteceu em 16 de 98 casos, e em 82 deles a viagem
-  chegou em até dois minutos. O cartão existe, informa, e o botão liga sozinho.
+- **A oferta chega antes da viagem.** Medido: em **73** das 98 ofertas que casaram com viagem. O
+  prazo até a viagem existir se distribui assim: **25** já estavam no TMS antes de a oferta chegar,
+  **57** chegaram em até dois minutos — somando **82 de 98 disponíveis nesse prazo** — e nas outras
+  **16** demorou mais. O cartão existe, informa, e o botão liga sozinho.
+- **A virada do dia com oferta não decidida.** A leitura recorta pelo dia em São Paulo, então uma
+  oferta que ninguém aceitou nem ignorou some na virada. É a **única** exceção ao FR-001, e é
+  deliberada: leilão de ontem é leilão morto. A oferta continua no registro do dia.
 - **A oferta nunca vira viagem no TMS.** Medido: 34 de 132. O cartão fica com o aceite indisponível
   para sempre; ignorar continua sendo possível, e é o único jeito de limpá-lo.
 - **Muitas ofertas ao mesmo tempo.** Medido: 5 a 10 por dia, e há dias com várias no mesmo minuto. Os
@@ -142,7 +147,10 @@ noutra aba, passa ao estado "enviado" — provando que é o mesmo estado, e não
 ### Funcionamento do cartão
 
 - **FR-001**: O cartão de oferta MUST permanecer na tela até que a oferta seja aceita ou ignorada.
-  A saída por decurso de prazo deixa de existir.
+  A saída por decurso de prazo — os trinta segundos de hoje — deixa de existir.
+  **A única exceção é a virada do dia**: a leitura das ofertas é recortada pelo dia em São Paulo, e
+  uma oferta não decidida sai da tela quando o dia vira. É deliberado (leilão de ontem é leilão
+  morto) e está declarado aqui para não ser descoberto depois.
 - **FR-002**: Havendo mais de uma oferta esperando decisão, todas MUST estar visíveis ao mesmo tempo,
   dividindo o espaço lado a lado e em linhas sucessivas, sem que nenhuma seja escondida por outra.
 - **FR-003**: A área ocupada pelos cartões MUST permitir que o restante da tela continue legível e

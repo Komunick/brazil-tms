@@ -20,8 +20,8 @@
 1. **COPIAR O ESTADO É O ERRO.** Nenhuma coluna nossa guarda "aceita". Das 19 ofertas de dois dias,
    quase todas foram aceitas **direto no portal**; uma cópia nossa diria "esperando" para sempre.
 2. **A CORTINA SAI.** `boxShadow: 0 0 0 9999px rgba(3,10,18,0.62)` apaga o TMS o dia inteiro quando o
-   cartão para de sumir. T041 impede que ela volte — e ela é fácil de reintroduzir sem perceber,
-   porque "melhora o contraste".
+   cartão para de sumir. **T019** a remove e **T049** impede que ela volte — e ela é fácil de
+   reintroduzir sem perceber, porque "melhora o contraste".
 3. **O X VIRA RECOLHER.** Fechar sem decidir é o que faz a oferta passar batido.
 4. **A MEMÓRIA DE ABA CONTINUA SENDO DO SOM.** `estadoInicial`/`novasOfertas` em
    `apps/web/lib/spot/ofertas.ts` existem para apitar uma vez por oferta. **Não** podem virar a
@@ -45,8 +45,15 @@
 
 ## Phase 2 · Foundational — as etapas 1 a 3 do plano
 
-**NADA MUDA PARA NENHUM USUÁRIO NESTA FASE.** A tabela nasce vazia e ninguém a lê; a derivação não
-tem chamador; a rota devolve campos que o cartão de hoje ignora. É isso que permite parar aqui.
+**NADA MUDA PARA NENHUM USUÁRIO NESTA FASE**, e a afirmação foi conferida tarefa a tarefa: a tabela
+nasce vazia e ninguém a lê; a derivação não tem chamador; a rota devolve campos que o cartão de hoje
+ignora, **e a lista continua completa** — o cartão recebe exatamente as mesmas ofertas de hoje. É
+isso que permite parar aqui.
+
+A única coisa que mudaria o que o cartão recebe é excluir as ofertas já aceitas, e ela foi movida
+para a Fase 3 de propósito (**T017a**). Filtrar a dispensa também não muda nada aqui, e por isso fica
+na Fase 4 junto com o Ignorar: sem ninguém tendo dispensado, a tabela está vazia e o filtro não tem
+o que esconder.
 
 ### A tabela da dispensa (etapa 1)
 
@@ -66,9 +73,9 @@ tem chamador; a rota devolve campos que o cartão de hoje ignora. É isso que pe
 ### A leitura passa a trazer o estado (etapa 3)
 
 - [ ] T012 Estender `packages/db/src/trips/spot-offers.ts` (`readSpotOffersToday`) com `left join` para `trips` por `external_trip_id = trip_number` e um lateral para a última ordem de aceite em `portal_commands`, devolvendo as quatro entradas da derivação. Manter o teto de 30 e o recorte do dia em São Paulo
-- [ ] T013 Aplicar a derivação da T008 no mapeamento para `SpotOfferView`, acrescentando `estado`, `tripId`, `podeAceitar`, `decidiuUserId`, `decidiuNome` e `erroDoPortal` (contrato §1) — e **excluir da lista as ofertas cujo estado é `aceito`**: é assim que o cartão sai da tela, e é a garantia por construção do FR-014
+- [ ] T013 Aplicar a derivação da T008 no mapeamento para `SpotOfferView`, acrescentando `estado`, `tripId`, `podeAceitar`, `decidiuUserId`, `decidiuNome` e `erroDoPortal` (contrato §1). **NESTA FASE A LISTA CONTINUA COMPLETA** — a exclusão do que já foi aceito é a T017a, na Fase 3, e a razão está lá
 - [ ] T014 Ajustar `apps/web/app/api/spot-offers/route.ts` para devolver os campos novos, mantendo `requirePermission(ctx, "view_all_trips")` — nenhuma permissão nova nasce nesta fatia
-- [ ] T015 [P] Escrever `packages/db/src/trips/spot-offers.test.ts` afirmando que `estado: "aceito"` **nunca** aparece na lista devolvida, em nenhuma combinação de entradas
+- [ ] T015 [P] Escrever `packages/db/src/trips/spot-offers.test.ts` afirmando que a derivação é aplicada a cada linha e que os campos novos aparecem com os nomes do contrato
 - [ ] T016 Conferir que **a tela não mudou**: subir o app e olhar o cartão de hoje, que deve ignorar os campos novos e se comportar exatamente como antes. Se algo mudou visualmente nesta etapa, algo saiu do lugar
 - [ ] T017 Medir de novo o custo da consulta com `explain (analyze, buffers)` contra a produção e comparar com a referência de **2,5 ms** — ela roda de 5 em 5 segundos, com a aba escondida, em toda tela aberta
 
@@ -86,6 +93,11 @@ enviado, e que ele sai quando a leitura seguinte trouxer a viagem como aceita.
 
 > **US1 e US2 vão no MESMO PR.** Entregar só o aceitar deixaria os cartões parados na tela sem
 > nenhuma forma de limpá-los — um sistema pior que o de hoje. As duas são P1 na spec por isso.
+
+### A exclusão do que já foi aceito — mudou de fase, e o porquê importa
+
+- [ ] T017a [US1] Em `packages/db/src/trips/spot-offers.ts`, **excluir da lista as ofertas cujo estado é `aceito`** — é assim que o cartão sai da tela, e é a garantia por construção do FR-014. **Esta tarefa estava na Fase 2 e saiu de lá**: com o cartão de hoje, que anuncia toda oferta nova e sai em 30 s, excluir as já aceitas SUPRIMIRIA um aviso que hoje aparece — e **25 de 98 ofertas tinham a viagem no TMS antes de a oferta chegar**, então o caso não é teórico. Na Fase 2 isso quebraria a promessa de que nada muda; aqui, junto com o cartão que fica, é exatamente o comportamento pedido
+- [ ] T017b [US1] [P] Escrever em `packages/db/src/trips/spot-offers.test.ts` a asserção de que `estado: "aceito"` **nunca** aparece na lista devolvida, em nenhuma combinação de entradas
 
 ### O cartão, sem a cortina
 
@@ -142,7 +154,8 @@ aba, passa ao estado enviado — provando que é o mesmo estado, e não uma segu
 
 - [ ] T041 [US3] **A CORREÇÃO DE PASSAGEM**: em `packages/db/src/trips/programacao.ts`, trocar a decisão de `aceito` de `t.id is not null` (a viagem existe no TMS) pela derivação da T008. O atalho de hoje erra exatamente na janela desta fatia — os minutos em que a viagem chegou e ainda está `Pending` — e por ser passageiro nunca foi notado
 - [ ] T042 [US3] [P] Escrever teste provando a correção: oferta cuja viagem está `Pending` **não** é contada como aceita, e passa a ser contada quando a aceitação virar `Accepted`. Sem este teste a correção vira efeito colateral que ninguém confere
-- [ ] T043 [US3] Acrescentar `estado`, `dispensadaPorMim` e `tripId` a cada linha de `SpotDaRegiao["rotas"]` (contrato §4), mantendo as linhas dentro do payload do painel, sem busca própria — são até 20 por frente e o painel recarrega de minuto em minuto
+- [ ] T043 [US3] Acrescentar `estado`, `dispensadaPorMim` e `tripId` a cada linha de `SpotDaRegiao["rotas"]` (contrato §4), mantendo as linhas dentro do payload do painel, sem busca própria — são até 20 por frente e o painel recarrega de minuto em minuto. **O painel MANTÉM as ofertas com estado `aceito`**, ao contrário da rota do cartão, que as exclui (T017a) — e a assimetria é o ponto: uma leitura é a fila do que falta decidir, a outra é a história do que aconteceu. Escrever isso no comentário, senão "uniformizar" depois vai parecer faxina e quebrar o FR-014
+- [ ] T043a [US3] [P] Escrever teste afirmando que a leitura do painel **devolve** a oferta aceita e que a leitura do cartão **não** devolve — as duas asserções no mesmo arquivo, para que quem mexer numa veja a outra
 - [ ] T044 [US3] Em `apps/web/components/trips/dashboard/frente.tsx`, dar ao pontinho um **terceiro estado** (esperando decisão), distinto de aceita e de não aceita, com título e rótulo próprios — a cor sozinha não basta, como o comentário que já está lá explica
 - [ ] T045 [US3] Acrescentar Aceitar e Ignorar à linha que espera decisão, com a MESMA confirmação de dois gestos, reusando a rota da T025 e a da T037 (FR-021)
 - [ ] T046 [US3] Assinalar a linha dispensada como "ignorado por você", **mantendo-a listada e ainda aceitável** (FR-019) — ignorar não apaga a prova de que a oferta chegou
@@ -169,8 +182,8 @@ aba, passa ao estado enviado — provando que é o mesmo estado, e não uma segu
 
 ```text
 Phase 1 (T001–T002)
-   └─▶ Phase 2 (T003–T017)  ── etapas 1 a 3; NADA muda para o usuário
-          ├─▶ Phase 3 (T018–T035)  US1 ─┐
+   └─▶ Phase 2 (T003–T017)  ── etapas 1 a 3; NADA muda para o usuário (conferido tarefa a tarefa)
+          ├─▶ Phase 3 (T017a–T035)  US1 ─┐
           │                              ├── MESMO PR: uma sem a outra piora o sistema
           ├─▶ Phase 4 (T036–T040)  US2 ─┘
           └─▶ Phase 5 (T041–T048)  US3 — depende da T008 (a derivação), não das fases 3/4
@@ -184,7 +197,7 @@ Dentro da Phase 2, a ordem é rígida: **T003 → T004 → T005 → T007** (a mi
 
 - **Phase 2**: T006, T009, T010 e T015 são testes em arquivos distintos, e T008 não depende da tabela
 - **Phase 3**: T030 (a tradução) e T034–T035 (o recolher) não tocam os mesmos arquivos que T023–T029
-- **Phase 5**: T042 é teste próprio, independente de T043–T047
+- **Phase 5**: T042 e T043a são testes próprios, independentes de T043–T047
 - **Phase 6**: T049, T051, T052 e T053 são arquivos distintos
 
 ## Estratégia de entrega
@@ -203,7 +216,7 @@ param na tela sem forma de limpá-los seriam pior que o comportamento de hoje.
 
 | FR | tarefas | | FR | tarefas |
 | --- | --- | --- | --- | --- |
-| FR-001 | T020 | | FR-014 | T013, T015 |
+| FR-001 | T020 | | FR-014 | T017a, T017b |
 | FR-002 | T021 | | FR-015 | T029, T030 |
 | FR-003 | T019, T050 | | FR-016 | T037, T039 |
 | FR-004 | T034 | | FR-017 | T040 |
@@ -221,7 +234,7 @@ param na tela sem forma de limpá-los seriam pior que o comportamento de hoje.
 | --- | --- | --- |
 | SC-001 | dois gestos a partir do cartão, sem sair da tela | T023, T024, T027 |
 | SC-002 | nenhuma saída sem decisão | T051 |
-| SC-003 | sai em até um minuto depois do portal confirmar | T013, T017 |
+| SC-003 | sai em até um minuto depois do portal confirmar | T017a, T017b |
 | SC-004 | ignorada continua visível para os demais | T040 |
 | SC-005 | nenhum aceite com um gesto só | T023, T024 |
 | SC-006 | cinco cartões e a tela ainda operável | T021, T050 |

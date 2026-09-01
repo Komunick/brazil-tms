@@ -94,9 +94,19 @@ da fatia e o lugar onde ela é provada sem tocar em portal nenhum.
 
 ### 3 · A leitura passa a trazer o estado
 
-`GET /api/spot-offers` ganha, por oferta, o que a derivação precisa, e passa a esconder o que a
-pessoa dispensou. **Nesta etapa o cartão ainda é o de hoje** e ignora os campos novos: comportamento
-idêntico ao atual, e é isso que se quer. A consulta foi medida: 2,5 ms.
+`GET /api/spot-offers` ganha, por oferta, o que a derivação precisa. **Nesta etapa o cartão ainda é o
+de hoje** e ignora os campos novos: comportamento idêntico ao atual, e é isso que se quer. A consulta
+foi medida: 2,5 ms.
+
+**Duas coisas que a rota fará no fim NÃO entram aqui**, e a razão é a mesma nos dois casos — elas
+mudariam o que o cartão de hoje recebe, e a promessa desta etapa é que nada muda:
+
+- **Excluir da lista as ofertas já aceitas** vai para a etapa 4. Com o cartão de hoje, que anuncia
+  toda oferta nova e sai em 30 s, excluí-las suprimiria um aviso que hoje aparece — e **25 de 98
+  ofertas tinham a viagem no TMS antes de a oferta chegar**, então o caso não é teórico.
+- **Esconder o que a pessoa dispensou** vai para a etapa 4 também, junto com o Ignorar que gera a
+  dispensa. Aqui ela não teria efeito (a tabela está vazia), e separá-la do gesto que a alimenta só
+  criaria uma etapa que não dá para conferir.
 
 ### 4 · O cartão (US1 + US2) — é aqui que passa a valer
 
