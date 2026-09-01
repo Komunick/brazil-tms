@@ -102,12 +102,28 @@ export const spotOfferDispensas = pgTable(
     spotOfferId: uuid("spot_offer_id")
       .notNull()
       .references(() => spotOffers.id, { onDelete: "cascade" }),
+    /** Quem decidiu. Guardado para o registro — não filtra mais nada, ver a chave abaixo. */
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id),
+    /**
+     * POR QUE NÃO PEGAMOS — opcional, e o opcional é a decisão (2026-09-01).
+     *
+     * Obrigar a escrever faria a operação digitar "n" para se livrar do campo, e um registro cheio
+     * de "n" é pior que um vazio: parece informação e ninguém desconfia dele. Em branco, o registro
+     * ainda guarda quem e quando, que é o que responde a pergunta principal.
+     */
+    motivo: text("motivo"),
     dispensadaEm: timestamp("dispensada_em", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    primaryKey({ name: "spot_offer_dispensas_pk", columns: [table.spotOfferId, table.userId] }),
+    /*
+      UMA DECISÃO POR OFERTA — a chave encolheu em 2026-09-01.
+
+      Ela era `(oferta, pessoa)`, de quando ignorar limpava só a tela de quem clicava. Com a decisão
+      valendo para a equipe inteira, duas linhas para a mesma oferta seriam duas verdades sobre o
+      mesmo fato — e a segunda contaria uma história diferente da primeira.
+    */
+    primaryKey({ name: "spot_offer_dispensas_pk", columns: [table.spotOfferId] }),
   ],
 );

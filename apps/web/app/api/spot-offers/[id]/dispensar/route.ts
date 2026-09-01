@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { dispensarOferta } from "@brazil-tms/db";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
+import { dispensarBodySchema } from "@brazil-tms/shared";
 import { handleRouteError } from "@/lib/api/respond";
 
 export const dynamic = "force-dynamic";
@@ -33,14 +34,20 @@ export const dynamic = "force-dynamic";
  * o corpo é vazio de propósito — não há como dispensar em nome de outra pessoa.
  */
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   try {
     const ctx = await requireAuth();
-    requirePermission(ctx, "view_all_trips");
+    requirePermission(ctx, "decidir_spot");
     const { id } = await params;
-    await dispensarOferta(id, ctx.userId);
+    /*
+      O corpo pode vir vazio: o motivo é opcional, e quem ignora sem escrever nada não manda corpo
+      nenhum. O `catch` cobre isso — `request.json()` lança em corpo vazio, e um erro de parse aqui
+      viraria uma falha para um caso que é o mais comum.
+    */
+    const corpo = dispensarBodySchema.parse(await request.json().catch(() => ({})));
+    await dispensarOferta(id, ctx.userId, corpo.motivo ?? null);
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     return handleRouteError(error);

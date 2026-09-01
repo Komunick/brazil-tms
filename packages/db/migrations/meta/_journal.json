@@ -442,6 +442,13 @@
       "when": 1788357600009,
       "tag": "0062_dispensa_de_oferta",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1788444000009,
+      "tag": "0063_spot_decisao_da_equipe",
+      "breakpoints": true
     }
   ]
 }

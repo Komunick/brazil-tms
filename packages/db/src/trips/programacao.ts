@@ -122,8 +122,19 @@ export interface SpotDaRegiao {
     aceitacaoDoPortal: string | null;
     ordemAberta: boolean;
     ultimaFalhou: boolean;
-    /** Esta pessoa ignorou. Só MARCA — a linha continua listada e aceitável (FR-019). */
-    dispensadaPorMim: boolean;
+    /**
+     * QUEM ignorou esta oferta pela equipe, ou nulo (2026-09-01).
+     *
+     * Era `dispensadaPorMim: boolean`, de quando ignorar limpava só a tela de quem clicava. Com a
+     * decisão valendo para todos, o booleano deixou de bastar: a pergunta que a linha responde
+     * passou a ser "quem decidiu que a gente não pega?".
+     *
+     * Só MARCA — a linha continua listada, porque este cartão é o registro do dia e ignorar não
+     * apaga a prova de que a oferta chegou.
+     */
+    ignoradaPor: string | null;
+    /** O que a pessoa escreveu ao ignorar. Nulo é comum: o campo é opcional de propósito. */
+    motivoDoDescarte: string | null;
   }[];
 }
 
@@ -370,7 +381,8 @@ export async function readSpotPorRegiao(
             'aceitacaoDoPortal', t.aceitacao,
             'ordemAberta', coalesce(t.ordem_aberta, false),
             'ultimaFalhou', t.ultimo_status = 'failed',
-            'dispensadaPorMim', coalesce(d.dispensada, false),
+            'ignoradaPor', d.por,
+            'motivoDoDescarte', d.motivo,
             -- A lista mostra as duas, e a marca é o que diz qual número cada linha alimenta.
             'tendencia', o.tendencia,
             'diaDaViagem', o.dia_da_viagem

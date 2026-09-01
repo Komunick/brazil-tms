@@ -16,7 +16,7 @@ export async function GET(): Promise<NextResponse> {
     requirePermission(ctx, "view_all_trips");
     // O BSC vem junto do resumo, não numa chamada própria: é o mesmo painel, no mesmo passo de
     // atualização. Separado, o cartão do cliente piscaria fora de sincronia com o resto da tela.
-    const [summary, bsc] = await Promise.all([queryDashboardMetrics(ctx.userId), queryLatestBsc()]);
+    const [summary, bsc] = await Promise.all([queryDashboardMetrics(), queryLatestBsc()]);
     return NextResponse.json({ summary, bsc });
   } catch (error) {
     return handleRouteError(error);

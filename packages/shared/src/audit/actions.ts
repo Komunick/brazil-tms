@@ -90,6 +90,16 @@ export type AuditAction =
   | "user.foto_descartada"
   | "selo.criado"
   | "selo.apagado"
+  /**
+   * 2026-09-01 (fatia 030) — IGNORAR uma oferta de spot, e desde hoje isso vale para a EQUIPE.
+   *
+   * Antes o gesto limpava só a tela de quem clicava e não precisava de registro: ninguém era
+   * afetado. Agora a oferta some para todos, então um frete perdido pode não deixar rastro nenhum
+   * na tela — e esta linha passa a ser a única resposta para "por que não pegamos aquela?".
+   *
+   * O motivo vai no `newValue` e é OPCIONAL: em branco, o registro ainda diz quem e quando.
+   */
+  | "spot_offer.ignorada"
   | "usuario.selos_alterados"
   | "trip.create" // newValue = original_plan summary + initial status
   | "trip.plan_update" // accepted customer update to live planned_* fields (per-field prev/new)
@@ -271,6 +281,7 @@ export const ALL_AUDIT_ACTIONS = [
   "selo.criado",
   "selo.apagado",
   "usuario.selos_alterados",
+  "spot_offer.ignorada",
 ] as const satisfies readonly AuditAction[];
 
 /**

@@ -103,34 +103,22 @@ export async function recordSpotOffer(offer: SpotOfferInput): Promise<{ nova: bo
  * forma barata. Medido: casa em 98 de 132 ofertas; as outras 34 nunca viraram viagem, e para elas o
  * estado é `sem_viagem`.
  */
-export async function readSpotOffersToday(
-  /**
-   * QUEM ESTÁ PERGUNTANDO — e é por isto que a dispensa é filtrada AQUI, no servidor (2026-09-01).
-   *
-   * Filtrar no cliente faria a dispensa depender de cada tela lembrar de filtrar, em três lugares
-   * diferentes, e carregaria pela rede ofertas que aquela pessoa não vai ver. Filtrando aqui, a
-   * dispensa sobrevive a recarregar e a trocar de aparelho sem que ninguém precise fazer nada
-   * (FR-018) — ela nunca chega.
-   *
-   * Opcional porque o Painel do dia NÃO filtra: lá a oferta ignorada continua listada, assinalada,
-   * e ainda aceitável (FR-019). Uma leitura é a fila do que falta decidir; a outra é a história do
-   * que aconteceu.
-   */
-  userId?: string | null,
-  agora = new Date(),
-): Promise<SpotOfferView[]> {
+export async function readSpotOffersToday(agora = new Date()): Promise<SpotOfferView[]> {
   const { from, to } = dayRangeSaoPaulo(agora);
 
   /*
-    A dispensa desta pessoa, e de mais ninguém. `not exists` sobre a chave primária composta — que
-    é exatamente o prefixo dela, e por isso a tabela não precisa de índice além da PK.
+    A OFERTA IGNORADA SAI PARA TODOS — e por isso esta consulta parou de perguntar QUEM está
+    olhando (2026-09-01).
+
+    Ela recebia um `userId` e escondia só o que aquela pessoa tinha dispensado. Com a decisão
+    valendo para a equipe, a pergunta virou outra e mais simples: alguém já decidiu sobre esta
+    oferta? O parâmetro sumiu junto com a razão de ele existir.
+
+    `exists` sobre a chave primária, que agora é só a oferta.
   */
-  const dispensadaPorMim = userId
-    ? sql<boolean>`exists (
-        select 1 from spot_offer_dispensas d
-         where d.spot_offer_id = ${spotOffers.id} and d.user_id = ${userId}::uuid
-      )`
-    : sql<boolean>`false`;
+  const dispensada = sql<boolean>`exists (
+    select 1 from spot_offer_dispensas d where d.spot_offer_id = ${spotOffers.id}
+  )`;
 
   /*
     "Há ordem de aceite em voo?" — `pending` é gravada e esperando o robô; `sent` é o robô
@@ -176,7 +164,7 @@ export async function readSpotOffersToday(
       ultimoStatus,
       ultimoErro,
       decidiuNome,
-      dispensadaPorMim,
+      dispensada,
     })
     .from(spotOffers)
     .leftJoin(trips, eq(trips.externalTripId, spotOffers.tripNumber))
@@ -193,7 +181,7 @@ export async function readSpotOffersToday(
    * que o remova. O FR-014 fica provado por construção, e não por disciplina — não havendo o ramo,
    * não há como um segundo motivo aparecer nele.
    *
-   * `dispensadaPorMim` — quem ignorou não vê mais, e só quem ignorou.
+   * `dispensada` — alguém com `decidir_spot` decidiu que a empresa não pega esta. Sai para todos.
    *
    * A dispensa é filtrada DEPOIS do teto de 30 de propósito: o teto é do dia, não da pessoa. Filtrar
    * antes faria a lista de quem ignorou muita coisa puxar ofertas mais antigas que as dos colegas —
@@ -201,7 +189,7 @@ export async function readSpotOffersToday(
    */
   return (
     rows
-      .filter((r) => !r.dispensadaPorMim)
+      .filter((r) => !r.dispensada)
       .map(paraView)
       // `aceito` não sai daqui. Ver o comentário acima — é o FR-014 por construção.
       .filter((v) => v.estado !== "aceito")
@@ -216,7 +204,7 @@ type LinhaDaOferta = {
   ultimoStatus: string | null;
   ultimoErro: string | null;
   decidiuNome: string | null;
-  dispensadaPorMim: boolean;
+  dispensada: boolean;
 };
 
 function paraView(r: LinhaDaOferta): SpotOfferView {

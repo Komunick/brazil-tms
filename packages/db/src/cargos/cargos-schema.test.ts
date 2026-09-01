@@ -67,10 +67,23 @@ describe("a migração 0060 é aditiva", () => {
  * cair — que é o único jeito de descobrir isso antes de uma pessoa reclamar que perdeu um botão.
  */
 describe("a semeadura reproduz `ROLE_PERMISSIONS`", () => {
-  const original = readFileSync(
-    join(__dirname, "../../migrations/0060_cargos_e_perfil.sql"),
-    "utf8",
-  );
+  /**
+   * AS MIGRAÇÕES DE SEMEADURA SÃO LIDAS JUNTAS, e a lista vai crescer.
+   *
+   * A `0060` semeou os cargos a partir de `ROLE_PERMISSIONS`. Toda permissão criada DEPOIS dela
+   * precisa da própria migração, porque a 0060 já rodou em produção e não se reescreve.
+   *
+   * Ler só a primeira faria este teste acusar como ausente uma permissão que EXISTE — ensinando
+   * quem vier depois a desconfiar dele, que é o pior estado em que um guarda pode ficar. Aconteceu
+   * exatamente assim com `programacao-e-comentario.test.ts`, e o conserto é o mesmo: somar as
+   * migrações que participam da semeadura.
+   *
+   *   0060 — os 7 cargos e as capacidades de cada um (fatia 029)
+   *   0063 — `decidir_spot` para o Administrador, e o cargo SPOT (fatia 030)
+   */
+  const original = ["0060_cargos_e_perfil", "0063_spot_decisao_da_equipe"]
+    .map((tag) => readFileSync(join(__dirname, `../../migrations/${tag}.sql`), "utf8"))
+    .join("\n");
 
   /** `('Despachante'), 'assign_resources'` → o par que a migração grava. */
   const gravados = new Map<string, Set<string>>();
@@ -89,14 +102,36 @@ describe("a semeadura reproduz `ROLE_PERMISSIONS`", () => {
     ),
   );
 
-  it("semeia SETE cargos — `customer_viewer` fica de fora", () => {
+  it("semeia os sete cargos dos papéis — `customer_viewer` fica de fora", () => {
     /**
      * O enum `app_role` tem oito valores; `ROLE_PERMISSIONS` tem sete. `customer_viewer` está no
      * banco e não está no catálogo: não é papel atribuível (FR-007 da fatia 001) e não vira cargo
      * (FR-017). Semear oito não teria de onde tirar o oitavo.
+     *
+     * ── E CARGO NOVO NÃO SAI DE PAPEL NENHUM (2026-09-01, fatia 030) ────────────────────────────
+     *
+     * A conta era `gravados.size === 7`, e ela parou de fechar quando a 0063 semeou o cargo "SPOT".
+     * O que a asserção existe para proteger é a EQUIVALÊNCIA com os papéis antigos — que nenhum
+     * papel fique sem cargo e que nenhum cargo apareça sem papel de origem. Ela não existe para
+     * congelar o número de cargos: o ponto da fatia 029 foi justamente que eles passam a ser
+     * criados sem tocar em código.
+     *
+     * Então a conta muda de forma: os sete papéis continuam tendo cargo, e o que vier além deles é
+     * cargo NOVO — cada um com a própria migração, como o SPOT.
      */
-    expect(gravados.size).toBe(7);
+    // Todo papel atribuível tem um cargo semeado a partir dele. `PAPEL_DO_CARGO` é o mapa que a
+    // própria migração escreve, então esta é a equivalência conferida contra o SQL de verdade.
+    const papeisComCargo = new Set(PAPEL_DO_CARGO.values());
+    for (const papel of ASSIGNABLE_ROLES) {
+      expect(papeisComCargo.has(papel), `${papel} ficou sem cargo`).toBe(true);
+    }
     expect(ASSIGNABLE_ROLES).toHaveLength(7);
+    /*
+      Os cargos semeados ALÉM dos sete, um por um. A lista é explícita de propósito: um cargo que
+      aparecesse aqui sem alguém tê-lo escrito seria semeadura que ninguém decidiu.
+    */
+    const alemDosPapeis = [...gravados.keys()].filter((nome) => !PAPEL_DO_CARGO.has(nome));
+    expect(alemDosPapeis.sort()).toEqual(["SPOT"]);
     /*
       Conferido no SQL SEM COMENTÁRIOS. O cabeçalho da migração cita `customer_viewer` de propósito,
       para explicar por que ele fica de fora — e uma asserção sobre o arquivo inteiro proibiria
