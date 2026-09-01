@@ -1502,7 +1502,9 @@
       "totalSpot": "Total spot",
       "totalTendencia": "Total tendência",
       "d1": "D1",
-      "d2": "D2"
+      "d2": "D2",
+      "spotEsperando": "Esperando decisão",
+      "spotEsperandoResumo": "{n} esperando"
     },
     "portalDecision": {
       "title": "Decisão da proposta",
@@ -2010,7 +2012,10 @@
     "portalRecusou": "O portal recusou o aceite",
     "tentarDeNovo": "Tentar de novo",
     "semViagemAinda": "A viagem ainda não chegou no TMS. O botão liga sozinho assim que ela chegar.",
-    "aceiteIndisponivel": "Não dá para aceitar esta oferta agora."
+    "aceiteIndisponivel": "Não dá para aceitar esta oferta agora.",
+    "aguardandoPortalCurto": "esperando o portal",
+    "ignoradoPorVoce": "ignorado por você",
+    "confirmarAceiteCurto": "Aceitar a {lh}? Não tem volta."
   },
   "Wallboard": {
     "title": "Brazil Transports · Torre",
