@@ -61,7 +61,7 @@ o que esconder.
 - [x] T004 Acrescentar a entrada de `0062_dispensa_de_oferta` em `packages/db/migrations/meta/_journal.json`, **no mesmo commit da T003** — sem ela a migração é pulada em silêncio e o deploy responde sucesso
 - [x] T005 Declarar a tabela em `packages/db/schema/spot-offers.ts` (mesmo arquivo da oferta, porque é a mesma história), com PK composta e sem índice extra — a leitura é `not exists (… where spot_offer_id = ? and user_id = ?)`, que é o prefixo da PK; um índice por `user_id` seria especulação
 - [x] T006 [P] Escrever `packages/db/src/trips/spot-dispensas.test.ts` conferindo que migração e schema concordam: toda coluna do schema aparece na migração com aspas, a PK é composta, a cascata está na oferta e **não** está no autor
-- [ ] T007 Rodar `pnpm --filter @brazil-tms/db db:migrate` no dev e conferir com `grep -c "0062_dispensa_de_oferta" packages/db/migrations/meta/_journal.json` (tem de ser 1) e com a tabela existindo e vazia
+- [x] T007 Rodar `pnpm --filter @brazil-tms/db db:migrate` no dev e conferir com `grep -c "0062_dispensa_de_oferta" packages/db/migrations/meta/_journal.json` (tem de ser 1) e com a tabela existindo e vazia
 
 ### A derivação do estado (etapa 2) — o coração da fatia
 
@@ -75,8 +75,8 @@ o que esconder.
 - [x] T012 Estender `packages/db/src/trips/spot-offers.ts` (`readSpotOffersToday`) com `left join` para `trips` por `external_trip_id = trip_number` e um lateral para a última ordem de aceite em `portal_commands`, devolvendo as quatro entradas da derivação. Manter o teto de 30 e o recorte do dia em São Paulo
 - [x] T013 Aplicar a derivação da T008 no mapeamento para `SpotOfferView`, acrescentando `estado`, `tripId`, `podeAceitar`, `decidiuUserId`, `decidiuNome` e `erroDoPortal` (contrato §1). **NESTA FASE A LISTA CONTINUA COMPLETA** — a exclusão do que já foi aceito é a T017a, na Fase 3, e a razão está lá
 - [x] T014 Ajustar `apps/web/app/api/spot-offers/route.ts` para devolver os campos novos, mantendo `requirePermission(ctx, "view_all_trips")` — nenhuma permissão nova nasce nesta fatia
-- [ ] T015 [P] Escrever `packages/db/src/trips/spot-offers.test.ts` afirmando que a derivação é aplicada a cada linha e que os campos novos aparecem com os nomes do contrato
-- [ ] T016 Conferir que **a tela não mudou**: subir o app e olhar o cartão de hoje, que deve ignorar os campos novos e se comportar exatamente como antes. Se algo mudou visualmente nesta etapa, algo saiu do lugar
+- [x] T015 [P] Escrever `packages/db/src/trips/spot-offers.test.ts` afirmando que a derivação é aplicada a cada linha e que os campos novos aparecem com os nomes do contrato
+- [x] T016 Conferir que **a tela não mudou**: subir o app e olhar o cartão de hoje, que deve ignorar os campos novos e se comportar exatamente como antes. Se algo mudou visualmente nesta etapa, algo saiu do lugar
 - [x] T017 Medir de novo o custo da consulta com `explain (analyze, buffers)` contra a produção e comparar com a referência de **2,5 ms** — ela roda de 5 em 5 segundos, com a aba escondida, em toda tela aberta
 
 **Checkpoint**: dá para parar aqui. Nada mudou para ninguém.
@@ -160,20 +160,20 @@ aba, passa ao estado enviado — provando que é o mesmo estado, e não uma segu
 - [x] T045 [US3] Acrescentar Aceitar e Ignorar à linha que espera decisão, com a MESMA confirmação de dois gestos, reusando a rota da T025 e a da T037 (FR-021)
 - [x] T046 [US3] Assinalar a linha dispensada como "ignorado por você", **mantendo-a listada e ainda aceitável** (FR-019) — ignorar não apaga a prova de que a oferta chegou
 - [x] T047 [US3] Fazer o resumo do cabeçalho do card dizer quantas ainda esperam decisão (FR-023)
-- [ ] T048 [US3] Conferir o FR-022 com as duas telas abertas: aceitar por um lado muda o outro sem ação adicional — as duas leem a MESMA derivação, e é essa fonte única que a garante
+- [x] T048 [US3] Conferir o FR-022 com as duas telas abertas: aceitar por um lado muda o outro sem ação adicional — as duas leem a MESMA derivação, e é essa fonte única que a garante
 
 ---
 
 ## Phase 6 · As provas que não são teste de unidade, e o polimento
 
-- [ ] T049 [P] Escrever o guarda que **impede a cortina de voltar**, em `apps/web/lib/ui/` (junto dos guardas que já moram lá): falha se `9999px` ou um fundo opaco de tela cheia reaparecerem em `oferta-de-spot.tsx`. Ignorar comentários antes de asseverar
-- [ ] T050 Escrever o Playwright que prova o **FR-003**: com cartões na tela, **preencher e enviar** um campo do diálogo de atribuição. A asserção MUST começar conferindo que há cartão — passar por não haver cartão nenhum não prova coisa alguma
+- [x] T049 [P] Escrever o guarda que **impede a cortina de voltar**, em `apps/web/lib/ui/` (junto dos guardas que já moram lá): falha se `9999px` ou um fundo opaco de tela cheia reaparecerem em `oferta-de-spot.tsx`. Ignorar comentários antes de asseverar
+- [x] T050 Escrever o Playwright que prova o **FR-003**: com cartões na tela, **preencher e enviar** um campo do diálogo de atribuição. A asserção MUST começar conferindo que há cartão — passar por não haver cartão nenhum não prova coisa alguma
 - [x] T051 [P] Escrever o teste que prova o **FR-005**: não existe caminho que remova um cartão sem aceitar, ignorar ou recolher — e que recolher não tira nada da lista
-- [ ] T052 [P] Conferir que `apps/web/components/spot/cartao-da-oferta.tsx` tem dono: alguma tela o importa. `apps/web/lib/ui/componentes-tem-dono.test.ts` cai se ele ficar órfão — foi o quinto caso de "dado capturado e nunca mostrado" nesta base
+- [x] T052 [P] Conferir que `apps/web/components/spot/cartao-da-oferta.tsx` tem dono: alguma tela o importa. `apps/web/lib/ui/componentes-tem-dono.test.ts` cai se ele ficar órfão — foi o quinto caso de "dado capturado e nunca mostrado" nesta base
 - [x] T053 [P] Traduzir todos os rótulos novos para pt-BR nos arquivos de mensagens, sem texto solto no componente
-- [ ] T054 Estender `apps/web/lib/spot/ensaio.ts` para o ensaio poder subir uma oferta de mentira em **cada** estado (`sem_viagem`, `esperando`, `enviado`, `recusado`), pela MESMA porta da oferta real — um ensaio que desenhasse por outro caminho provaria o outro caminho
+- [x] T054 Estender `apps/web/lib/spot/ensaio.ts` para o ensaio poder subir uma oferta de mentira em **cada** estado (`sem_viagem`, `esperando`, `enviado`, `recusado`), pela MESMA porta da oferta real — um ensaio que desenhasse por outro caminho provaria o outro caminho
 - [ ] T055 Percorrer a lista de conferência da etapa 4 do `quickstart.md` inteira, com o ensaio, **sem aceitar nada de verdade**
-- [ ] T056 Rodar `pnpm lint` da RAIZ (`eslint .`), `pnpm typecheck`, `pnpm test` e o e2e do spot — `pnpm -r lint` não cobre `scripts/` e já deixou a CI vermelha nesta base
+- [x] T056 Rodar `pnpm lint` da RAIZ (`eslint .`), `pnpm typecheck`, `pnpm test` e o e2e do spot — `pnpm -r lint` não cobre `scripts/` e já deixou a CI vermelha nesta base
 - [ ] T057 Abrir o PR para `dev` (nunca para `main`), citando no corpo os princípios aplicados e a troca explícita: uma tabela nova contra a alternativa recusada de copiar o estado (princípio I + FR-014)
 
 ---

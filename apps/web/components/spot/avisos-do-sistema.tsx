@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Bell, BellOff, BellRing } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ensaiarAviso } from "@/lib/spot/ensaio";
+import { ensaiarAviso, ESTADOS_DE_ENSAIO } from "@/lib/spot/ensaio";
 import {
   avisarNoSistema,
   estadoDoAviso,
@@ -104,15 +104,29 @@ export function AvisosDoSistema() {
          * sentido com permissão; o ensaio pergunta "como é o aviso de oferta?" — e o cartão na tela
          * e o som funcionam mesmo com a permissão negada, que é quando ver o cartão mais importa.
          */}
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={ensaiarAviso}
-          title={t("ensaioDica")}
-        >
-          {t("ensaio")}
-        </Button>
+        {/*
+          UM BOTÃO POR ESTADO (2026-09-01, fatia 030).
+
+          O cartão passou a ter quatro caras, e três delas ninguém vê até o dia em que acontecem de
+          verdade: a viagem que ainda não chegou, a ordem esperando o portal, e a RECUSA. Esta última
+          é a que mais importa ensaiar — aconteceu em 4 de 17 ordens reais, e é a única tela que
+          alguém vê ao perder a corrida do leilão.
+
+          Nenhum deles gasta: a oferta de ensaio nasce sem viagem, e sem viagem não há a quem
+          endereçar a ordem. Ver `ofertaDeEnsaio`.
+        */}
+        {ESTADOS_DE_ENSAIO.map((qual) => (
+          <Button
+            key={qual}
+            type="button"
+            size="sm"
+            variant="ghost"
+            onClick={() => ensaiarAviso(qual)}
+            title={t("ensaioDica")}
+          >
+            {t(`ensaioEstado.${qual}`)}
+          </Button>
+        ))}
       </div>
 
       {/**

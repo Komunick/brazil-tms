@@ -1996,8 +1996,8 @@
     "systemUnavailable": "Este navegador não tem avisos do sistema.",
     "systemTestTitle": "Teste — Brazil Transports TMS",
     "systemTestBody": "Se você está lendo isto, os avisos de spot vão chegar aqui.",
-    "ensaio": "Ensaiar aviso",
-    "ensaioDica": "Mostra o cartão, toca o som e dispara a notificação — sem gravar oferta nenhuma.",
+    "ensaio": "Ensaiar",
+    "ensaioDica": "Mostra o cartão, toca o som e dispara a notificação — sem gravar oferta nenhuma e sem tocar no portal.",
     "price": "Preço",
     "aceitar": "Aceitar",
     "ignorar": "Ignorar",
@@ -2015,7 +2015,13 @@
     "aceiteIndisponivel": "Não dá para aceitar esta oferta agora.",
     "aguardandoPortalCurto": "esperando o portal",
     "ignoradoPorVoce": "ignorado por você",
-    "confirmarAceiteCurto": "Aceitar a {lh}? Não tem volta."
+    "confirmarAceiteCurto": "Aceitar a {lh}? Não tem volta.",
+    "ensaioEstado": {
+      "esperando": "Ensaiar: esperando",
+      "sem_viagem": "Ensaiar: sem viagem",
+      "enviado": "Ensaiar: enviado",
+      "recusado": "Ensaiar: recusado"
+    }
   },
   "Wallboard": {
     "title": "Brazil Transports · Torre",
