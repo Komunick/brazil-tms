@@ -260,15 +260,14 @@ const chaveDaEstacao = (col: SQL) => sql`
  * viagem é a prova mais forte disponível — mais forte, inclusive, do que um campo que o fornecedor
  * poderia preencher de outro jeito amanhã.
  */
-export async function readSpotPorRegiao(
-  /**
-   * Quem está olhando — só para MARCAR a linha que essa pessoa ignorou (2026-09-01).
-   *
-   * Opcional, e ausente significa que nada é marcado. Diferente da leitura do cartão, que ESCONDE o
-   * dispensado: aqui ele fica listado e aceitável, porque este cartão é o registro do dia.
-   */
-  userId?: string | null,
-): Promise<SpotDaRegiao[]> {
+/*
+  NÃO RECEBE MAIS QUEM ESTÁ OLHANDO (2026-09-01).
+
+  Ela recebia um `userId` para marcar "ignorado por VOCÊ". Com a dispensa valendo para a equipe, a
+  linha passa a dizer QUEM ignorou — e a resposta é a mesma para todo mundo. O parâmetro saiu junto
+  com a razão de ele existir.
+*/
+export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
   const linhas = await db.execute<{
     region: string | null;
     aceito: string;
@@ -426,10 +425,27 @@ export async function readSpotPorRegiao(
      * oferta chegou, e a linha continua podendo ser aceita (FR-019).
      */
     left join lateral (
-      select true as dispensada
+      /*
+       * QUEM IGNOROU, e não "eu ignorei" (2026-09-01).
+       *
+       * A dispensa deixou de ser pessoal: quem tem "decidir_spot" decide pela equipe. Então a linha
+       * não pergunta mais se EU ignorei — ela diz QUEM ignorou, que é o que responde "por que não
+       * pegamos aquela?".
+       *
+       * ── ESTE BLOCO JÁ QUEBROU A PRODUÇÃO, e vale saber como ─────────────────────────────────
+       *
+       * Ele ficou para trás numa substituição por script que falhou em silêncio: o "jsonb" acima
+       * passou a ler "d.por" e ESTE "select" continuou devolvendo "true as dispensada". O painel
+       * inteiro parou com "column d.por does not exist".
+       *
+       * Nada pegou: os testes leem este SQL como TEXTO, o TypeScript não confere consulta, e o
+       * build compilou. Só executar acha. O guarda que nasceu disso está em "spot-painel.test.ts" —
+       * ele confere que toda coluna citada como "d.<algo>" é produzida aqui dentro.
+       */
+      select u.name as por, sd.motivo
       from spot_offer_dispensas sd
+      join users u on u.id = sd.user_id
       where sd.spot_offer_id = o.oferta_id
-        and sd.user_id = ${userId ?? null}::uuid
       limit 1
     ) d on true
     group by 1
