@@ -137,7 +137,14 @@ export function Wallboard({ podeDecidir }: { podeDecidir: boolean }) {
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-slate-950 font-sans">
       {/* Fica FORA do fluxo (posicionado sobre a tela) — o quadro atrás continua desenhado e
           vivo; o aviso só cobre o centro pelos seus 30 segundos. */}
-      <OfertaDeSpot podeDecidir={podeDecidir} />
+      {/*
+        A TV FICA NO CENTRO SEMPRE — a única exceção à regra da posição (2026-09-01).
+
+        Nas telas de gente o meio é de quem pode decidir, e o resto recebe o popup do canto. Aqui não
+        há ninguém para pré-selecionar: a parede existe para ser lida de longe, e um aviso encolhido
+        no canto de uma TV não avisa ninguém.
+      */}
+      <OfertaDeSpot podeDecidir={podeDecidir} sempreNoCentro />
       {/* Cabeçalho: quem, quando, e se o que está na tela ainda vale. */}
       <header className="flex shrink-0 items-center justify-between border-b border-slate-800 px-[1.6vw] py-[1.6vh]">
         <h1 className="text-[1.7vw] font-bold uppercase tracking-[0.2em] text-white">

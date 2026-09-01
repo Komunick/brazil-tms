@@ -28,5 +28,5 @@ export default async function PainelPage() {
     de madrugada. Então a permissão desce aqui igual ao shell: o painel roda sob uma sessão de
     verdade, e quem estiver logado nele decide como decidiria em qualquer outra tela.
   */
-  return <Wallboard podeDecidir={can(session.user, "assign_resources")} />;
+  return <Wallboard podeDecidir={can(session.user, "decidir_spot")} />;
 }
