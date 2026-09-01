@@ -103,8 +103,34 @@ export async function recordSpotOffer(offer: SpotOfferInput): Promise<{ nova: bo
  * forma barata. Medido: casa em 98 de 132 ofertas; as outras 34 nunca viraram viagem, e para elas o
  * estado é `sem_viagem`.
  */
-export async function readSpotOffersToday(agora = new Date()): Promise<SpotOfferView[]> {
+export async function readSpotOffersToday(
+  /**
+   * QUEM ESTÁ PERGUNTANDO — e é por isto que a dispensa é filtrada AQUI, no servidor (2026-09-01).
+   *
+   * Filtrar no cliente faria a dispensa depender de cada tela lembrar de filtrar, em três lugares
+   * diferentes, e carregaria pela rede ofertas que aquela pessoa não vai ver. Filtrando aqui, a
+   * dispensa sobrevive a recarregar e a trocar de aparelho sem que ninguém precise fazer nada
+   * (FR-018) — ela nunca chega.
+   *
+   * Opcional porque o Painel do dia NÃO filtra: lá a oferta ignorada continua listada, assinalada,
+   * e ainda aceitável (FR-019). Uma leitura é a fila do que falta decidir; a outra é a história do
+   * que aconteceu.
+   */
+  userId?: string | null,
+  agora = new Date(),
+): Promise<SpotOfferView[]> {
   const { from, to } = dayRangeSaoPaulo(agora);
+
+  /*
+    A dispensa desta pessoa, e de mais ninguém. `not exists` sobre a chave primária composta — que
+    é exatamente o prefixo dela, e por isso a tabela não precisa de índice além da PK.
+  */
+  const dispensadaPorMim = userId
+    ? sql<boolean>`exists (
+        select 1 from spot_offer_dispensas d
+         where d.spot_offer_id = ${spotOffers.id} and d.user_id = ${userId}::uuid
+      )`
+    : sql<boolean>`false`;
 
   /*
     "Há ordem de aceite em voo?" — `pending` é gravada e esperando o robô; `sent` é o robô
@@ -150,6 +176,7 @@ export async function readSpotOffersToday(agora = new Date()): Promise<SpotOffer
       ultimoStatus,
       ultimoErro,
       decidiuNome,
+      dispensadaPorMim,
     })
     .from(spotOffers)
     .leftJoin(trips, eq(trips.externalTripId, spotOffers.tripNumber))
@@ -158,7 +185,27 @@ export async function readSpotOffersToday(agora = new Date()): Promise<SpotOffer
     // Teto de sanidade: num dia de pico o leilão abre dezenas, e a tela mostra as primeiras.
     .limit(30);
 
-  return rows.map(paraView);
+  /**
+   * O QUE SAI DA LISTA, E POR QUE SAI ANTES DE CHEGAR À TELA (2026-09-01).
+   *
+   * `aceito` — a viagem foi aceita no portal, por quem quer que seja, aqui ou lá. É ASSIM que o
+   * cartão sai da tela de todas as pessoas: ele some da lista, e a tela não tem um caminho de código
+   * que o remova. O FR-014 fica provado por construção, e não por disciplina — não havendo o ramo,
+   * não há como um segundo motivo aparecer nele.
+   *
+   * `dispensadaPorMim` — quem ignorou não vê mais, e só quem ignorou.
+   *
+   * A dispensa é filtrada DEPOIS do teto de 30 de propósito: o teto é do dia, não da pessoa. Filtrar
+   * antes faria a lista de quem ignorou muita coisa puxar ofertas mais antigas que as dos colegas —
+   * duas pessoas veriam janelas diferentes do mesmo dia.
+   */
+  return (
+    rows
+      .filter((r) => !r.dispensadaPorMim)
+      .map(paraView)
+      // `aceito` não sai daqui. Ver o comentário acima — é o FR-014 por construção.
+      .filter((v) => v.estado !== "aceito")
+  );
 }
 
 type LinhaDaOferta = {
@@ -169,6 +216,7 @@ type LinhaDaOferta = {
   ultimoStatus: string | null;
   ultimoErro: string | null;
   decidiuNome: string | null;
+  dispensadaPorMim: boolean;
 };
 
 function paraView(r: LinhaDaOferta): SpotOfferView {

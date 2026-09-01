@@ -22,5 +22,11 @@ export default async function PainelPage() {
   if (decideAccess(session) === "redirect_set_password") redirect("/auth/set-password");
   if (!can(session.user, "view_all_trips")) redirect("/");
 
-  return <Wallboard />;
+  /*
+    A TV NÃO GANHA EXCEÇÃO (2026-09-01, decisão do usuário). Perguntei se o cartão deveria sair
+    sozinho lá na madrugada, e a resposta foi que há gente trabalhando de madrugada e que se aceita
+    de madrugada. Então a permissão desce aqui igual ao shell: o painel roda sob uma sessão de
+    verdade, e quem estiver logado nele decide como decidiria em qualquer outra tela.
+  */
+  return <Wallboard podeDecidir={can(session.user, "assign_resources")} />;
 }

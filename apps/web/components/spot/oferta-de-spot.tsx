@@ -1,369 +1,306 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Gavel, X } from "lucide-react";
+import { ChevronDown, Gavel } from "lucide-react";
 import type { SpotOfferView } from "@brazil-tms/db";
 import { useSpotOffers } from "@/lib/trips/client";
-import { enfileirar, estadoInicial, novasOfertas } from "@/lib/spot/ofertas";
+import { estadoInicial, novasOfertas } from "@/lib/spot/ofertas";
 import { tocarAviso } from "@/lib/spot/som";
 import { avisarNoSistema } from "@/lib/spot/aviso-do-sistema";
 import { EVENTO_ENSAIO } from "@/lib/spot/ensaio";
+import { CartaoDaOferta } from "./cartao-da-oferta";
 
 /**
- * O AVISO DE OFERTA no meio da tela (2026-08-18).
+ * AS OFERTAS DE SPOT NA TELA — e agora elas FICAM (2026-09-01, a pedido).
  *
- * O leilão de spot tem prazo curto: quem vê primeiro dá lance. O aviso já existia no Telegram, no
- * celular de quem estava olhando; este é o mesmo aviso na tela de quem está trabalhando.
+ * O leilão de spot tem prazo curto: quem vê primeiro dá lance. Este aviso existia desde 2026-08-18
+ * como um cartão que subia no meio da tela e saía sozinho em trinta segundos. Ele avisava, e era só
+ * o que dava para fazer com ele — quem quisesse pegar o frete tinha de sair dali, abrir a lista de
+ * viagens, procurar o número da LH e aceitar por lá.
  *
- * Três decisões vêm de a tela ficar ligada o dia inteiro, às vezes sem ninguém tocando nela:
+ * Medido em produção em 01/09: **onze aceites de LH vinda de oferta de spot foram disparados de zero
+ * a três minutos depois de a oferta chegar** — exatamente a janela em que este cartão estava na tela.
+ * A operação já fazia este caminho à mão, todo dia. O que faltava era o botão onde a decisão já
+ * estava sendo tomada.
  *
- *   MÉDIO, NÃO TELA CHEIA. Cobre o centro e deixa o painel respirando em volta. Uma cortina cheia
- *   faria a sala pedir para desligar o aviso, e aí ele não avisa mais nada.
+ * ── AS TRÊS COISAS QUE SE INVERTERAM, e o porquê de cada uma ─────────────────────────────────
  *
- *   SAI SOZINHO EM 30 SEGUNDOS. O botão de fechar é atalho para quem está na frente do computador,
- *   não condição: numa TV ninguém clica, e aviso que depende de clique vira cortina permanente no
- *   primeiro dia em que a sala esvazia.
+ * O CARTÃO NÃO SAI MAIS SOZINHO. O comentário antigo defendia o contrário, e a defesa era boa para o
+ * que ele era: "aviso que depende de clique vira cortina permanente no primeiro dia em que a sala
+ * esvazia". O que mudou não foi a lógica — foi o cartão deixar de ser só aviso. Um aviso que some é
+ * aceitável; uma DECISÃO que some sem ser tomada é a oferta passando batido, que é o defeito que
+ * esta fatia veio consertar. Perguntei ao usuário se a TV deveria ser exceção na madrugada, e a
+ * resposta foi que há gente trabalhando de madrugada e que se aceita de madrugada. Nenhuma exceção.
  *
- *   UM DE CADA VEZ, EM FILA. Chegando três no mesmo ciclo, empilhá-las esconderia duas.
+ * A CORTINA SAIU. Havia aqui um `boxShadow: 0 0 0 9999px rgba(3,10,18,0.62)`, que escurecia a tela
+ * inteira por trás do cartão. Com trinta segundos, era ênfase; com o cartão parado, seria o TMS
+ * apagado o dia inteiro — e o pedido foi explícito: "que não atrapalhe se alguém tiver atribuindo".
+ * A camada continua transparente ao mouse, e só os cartões recebem clique.
+ *
+ * TODOS AO MESMO TEMPO, e não um de cada vez. A fila existia porque três ofertas empilhadas
+ * esconderiam duas. Agora elas dividem o espaço — lado a lado e em linhas —, que foi o pedido:
+ * "um do lado do outro, um embaixo do outro".
+ *
+ * ── O QUE NÃO MUDOU, e não pode mudar ────────────────────────────────────────────────────────
+ *
+ * O SOM. `estadoInicial`/`novasOfertas` continuam sendo a memória de "já apitei por esta oferta", e
+ * SÓ disso. Elas não são, e não podem virar, a memória da decisão: essa vive no banco, porque
+ * recarregar a página não pode trazer de volta o que alguém já resolveu — nem apitar de novo por
+ * quem já está na tela.
+ *
+ * O QUE TIRA O CARTÃO DE TODAS AS TELAS. Não existe aqui um caminho de código que remova um cartão
+ * por aceite. A oferta some porque a leitura seguinte não a traz — o servidor a exclui quando o
+ * portal diz `Accepted`. Não havendo o ramo, não há um segundo motivo capaz de entrar nele, e é
+ * assim que o "só some quando o portal confirmar" fica garantido por construção.
  */
-
-/** Quanto tempo cada aviso fica na tela. */
-const DURACAO_MS = 30_000;
-
-/**
- * AS CORES DA MARCA, e por que cada uma está onde está (2026-08-19, a pedido).
- *
- * O logo da Brazil Transports tem três: verde escuro (o dominante), amarelo e azul-marinho. São as
- * da bandeira, e o pedido veio com uma condição — "de uma forma que não atrapalhe a visualização".
- * Ela é o que decide a distribuição abaixo, porque as três juntas erram fácil.
- *
- *   FUNDO AZUL-MARINHO, não verde. Verde é a cor dominante do logo, e um fundo verde escuro deixa o
- *   texto branco com contraste pior e o amarelo quase invisível. O marinho é o mais escuro dos três:
- *   serve de base e faz os outros dois aparecerem.
- *
- *   AMARELO SÓ NO QUE É CURTO E GRANDE — o número da viagem e a barra de tempo. Amarelo sobre
- *   marinho tem contraste altíssimo (~11:1), mas em texto pequeno ele vibra e cansa. Rótulo e valor
- *   ficam em cinza-claro e branco.
- *
- *   VERDE NA MOLDURA. É a cor que diz "Brazil Transports" à distância, e na borda ela não compete
- *   com texto nenhum. A faixa de cima faz verde → amarelo, que é a assinatura do logo.
- *
- * O que NÃO mudou: o fundo continua escuro. Numa TV ligada o dia inteiro, cartão claro estoura o
- * brilho da sala e é a primeira coisa que alguém pede para desligar.
- */
-const MARCA = {
-  fundo: "#0C1A2B",
-  fundoTopo: "#12283F",
-  verde: "#1B7A3D",
-  amarelo: "#F2C230",
-  texto: "#EEF3F8",
-  rotulo: "#93A9BF",
-};
-
-export function OfertaDeSpot() {
+export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
   const t = useTranslations("Spot");
-  // Busca própria, com ritmo próprio: o componente é montado em telas de cadências diferentes e não
-  // pode herdar a lentidão de nenhuma delas. Ver `useSpotOffers`.
-  const { data } = useSpotOffers();
-  const ofertas = data?.ofertas;
+  const { data, refetch } = useSpotOffers();
+  const ofertas = useMemo(() => data?.ofertas ?? [], [data?.ofertas]);
 
-  // A memória de "já anunciei" vive na sessão da tela, não em estado do React: recriá-la a cada
-  // render faria a mesma oferta voltar a ser novidade. Ver `novasOfertas`.
-  const memoria = useRef(estadoInicial());
   /**
-   * O id do último cartão que JÁ apitou, e o do que veio do botão de ensaio.
-   *
-   * Os dois são `useRef` porque nenhum deles muda o desenho da tela: são memória de "isto já
-   * aconteceu". Em estado, cada um deles provocaria um render a mais e o primeiro deles voltaria a
-   * apitar o cartão que já estava lá.
+   * A memória do APITO, e só dela. Vive num `useRef` porque é memória de sessão da tela: recriá-la a
+   * cada render faria a mesma oferta voltar a ser novidade e apitar sem parar. Ver `novasOfertas`.
    */
-  const ultimoAnunciado = useRef<string | null>(null);
+  const memoria = useRef(estadoInicial());
   const ensaiada = useRef<string | null>(null);
-  const [fila, setFila] = useState<SpotOfferView[]>([]);
-  const [saindo, setSaindo] = useState(false);
+
+  /** As ofertas de ensaio vivem só aqui: elas não estão na resposta do servidor. */
+  const [ensaios, setEnsaios] = useState<SpotOfferView[]>([]);
+  const [recolhido, setRecolhido] = useState(false);
+  const [enviando, setEnviando] = useState<string | null>(null);
+  const [saindo, setSaindo] = useState<Set<string>>(new Set());
+
+  const naTela = useMemo(
+    () => [...ensaios, ...ofertas].filter((o) => !saindo.has(o.id)),
+    [ensaios, ofertas, saindo],
+  );
 
   /**
-   * TODA OFERTA NOVA ENTRA NA FILA (2026-08-27, a pedido). Ver `enfileirar`.
+   * O APITO E O AVISO DO SISTEMA saem quando uma oferta é NOVIDADE, e uma vez só por oferta.
    *
-   * Aqui morava a regra da rajada, que deixava subir só a primeira depois de um silêncio. Três
-   * ofertas seguidas produziram UM apito na tela de verdade, e as outras duas passaram sem ninguém
-   * ver: quem faz alguém olhar é o som, e sem som a oferta existe só na caixa.
-   *
-   * ESTE EFEITO NÃO APITA MAIS. Ele só empilha. Quem apita é o efeito de baixo, quando o cartão
-   * SOBE — e é essa separação que faz a segunda oferta soar trinta segundos depois da primeira, em
-   * vez de soar junto com ela e ser esquecida.
+   * Antes isto acontecia quando o cartão SUBIA, porque só um subia por vez. Com todos na tela, subir
+   * e chegar viraram a mesma coisa — e a guarda de `novasOfertas` continua sendo o que impede o
+   * cartão parado de apitar a cada ciclo de cinco segundos.
    */
   useEffect(() => {
-    if (!ofertas) return;
-    const novas = novasOfertas(memoria.current, ofertas);
-    if (novas.length === 0) return;
-    setFila((atual) => enfileirar(atual, novas));
-  }, [ofertas]);
+    if (!data?.ofertas) return;
+    const novas = novasOfertas(memoria.current, data.ofertas);
+    for (const nova of novas) {
+      tocarAviso();
+      avisarNoSistema(
+        t("systemTitle"),
+        [nova.route, nova.price].filter(Boolean).join(" · "),
+        { somenteSeEscondido: ensaiada.current !== nova.id },
+      );
+    }
+    /*
+      UMA OFERTA NOVA REABRE O CONJUNTO (2026-09-01). Recolher é "me dá a tela por um minuto", não
+      uma preferência — e informação nova não pode ficar atrás de um gesto antigo. O custo é
+      conhecido: quem recolheu para atribuir pode ser reaberto no meio. É por isso que a camada não
+      rouba foco nem bloqueia clique — reabrir é um incômodo visual, não uma interrupção.
+    */
+    if (novas.length > 0) setRecolhido(false);
+  }, [data?.ofertas, t]);
 
   /**
-   * O ENSAIO — o mesmo cartão, o mesmo som, o mesmo aviso, com uma oferta de mentira (2026-08-24).
+   * O ENSAIO — o mesmo cartão, o mesmo som, com uma oferta de mentira.
    *
-   * Ele entra pela porta da frente de propósito: a MESMA fila da oferta de verdade. Um ensaio que
+   * Ele entra pela porta da frente de propósito: a MESMA lista da oferta de verdade. Um ensaio que
    * desenhasse o cartão por outro caminho provaria que o outro caminho funciona.
    *
-   * ENTRA PELA FRENTE, e não pelo fim: quem apertou o botão quer ver o cartão agora, não depois de
-   * a fila esvaziar. O que já estava na fila continua lá e sobe em seguida — antes disto o ensaio
-   * SUBSTITUÍA a fila, e testar o aviso jogava fora as ofertas que esperavam.
-   *
-   * Não passa por `novasOfertas`: a oferta de ensaio não está na resposta do servidor, e registrá-la
-   * na memória de vistos faria a próxima oferta REAL com aquele id ser tratada como já anunciada.
+   * Não passa por `novasOfertas` na chegada: a oferta de ensaio não está na resposta do servidor, e
+   * registrá-la na memória de vistos faria a próxima oferta REAL com aquele id ser tratada como já
+   * anunciada.
    */
   useEffect(() => {
     const aoEnsaiar = (e: Event) => {
       const oferta = (e as CustomEvent<SpotOfferView>).detail;
       if (!oferta) return;
       ensaiada.current = oferta.id;
-      setFila((f) => [oferta, ...f.filter((o) => o.id !== oferta.id)]);
+      setEnsaios((atuais) => [oferta, ...atuais.filter((o) => o.id !== oferta.id)]);
+      setRecolhido(false);
+      tocarAviso();
+      avisarNoSistema(t("systemTitle"), [oferta.route, oferta.price].filter(Boolean).join(" · "), {
+        somenteSeEscondido: false,
+      });
     };
     window.addEventListener(EVENTO_ENSAIO, aoEnsaiar);
     return () => window.removeEventListener(EVENTO_ENSAIO, aoEnsaiar);
-  }, []);
-
-  const atual = fila[0];
+  }, [t]);
 
   /**
-   * O APITO ACOMPANHA O CARTÃO QUE SOBE (2026-08-27, a pedido).
+   * IGNORAR — grava a dispensa e tira o cartão da MINHA tela.
    *
-   * Antes ele saía na CHEGADA da oferta, junto com a decisão de enfileirar. Dava no mesmo enquanto
-   * só a primeira de cada rajada subia; com a fila, daria tudo errado — cinquenta apitos em rajada
-   * e nenhum quando o quadragésimo cartão finalmente aparecesse.
+   * O `saindo` é o que faz o cartão sumir na hora, antes de a leitura seguinte confirmar. Sem ele, o
+   * cartão ficaria até cinco segundos na tela depois do clique, e a pessoa clicaria de novo.
    *
-   * A GUARDA É POR `id`, e não pela identidade do objeto: a busca refaz a lista a cada ciclo, e um
-   * objeto novo com o mesmo id faria o cartão que já está na tela apitar de novo a cada poucos
-   * segundos — o cartão parado apitando sem parar é pior do que o apito que faltava.
+   * A oferta de ensaio não vai ao servidor: ela nunca existiu lá.
    */
-  useEffect(() => {
-    if (!atual || ultimoAnunciado.current === atual.id) return;
-    ultimoAnunciado.current = atual.id;
-    tocarAviso();
-    /**
-     * E o aviso do SISTEMA, para quem não está com o TMS na frente (2026-08-22, a pedido).
-     *
-     * Sai no mesmo ponto do som: os dois respondem à mesma coisa — um cartão subiu. Ele mesmo se
-     * cala quando a aba está visível (ver `aviso-do-sistema.ts`), MENOS no ensaio: ali o ponto é
-     * justamente ver a notificação aparecer com o TMS aberto na frente.
-     */
-    avisarNoSistema(t("systemTitle"), [atual.route, atual.price].filter(Boolean).join(" · "), {
-      somenteSeEscondido: ensaiada.current !== atual.id,
-    });
-  }, [atual, t]);
+  const ignorar = useCallback(
+    async (oferta: SpotOfferView) => {
+      setSaindo((s) => new Set(s).add(oferta.id));
+      if (oferta.id.startsWith("ensaio-")) {
+        setEnsaios((atuais) => atuais.filter((o) => o.id !== oferta.id));
+        return;
+      }
+      try {
+        await fetch(`/api/spot-offers/${oferta.id}/dispensar`, { method: "POST" });
+      } catch {
+        // Falhou: o cartão volta, porque o servidor não gravou e a leitura seguinte o trará.
+        setSaindo((s) => {
+          const novo = new Set(s);
+          novo.delete(oferta.id);
+          return novo;
+        });
+      }
+    },
+    [],
+  );
 
   /**
-   * A saída passa pela animação antes de tirar da fila.
+   * ACEITAR — a MESMA ordem que a tela de viagem grava, pelo MESMO caminho.
    *
-   * Sem isso, fechar (ou o tempo acabar) faz o cartão SUMIR num quadro — e some junto a informação
-   * de que ele estava ali, o que numa tela de canto do olho parece falha de renderização.
+   * `origem` vai para a auditoria dizer que a decisão saiu daqui, e não da tela da viagem: são dois
+   * atos diferentes, um no calor do leilão e outro com a lista à vista.
+   *
+   * O CARTÃO NÃO SAI AQUI, e é o ponto: 202 quer dizer ACEITO, não FEITO. Ele passa a `enviado` na
+   * leitura seguinte e só some quando o portal confirmar. Medido: 4 das 17 ordens de aceite já
+   * gravadas voltaram RECUSADAS pelo portal.
    */
-  const encerrar = useCallback(() => {
-    setSaindo(true);
-    setTimeout(() => {
-      setSaindo(false);
-      setFila((f) => f.slice(1));
-    }, 220);
-  }, []);
+  const aceitar = useCallback(
+    async (oferta: SpotOfferView) => {
+      if (!oferta.tripId) return;
+      setEnviando(oferta.id);
+      try {
+        await fetch(`/api/trips/${oferta.tripId}/portal-action`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "accept", origem: "oferta_spot" }),
+        });
+      } finally {
+        setEnviando(null);
+        // Puxa já, para o cartão passar a "enviado" sem esperar o ciclo de cinco segundos.
+        void refetch();
+      }
+    },
+    [refetch],
+  );
 
-  useEffect(() => {
-    if (!atual) return;
-    const t = setTimeout(encerrar, DURACAO_MS);
-    return () => clearTimeout(t);
-  }, [atual, encerrar]);
+  if (naTela.length === 0) return null;
 
-  if (!atual) return null;
+  if (recolhido) {
+    return (
+      <div className="pointer-events-none fixed inset-0 z-50">
+        <button
+          type="button"
+          onClick={() => setRecolhido(false)}
+          className="pointer-events-auto absolute bottom-5 right-5 flex items-center gap-2.5 rounded-full px-4 py-2.5 text-sm font-bold shadow-[0_12px_28px_-14px_rgba(0,0,0,0.8)]"
+          style={{
+            background: "linear-gradient(160deg, #12283F, #0C1A2B)",
+            outline: "3px solid #1B7A3D",
+            color: "#EEF3F8",
+          }}
+        >
+          <Gavel className="h-4 w-4" style={{ color: "#F2C230" }} aria-hidden />
+          <span
+            className="rounded-full px-2 font-extrabold tabular-nums"
+            style={{ background: "#F2C230", color: "#2A1F00" }}
+          >
+            {naTela.length}
+          </span>
+          {t("esperandoDecisao")}
+        </button>
+      </div>
+    );
+  }
+
+  const compacto = naTela.length > 1;
 
   return (
+    /*
+      A CAMADA É TRANSPARENTE AO MOUSE. Só os cartões recebem clique, e não há fundo nenhum pintado
+      atrás deles — quem está atribuindo continua lendo, clicando e digitando no que está embaixo.
+      É o FR-003, e há um Playwright que o prova preenchendo um campo com cartões na tela.
+    */
     <div
-      // A CAMADA é transparente ao mouse; só o cartão recebe clique. Assim o botão de fechar funciona
-      // sem que o resto do aviso roube um clique de quem está trabalhando no painel atrás.
       className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center p-4"
       role="status"
       aria-live="polite"
     >
-      {/**
-       * QUADRADO, e com QUATRO informações (2026-08-19, a pedido, sobre um desenho do usuário).
-       *
-       * Era um retângulo largo com cabeçalho, preço em destaque e contador de fila. Virou um quadrado
-       * com viagem, rota, saída e veículo — as mesmas coisas que vão para o Telegram, e só elas.
-       *
-       * O que saiu, e por quê: o PREÇO, porque a maioria das ofertas chega como "preço não exibido" e
-       * um campo que quase sempre diz nada rouba o lugar do que decide; o CABEÇALHO "Nova oferta",
-       * porque um aviso que ocupa o meio da tela por trinta segundos já se anuncia sozinho; e o
-       * CONTADOR DE FILA, porque a segunda oferta aparece logo em seguida de qualquer jeito.
-       *
-       * O que ficou, e não é informação: o X (foi pedido antes) e a barra de tempo, que é o que
-       * explica por que o aviso some sozinho.
-       *
-       * LARGO, E COM A ALTURA SEGUINDO O CONTEÚDO (2026-08-19, autorizado).
-       *
-       * O desenho pedia um quadrado, e ele não sobreviveu a dois pedidos que vieram depois: a rota em
-       * UMA linha e nada de espaço vazio. Com 620 px de largura, os 73 caracteres da maior rota
-       * espremiam a letra para ~15 px — legível de perto, invisível numa TV do outro lado da sala.
-       *
-       * A largura resolve a leitura; tirar a proporção fixa resolve o vazio. São só três blocos, e
-       * qualquer altura imposta sobraria embaixo deles — que foi exatamente o que aconteceu com o
-       * quadrado e com o 3:2 que tentei antes dele.
-       *
-       * O `py` generoso é o que mantém cara de CARTÃO em vez de barra de notificação: o aviso precisa
-       * de peso para fazer alguém virar a cabeça, e peso aqui vem da moldura, não de espaço morto.
-       */}
-      <div
-        style={{
-          background: `linear-gradient(160deg, ${MARCA.fundoTopo} 0%, ${MARCA.fundo} 55%)`,
-          boxShadow: `0 0 0 9999px rgba(3,10,18,0.62), 0 30px 70px -20px rgba(0,0,0,0.95)`,
-          outline: `5px solid ${MARCA.verde}`,
-        }}
-        // `sm:min-w-[360px]` e não `min-w-[360px]` (2026-08-28): o aviso cobre TODAS as telas, e num
-        // aparelho de 390px sobram 358px depois do respiro de 16px de cada lado. Dois pixels a menos
-        // que o mínimo bastavam para o cartão furar a borda e a página inteira ganhar rolagem
-        // lateral — num aviso que a operação vê dez vezes por dia. Acima de `sm` nada muda: 74vw já
-        // passa de 360px muito antes disso.
-        className={`pointer-events-auto relative flex max-h-[80vh] w-[74vw] max-w-[1500px] flex-col overflow-hidden rounded-[28px] transition-all duration-200 sm:min-w-[360px] ${
-          saindo ? "scale-[0.97] opacity-0" : "scale-100 opacity-100"
-        }`}
-      >
-        {/* A assinatura do logo em 4 px: verde virando amarelo. Não carrega texto, então não há
-            contraste a perder — é a única cor que pode ser puramente decorativa aqui. */}
-        <div
-          aria-hidden
-          className="h-1 shrink-0"
-          style={{ background: `linear-gradient(90deg, ${MARCA.verde}, ${MARCA.amarelo})` }}
-        />
-
-        <button
-          type="button"
-          onClick={encerrar}
-          aria-label={t("dismiss")}
-          title={t("dismiss")}
-          className="absolute right-3 top-4 z-10 rounded-full p-1.5 text-slate-500 transition-colors hover:bg-white/10 hover:text-white"
-        >
-          <X className="h-5 w-5" aria-hidden />
-        </button>
-
-        <div className="flex flex-1 flex-col items-center justify-center gap-[2.2vh] px-[6%] py-[3.5vh] text-center">
-          {/* TRIP — o número do LH, para quem for atrás dele no portal. */}
-          {atual.tripNumber ? (
-            <div className="flex items-center gap-2.5" style={{ color: MARCA.amarelo }}>
-              <Gavel className="h-[1.7vw] min-h-5 w-[1.7vw] min-w-5 shrink-0" aria-hidden />
-              <span className="font-black uppercase tracking-[0.14em] tabular-nums [font-size:clamp(1rem,1.8vw,2.6rem)]">
-                {atual.tripNumber}
-              </span>
-            </div>
-          ) : null}
-
-          {/**
-           * ROTA EM UMA LINHA SÓ (2026-08-19, a pedido) — e é por ela que o cartão alargou.
-           *
-           * Quebrada em duas ou três linhas, a rota quebrava no meio do nome da estação
-           * ("LM Hub_PB_João / Pessoa_Gramame"), o que faz o olho parar para remontar a palavra. É a
-           * informação que decide se alguém corre atrás do frete; ela não pode custar leitura.
-           *
-           * O tamanho da letra CAI conforme o texto cresce, em vez de um valor fixo. Medido nas rotas
-           * reais: a maior tem 65 caracteres nas ofertas e 73 nas viagens em geral. Com um número
-           * fixo, ou a rota longa vazava, ou a curta ficava pequena à toa.
-           *
-           * A conta de caber: a largura útil é 88% do cartão e uma letra em negrito ocupa ~0,52 do
-           * corpo dela, então o corpo máximo é `1,69 × largura ÷ comprimento`.
-           *
-           * O TETO É EM PIXELS, e isso não é detalhe. O cartão cresce com a tela até 1080 px e PARA;
-           * um tamanho só em `vw` continuaria crescendo depois disso e a rota vazaria justamente na
-           * tela grande — que é a TV, o lugar onde ela precisa caber.
-           */}
+      <div className="flex max-h-full w-full max-w-[960px] flex-col gap-3 overflow-y-auto">
+        {/* A barra só aparece com mais de um: com um cartão só ela seria enfeite. */}
+        {naTela.length > 1 ? (
           <div
-            className="w-full overflow-hidden whitespace-nowrap font-bold leading-tight"
+            className="pointer-events-auto flex shrink-0 items-center justify-between gap-3 rounded-xl border px-3 py-1.5 text-xs font-semibold"
             style={{
-              color: MARCA.texto,
-              fontSize: `clamp(0.72rem, ${(125 / Math.max(atual.route.length, 1)).toFixed(2)}vw, ${Math.min(54, 2535 / Math.max(atual.route.length, 1)).toFixed(1)}px)`,
+              background: "rgba(12,26,43,0.92)",
+              borderColor: "rgba(238,243,248,0.16)",
+              color: "#EEF3F8",
             }}
-            title={atual.route}
           >
-            {atual.route}
+            <span className="flex items-center gap-2 tracking-wide">
+              <span
+                className="rounded-full px-2 font-extrabold tabular-nums"
+                style={{ background: "#F2C230", color: "#2A1F00" }}
+              >
+                {naTela.length}
+              </span>
+              {t("esperandoDecisao")}
+            </span>
+            <button
+              type="button"
+              onClick={() => setRecolhido(true)}
+              className="flex items-center gap-1.5 rounded-md border px-2.5 py-1"
+              style={{ borderColor: "rgba(238,243,248,0.28)", color: "#93A9BF" }}
+            >
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+              {t("recolher")}
+            </button>
           </div>
+        ) : null}
 
-          {/**
-           * UM HORÁRIO SÓ, E COM O NOME DO PORTAL: o STA da ORIGEM (2026-08-19, a pedido).
-           *
-           * A viagem tem três instantes programados, e eu mostrava os dois errados. Na LT1Q8J02EEL01
-           * eles eram:
-           *
-           *   STA origem   19/08 16:29   o caminhão precisa ESTAR lá   ← este
-           *   STD origem   19/08 17:29   ele sai
-           *   STA destino  20/08 01:29   chega no destino
-           *
-           * Só o primeiro responde a pergunta de quem vai dar lance: "consigo pôr um caminhão aí?".
-           * Os outros dois são consequência, e numa TV cada campo a mais encolhe todos os outros.
-           *
-           * O rótulo é `STA` porque é assim que está escrito na coluna do portal. Chamar de "saída"
-           * ou "chegada" obriga quem lê os dois lados a traduzir de cabeça — e foi traduzindo de
-           * cabeça que esta tela ficou com o horário errado desde que nasceu.
-           */}
-          {atual.originArrival || atual.vehicle ? (
-            <div className="flex w-full items-start justify-center gap-[12%]">
-              {atual.originArrival ? (
-                <Dado rotulo={t("originArrival")} valor={atual.originArrival} />
-              ) : null}
-              {atual.vehicle ? <Dado rotulo={t("vehicle")} valor={atual.vehicle} /> : null}
-            </div>
-          ) : null}
-
-          {/**
-           * "+N esperando" — o tamanho da fila atrás deste cartão (2026-08-27).
-           *
-           * Ela dizia "+N na caixa", das que tinham sido engolidas pela regra da rajada. Agora nada é
-           * engolido, e o que a linha informa é OUTRA coisa: quantas ainda vão subir depois desta.
-           *
-           * É a informação que o pedido de apitar todas torna necessária. Trinta segundos por oferta
-           * significa que a décima sobe cinco minutos depois de chegar; quem vê "+9" sabe que a fila é
-           * longa e pode ir direto à caixa de ofertas do dia, em vez de esperar a tela contar.
-           *
-           * Só aparece quando há fila. Num dia espaçado ninguém vê esta linha.
-           */}
-          {fila.length > 1 ? (
-            <p className="text-center text-[0.8rem] font-medium" style={{ color: MARCA.amarelo }}>
-              {t("queued", { count: fila.length - 1 })}
-            </p>
-          ) : null}
+        {/*
+          UM cartão ocupa o meio como antes; DOIS ou mais dividem em duas colunas e descem em linhas.
+          Passando da altura, o conjunto rola dentro da própria camada — sem esconder nenhum, que é
+          o que a fila antiga fazia.
+        */}
+        <div className={`grid gap-3 ${compacto ? "sm:grid-cols-2" : "grid-cols-1"}`}>
+          {naTela.map((oferta) => (
+            <CartaoDaOferta
+              key={oferta.id}
+              oferta={oferta}
+              /*
+                Sem `tripId` não há a quem endereçar a ordem, e o próprio cartão diz isso. A
+                autoridade continua sendo o servidor: `podeAceitar` só decide o que o botão mostra.
+              */
+              podeDecidir={podeDecidir}
+              enviando={enviando === oferta.id}
+              onAceitar={() => void aceitar(oferta)}
+              onIgnorar={() => void ignorar(oferta)}
+              compacto={compacto}
+            />
+          ))}
         </div>
 
-        {/* A barra escorre com o tempo: mostra que ele vai sair sozinho, sem precisar de aviso. */}
-        <div className="h-1.5 shrink-0" style={{ backgroundColor: "rgba(242,194,48,0.16)" }}>
-          <div
-            key={atual.id}
-            className="h-full"
+        {/* Um cartão sozinho também precisa poder sair da frente. */}
+        {naTela.length === 1 ? (
+          <button
+            type="button"
+            onClick={() => setRecolhido(true)}
+            className="pointer-events-auto mx-auto flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold"
             style={{
-              backgroundColor: MARCA.amarelo,
-              animation: `oferta-tempo ${DURACAO_MS}ms linear forwards`,
+              background: "rgba(12,26,43,0.92)",
+              borderColor: "rgba(238,243,248,0.24)",
+              color: "#93A9BF",
             }}
-          />
-        </div>
+          >
+            <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+            {t("recolher")}
+          </button>
+        ) : null}
       </div>
-
-      <style>{`@keyframes oferta-tempo { from { width: 100% } to { width: 0% } }`}</style>
     </div>
-  );
-}
-
-function Dado({ rotulo, valor }: { rotulo: string; valor: string }) {
-  return (
-    <span className="leading-tight">
-      {/* Rótulo em cinza-claro e valor em branco: os dois em AMARELO brigariam com o número da
-          viagem, e a tela perderia a hierarquia que faz o olho achar a rota primeiro. */}
-      <span
-        className="block uppercase tracking-[0.14em] [font-size:clamp(0.68rem,0.95vw,1.25rem)]"
-        style={{ color: MARCA.rotulo }}
-      >
-        {rotulo}
-      </span>
-      <span
-        className="font-semibold [font-size:clamp(0.95rem,1.6vw,2.2rem)]"
-        style={{ color: MARCA.texto }}
-      >
-        {valor}
-      </span>
-    </span>
   );
 }

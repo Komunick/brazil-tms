@@ -60,7 +60,7 @@ o que esconder.
 - [x] T003 Escrever À MÃO `packages/db/migrations/0062_dispensa_de_oferta.sql` criando `spot_offer_dispensas` com `spot_offer_id uuid REFERENCES "spot_offers"("id") ON DELETE CASCADE`, `user_id uuid REFERENCES "users"("id")` **sem cascade**, `dispensada_em timestamptz not null default now()` e **chave primária composta `(spot_offer_id, user_id)`** — o comentário do arquivo deve explicar por que a cascata é obrigatória pela oferta e proibida pelo autor (data-model §1)
 - [x] T004 Acrescentar a entrada de `0062_dispensa_de_oferta` em `packages/db/migrations/meta/_journal.json`, **no mesmo commit da T003** — sem ela a migração é pulada em silêncio e o deploy responde sucesso
 - [x] T005 Declarar a tabela em `packages/db/schema/spot-offers.ts` (mesmo arquivo da oferta, porque é a mesma história), com PK composta e sem índice extra — a leitura é `not exists (… where spot_offer_id = ? and user_id = ?)`, que é o prefixo da PK; um índice por `user_id` seria especulação
-- [ ] T006 [P] Escrever `packages/db/src/trips/spot-dispensas.test.ts` conferindo que migração e schema concordam: toda coluna do schema aparece na migração com aspas, a PK é composta, a cascata está na oferta e **não** está no autor
+- [x] T006 [P] Escrever `packages/db/src/trips/spot-dispensas.test.ts` conferindo que migração e schema concordam: toda coluna do schema aparece na migração com aspas, a PK é composta, a cascata está na oferta e **não** está no autor
 - [ ] T007 Rodar `pnpm --filter @brazil-tms/db db:migrate` no dev e conferir com `grep -c "0062_dispensa_de_oferta" packages/db/migrations/meta/_journal.json` (tem de ser 1) e com a tabela existindo e vazia
 
 ### A derivação do estado (etapa 2) — o coração da fatia
@@ -96,35 +96,35 @@ enviado, e que ele sai quando a leitura seguinte trouxer a viagem como aceita.
 
 ### A exclusão do que já foi aceito — mudou de fase, e o porquê importa
 
-- [ ] T017a [US1] Em `packages/db/src/trips/spot-offers.ts`, **excluir da lista as ofertas cujo estado é `aceito`** — é assim que o cartão sai da tela, e é a garantia por construção do FR-014. **Esta tarefa estava na Fase 2 e saiu de lá**: com o cartão de hoje, que anuncia toda oferta nova e sai em 30 s, excluir as já aceitas SUPRIMIRIA um aviso que hoje aparece — e **25 de 98 ofertas tinham a viagem no TMS antes de a oferta chegar**, então o caso não é teórico. Na Fase 2 isso quebraria a promessa de que nada muda; aqui, junto com o cartão que fica, é exatamente o comportamento pedido
-- [ ] T017b [US1] [P] Escrever em `packages/db/src/trips/spot-offers.test.ts` a asserção de que `estado: "aceito"` **nunca** aparece na lista devolvida, em nenhuma combinação de entradas
+- [x] T017a [US1] Em `packages/db/src/trips/spot-offers.ts`, **excluir da lista as ofertas cujo estado é `aceito`** — é assim que o cartão sai da tela, e é a garantia por construção do FR-014. **Esta tarefa estava na Fase 2 e saiu de lá**: com o cartão de hoje, que anuncia toda oferta nova e sai em 30 s, excluir as já aceitas SUPRIMIRIA um aviso que hoje aparece — e **25 de 98 ofertas tinham a viagem no TMS antes de a oferta chegar**, então o caso não é teórico. Na Fase 2 isso quebraria a promessa de que nada muda; aqui, junto com o cartão que fica, é exatamente o comportamento pedido
+- [x] T017b [US1] [P] Escrever em `packages/db/src/trips/spot-offers.test.ts` a asserção de que `estado: "aceito"` **nunca** aparece na lista devolvida, em nenhuma combinação de entradas
 
 ### O cartão, sem a cortina
 
-- [ ] T018 [US1] Extrair um cartão para `apps/web/components/spot/cartao-da-oferta.tsx`, recebendo uma oferta e os gestos — hoje o desenho está embutido em `oferta-de-spot.tsx`, e vários cartões na tela exigem que ele seja uma peça
-- [ ] T019 [US1] Em `apps/web/components/spot/oferta-de-spot.tsx`, **remover a cortina** (`boxShadow: 0 0 0 9999px …`) mantendo `pointer-events-none` na camada e `pointer-events-auto` só nos cartões, e reescrever o comentário que defendia a cortina para explicar por que ela saiu
-- [ ] T020 [US1] Remover o temporizador de `DURACAO_MS` e a barra de tempo: o cartão não sai mais sozinho (FR-001). Reescrever o comentário "SAI SOZINHO EM 30 SEGUNDOS", que passa a ser o oposto
-- [ ] T021 [US1] Trocar a fila de "um de cada vez" por **todos ao mesmo tempo**: um cartão sozinho ocupa o meio como hoje; dois ou mais dividem em duas colunas e descem em linhas; passando da altura, o conjunto rola dentro da própria camada, sem esconder nenhum (FR-002)
-- [ ] T022 [US1] **Preservar `estadoInicial`/`novasOfertas` de `apps/web/lib/spot/ofertas.ts` como memória do SOM**, e só dela: o apito continua saindo uma vez por oferta. Acrescentar comentário dizendo que ela não é, e não pode virar, a memória da decisão
+- [x] T018 [US1] Extrair um cartão para `apps/web/components/spot/cartao-da-oferta.tsx`, recebendo uma oferta e os gestos — hoje o desenho está embutido em `oferta-de-spot.tsx`, e vários cartões na tela exigem que ele seja uma peça
+- [x] T019 [US1] Em `apps/web/components/spot/oferta-de-spot.tsx`, **remover a cortina** (`boxShadow: 0 0 0 9999px …`) mantendo `pointer-events-none` na camada e `pointer-events-auto` só nos cartões, e reescrever o comentário que defendia a cortina para explicar por que ela saiu
+- [x] T020 [US1] Remover o temporizador de `DURACAO_MS` e a barra de tempo: o cartão não sai mais sozinho (FR-001). Reescrever o comentário "SAI SOZINHO EM 30 SEGUNDOS", que passa a ser o oposto
+- [x] T021 [US1] Trocar a fila de "um de cada vez" por **todos ao mesmo tempo**: um cartão sozinho ocupa o meio como hoje; dois ou mais dividem em duas colunas e descem em linhas; passando da altura, o conjunto rola dentro da própria camada, sem esconder nenhum (FR-002)
+- [x] T022 [US1] **Preservar `estadoInicial`/`novasOfertas` de `apps/web/lib/spot/ofertas.ts` como memória do SOM**, e só dela: o apito continua saindo uma vez por oferta. Acrescentar comentário dizendo que ela não é, e não pode virar, a memória da decisão
 
 ### Aceitar em dois gestos
 
-- [ ] T023 [US1] Acrescentar ao cartão o botão Aceitar, que **não envia nada**: abre uma confirmação dentro do próprio cartão, escrevendo o número da LH e avisando que o aceite não tem volta (FR-007)
-- [ ] T024 [US1] Acrescentar Confirmar e Voltar à confirmação; Voltar retorna ao estado de decisão sem efeito nenhum (FR-008)
-- [ ] T025 [US1] Aceitar `origem: "oferta_spot" | "tela_da_viagem"` (opcional, ausente = `tela_da_viagem`) no corpo de `apps/web/app/api/trips/[id]/portal-action/route.ts` e no schema Zod correspondente — **sem criar rota nova** (FR-009)
-- [ ] T026 [US1] Gravar a origem no `newValue` da auditoria que a rota já escreve na mesma transação (FR-025), **sem mudar a assinatura de `enfileirarOrdemDoPortal`** para nenhum chamador existente
-- [ ] T027 [US1] Ligar o Confirmar a `POST /api/trips/[id]/portal-action` com `action: "accept"` e `origem: "oferta_spot"`, usando o `tripId` que a leitura passou a devolver
-- [ ] T028 [US1] Desenhar o estado `enviado`: o cartão **fica na tela**, diz que a ordem foi enviada e mostra quem decidiu (FR-013). **Não** esconder o cartão quando o POST responde sucesso — 4 das 17 ordens gravadas voltaram recusadas
-- [ ] T029 [US1] Desenhar o estado `recusado`: mostra a mensagem do portal e volta a permitir tentar (FR-015). A recusa **não** tira o cartão da tela
-- [ ] T030 [US1] Traduzir em `apps/web/components/spot/cartao-da-oferta.tsx` (ou no arquivo de mensagens pt-BR) **apenas** o código já observado — `131205003` → "A viagem não está mais esperando decisão; ela pode já ter sido aceita, aqui ou no portal" — com a regra de que **código desconhecido mostra o texto cru do portal, nunca "erro desconhecido"** (R6)
-- [ ] T031 [US1] Desenhar o estado `sem_viagem`: Aceitar desligado com a razão escrita, e ligando sozinho quando a viagem chegar — em 82 de 98 casos medidos isso levou menos de dois minutos (FR-010)
-- [ ] T032 [US1] Esconder o Aceitar de quem não tem a permissão de aceitar viagem, mantendo a oferta visível (FR-011) — e conferir que a recusa vale no servidor, pelo `requirePermission` da rota reusada, não só no botão
-- [ ] T033 [US1] Mostrar "já há decisão em andamento" quando houver ordem aberta, sem permitir uma segunda (FR-012) — o índice parcial de `portal_commands` já garante, e a tela precisa dizer em vez de falhar
+- [x] T023 [US1] Acrescentar ao cartão o botão Aceitar, que **não envia nada**: abre uma confirmação dentro do próprio cartão, escrevendo o número da LH e avisando que o aceite não tem volta (FR-007)
+- [x] T024 [US1] Acrescentar Confirmar e Voltar à confirmação; Voltar retorna ao estado de decisão sem efeito nenhum (FR-008)
+- [x] T025 [US1] Aceitar `origem: "oferta_spot" | "tela_da_viagem"` (opcional, ausente = `tela_da_viagem`) no corpo de `apps/web/app/api/trips/[id]/portal-action/route.ts` e no schema Zod correspondente — **sem criar rota nova** (FR-009)
+- [x] T026 [US1] Gravar a origem no `newValue` da auditoria que a rota já escreve na mesma transação (FR-025), **sem mudar a assinatura de `enfileirarOrdemDoPortal`** para nenhum chamador existente
+- [x] T027 [US1] Ligar o Confirmar a `POST /api/trips/[id]/portal-action` com `action: "accept"` e `origem: "oferta_spot"`, usando o `tripId` que a leitura passou a devolver
+- [x] T028 [US1] Desenhar o estado `enviado`: o cartão **fica na tela**, diz que a ordem foi enviada e mostra quem decidiu (FR-013). **Não** esconder o cartão quando o POST responde sucesso — 4 das 17 ordens gravadas voltaram recusadas
+- [x] T029 [US1] Desenhar o estado `recusado`: mostra a mensagem do portal e volta a permitir tentar (FR-015). A recusa **não** tira o cartão da tela
+- [x] T030 [US1] Traduzir em `apps/web/components/spot/cartao-da-oferta.tsx` (ou no arquivo de mensagens pt-BR) **apenas** o código já observado — `131205003` → "A viagem não está mais esperando decisão; ela pode já ter sido aceita, aqui ou no portal" — com a regra de que **código desconhecido mostra o texto cru do portal, nunca "erro desconhecido"** (R6)
+- [x] T031 [US1] Desenhar o estado `sem_viagem`: Aceitar desligado com a razão escrita, e ligando sozinho quando a viagem chegar — em 82 de 98 casos medidos isso levou menos de dois minutos (FR-010)
+- [x] T032 [US1] Esconder o Aceitar de quem não tem a permissão de aceitar viagem, mantendo a oferta visível (FR-011) — e conferir que a recusa vale no servidor, pelo `requirePermission` da rota reusada, não só no botão
+- [x] T033 [US1] Mostrar "já há decisão em andamento" quando houver ordem aberta, sem permitir uma segunda (FR-012) — o índice parcial de `portal_commands` já garante, e a tela precisa dizer em vez de falhar
 
 ### Recolher
 
-- [ ] T034 [US1] Trocar o X por **Recolher**: encolhe o conjunto para uma pastilha com a contagem do que espera decisão, e volta com um clique (FR-004). O estado do recolhido vive na aba e **não** é guardado (R8)
-- [ ] T035 [US1] Fazer uma oferta NOVA reabrir o conjunto recolhido, e conferir que recolher **não** remove nada da lista (FR-005) — informação nova não pode ficar atrás de um gesto antigo
+- [x] T034 [US1] Trocar o X por **Recolher**: encolhe o conjunto para uma pastilha com a contagem do que espera decisão, e volta com um clique (FR-004). O estado do recolhido vive na aba e **não** é guardado (R8)
+- [x] T035 [US1] Fazer uma oferta NOVA reabrir o conjunto recolhido, e conferir que recolher **não** remove nada da lista (FR-005) — informação nova não pode ficar atrás de um gesto antigo
 
 ---
 
@@ -135,11 +135,11 @@ enviado, e que ele sai quando a leitura seguinte trouxer a viagem como aceita.
 **Independent Test**: ignorar numa sessão e verificar, noutra sessão de outra pessoa, que o cartão
 continua lá; e verificar que nenhuma ordem foi enviada ao portal.
 
-- [ ] T036 [US2] Criar `packages/db/src/trips/spot-dispensas.ts` com a gravação `insert … on conflict do nothing` e a leitura usada pelo filtro — **sem nenhum `delete` em lugar nenhum** (invariante I2, princípio III)
-- [ ] T037 [US2] Criar `apps/web/app/api/spot-offers/[id]/dispensar/route.ts`: `POST`, corpo vazio, permissão `view_all_trips`, resposta `204`, idempotente. Quem dispensa é quem está autenticado e não pode ser outro. **Não existe a rota inversa** — o caminho de volta é o Painel do dia (contrato §3)
-- [ ] T038 [US2] Filtrar **no servidor**, em `readSpotOffersToday`, as ofertas que quem pediu dispensou — é isso que faz a dispensa sobreviver a recarregar e a trocar de aparelho (FR-018), sem o cliente precisar lembrar de filtrar em três telas
-- [ ] T039 [US2] Acrescentar o botão Ignorar ao cartão, chamando a rota da T037 e tirando o cartão da tela com a animação de saída (FR-016)
-- [ ] T040 [US2] [P] Escrever teste afirmando que dispensar **não** cria ordem de portal nenhuma, que a oferta continua sendo devolvida ao Painel do dia (invariante I3) e que a leitura de outra pessoa continua trazendo a oferta (FR-017)
+- [x] T036 [US2] Criar `packages/db/src/trips/spot-dispensas.ts` com a gravação `insert … on conflict do nothing` e a leitura usada pelo filtro — **sem nenhum `delete` em lugar nenhum** (invariante I2, princípio III)
+- [x] T037 [US2] Criar `apps/web/app/api/spot-offers/[id]/dispensar/route.ts`: `POST`, corpo vazio, permissão `view_all_trips`, resposta `204`, idempotente. Quem dispensa é quem está autenticado e não pode ser outro. **Não existe a rota inversa** — o caminho de volta é o Painel do dia (contrato §3)
+- [x] T038 [US2] Filtrar **no servidor**, em `readSpotOffersToday`, as ofertas que quem pediu dispensou — é isso que faz a dispensa sobreviver a recarregar e a trocar de aparelho (FR-018), sem o cliente precisar lembrar de filtrar em três telas
+- [x] T039 [US2] Acrescentar o botão Ignorar ao cartão, chamando a rota da T037 e tirando o cartão da tela com a animação de saída (FR-016)
+- [x] T040 [US2] [P] Escrever teste afirmando que dispensar **não** cria ordem de portal nenhuma, que a oferta continua sendo devolvida ao Painel do dia (invariante I3) e que a leitura de outra pessoa continua trazendo a oferta (FR-017)
 
 **Checkpoint**: com as fases 3 e 4, o pedido está entregue. As duas vão juntas no mesmo PR.
 
@@ -168,9 +168,9 @@ aba, passa ao estado enviado — provando que é o mesmo estado, e não uma segu
 
 - [ ] T049 [P] Escrever o guarda que **impede a cortina de voltar**, em `apps/web/lib/ui/` (junto dos guardas que já moram lá): falha se `9999px` ou um fundo opaco de tela cheia reaparecerem em `oferta-de-spot.tsx`. Ignorar comentários antes de asseverar
 - [ ] T050 Escrever o Playwright que prova o **FR-003**: com cartões na tela, **preencher e enviar** um campo do diálogo de atribuição. A asserção MUST começar conferindo que há cartão — passar por não haver cartão nenhum não prova coisa alguma
-- [ ] T051 [P] Escrever o teste que prova o **FR-005**: não existe caminho que remova um cartão sem aceitar, ignorar ou recolher — e que recolher não tira nada da lista
+- [x] T051 [P] Escrever o teste que prova o **FR-005**: não existe caminho que remova um cartão sem aceitar, ignorar ou recolher — e que recolher não tira nada da lista
 - [ ] T052 [P] Conferir que `apps/web/components/spot/cartao-da-oferta.tsx` tem dono: alguma tela o importa. `apps/web/lib/ui/componentes-tem-dono.test.ts` cai se ele ficar órfão — foi o quinto caso de "dado capturado e nunca mostrado" nesta base
-- [ ] T053 [P] Traduzir todos os rótulos novos para pt-BR nos arquivos de mensagens, sem texto solto no componente
+- [x] T053 [P] Traduzir todos os rótulos novos para pt-BR nos arquivos de mensagens, sem texto solto no componente
 - [ ] T054 Estender `apps/web/lib/spot/ensaio.ts` para o ensaio poder subir uma oferta de mentira em **cada** estado (`sem_viagem`, `esperando`, `enviado`, `recusado`), pela MESMA porta da oferta real — um ensaio que desenhasse por outro caminho provaria o outro caminho
 - [ ] T055 Percorrer a lista de conferência da etapa 4 do `quickstart.md` inteira, com o ensaio, **sem aceitar nada de verdade**
 - [ ] T056 Rodar `pnpm lint` da RAIZ (`eslint .`), `pnpm typecheck`, `pnpm test` e o e2e do spot — `pnpm -r lint` não cobre `scripts/` e já deixou a CI vermelha nesta base
