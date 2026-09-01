@@ -45,6 +45,22 @@ export function ofertaDeEnsaio(): SpotOfferView {
     arrival: null,
     operator: "disparado do TMS",
     receivedAt: agora.toISOString(),
+
+    /*
+      A OFERTA DE ENSAIO NÃO TEM VIAGEM, e o estado diz isso em vez de fingir (2026-09-01).
+
+      Ela é inventada aqui, no navegador; não existe LH nenhuma no portal com este número. `sem_viagem`
+      é a verdade, e é também o estado mais seguro: com ele o botão de aceitar nasce desligado, então
+      nenhum ensaio pode virar uma ordem de verdade por engano.
+
+      A fatia 030 prevê o ensaio cobrir os quatro estados (ver tasks T054). Enquanto isso não chega,
+      este é o único que não mente.
+    */
+    estado: "sem_viagem",
+    tripId: null,
+    podeAceitar: false,
+    decidiuNome: null,
+    erroDoPortal: null,
   };
 }
 

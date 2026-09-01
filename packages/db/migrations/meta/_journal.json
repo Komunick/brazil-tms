@@ -435,6 +435,13 @@
       "when": 1788271200009,
       "tag": "0061_sm_da_programacao",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1788357600009,
+      "tag": "0062_dispensa_de_oferta",
+      "breakpoints": true
     }
   ]
 }
