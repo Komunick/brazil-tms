@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type { SpotOfferView } from "@brazil-tms/db";
 import { useSpotOffers } from "@/lib/trips/client";
 import { estadoInicial, novasOfertas } from "@/lib/spot/ofertas";
@@ -10,6 +11,8 @@ import { tocarAviso } from "@/lib/spot/som";
 import { avisarNoSistema } from "@/lib/spot/aviso-do-sistema";
 import { EVENTO_ENSAIO } from "@/lib/spot/ensaio";
 import { useEsteira } from "@/lib/spot/esteira";
+import { useDialogoAberto } from "@/lib/spot/dialogo-aberto";
+import { aoRecolher, formaDaCamada, type FormaDaCamada } from "@/lib/spot/forma-da-camada";
 import { CartaoDaOferta } from "./cartao-da-oferta";
 
 /**
@@ -59,10 +62,24 @@ import { CartaoDaOferta } from "./cartao-da-oferta";
 const LARANJA = "#EE4D2D";
 const LARANJA_ESCURO = "#D73211";
 
-export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
+export function OfertaDeSpot({
+  podeDecidir,
+  sempreNoCentro = false,
+}: {
+  podeDecidir: boolean;
+  /**
+   * O PAINEL DE PAREDE É A ÚNICA EXCEÇÃO À REGRA DA POSIÇÃO, e é deliberada.
+   *
+   * Ele não tem ninguém para pré-selecionar: existe para ser lido de longe, e uma TV com o aviso
+   * encolhido no canto não avisa ninguém. As telas de gente seguem a regra; esta não.
+   */
+  sempreNoCentro?: boolean;
+}) {
   const t = useTranslations("Spot");
   const { data, refetch } = useSpotOffers();
   const ofertas = useMemo(() => data?.ofertas ?? [], [data?.ofertas]);
+  const pathname = usePathname();
+  const dialogoAberto = useDialogoAberto();
 
   /**
    * A memória do APITO, e só dela. Vive num `useRef` porque é memória de sessão da tela: recriá-la a
@@ -73,7 +90,13 @@ export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
 
   /** As ofertas de ensaio vivem só aqui: elas não estão na resposta do servidor. */
   const [ensaios, setEnsaios] = useState<SpotOfferView[]>([]);
-  const [recolhido, setRecolhido] = useState(false);
+  /**
+   * A FORMA ESCOLHIDA NESTA SESSÃO DE TELA — `null` enquanto ninguém mexeu.
+   *
+   * Estado de tela, e não preferência guardada, pela mesma razão de sempre: uma preferência sumiria
+   * com uma coisa que a pessoa esqueceu que escondeu. Recarregar devolve o padrão.
+   */
+  const [escolhida, setEscolhida] = useState<FormaDaCamada | null>(null);
   const [enviando, setEnviando] = useState<string | null>(null);
   const [saindo, setSaindo] = useState<Set<string>>(new Set());
   /**
@@ -116,7 +139,7 @@ export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
       conhecido: quem recolheu para atribuir pode ser reaberto no meio. É por isso que a camada não
       rouba foco nem bloqueia clique — reabrir é um incômodo visual, não uma interrupção.
     */
-    if (novas.length > 0) setRecolhido(false);
+    if (novas.length > 0) setEscolhida(null);
   }, [data?.ofertas, t]);
 
   /**
@@ -135,7 +158,7 @@ export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
       if (!oferta) return;
       ensaiada.current = oferta.id;
       setEnsaios((atuais) => [oferta, ...atuais.filter((o) => o.id !== oferta.id)]);
-      setRecolhido(false);
+      setEscolhida(null);
       tocarAviso();
       avisarNoSistema(t("systemTitle"), [oferta.route, oferta.price].filter(Boolean).join(" · "), {
         somenteSeEscondido: false,
@@ -210,20 +233,66 @@ export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
   if (naTela.length === 0) return null;
 
   /*
-    ── RECOLHIDO: UM PAINEL NA DIREITA, e não um botão solto (2026-09-01, a pedido) ─────────────
+    ── ONDE ESTE CARTÃO SE PÕE, e para quem (2026-09-01, a pedido) ──────────────────────────────
 
-    Recolher era um comprimido no canto que só dizia "3 esperando". Escondia demais: quem recolheu
-    para atribuir perdia de vista QUAIS ofertas estavam paradas, e voltava a abrir tudo só para
-    lembrar. O painel mantém a lista à mão — LH, rota e horário — e ainda deixa decidir dali.
+    O meio da tela era de todos, em toda tela. Agora é do Painel do dia de quem tem `decidir_spot`,
+    e o resto da equipe recebe a MESMA oferta no canto inferior direito. A regra inteira mora em
+    `formaDaCamada`, sob teste — aqui só se desenha o que ela responde.
 
-    Ele fica na direita, encostado, ocupando uma faixa estreita. É o desenho que o usuário aprovou:
-    a esteira sai do caminho, e a informação não sai junto.
+    O `pathname === "/"` é o Painel do dia: ele é a raiz do shell, e é a tela onde se está OLHANDO.
   */
-  if (recolhido) {
+  const padrao = sempreNoCentro || (pathname === "/" && podeDecidir) ? "centro" : "popup";
+  const forma = formaDaCamada({ padrao, escolhida, dialogoAberto });
+  const recolher = () => setEscolhida(aoRecolher(forma));
+  const abrir = () => setEscolhida(null);
+
+  /*
+    ── A PASTILHA: só a contagem, e ela nunca some ──────────────────────────────────────────────
+
+    É onde o cartão vai enquanto há um diálogo aberto — atribuindo, editando, confirmando —, e onde
+    ele fica para quem recolheu duas vezes. A contagem CONTINUA À VISTA de propósito: recolher é
+    "me dá a tela por um minuto", e não "esqueça que isto existe". Sem o número, a oferta passaria
+    batido exatamente como passava antes desta fatia.
+  */
+  if (forma === "pastilha") {
+    return (
+      <div className="pointer-events-none fixed inset-0 z-50">
+        <button
+          type="button"
+          onClick={abrir}
+          className="pointer-events-auto absolute bottom-4 right-4 flex items-center gap-2 rounded-full py-1.5 pl-1.5 pr-4 text-xs font-extrabold text-white shadow-[0_8px_24px_-8px_rgba(238,77,45,0.9)]"
+          style={{ background: LARANJA }}
+          aria-live="polite"
+        >
+          <span
+            className="rounded-full bg-white px-2 py-0.5 font-black tabular-nums"
+            style={{ color: LARANJA_ESCURO }}
+          >
+            {naTela.length}
+          </span>
+          {t("esperandoDecisao")}
+        </button>
+      </div>
+    );
+  }
+
+  /*
+    ── O POPUP DO CANTO INFERIOR DIREITO — o que a equipe recebe (2026-09-01, a pedido) ──────────
+
+    Ele mostra O MESMO `CartaoDaOferta`, em tamanho compacto e empilhado. Não é um resumo: houve
+    aqui um painel com uma linha por oferta — LH, rota, horário — e ele tinha o defeito de ser uma
+    SEGUNDA descrição da mesma oferta, que divergiria da primeira no primeiro ajuste. O cartão de
+    verdade, menor, custa o mesmo e não se separa nunca.
+
+    Para quem não tem `decidir_spot`, os dois botões aparecem TRAVADOS, e não somem: o cartão dizer
+    o que existe e não se pode fazer é o que faz a pessoa chamar quem pode. Recolher continua sendo
+    de todo mundo — a tela é de quem está nela.
+  */
+  if (forma === "popup") {
     return (
       <div className="pointer-events-none fixed inset-0 z-50">
         <aside
-          className="pointer-events-auto absolute bottom-4 right-4 top-4 flex w-[300px] flex-col overflow-hidden rounded-2xl border-2 bg-card shadow-[0_20px_44px_-16px_rgba(0,0,0,0.5)]"
+          className="pointer-events-auto absolute bottom-4 right-4 flex max-h-[78vh] w-[380px] flex-col overflow-hidden rounded-2xl border-2 bg-card shadow-[0_20px_44px_-16px_rgba(0,0,0,0.5)]"
           style={{ borderColor: LARANJA }}
           role="status"
           aria-live="polite"
@@ -243,26 +312,25 @@ export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
             </span>
             <button
               type="button"
-              onClick={() => setRecolhido(false)}
+              onClick={recolher}
               className="flex items-center gap-1 rounded-md border border-white/60 bg-white/20 px-2 py-0.5 font-bold hover:bg-white/30"
             >
-              <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
-              {t("abrir")}
+              {t("recolher")}
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden />
             </button>
           </div>
 
           <div className="flex flex-col gap-2 overflow-y-auto p-2.5">
             {naTela.map((oferta) => (
-              <ItemRecolhido
+              <CartaoDaOferta
                 key={oferta.id}
                 oferta={oferta}
                 podeDecidir={podeDecidir}
-                /*
-                  Decidir daqui ABRE a esteira antes de perguntar. A confirmação de dois gestos e o
-                  campo de motivo vivem no cartão inteiro, e reproduzi-los aqui seria uma segunda
-                  cópia dos mesmos dois gestos — que divergiriam no primeiro ajuste.
-                */
-                aoDecidir={() => setRecolhido(false)}
+                enviando={enviando === oferta.id}
+                onAceitar={() => void aceitar(oferta)}
+                onIgnorar={(motivo) => void ignorar(oferta, motivo)}
+                aoOcuparse={(ocupado) => setOcupados((n) => Math.max(0, n + (ocupado ? 1 : -1)))}
+                compacto
               />
             ))}
           </div>
@@ -270,6 +338,7 @@ export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
       </div>
     );
   }
+
 
   /*
     OS CARTÕES FICAM GRANDES, sempre (2026-09-01, correção a pedido).
@@ -317,7 +386,7 @@ export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
 
         <button
           type="button"
-          onClick={() => setRecolhido(true)}
+          onClick={recolher}
           className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-extrabold text-white shadow-[0_3px_10px_-3px_rgba(238,77,45,0.7)]"
           style={{ background: LARANJA }}
         >
@@ -359,62 +428,6 @@ export function OfertaDeSpot({ podeDecidir }: { podeDecidir: boolean }) {
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-/**
- * UMA LINHA DO PAINEL RECOLHIDO — o suficiente para reconhecer a oferta e decidir voltar a ela.
- *
- * Traz LH, rota e o STA. Não traz os botões de decisão de verdade: a confirmação de dois gestos e o
- * campo de motivo vivem no cartão, e reproduzi-los aqui criaria uma segunda cópia dos mesmos dois
- * gestos. Quem quer decidir abre — é um clique, e o clique já estava lá.
- */
-function ItemRecolhido({
-  oferta,
-  podeDecidir,
-  aoDecidir,
-}: {
-  oferta: SpotOfferView;
-  podeDecidir: boolean;
-  aoDecidir: () => void;
-}) {
-  const t = useTranslations("Spot");
-  const enviado = oferta.estado === "enviado";
-
-  return (
-    <div
-      className="flex flex-col gap-1 rounded-xl border border-l-4 p-2.5"
-      style={{ borderLeftColor: enviado ? "#12925A" : LARANJA }}
-    >
-      <span
-        className="text-[0.72rem] font-black tracking-[0.06em] tabular-nums"
-        style={{ color: LARANJA_ESCURO }}
-      >
-        {oferta.tripNumber}
-      </span>
-      <span className="text-[0.72rem] font-semibold leading-snug">{oferta.route}</span>
-      {oferta.originArrival ? (
-        <span className="text-[0.64rem] text-muted-foreground">
-          {t("originArrival")} {oferta.originArrival}
-          {oferta.vehicle ? ` · ${oferta.vehicle}` : ""}
-        </span>
-      ) : null}
-
-      {enviado ? (
-        <span className="text-[0.64rem] font-extrabold text-success">
-          {oferta.decidiuNome ? t("aceitoPor", { nome: oferta.decidiuNome }) : t("esperandoDecisao")}
-        </span>
-      ) : podeDecidir ? (
-        <button
-          type="button"
-          onClick={aoDecidir}
-          className="mt-0.5 self-start rounded px-2 py-0.5 text-[0.66rem] font-extrabold text-white"
-          style={{ background: LARANJA }}
-        >
-          {t("decidir")}
-        </button>
-      ) : null}
     </div>
   );
 }

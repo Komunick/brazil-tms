@@ -7,24 +7,27 @@ import { handleRouteError } from "@/lib/api/respond";
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/spot-offers/:id/dispensar — tirar esta oferta da MINHA tela (2026-09-01).
+ * POST /api/spot-offers/:id/dispensar — a equipe decide não pegar esta oferta (2026-09-01).
+ *
+ * ── ELA JÁ FOI PESSOAL, e o comentário abaixo ficou dias descrevendo o que ela não era mais ────
+ *
+ * Nasceu como "tirar da MINHA tela": uma linha por (pessoa, oferta), e a oferta continuava com os
+ * colegas. O usuário inverteu no mesmo dia — ignorar passou a valer para todos, porque o contrário
+ * fazia cada pessoa ter de recusar o mesmo cartão. A migração 0063 encolheu a chave para a oferta.
  *
  * ── O QUE ELA NÃO FAZ, e cada uma é deliberada ────────────────────────────────────────────────
  *
  * NÃO manda nada ao portal. Ignorar não é rejeitar: rejeitar exige um motivo do vocabulário do
  * portal e é outra decisão, com outra tela. Aqui não sai ordem nenhuma.
  *
- * NÃO mexe na tela de ninguém. A oferta continua com os colegas até alguém aceitar — é o que impede
- * uma pessoa de esconder da equipe uma oferta que talvez interessasse a outra.
- *
  * NÃO remove nada. A oferta continua inteira na tabela dela e continua no registro do dia, onde a
- * linha aparece assinalada como ignorada e ainda pode ser aceita.
+ * linha aparece assinalada com QUEM ignorou e o motivo, e ainda pode ser aceita.
  *
- * ── A PERMISSÃO É A DA LEITURA, e não a do aceite ─────────────────────────────────────────────
+ * ── A PERMISSÃO É `decidir_spot`, e é a mesma do aceite ───────────────────────────────────────
  *
- * `view_all_trips`, a mesma de `GET /api/spot-offers`. Dispensar é um gesto sobre a própria tela, não
- * sobre o frete: quem pode ver a oferta pode limpar a própria vista. Exigir a permissão de aceitar
- * deixaria quem só olha sem como tirar da frente um cartão que não vai decidir.
+ * Enquanto a dispensa era pessoal, a permissão certa era a da LEITURA (`view_all_trips`): limpar a
+ * própria vista não é decidir sobre o frete. Ao virar decisão da equipe, ela passou a apagar o
+ * cartão da tela de todo mundo — e isso é decidir sobre o frete. Quem só olha não pode fazê-lo.
  *
  * ── E NÃO EXISTE O INVERSO ────────────────────────────────────────────────────────────────────
  *

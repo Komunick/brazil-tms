@@ -112,13 +112,38 @@ describe("o cartão não sai da tela sem decisão", () => {
    * FR-005: as saídas são aceitar e ignorar. RECOLHER NÃO É SAÍDA — é tamanho, e a contagem
    * continua à vista. Um botão de fechar que apagasse o cartão sem registrar nada é exatamente o
    * que fazia a oferta passar batido antes desta fatia.
+   *
+   * ── ESTE GUARDA FOI RENOMEADO, NÃO AFROUXADO (2026-09-01) ─────────────────────────────────
+   *
+   * Ele falava de `setRecolhido` e `if (recolhido)`, que era o booleano de quando havia dois
+   * tamanhos. Agora são três formas (`centro`, `popup`, `pastilha`) e o estado é `escolhida`. A
+   * pergunta não mudou uma vírgula: o passo mais discreto de todos ainda precisa dizer QUANTAS
+   * esperam. Trocar a asserção pelos nomes novos é o conserto certo; apagá-la porque "o teste
+   * quebrou no rename" seria perder a única coisa que impede a pastilha de virar um botão mudo.
    */
   it("recolher encolhe, e não remove", () => {
     const codigo = readFileSync(CAMADA, "utf8");
-    expect(codigo).toContain("setRecolhido");
-    // Recolhido continua mostrando quantas esperam: some da vista, não da lista.
-    const trecho = codigo.slice(codigo.indexOf("if (recolhido)"));
+    expect(codigo, "recolher deixou de existir como gesto").toContain("aoRecolher");
+    // A pastilha é o passo mais escondido — e mesmo ela mostra quantas esperam.
+    const trecho = codigo.slice(codigo.indexOf('if (forma === "pastilha")'));
     expect(trecho.slice(0, 1200)).toContain("naTela.length");
+  });
+
+  /**
+   * O DIÁLOGO ABERTO PRECISA CHEGAR VIVO ATÉ A REGRA (2026-09-01).
+   *
+   * `formaDaCamada` exige o campo, e o compilador cobra que ele exista — mas não que ele seja
+   * VERDADE. Um `dialogoAberto: false` fixo compila, passa em todo teste desta pasta e desliga em
+   * silêncio a única coisa que faz o cartão sair da frente de quem está atribuindo. É o defeito mais
+   * barato de introduzir aqui, e o mais difícil de notar: nada quebra, o cartão só volta a atrapalhar.
+   */
+  it("a forma escuta o diálogo de verdade, e não um `false` fixo", () => {
+    const codigo = semComentarios(readFileSync(CAMADA, "utf8"));
+    expect(codigo, "a camada parou de observar o diálogo aberto").toContain("useDialogoAberto()");
+    expect(
+      codigo,
+      "`dialogoAberto` virou constante — o cartão deixaria de encolher enquanto alguém atribui",
+    ).not.toMatch(/dialogoAberto:\s*(true|false)/);
   });
 });
 
