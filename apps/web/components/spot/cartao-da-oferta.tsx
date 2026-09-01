@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Loader2, TriangleAlert } from "lucide-react";
 import type { SpotOfferView } from "@brazil-tms/db";
@@ -114,6 +114,14 @@ export interface CartaoDaOfertaProps {
   enviando: boolean;
   onAceitar: () => void;
   onIgnorar: (motivo: string | null) => void;
+  /**
+   * AVISA A ESTEIRA que este cartão está com uma pergunta aberta (2026-09-01).
+   *
+   * Sem isto, quem aperta Aceitar e afasta o mouse para ler a confirmação vê o cartão deslizar
+   * embaixo dela, levando a pergunta junto. O mouse em cima já pausa a faixa; este aviso cobre o
+   * caso em que a mão sai e a decisão continua aberta.
+   */
+  aoOcuparse?: (ocupado: boolean) => void;
   /** Compacto quando há vários na tela: mesma informação, menos respiro. */
   compacto: boolean;
 }
@@ -124,6 +132,7 @@ export function CartaoDaOferta({
   enviando,
   onAceitar,
   onIgnorar,
+  aoOcuparse,
   compacto,
 }: CartaoDaOfertaProps) {
   const t = useTranslations("Spot");
@@ -139,6 +148,19 @@ export function CartaoDaOferta({
   /** O segundo gesto do Ignorar, e o que a pessoa escreveu nele. Ver o bloco lá embaixo. */
   const [ignorando, setIgnorando] = useState(false);
   const [motivo, setMotivo] = useState("");
+
+  /*
+    UM ÚNICO PONTO avisa a esteira, em vez de cada botão avisar por conta.
+
+    Dois pontos contariam diferente no primeiro caminho que alguém esquecesse de fechar — e um
+    contador que nunca chega a zero deixa a faixa parada para sempre, que é pior do que ela andar.
+    A limpeza no `return` cobre o cartão que sai da tela com a pergunta aberta.
+  */
+  const ocupado = confirmando || ignorando;
+  useEffect(() => {
+    aoOcuparse?.(ocupado);
+    return () => aoOcuparse?.(false);
+  }, [ocupado, aoOcuparse]);
 
   const erro = explicar(oferta.erroDoPortal);
 

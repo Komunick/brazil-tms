@@ -90,12 +90,22 @@ describe("o cartão não sai da tela sem decisão", () => {
    *
    * O que se procura é o vocabulário do estado final sendo usado para FILTRAR ou ESCONDER.
    */
+  /**
+   * O QUE SE PROCURA É O FILTRO, e não a palavra — a primeira versão errava isso.
+   *
+   * Ela proibia qualquer ocorrência de "aceito" no arquivo, e reprovou no dia em que a camada passou
+   * a exibir o rótulo `aceitoPor` no painel recolhido — um texto, não uma decisão. É a terceira vez
+   * nesta fatia que um guarda largo demais acusa o certo.
+   *
+   * O defeito real tem uma forma reconhecível: comparar o ESTADO com `aceito` para esconder algo.
+   * É isso que se proíbe.
+   */
   it("a tela não decide sozinha esconder o que foi aceito", () => {
     const codigo = semComentarios(readFileSync(CAMADA, "utf8"));
     expect(
       codigo,
-      "a camada passou a filtrar por 'aceito' — quem tira o cartão é o servidor, ver FR-014",
-    ).not.toMatch(/aceito/);
+      "a camada passou a filtrar por estado 'aceito' — quem tira o cartão é o servidor, ver FR-014",
+    ).not.toMatch(/estado\s*[!=]==\s*["']aceito["']/);
   });
 
   /**
