@@ -1502,7 +1502,9 @@
       "totalSpot": "Total spot",
       "totalTendencia": "Total tendência",
       "d1": "D1",
-      "d2": "D2"
+      "d2": "D2",
+      "spotEsperando": "Esperando decisão",
+      "spotEsperandoResumo": "{n} esperando"
     },
     "portalDecision": {
       "title": "Decisão da proposta",
@@ -1982,10 +1984,8 @@
     "alert_liberacao_off": "Sem liberações"
   },
   "Spot": {
-    "dismiss": "Fechar aviso",
     "vehicle": "Veículo",
     "originArrival": "STA",
-    "queued": "+{count} esperando na fila",
     "systemTitle": "Nova oferta de spot",
     "systemHeading": "Aviso na área de trabalho",
     "systemHint": "Recebe o aviso mesmo com o TMS numa aba de fundo ou minimizado. Aba fechada não alcança — aí quem avisa é o Telegram.",
@@ -1996,8 +1996,32 @@
     "systemUnavailable": "Este navegador não tem avisos do sistema.",
     "systemTestTitle": "Teste — Brazil Transports TMS",
     "systemTestBody": "Se você está lendo isto, os avisos de spot vão chegar aqui.",
-    "ensaio": "Ensaiar aviso",
-    "ensaioDica": "Mostra o cartão, toca o som e dispara a notificação — sem gravar oferta nenhuma."
+    "ensaio": "Ensaiar",
+    "ensaioDica": "Mostra o cartão, toca o som e dispara a notificação — sem gravar oferta nenhuma e sem tocar no portal.",
+    "price": "Preço",
+    "aceitar": "Aceitar",
+    "ignorar": "Ignorar",
+    "recolher": "Recolher",
+    "esperandoDecisao": "esperando decisão",
+    "confirmarAceite": "Aceitar a <forte>{lh}</forte> no portal? O aceite não tem volta.",
+    "confirmarBotao": "Confirmar aceite",
+    "voltar": "Voltar",
+    "enviando": "Enviando…",
+    "aguardandoPortal": "Ordem enviada. Esperando o portal confirmar — o cartão só sai quando ele disser que aceitou.",
+    "aceitoPor": "Aceito por {nome}",
+    "portalRecusou": "O portal recusou o aceite",
+    "tentarDeNovo": "Tentar de novo",
+    "semViagemAinda": "A viagem ainda não chegou no TMS. O botão liga sozinho assim que ela chegar.",
+    "aceiteIndisponivel": "Não dá para aceitar esta oferta agora.",
+    "aguardandoPortalCurto": "esperando o portal",
+    "ignoradoPorVoce": "ignorado por você",
+    "confirmarAceiteCurto": "Aceitar a {lh}? Não tem volta.",
+    "ensaioEstado": {
+      "esperando": "Ensaiar: esperando",
+      "sem_viagem": "Ensaiar: sem viagem",
+      "enviado": "Ensaiar: enviado",
+      "recusado": "Ensaiar: recusado"
+    }
   },
   "Wallboard": {
     "title": "Brazil Transports · Torre",

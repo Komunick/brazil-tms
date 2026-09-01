@@ -19,7 +19,12 @@ export async function GET(): Promise<NextResponse> {
   try {
     const ctx = await requireAuth();
     requirePermission(ctx, "view_all_trips");
-    return NextResponse.json({ ofertas: await readSpotOffersToday() });
+    /*
+      QUEM PERGUNTA importa desde 2026-09-01: a leitura esconde o que ESTA pessoa dispensou, e só
+      ela. Filtrar aqui, e não na tela, é o que faz o ignorar sobreviver a recarregar e a trocar de
+      posto — a oferta nunca chega. Ver `readSpotOffersToday`.
+    */
+    return NextResponse.json({ ofertas: await readSpotOffersToday(ctx.userId) });
   } catch (error) {
     return handleRouteError(error);
   }

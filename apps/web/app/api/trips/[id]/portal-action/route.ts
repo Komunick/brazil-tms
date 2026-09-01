@@ -69,6 +69,8 @@ export async function POST(
       secondDriverId: body.secondDriverId ?? null,
       plates: body.plates ?? [],
       requestedBy: ctx.userId,
+      // Só a auditoria a recebe; o portal não tem este campo. Ver `portal-commands.ts`.
+      origem: body.origem ?? null,
     });
 
     /**

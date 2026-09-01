@@ -31,5 +31,15 @@ export default async function HomePage() {
   // O CARGO VAI JUNTO (2026-08-27, a pedido): a frente "Sem região" é card de administração, e quem
   // decide isso é o servidor. Mandar o papel inteiro em vez de um `ehAdmin` já resolvido deixa a
   // regra visível no componente, que é onde ela vale — e não escondida numa linha desta página.
-  return <DashboardWidgets papel={session.user.role} />;
+  /*
+    A permissão de DECIDIR desce separada do papel (2026-09-01, fatia 030): o cartão de spot ganhou
+    ação na linha, e quem pode aceitar é quem tem "assign_resources" — a mesma chave da tela de
+    viagem. Depois da 029 o papel não decide mais acesso; quem decide é o conjunto do cargo.
+  */
+  return (
+    <DashboardWidgets
+      papel={session.user.role}
+      podeDecidir={session.user.permissoes.has("assign_resources")}
+    />
+  );
 }

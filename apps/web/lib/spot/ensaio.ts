@@ -30,8 +30,31 @@ import type { SpotOfferView } from "@brazil-tms/db";
 
 export const EVENTO_ENSAIO = "tms:ensaio-de-oferta";
 
-/** A oferta de mentira, marcada como tal em todo campo que aparece na tela. */
-export function ofertaDeEnsaio(): SpotOfferView {
+/**
+ * OS QUATRO ESTADOS DO CARTÃO, ensaiáveis (2026-09-01, fatia 030).
+ *
+ * O ensaio existia para provar que o cartão sobe, o som toca e a notificação sai. Com o cartão
+ * ganhando decisão, ele passou a ter QUATRO caras — e três delas são as que ninguém vê até o dia em
+ * que acontecem de verdade: a viagem que ainda não chegou, a ordem esperando o portal, e a recusa.
+ *
+ * A recusa é a mais importante de ensaiar: ela aconteceu 4 vezes em 17 ordens reais, e é a única
+ * tela que alguém vê quando perde a corrida do leilão. Ensaiá-la é o único jeito de conferir que ela
+ * diz o que precisa dizer sem esperar perder um frete.
+ */
+export const ESTADOS_DE_ENSAIO = ["esperando", "sem_viagem", "enviado", "recusado"] as const;
+
+export type EstadoDeEnsaio = (typeof ESTADOS_DE_ENSAIO)[number];
+
+/**
+ * A oferta de mentira, marcada como tal em todo campo que aparece na tela.
+ *
+ * NENHUM ENSAIO PODE VIRAR ORDEM DE VERDADE, e a garantia é o `tripId` nulo: sem viagem não há a
+ * quem endereçar a ordem, e a rota de aceite nem chega a ser chamada. Por isso `podeAceitar` é
+ * verdadeiro no ensaio de "esperando" — para o botão APARECER e a confirmação poder ser exercitada —
+ * enquanto o envio para no primeiro `if` do componente. O desenho se prova inteiro; o portal não é
+ * tocado.
+ */
+export function ofertaDeEnsaio(estado: EstadoDeEnsaio = "esperando"): SpotOfferView {
   const agora = new Date();
   return {
     id: `ensaio-${agora.getTime()}`,
@@ -45,11 +68,21 @@ export function ofertaDeEnsaio(): SpotOfferView {
     arrival: null,
     operator: "disparado do TMS",
     receivedAt: agora.toISOString(),
+
+    estado,
+    // Sempre nulo — ver o comentário acima. É o que torna o ensaio incapaz de gastar.
+    tripId: null,
+    podeAceitar: estado === "esperando" || estado === "recusado",
+    decidiuNome: estado === "enviado" ? "ensaio" : null,
+    erroDoPortal:
+      estado === "recusado"
+        ? "portal retcode 131205003: Erro de sistema (4), erro de status de viagem. Tente novamente ou entre em contato com o gerente."
+        : null,
   };
 }
 
-/** Dispara o ensaio. Quem escuta é o cartão de oferta, no painel. */
-export function ensaiarAviso(): void {
+/** Dispara o ensaio. Quem escuta é a camada dos cartões, montada em toda tela do TMS. */
+export function ensaiarAviso(estado: EstadoDeEnsaio = "esperando"): void {
   if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(EVENTO_ENSAIO, { detail: ofertaDeEnsaio() }));
+  window.dispatchEvent(new CustomEvent(EVENTO_ENSAIO, { detail: ofertaDeEnsaio(estado) }));
 }

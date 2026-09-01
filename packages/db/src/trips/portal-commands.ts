@@ -130,6 +130,18 @@ export async function enfileirarOrdemDoPortal(entrada: {
   secondDriverId?: number | null;
   plates?: string[];
   requestedBy: string;
+  /**
+   * DE ONDE A DECISÃO SAIU (2026-09-01, fatia 030).
+   *
+   * Opcional, e ausente significa `tela_da_viagem` — que era o único lugar de onde se decidia até o
+   * cartão de spot ganhar o botão. Ela vai para a AUDITORIA, e não para o portal: o portal não tem
+   * este campo e não saberia o que fazer com ele.
+   *
+   * Serve para a revisão depois distinguir a decisão tomada no calor do leilão, em segundos, da
+   * tomada na tela da viagem com a lista inteira à vista. São dois atos diferentes, e até aqui o
+   * registro não os separava.
+   */
+  origem?: "oferta_spot" | "tela_da_viagem" | null;
 }): Promise<OrdemDoPortal> {
   if (entrada.action === "assign") {
     // As regras vivem em `shared`, sob teste. Aqui só se recusa o que elas apontarem, com o mesmo
@@ -290,6 +302,8 @@ export async function enfileirarOrdemDoPortal(entrada: {
         plates: linha[0]!.plates,
         // A auditoria registra as DUAS: o que foi ao portal e o que ficou por controle interno.
         platesInternas: linha[0]!.platesInternas,
+        // De onde a pessoa decidiu — ver o comentário do campo na entrada. Só a auditoria a recebe.
+        origem: entrada.origem ?? "tela_da_viagem",
       },
     });
     return paraOrdem(linha[0]!);

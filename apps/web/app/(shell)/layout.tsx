@@ -47,7 +47,14 @@ export default async function ShellLayout({ children }: { children: ReactNode })
        *
        * O painel de parede tem o seu próprio (`(wall)`), porque não passa por este shell.
        */}
-      <OfertaDeSpot />
+      {/*
+        A PERMISSÃO DESCE DO SERVIDOR, e é a mesma que a tela de viagem já exige para aceitar
+        (`assign_resources`) — nenhuma chave nova nasceu nesta fatia. Quem não a tem continua VENDO
+        a oferta e não vê o botão de aceitar, o que é o pedido: a informação é de todos, a decisão
+        não. E o botão escondido não é a garantia: a rota de aceite recusa no servidor de qualquer
+        forma, pelo `requirePermission` que ela já tinha.
+      */}
+      <OfertaDeSpot podeDecidir={session.user.permissoes.has("assign_resources")} />
     </div>
   );
 }

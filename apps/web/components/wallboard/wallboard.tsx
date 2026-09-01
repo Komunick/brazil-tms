@@ -110,7 +110,7 @@ function Linha({ trip, t }: { trip: WallboardTrip; t: ReturnType<typeof useTrans
   );
 }
 
-export function Wallboard() {
+export function Wallboard({ podeDecidir }: { podeDecidir: boolean }) {
   const t = useTranslations("Wallboard");
   const tStatus = useTranslations("Trips");
   const { data, isError } = useWallboard();
@@ -137,7 +137,7 @@ export function Wallboard() {
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-slate-950 font-sans">
       {/* Fica FORA do fluxo (posicionado sobre a tela) — o quadro atrás continua desenhado e
           vivo; o aviso só cobre o centro pelos seus 30 segundos. */}
-      <OfertaDeSpot />
+      <OfertaDeSpot podeDecidir={podeDecidir} />
       {/* Cabeçalho: quem, quando, e se o que está na tela ainda vale. */}
       <header className="flex shrink-0 items-center justify-between border-b border-slate-800 px-[1.6vw] py-[1.6vh]">
         <h1 className="text-[1.7vw] font-bold uppercase tracking-[0.2em] text-white">

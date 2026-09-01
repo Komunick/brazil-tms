@@ -110,7 +110,7 @@ export interface DadosDaFrente {
    */
   spot?: Pick<
     SpotDaRegiao,
-    "aceito" | "naoAceito" | "tendenciaAceito" | "tendenciaNaoAceito" | "rotas"
+    "aceito" | "naoAceito" | "esperando" | "tendenciaAceito" | "tendenciaNaoAceito" | "rotas"
   >;
 }
 
@@ -470,7 +470,165 @@ function formatarDia(iso: string): string {
   return dia && mes ? `${dia}/${mes}` : iso;
 }
 
-function ListaDeOfertas({ ofertas }: { ofertas: SpotDaRegiao["rotas"] }) {
+/** O rótulo de cada um dos três estados que a lista distingue. A cor sozinha nunca basta. */
+function rotuloDoEstado(
+  estado: SpotDaRegiao["rotas"][number]["estado"],
+  t: (chave: string) => string,
+): string {
+  if (estado === "aceito") return t("medidaAceita");
+  if (estado === "sem_viagem") return t("medidaNaoAceita");
+  return t("spotEsperando");
+}
+
+/**
+ * OS GESTOS DA LINHA — a mesma decisão do cartão do meio, no registro do dia (fatia 030).
+ *
+ * Componente próprio porque cada linha precisa da PRÓPRIA confirmação: com o estado no pai, confirmar
+ * uma abriria a pergunta em todas.
+ *
+ * A confirmação em dois gestos é a mesma do cartão, e pelo mesmo motivo — o aceite não tem volta.
+ */
+function AcaoDaLinha({
+  oferta,
+  podeDecidir,
+}: {
+  oferta: SpotDaRegiao["rotas"][number];
+  podeDecidir: boolean;
+}) {
+  const t = useTranslations("Spot");
+  const [confirmando, setConfirmando] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [feito, setFeito] = useState(false);
+  const [ignoradaAgora, setIgnoradaAgora] = useState(false);
+
+  const aceitar = async () => {
+    if (!oferta.tripId) return;
+    setEnviando(true);
+    try {
+      await fetch(`/api/trips/${oferta.tripId}/portal-action`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "accept", origem: "oferta_spot" }),
+      });
+      setFeito(true);
+    } finally {
+      setEnviando(false);
+      setConfirmando(false);
+    }
+  };
+
+  /**
+   * IGNORAR DAQUI TIRA O CARTÃO DO MEIO, e não esta linha.
+   *
+   * É a diferença entre as duas telas, e ela é o FR-019: o cartão é a fila do que falta decidir, e
+   * esta lista é o registro do dia. A linha continua aqui, ganha o selo "ignorado por você", e
+   * continua podendo ser aceita. Ignorar não apaga a prova de que a oferta chegou.
+   */
+  const ignorar = async () => {
+    setEnviando(true);
+    try {
+      await fetch(`/api/spot-offers/${oferta.ofertaId}/dispensar`, { method: "POST" });
+      setIgnoradaAgora(true);
+    } finally {
+      setEnviando(false);
+    }
+  };
+
+  // `aceito` já é final: não há gesto, e a linha só informa.
+  if (oferta.estado === "aceito") return null;
+
+  const podeMandar =
+    podeDecidir && !feito && (oferta.estado === "esperando" || oferta.estado === "recusado");
+
+  return (
+    <span className="mt-1 flex flex-wrap items-center gap-1.5">
+      {oferta.estado === "enviado" || feito ? (
+        <span className="rounded-full bg-emerald-500/15 px-1.5 py-px text-[0.6rem] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+          {t("aguardandoPortalCurto")}
+        </span>
+      ) : null}
+
+      {oferta.estado === "recusado" && !feito ? (
+        <span className="rounded-full bg-red-500/15 px-1.5 py-px text-[0.6rem] font-bold uppercase tracking-wide text-red-700 dark:text-red-400">
+          {t("portalRecusou")}
+        </span>
+      ) : null}
+
+      {oferta.estado === "esperando" && !feito ? (
+        <span className="rounded-full bg-amber-500/20 px-1.5 py-px text-[0.6rem] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+          {t("esperandoDecisao")}
+        </span>
+      ) : null}
+
+      {/*
+        IGNORADA CONTINUA AQUI, e é o ponto do FR-019: ignorar limpa a tela de quem clicou, não o
+        registro. A linha fica, assinalada, e continua podendo ser aceita — a prova de que a oferta
+        chegou não se apaga por alguém não ter querido esta.
+      */}
+      {oferta.dispensadaPorMim || ignoradaAgora ? (
+        <span className="rounded-full bg-muted px-1.5 py-px text-[0.6rem] font-semibold uppercase tracking-wide text-muted-foreground">
+          {t("ignoradoPorVoce")}
+        </span>
+      ) : null}
+
+      {podeMandar && !confirmando ? (
+        <button
+          type="button"
+          onClick={() => setConfirmando(true)}
+          className="rounded bg-emerald-600 px-2 py-px text-[0.62rem] font-bold text-white hover:bg-emerald-500"
+        >
+          {oferta.estado === "recusado" ? t("tentarDeNovo") : t("aceitar")}
+        </button>
+      ) : null}
+
+      {/*
+        IGNORAR DAQUI TIRA O CARTÃO DO MEIO, e não esta linha — ver o comentário da função.
+        Some depois de clicado, porque o gesto não se repete: o selo passa a dizer o que houve.
+      */}
+      {podeMandar && !confirmando && !oferta.dispensadaPorMim && !ignoradaAgora ? (
+        <button
+          type="button"
+          disabled={enviando}
+          onClick={() => void ignorar()}
+          className="rounded border px-2 py-px text-[0.62rem] font-semibold text-muted-foreground hover:text-foreground disabled:opacity-60"
+        >
+          {t("ignorar")}
+        </button>
+      ) : null}
+
+      {confirmando ? (
+        <span className="flex flex-wrap items-center gap-1.5 rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-1">
+          <span className="text-[0.62rem] leading-snug">
+            {t("confirmarAceiteCurto", { lh: oferta.lh ?? "" })}
+          </span>
+          <button
+            type="button"
+            disabled={enviando}
+            onClick={() => void aceitar()}
+            className="rounded bg-amber-400 px-2 py-px text-[0.62rem] font-bold text-amber-950 disabled:opacity-60"
+          >
+            {enviando ? t("enviando") : t("confirmarBotao")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmando(false)}
+            className="rounded border px-2 py-px text-[0.62rem] font-semibold text-muted-foreground"
+          >
+            {t("voltar")}
+          </button>
+        </span>
+      ) : null}
+    </span>
+  );
+}
+
+function ListaDeOfertas({
+  ofertas,
+  podeDecidir,
+}: {
+  ofertas: SpotDaRegiao["rotas"];
+  podeDecidir: boolean;
+}) {
   const t = useTranslations("Trips.dashboard");
   const tSpot = useTranslations("Spot");
 
@@ -487,16 +645,25 @@ function ListaDeOfertas({ ofertas }: { ofertas: SpotDaRegiao["rotas"] }) {
           return (
             <li key={`${o.rota}-${i}`} className="flex items-start gap-1.5 text-[0.7rem]">
               {/*
-                O ponto diz se pegamos, e a cor sozinha não bastaria: quem não distingue verde de
-                cinza precisa do título.
+                O ponto diz em que pé está, e a cor sozinha não bastaria: quem não distingue verde
+                de cinza precisa do título.
+
+                O TERCEIRO ESTADO entrou em 2026-09-01 (fatia 030). Eram dois — pegamos ou não —, e
+                a oferta que ESPERA decisão não cabia em nenhum: ela era contada como pega, porque a
+                conta antiga perguntava só se a viagem existia no TMS. O âmbar pulsando é o que
+                separa "estamos decidindo" de "decidido", e é a única linha em que há o que fazer.
               */}
               <span
                 className={cn(
                   "mt-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full",
-                  o.aceito ? "bg-emerald-500" : "bg-muted-foreground/40",
+                  o.estado === "aceito"
+                    ? "bg-emerald-500"
+                    : o.estado === "sem_viagem"
+                      ? "bg-muted-foreground/40"
+                      : "animate-pulse bg-amber-500 ring-2 ring-amber-500/30",
                 )}
-                title={o.aceito ? t("medidaAceita") : t("medidaNaoAceita")}
-                aria-label={o.aceito ? t("medidaAceita") : t("medidaNaoAceita")}
+                title={rotuloDoEstado(o.estado, t)}
+                aria-label={rotuloDoEstado(o.estado, t)}
               />
               <span className="min-w-0 flex-1">
                 <span className="flex items-baseline justify-between gap-2">
@@ -544,6 +711,14 @@ function ListaDeOfertas({ ofertas }: { ofertas: SpotDaRegiao["rotas"] }) {
                     {detalhes.join(" · ")}
                   </span>
                 ) : null}
+                {/*
+                  A AÇÃO NA LINHA (2026-09-01, fatia 030) — e é a MESMA decisão do cartão do meio.
+
+                  Quem recolheu os cartões, ou entrou depois, encontra aqui o que ficou esperando. As
+                  duas telas leem a mesma derivação e chamam a mesma rota, então aceitar de um lado
+                  aparece no outro sem ação nenhuma.
+                */}
+                <AcaoDaLinha oferta={o} podeDecidir={podeDecidir} />
               </span>
             </li>
           );
@@ -593,7 +768,13 @@ function ListaDeOfertas({ ofertas }: { ofertas: SpotDaRegiao["rotas"] }) {
  * vira informação em vez de ausência. O custo é a altura fixa da faixa, que é barato perto de
  * alguém desconfiar do painel inteiro.
  */
-export function CardsDeSpot({ frentes }: { frentes: DadosDaFrente[] }) {
+export function CardsDeSpot({
+  frentes,
+  podeDecidir,
+}: {
+  frentes: DadosDaFrente[];
+  podeDecidir: boolean;
+}) {
   const t = useTranslations("Trips.dashboard");
   if (frentes.length === 0) return null;
 
@@ -623,11 +804,26 @@ export function CardsDeSpot({ frentes }: { frentes: DadosDaFrente[] }) {
               Agora ele diz de onde vem cada linha — e é exatamente a leitura das duas colunas da
               tabela acima. Quem pegou e quem não pegou continua dito, linha a linha, pelo ponto.
             */}
+            {/*
+              "N ESPERANDO" ENTROU EM 2026-09-01 (fatia 030), e é a única parte deste resumo sobre
+              a qual há o que FAZER. Sem ela, quem passa os olhos no painel não distingue a frente
+              onde tudo já foi decidido daquela com três ofertas paradas esperando alguém.
+
+              O total de hoje passou a somar TRÊS contas, e não duas: aceita, não aceita e esperando.
+              Antes eram duas porque a oferta que esperava era contada como aceita — ver o comentário
+              da consulta em `readSpotPorRegiao`.
+            */}
             <span className="shrink-0 text-[0.68rem] font-semibold tabular-nums">
               {t("spotResumo", {
-                hoje: (f.spot?.aceito ?? 0) + (f.spot?.naoAceito ?? 0),
+                hoje:
+                  (f.spot?.aceito ?? 0) + (f.spot?.naoAceito ?? 0) + (f.spot?.esperando ?? 0),
                 tendencia: (f.spot?.tendenciaAceito ?? 0) + (f.spot?.tendenciaNaoAceito ?? 0),
               })}
+              {(f.spot?.esperando ?? 0) > 0 ? (
+                <span className="ml-1.5 rounded-full bg-amber-500/25 px-1.5 py-px text-amber-900 dark:text-amber-200">
+                  {t("spotEsperandoResumo", { n: f.spot?.esperando ?? 0 })}
+                </span>
+              ) : null}
             </span>
           </div>
 
@@ -645,7 +841,7 @@ export function CardsDeSpot({ frentes }: { frentes: DadosDaFrente[] }) {
               */
               <p className="py-1 text-[0.7rem] text-muted-foreground">{t("spotSemOferta")}</p>
             ) : (
-              <ListaDeOfertas ofertas={f.spot?.rotas ?? []} />
+              <ListaDeOfertas ofertas={f.spot?.rotas ?? []} podeDecidir={podeDecidir} />
             )}
           </div>
         </Card>

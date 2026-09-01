@@ -143,7 +143,7 @@ function PainelPersonalizar({
  * O caminho para reduzir isso não é a tela: é cadastrar a estação, e aí a oferta passa a cair na
  * frente certa e aparece para todo mundo. Por isso o card sobra justamente para quem cadastra.
  */
-export function DashboardWidgets({ papel }: { papel: Role }) {
+export function DashboardWidgets({ papel, podeDecidir }: { papel: Role; podeDecidir: boolean }) {
   const ehAdmin = papel === Role.Admin;
   const t = useTranslations("Trips.dashboard");
   const tCommon = useTranslations("Common");
@@ -466,7 +466,7 @@ export function DashboardWidgets({ papel }: { papel: Role }) {
          * card quebrado. Ver `CardsDeSpot`.
          */}
         <div className="col-span-full">
-          <CardsDeSpot frentes={dadosDasFrentes} />
+          <CardsDeSpot frentes={dadosDasFrentes} podeDecidir={podeDecidir} />
         </div>
 
         {/*

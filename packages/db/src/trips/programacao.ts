@@ -1,5 +1,10 @@
 import { eq, or, sql, type SQL } from "drizzle-orm";
-import { regionPosition } from "@brazil-tms/shared";
+import {
+  ACEITACAO_ACEITA,
+  estadoDaOferta,
+  regionPosition,
+  type EstadoDaOferta,
+} from "@brazil-tms/shared";
 import { db } from "../client";
 import { locations, trips } from "../../schema";
 import { origemAtrasadaSql, origemRiscoSql } from "./atrasos";
@@ -55,6 +60,14 @@ export interface SpotDaRegiao {
    */
   aceito: number;
   naoAceito: number;
+  /**
+   * A TERCEIRA CONTA, que faltava (2026-09-01, fatia 030).
+   *
+   * `aceito` era "a viagem existe no TMS", o que contava como pega a oferta que ainda esperava
+   * decisão. Com a terceira, as três somam o total e cada uma diz o que diz: o portal confirmou,
+   * não pegamos, ou está esperando alguém decidir.
+   */
+  esperando: number;
   tendenciaAceito: number;
   tendenciaNaoAceito: number;
   /**
@@ -79,6 +92,8 @@ export interface SpotDaRegiao {
    * travessões ocuparia a linha inteira para dizer que não há nada a dizer.
    */
   rotas: {
+    /** O id da oferta — é o endereço da dispensa quando alguém ignora daqui. */
+    ofertaId: string;
     rota: string;
     aceito: boolean;
     /** O número da LH no portal, para quem for atrás dela. */
@@ -93,6 +108,22 @@ export interface SpotDaRegiao {
     tendencia: boolean;
     /** O dia da viagem (ISO `YYYY-MM-DD`), quando deu para ler o STA. A tela mostra dia e mês. */
     diaDaViagem: string | null;
+
+    /**
+     * EM QUE PÉ ESTÁ A DECISÃO — derivado pela MESMA função que a leitura do cartão usa.
+     *
+     * Diferente da leitura do cartão, aqui `aceito` APARECE: este cartão é o registro do dia e
+     * precisa mostrar o que foi aceito. Lá a oferta aceita some, porque a lista é a fila do que
+     * falta decidir. A assimetria é deliberada — uniformizar as duas quebraria o FR-014.
+     */
+    estado: EstadoDaOferta;
+    /** A viagem no TMS, quando existe. É o endereço da ordem que a ação da linha manda. */
+    tripId: string | null;
+    aceitacaoDoPortal: string | null;
+    ordemAberta: boolean;
+    ultimaFalhou: boolean;
+    /** Esta pessoa ignorou. Só MARCA — a linha continua listada e aceitável (FR-019). */
+    dispensadaPorMim: boolean;
   }[];
 }
 
@@ -218,14 +249,23 @@ const chaveDaEstacao = (col: SQL) => sql`
  * viagem é a prova mais forte disponível — mais forte, inclusive, do que um campo que o fornecedor
  * poderia preencher de outro jeito amanhã.
  */
-export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
+export async function readSpotPorRegiao(
+  /**
+   * Quem está olhando — só para MARCAR a linha que essa pessoa ignorou (2026-09-01).
+   *
+   * Opcional, e ausente significa que nada é marcado. Diferente da leitura do cartão, que ESCONDE o
+   * dispensado: aqui ele fica listado e aceitável, porque este cartão é o registro do dia.
+   */
+  userId?: string | null,
+): Promise<SpotDaRegiao[]> {
   const linhas = await db.execute<{
     region: string | null;
     aceito: string;
     nao_aceito: string;
+    esperando: string;
     tendencia_aceito: string;
     tendencia_nao_aceito: string;
-    rotas: SpotDaRegiao["rotas"] | null;
+    rotas: LinhaCrua[] | null;
   }>(sql`
     with estacao as (
       -- UM local por NOME DOBRADO, e o distinct on não é enfeite: o cadastro tem TRÊS pares de
@@ -242,6 +282,7 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
     ),
     oferta as (
       select
+        s.id as oferta_id,
         s.portal_trip_id,
         s.route,
         s.received_at,
@@ -265,12 +306,29 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
     )
     select
       e.region::text as region,
-      -- SPOT: a viagem e de hoje (ou de antes, ou nao tem data). Ver a coluna tendencia da CTE.
-      count(*) filter (where not o.tendencia and t.id is not null) as aceito,
-      count(*) filter (where not o.tendencia and t.id is null)     as nao_aceito,
+      /*
+       * "ACEITA" PASSOU A SIGNIFICAR ACEITA (2026-09-01, fatia 030) — e antes não significava.
+       *
+       * A conta era "t.id is not null": A VIAGEM EXISTE NO TMS. É um atalho, e ele erra exatamente
+       * na janela que esta fatia inteira habita — os minutos entre a viagem chegar e alguém decidir
+       * sobre ela, em que ela está no TMS e ainda espera decisão no portal.
+       *
+       * Por que ninguém notou: o erro é PASSAGEIRO. Medido em 01/09, das 98 ofertas que casaram com
+       * viagem, 98 estão "Accepted" hoje — o atalho coincide com a verdade DEPOIS, e não DURANTE.
+       * Um painel que só é conferido no fim do dia nunca mostra a diferença.
+       *
+       * Agora são três contas e não duas, e elas somam o total: aceita (o portal confirmou), não
+       * aceita (não há viagem — não pegamos) e esperando (há viagem e ela ainda espera decisão).
+       * Sem a terceira, a oferta que espera teria de mentir em uma das outras duas.
+       */
+      count(*) filter (where not o.tendencia and t.aceitacao = ${ACEITACAO_ACEITA}) as aceito,
+      count(*) filter (where not o.tendencia and t.id is null)                      as nao_aceito,
+      count(*) filter (
+        where not o.tendencia and t.id is not null and t.aceitacao is distinct from ${ACEITACAO_ACEITA}
+      ) as esperando,
       -- TENDÊNCIA: a viagem é de amanhã em diante, sem teto de dias.
-      count(*) filter (where o.tendencia and t.id is not null) as tendencia_aceito,
-      count(*) filter (where o.tendencia and t.id is null)     as tendencia_nao_aceito,
+      count(*) filter (where o.tendencia and t.aceitacao = ${ACEITACAO_ACEITA}) as tendencia_aceito,
+      count(*) filter (where o.tendencia and t.id is null)                      as tendencia_nao_aceito,
       /*
        * AS ROTAS, agregadas na mesma passada.
        *
@@ -288,13 +346,31 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
       coalesce(
         jsonb_agg(
           jsonb_build_object(
+            'ofertaId', o.oferta_id,
             'rota', o.route,
-            'aceito', t.id is not null,
+            'aceito', t.aceitacao = ${ACEITACAO_ACEITA},
             'lh', o.trip_number,
             'hora', o.received_at,
             'preco', o.price,
             'sta', o.origin_arrival,
             'veiculo', o.vehicle,
+            /*
+             * AS ENTRADAS DA DERIVAÇÃO, cruas — a linha NÃO decide o estado aqui (2026-09-01).
+             *
+             * Quem decide é "estadoDaOferta", em "packages/shared", no mapeamento abaixo. É a MESMA
+             * função que a leitura do cartão usa, e é isso que garante o FR-022: a decisão vista no
+             * cartão e a vista nesta linha são a mesma, e não duas que se parecem.
+             *
+             * Reimplementar a máquina de cinco estados em SQL seria a segunda fonte clássica: ela
+             * concordaria com a primeira no dia em que fosse escrita e divergiria em silêncio no
+             * primeiro ajuste — sem erro nenhum, só duas telas dizendo coisas diferentes sobre a
+             * mesma oferta.
+             */
+            'tripId', t.id,
+            'aceitacaoDoPortal', t.aceitacao,
+            'ordemAberta', coalesce(t.ordem_aberta, false),
+            'ultimaFalhou', t.ultimo_status = 'failed',
+            'dispensadaPorMim', coalesce(d.dispensada, false),
             -- A lista mostra as duas, e a marca é o que diz qual número cada linha alimenta.
             'tendencia', o.tendencia,
             'diaDaViagem', o.dia_da_viagem
@@ -305,7 +381,45 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
       ) as rotas
     from oferta o
     left join estacao e on e.chave = o.chave
-    left join trips t on (t.customer_fields ->> 'ID (portal)') = o.portal_trip_id
+    /*
+     * A VIAGEM E O QUE A DECISÃO PRECISA SABER, numa passada só.
+     *
+     * A chave continua sendo o "ID (portal)", e não o número da LH que a leitura do cartão usa.
+     * Medido em 01/09: as duas casam com as MESMAS 98 de 132 ofertas, com ZERO divergência — então
+     * nenhuma das duas foi mexida, e fica registrado que elas foram conferidas uma contra a outra.
+     */
+    left join lateral (
+      select
+        tr.id,
+        tr.customer_fields ->> 'Aceitação (portal)' as aceitacao,
+        exists (
+          select 1 from portal_commands pc
+           where pc.trip_id = tr.id and pc.action = 'accept'
+             and pc.status in ('pending', 'sent')
+        ) as ordem_aberta,
+        (
+          select pc.status from portal_commands pc
+           where pc.trip_id = tr.id and pc.action = 'accept'
+           order by pc.requested_at desc limit 1
+        ) as ultimo_status
+      from trips tr
+      where (tr.customer_fields ->> 'ID (portal)') = o.portal_trip_id
+      limit 1
+    ) t on true
+    /*
+     * A DISPENSA SÓ MARCA, e não filtra — é a diferença entre esta leitura e a do cartão.
+     *
+     * Lá a oferta ignorada some, porque a lista é a fila do que falta decidir. Aqui ela FICA,
+     * assinalada, porque este cartão é o registro do dia: ignorar não pode apagar a prova de que a
+     * oferta chegou, e a linha continua podendo ser aceita (FR-019).
+     */
+    left join lateral (
+      select true as dispensada
+      from spot_offer_dispensas sd
+      where sd.spot_offer_id = o.oferta_id
+        and sd.user_id = ${userId ?? null}::uuid
+      limit 1
+    ) d on true
     group by 1
   `);
 
@@ -314,6 +428,7 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
       region: r.region ?? null,
       aceito: Number(r.aceito),
       naoAceito: Number(r.nao_aceito),
+      esperando: Number(r.esperando),
       tendenciaAceito: Number(r.tendencia_aceito),
       tendenciaNaoAceito: Number(r.tendencia_nao_aceito),
       /*
@@ -324,7 +439,25 @@ export async function readSpotPorRegiao(): Promise<SpotDaRegiao[]> {
        * acima continua sendo do total, e um número que discordasse da lista embaixo dele seria pior
        * que lista nenhuma.
        */
-      rotas: (Array.isArray(r.rotas) ? r.rotas : []).slice(0, 20),
+      /*
+       * O ESTADO DE CADA LINHA SAI AQUI, com a MESMA função que a leitura do cartão usa.
+       *
+       * É o FR-022 garantido por construção: as duas telas não têm como discordar, porque só existe
+       * uma implementação da regra. A alternativa — repetir a máquina de cinco estados no SQL —
+       * concordaria no dia em que fosse escrita e divergiria em silêncio no primeiro ajuste.
+       */
+      rotas: (Array.isArray(r.rotas) ? r.rotas : []).slice(0, 20).map((l) => ({
+        ...l,
+        estado: estadoDaOferta({
+          tripId: l.tripId,
+          aceitacaoDoPortal: l.aceitacaoDoPortal,
+          ordemAberta: Boolean(l.ordemAberta),
+          ultimaFalhou: Boolean(l.ultimaFalhou),
+        }),
+      })),
     }))
     .sort((a, b) => regionPosition(a.region) - regionPosition(b.region));
 }
+
+/** A linha como o SQL a devolve: com as ENTRADAS da derivação, ainda sem o estado. */
+type LinhaCrua = Omit<SpotDaRegiao["rotas"][number], "estado">;

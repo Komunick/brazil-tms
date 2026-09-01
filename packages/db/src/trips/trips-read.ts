@@ -1053,7 +1053,15 @@ function agruparPorRegiao(
     .sort(([a], [b]) => regionPosition(a) - regionPosition(b) || String(a).localeCompare(String(b)))
     .map(([region, byStatus]) => ({ region, byStatus }));
 }
-export async function queryDashboardMetrics(): Promise<DashboardSummary> {
+export async function queryDashboardMetrics(
+  /**
+   * Quem está olhando — só para MARCAR a linha de spot que essa pessoa ignorou (fatia 030).
+   *
+   * Opcional, e ausente significa que nada é marcado: nenhum chamador antigo precisou mudar, e o
+   * painel continua respondendo o mesmo para quem não passa o campo.
+   */
+  userId?: string | null,
+): Promise<DashboardSummary> {
   const agora = new Date();
   const { from, to } = dayRangeSaoPaulo(agora);
   const amanha = dayRangeSaoPaulo(agora, 1);
@@ -1245,7 +1253,7 @@ export async function queryDashboardMetrics(): Promise<DashboardSummary> {
      * leitura em série faria metade dos números envelhecer esperando a outra metade.
      */
     readOrigemAtrasadaPorRegiao(),
-    readSpotPorRegiao(),
+    readSpotPorRegiao(userId),
   ]);
 
   const pct = (rows: Array<{ denom: number; num: number }>): number | null => {
