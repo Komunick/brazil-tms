@@ -1,4 +1,13 @@
-import { index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  index,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
+import { users } from "./users";
 
 /**
  * A OFERTA DE SPOT que o cliente abriu em leilão (2026-08-18).
@@ -52,5 +61,53 @@ export const spotOffers = pgTable(
     // chave, um reinício na madrugada encheria a TV de avisos de ofertas velhas.
     uniqueIndex("spot_offers_portal_trip_uq").on(table.portalTripId),
     index("spot_offers_received_idx").on(table.receivedAt.desc()),
+  ],
+);
+
+/**
+ * A DISPENSA PESSOAL — "esta pessoa tirou esta oferta da própria tela" (2026-09-01).
+ *
+ * Não é decisão sobre o frete: não vai recusa nenhuma ao portal, a oferta continua na tela dos
+ * colegas até alguém aceitar, e continua no registro do dia para todos. É decisão sobre a tela de
+ * quem clicou, e sobre mais nada.
+ *
+ * ── POR QUE ESTA É A ÚNICA TABELA QUE A FATIA CRIOU ───────────────────────────────────────────
+ *
+ * O cartão distingue cinco situações, e QUATRO delas já estavam gravadas antes desta fatia existir:
+ * "esperando" e "aceito" são `trips.customer_fields->>'Aceitação (portal)'`; "enviado" e "recusado"
+ * são `portal_commands`. Só "quem ignorou o quê" não tinha onde morar.
+ *
+ * Não guardar as outras quatro NÃO é economia — é o que impede uma segunda verdade. Medido: das 19
+ * ofertas dos últimos dois dias, quase todas foram aceitas DIRETO NO PORTAL, sem passar pelo TMS.
+ * Uma coluna nossa de "aceita" continuaria dizendo "esperando" para sempre, e o cartão nunca sairia
+ * da tela de ninguém.
+ *
+ * ── A CHAVE COMPOSTA É A REGRA, NÃO OTIMIZAÇÃO ────────────────────────────────────────────────
+ *
+ * Dispensar duas vezes é a mesma dispensa. Com a PK em `(spotOfferId, userId)`, a gravação é
+ * `insert … on conflict do nothing`: idempotente, e duas abas clicando junto não se atropelam.
+ *
+ * Sem índice além dela, de propósito: a única leitura é "esta pessoa já dispensou esta oferta?", que
+ * é o prefixo exato da chave. Um índice por `userId` sozinho seria especulação.
+ *
+ * ── A CASCATA PELA OFERTA É OBRIGATÓRIA; PELO AUTOR, PROIBIDA ─────────────────────────────────
+ *
+ * Pela oferta, para que a dispensa nunca trave a remoção dela. Pelo autor, jamais: a dispensa de
+ * alguém que saiu da empresa explica por que aquela oferta não estava na tela daquela pessoa, e
+ * apagá-la apagaria a explicação.
+ */
+export const spotOfferDispensas = pgTable(
+  "spot_offer_dispensas",
+  {
+    spotOfferId: uuid("spot_offer_id")
+      .notNull()
+      .references(() => spotOffers.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id),
+    dispensadaEm: timestamp("dispensada_em", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ name: "spot_offer_dispensas_pk", columns: [table.spotOfferId, table.userId] }),
   ],
 );

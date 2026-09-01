@@ -32,6 +32,17 @@ export const portalActionBodySchema = z
     /** Observação livre de quem decidiu. Vai junto para o portal e fica no registro daqui. */
     remark: z.string().trim().max(500).nullish(),
     /**
+     * DE ONDE A DECISÃO SAIU (2026-09-01, fatia 030).
+     *
+     * NÃO vai para o portal — ele não tem este campo. Vai para a auditoria, para que a revisão
+     * depois distinga a decisão tomada no calor do leilão, pelo cartão de spot, da tomada na tela
+     * da viagem com a lista inteira à vista.
+     *
+     * Opcional, e ausente vale `tela_da_viagem`: é o único lugar de onde se decidia antes, e um
+     * campo obrigatório aqui quebraria a tela que já existe sem ganhar nada.
+     */
+    origem: z.enum(["oferta_spot", "tela_da_viagem"]).nullish(),
+    /**
      * O VÍNCULO DE CADA RECURSO, quando quem atribui o informa (2026-08-25, fatia 026).
      *
      * NÃO vai para o portal do cliente — ele não tem esse campo e não sabe o que fazer com ele.

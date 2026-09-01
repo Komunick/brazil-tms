@@ -73,16 +73,38 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/028-fila-cadastro-motorista/plan.md` — o **pré-cadastro de motorista
-parceiro**, preenchido pelo próprio motorista. **VOLTOU A SER O TRABALHO COM DATA**: o evento é
-**10/09/2026**, com mais de 50 motoristas e ninguém do escritório presente.
+Active feature plan: `specs/030-aceite-de-spot/plan.md` — **aceitar a oferta de spot no próprio
+cartão** que aparece na tela de todo mundo, em dois gestos, mais Ignorar (que limpa só a tela de quem
+clicou). O cartão para de sair sozinho em 30 s e **só some quando o PORTAL confirmar**.
 
-**O que falta nela**, e as duas primeiras travam o resto:
+**A descoberta que governa a fatia**: quase nada de estado novo é preciso. "Enviado" já é
+`portal_commands`, "recusado" já é `status='failed'` + `last_error`, e **"aceito" já é
+`customer_fields->>'Aceitação (portal)'`**. Só a **dispensa pessoal** (quem ignorou o quê) não existe
+— é a única tabela nova. Copiar "aceita" para coluna nossa é O erro: das 19 ofertas de dois dias,
+quase todas foram aceitas **direto no portal**, e a cópia diria "esperando" para sempre.
 
-1. A **divergência de CPF** do primeiro cadastro real (Alexandre): `007.588.154-33` na CNH contra
-   `076.005.305-70` digitado — os dois válidos. Precisa ser resolvida com o motorista.
-2. O **primeiro `setMotorista` de verdade**, que nunca rodou. É **de graça** (decisão D7).
-3. A **PR #6 do site** (`site-brazil-transports`), com o `min` nas datas, ainda aberta.
+**Certificado contra produção antes de planejar**: 17 ordens de aceite, 13 concluídas — 11 delas em
+LH de oferta de spot, disparadas de **0 a 3 min** depois do aviso (a operação já faz isso à mão).
+Mediana de **3 s** do clique à resposta do portal em 396 ordens. As 4 recusas são todas
+`131205003 — erro de status de viagem`: **a corrida do leilão**, que não some e por isso o cartão
+mostra a recusa em vez de sumir.
+
+**ACEITAR É IRREVERSÍVEL.** Nenhum passo de implementação dispara aceite real — o caminho de escrita
+se prova contra viagem que NÃO está `Pending`, onde o guarda recusa antes de qualquer coisa sair.
+
+---
+
+**A 028 (pré-cadastro de motorista) continua sendo O TRABALHO COM DATA**, agora a nove dias:
+`specs/028-fila-cadastro-motorista/plan.md` — o pré-cadastro preenchido pelo próprio motorista. O
+evento é **10/09/2026**, com mais de 50 motoristas e ninguém do escritório presente.
+
+**O que falta nela:**
+
+1. O **primeiro `setMotorista` de verdade**, que nunca rodou. É **de graça** (decisão D7).
+2. A **PR #6 do site** (`site-brazil-transports`), com o `min` nas datas, ainda aberta.
+3. A fila tem **três pré-cadastros** e nenhum arquivado. O do **Alexandre é TESTE com dado errado**
+   (usuário, 01/09) — a "divergência de CPF" que constava aqui como pendência **não existe**, era
+   dado de teste. Falta o usuário dizer se Gabriel e Danilo são reais antes de arquivar.
 
 **ARMADILHAS da 028** — as cinco que quebram de verdade:
 

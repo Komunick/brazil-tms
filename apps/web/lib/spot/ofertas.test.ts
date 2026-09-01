@@ -15,6 +15,19 @@ const oferta = (id: string): SpotOfertaTeste => ({
   arrival: "19/08 06:00",
   operator: "fulano",
   receivedAt: "2026-08-18T14:00:00.000Z",
+
+  /*
+    O ESTADO DA DECISÃO NÃO INTERESSA A ESTE ARQUIVO, e é por isso que ele é fixo.
+
+    `novasOfertas` e `enfileirar` respondem "o que é novidade?" e "em que ordem?", olhando só o `id`.
+    Quem responde "dá para aceitar?" é `spot-decisao.ts`, que tem os testes dele. Variar o estado
+    aqui só faria estes testes falharem por motivo que não é o deles.
+  */
+  estado: "esperando",
+  tripId: `trip-${id}`,
+  podeAceitar: true,
+  decidiuNome: null,
+  erroDoPortal: null,
 });
 type SpotOfertaTeste = SpotOfferView;
 
