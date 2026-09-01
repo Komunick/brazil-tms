@@ -28,7 +28,9 @@ export async function listarCargos(): Promise<CargoNaLista[]> {
     permissoes: string[];
   }>(sql`
     select c.id, c.nome, c.ativo,
-           (select count(*)::int from users u where u.cargo_id = c.id and u.status = 'active')
+           (select count(*)::int from usuario_cargos uc
+              join users u on u.id = uc.user_id
+             where uc.cargo_id = c.id and u.status = 'active')
              as pessoas,
            coalesce(
              (select array_agg(cp.permissao order by cp.permissao)
@@ -52,7 +54,8 @@ export async function pessoasDoCargo(cargoId: string): Promise<{ id: string; nom
   const linhas = await db.execute<{ id: string; nome: string }>(sql`
     select u.id, u.name as nome
       from users u
-     where u.cargo_id = ${cargoId} and u.status = 'active'
+     where u.id in (select uc.user_id from usuario_cargos uc where uc.cargo_id = ${cargoId})
+       and u.status = 'active'
      order by u.name
   `);
   return linhas;

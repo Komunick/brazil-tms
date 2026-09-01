@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, ilike, or } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { db, users } from "@brazil-tms/db";
 import { quantosAindaAdministram } from "@brazil-tms/db";
 import { cargoParaPapel } from "@/lib/cargos/service";
@@ -18,6 +18,13 @@ export interface UserProfile {
   status: string;
   /** O setor da passagem de turno. Nulo é o normal — a maioria das contas não faz turno. */
   setor: Setor | null;
+  /**
+   * OS CARGOS DA PESSOA — vários desde 2026-09-01, e é a UNIÃO deles que decide o acesso.
+   *
+   * Vem só na LISTAGEM: a tela de usuários precisa deles para marcar as caixas, e as outras
+   * leituras de perfil não. Pô-los em `toProfile` faria toda leitura pagar por um dado de uma tela.
+   */
+  cargoIds?: string[];
   mustChangePassword: boolean;
   lastLoginAt: string | null;
   createdAt: string;
@@ -88,7 +95,24 @@ export async function listUsers(opts: ListUsersOptions = {}): Promise<UserProfil
     .where(filters.length > 0 ? and(...filters) : undefined)
     .orderBy(desc(users.createdAt));
 
-  return rows.map(toProfile);
+  /*
+    OS CARGOS NUMA CONSULTA SÓ, e não uma por pessoa.
+
+    São 34 usuários: uma consulta por linha seriam 34 idas ao banco para montar uma tela. Aqui é uma
+    varredura da tabela de vínculo inteira — algumas dezenas de linhas — e o agrupamento acontece em
+    memória, que é onde ele custa nada.
+  */
+  const vinculos = await db.execute<{ user_id: string; cargo_id: string }>(
+    sql`select user_id, cargo_id from usuario_cargos`,
+  );
+  const porPessoa = new Map<string, string[]>();
+  for (const v of vinculos) {
+    const lista = porPessoa.get(v.user_id);
+    if (lista) lista.push(v.cargo_id);
+    else porPessoa.set(v.user_id, [v.cargo_id]);
+  }
+
+  return rows.map((row) => ({ ...toProfile(row), cargoIds: porPessoa.get(row.id) ?? [] }));
 }
 
 /**
@@ -168,6 +192,25 @@ export async function createUser(
         .returning();
       const row = inserted[0];
       if (!row) throw new Error("Inserção de usuário não retornou linha.");
+
+      /*
+        O VÍNCULO TAMBÉM, e não só a coluna (2026-09-01).
+
+        Desde que os cargos viraram vários, quem decide acesso é `usuario_cargos` — a coluna
+        `users.cargo_id` só sobrevive para o app anterior durante o deploy. Gravar uma sem a outra
+        faria todo cadastro novo nascer com conjunto VAZIO: a pessoa entra, não vê nada, e ninguém
+        liga o efeito à causa.
+
+        Na mesma transação do `insert`: um usuário criado sem vínculo por uma falha aqui seria
+        exatamente esse caso, e sem nada apontando para ele.
+      */
+      if (row.cargoId) {
+        await tx.execute(
+          sql`insert into usuario_cargos (user_id, cargo_id)
+              values (${authUserId}::uuid, ${row.cargoId}::uuid)
+              on conflict do nothing`,
+        );
+      }
 
       await writeAudit(tx, {
         entityType: "user",
