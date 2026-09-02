@@ -401,7 +401,23 @@ export function OfertaDeSpot({
         onMouseLeave={soltar}
         onFocusCapture={pausar}
         onBlurCapture={soltar}
-        className="pointer-events-auto flex gap-3 overflow-x-auto px-4 pb-1.5 pt-1"
+        /*
+          `safe center`: A ESTEIRA CENTRALIZA QUANDO CABE (2026-09-02, medido na tela).
+
+          A camada já dizia `justify-center`, mas isso centraliza as LINHAS na vertical. Na
+          horizontal quem manda é a faixa, e faixa com rolagem empilha a partir da esquerda — com um
+          cartão só ele ficava colado na borda esquerda. O usuário reportou como "no painel continuou
+          aparecendo no canto", e estava certo: medido em produção, x=16 numa janela de 1707.
+
+          O `safe` NÃO É ENFEITE. `center` puro, num contêiner que rola, corta o começo do conteúdo
+          quando ele transborda — os primeiros cartões ficariam inalcançáveis, porque não há como
+          rolar para antes do início. `safe center` centraliza enquanto cabe e volta a alinhar pelo
+          início assim que passa da largura, que é exatamente o comportamento que a esteira precisa.
+
+          Conferido na produção antes de escrever: aplicando isto, o cartão foi de x=16 para x=565 —
+          centro em 845 contra 854 da janela.
+        */
+        className="pointer-events-auto flex gap-3 overflow-x-auto px-4 pb-1.5 pt-1 [justify-content:safe_center]"
       >
         {/*
           560 px por cartão — o inteiro, e não o encolhido.
