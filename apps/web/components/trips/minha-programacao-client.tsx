@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ChevronDown, ChevronRight, Eye, EyeOff, Palette, SlidersHorizontal } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Copy, Eye, EyeOff, Palette, SlidersHorizontal } from "lucide-react";
 import { useMarcarViagem, useProgramacao } from "@/lib/trips/client";
 import type { LinhaDaProgramacao } from "@brazil-tms/db";
 import { proximasFrentes } from "@/lib/trips/frentes";
@@ -334,6 +334,51 @@ export function MinhaProgramacaoClient({
   }, [visiveis, diasEscondidos, statusEscondidos]);
 
   /**
+   * AS PLACAS DO QUE ESTÁ NA TELA — para colar numa coluna de planilha (2026-09-02, a pedido).
+   *
+   * ── SAI DE `porDia`, E NÃO DE `visiveis` ──────────────────────────────────────────────────
+   *
+   * `visiveis` só aplicou a busca; `porDia` já passou também pelos dias e pelos status escondidos.
+   * O pedido foi "as placas do filtro selecionado", e filtro é o que a pessoa ESTÁ VENDO. Copiar de
+   * `visiveis` traria de volta linhas que ela acabou de esconder — o pior tipo de erro aqui, porque
+   * a lista colada parece certa e ninguém confere placa por placa.
+   *
+   * ── UMA PLACA POR ITEM, INCLUSIVE AS DUAS DA CARRETA ──────────────────────────────────────
+   *
+   * O portal manda as duas num campo só, separadas por vírgula ("PVZ6F36,FYD0H47"). Medido em
+   * produção: das 196 viagens com placa num dia, **146 têm duas** — é a maioria, não a exceção. A
+   * lista sai portanto MAIOR que o número de LHs, e é isso que se quer: o que se cola numa planilha
+   * de placas é placa, não viagem.
+   *
+   * A INTERNA ENTRA JUNTO quando existe. Ela é a placa que rodou e que o portal não aceitou (a
+   * carreta no lugar do truck), e a coluna já a mostra como "+ ABC1D23" — copiar sem ela deixaria de
+   * fora exatamente o caso que o faturamento precisa enxergar.
+   *
+   * REPETIDA NÃO É REMOVIDA: o mesmo cavalo pode puxar duas LHs no dia, e a lista tem de bater linha
+   * a linha com o que está na tela. Quem quiser sem repetição remove na planilha em dois cliques;
+   * quem precisa conferir contra a tela não teria como recuperar o que foi retirado aqui.
+   */
+  const placasNaTela = useMemo(
+    () =>
+      porDia.flatMap(([, linhasDoDia]) =>
+        linhasDoDia.flatMap((l) => [
+          ...(l.placa ?? "")
+            .split(",")
+            .map((p) => p.trim())
+            .filter(Boolean),
+          ...(l.placaInterna ? [l.placaInterna.trim()] : []),
+        ]),
+      ),
+    [porDia],
+  );
+
+  /** Quantas LHs geraram essas placas — o botão diz os dois números, senão um deles mente. */
+  const viagensNaTela = useMemo(
+    () => porDia.reduce((n, [, linhasDoDia]) => n + linhasDoDia.length, 0),
+    [porDia],
+  );
+
+  /**
    * Os dias que a consulta trouxe, com a contagem de cada um.
    *
    * Calculado sobre a lista ANTES do filtro de dias, e não depois: senão, esconder um dia
@@ -401,6 +446,8 @@ export function MinhaProgramacaoClient({
             placeholder={t("buscarPlaceholder")}
             className="h-8 max-w-xs"
           />
+
+          <CopiarPlacas placas={placasNaTela} viagens={viagensNaTela} />
 
           {/* Só aparece quando existe algo escondido: um botão que nunca faz nada é ruído. */}
           {ocultas > 0 ? (
@@ -1069,5 +1116,63 @@ function SeloDeVinculo({ vinculo }: { vinculo: LinhaDaProgramacao["vinculo"] }) 
     >
       {t(`vinculo_${vinculo}`)}
     </span>
+  );
+}
+
+/**
+ * COPIAR TODAS AS PLACAS DO QUE ESTÁ NA TELA (2026-09-02, a pedido).
+ *
+ * ── UMA POR LINHA, E O SEPARADOR É A DECISÃO INTEIRA ──────────────────────────────────────────
+ *
+ * O destino é uma COLUNA de planilha. Vírgula ou ponto-e-vírgula cairiam numa célula só, e quem cola
+ * teria de separar à mão — que é o trabalho que este botão existe para tirar. A quebra de linha é o
+ * que faz cada placa virar uma linha da planilha.
+ *
+ * ── O BOTÃO CONTA AS DUAS COISAS ──────────────────────────────────────────────────────────────
+ *
+ * "18 placas · 11 LHs". Um número só mentiria: como a maioria das viagens tem cavalo E carreta, a
+ * lista sai maior que o número de viagens, e quem lesse "11" esperaria 11 linhas na planilha.
+ *
+ * ── SEM PLACA, SEM BOTÃO ──────────────────────────────────────────────────────────────────────
+ *
+ * Um botão que copia lista vazia parece quebrado. Ele some quando o filtro não deixou placa nenhuma.
+ *
+ * A confirmação é o próprio rótulo virando "copiado" por dois segundos, como no `Copiar` da linha —
+ * um aviso flutuante para uma ação desta seria mais interrupção do que informação.
+ */
+function CopiarPlacas({ placas, viagens }: { placas: string[]; viagens: number }) {
+  const t = useTranslations("Programacao");
+  const [copiado, setCopiado] = useState(false);
+
+  useEffect(() => {
+    if (!copiado) return;
+    const id = setTimeout(() => setCopiado(false), 2000);
+    return () => clearTimeout(id);
+  }, [copiado]);
+
+  if (placas.length === 0) return null;
+
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      className="h-8"
+      onClick={() => {
+        void navigator.clipboard
+          .writeText(placas.join("\n"))
+          .then(() => setCopiado(true))
+          .catch(() => setCopiado(false));
+      }}
+    >
+      {copiado ? (
+        <Check className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+      ) : (
+        <Copy className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+      )}
+      {copiado
+        ? t("placasCopiadas", { placas: placas.length })
+        : t("copiarPlacasDoFiltro", { placas: placas.length, viagens })}
+    </Button>
   );
 }
