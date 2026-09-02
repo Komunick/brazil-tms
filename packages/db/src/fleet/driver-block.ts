@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
 import { db } from "../client";
 import { writeAudit } from "../audit/write-audit";
 import { drivers, users } from "../../schema";
@@ -158,15 +158,44 @@ export async function listarMotoristasBloqueados(): Promise<MotoristaBloqueado[]
  * uma consulta por motorista numa lista de centenas.
  */
 export async function bloqueiosPorIdDoPortal(): Promise<Map<number, string>> {
+  /*
+    OS DOIS IMPEDIMENTOS ENTRAM AQUI, e não só o nosso (2026-09-02, a pedido).
+
+    Havia dois estados diferentes com o mesmo efeito prático — a atribuição não passa — e a tela só
+    mostrava um:
+
+      · `blocked_at`      — bloqueado POR NÓS, com motivo escrito. Aparecia riscado.
+      · `status`          — a pessoa que o portal do CLIENTE desativou ou suspendeu. Aparecia NORMAL.
+
+    Medido em produção em 02/09: **1 bloqueado por nós e 8 desativados pelo portal**. Os oito eram
+    selecionáveis, e a atribuição só falhava depois — o espelho do portal exige `active`. Quem
+    escolhia o nome descobria o problema no fim do gesto, sem saber por quê.
+
+    O motivo do nosso bloqueio é texto livre; o do portal não existe, e por isso vai como string
+    vazia — a tela troca por uma frase própria. Vazio aqui significa "impedido, sem motivo escrito",
+    e não "não impedido": quem lê este mapa pergunta se a CHAVE existe, nunca se o valor tem texto.
+  */
   const linhas = await db
-    .select({ portalDriverId: drivers.portalDriverId, motivo: drivers.blockedReason })
+    .select({
+      portalDriverId: drivers.portalDriverId,
+      motivo: drivers.blockedReason,
+      status: drivers.status,
+      bloqueadoPorNos: drivers.blockedAt,
+    })
     .from(drivers)
-    .where(and(isNotNull(drivers.blockedAt), isNotNull(drivers.portalDriverId)));
+    .where(
+      and(
+        isNotNull(drivers.portalDriverId),
+        or(isNotNull(drivers.blockedAt), ne(drivers.status, "active")),
+      ),
+    );
 
   const mapa = new Map<number, string>();
   for (const l of linhas) {
     const id = Number(l.portalDriverId);
-    if (Number.isFinite(id) && id > 0) mapa.set(id, l.motivo ?? "");
+    if (!Number.isFinite(id) || id <= 0) continue;
+    // O nosso bloqueio ganha do estado do portal: ele tem motivo escrito, e é o mais específico.
+    mapa.set(id, l.bloqueadoPorNos ? (l.motivo ?? "") : "");
   }
   return mapa;
 }
