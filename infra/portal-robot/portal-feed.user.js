@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.19.0
+// @version      1.20.0
 // @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -555,10 +555,19 @@
       lugar nenhum — exatamente como a `SoC_BA2` ficou.
 
       As três estações abaixo foram lidas da listagem do portal antes de escrever aqui. Cuidado com
-      o vizinho `LM Hub_RN_FX_Natal_03`, que é OUTRA estação e não entra.
+      o vizinho `LM Hub_RN_FX_Natal_03`: ele é OUTRA estação (id 10881, código HUB-LRN-03-X,
+      contra 10329 e HUB-LRN-03 do outro) e entrou por conta própria em 02/09, a pedido.
     */
     "FM Hub_RN_Natal_S Jose de Mipibu,SoC_PE_Jaboatão dos Guararapes",
     "SoC_PE_Jaboatão dos Guararapes,LM Hub_RN_Natal_03",
+    /*
+      A FX É OUTRA ESTAÇÃO, e não uma variação de escrita da de cima (2026-09-02, a pedido).
+
+      `LM Hub_RN_FX_Natal_03` tem id 10881 e código HUB-LRN-03-X; a `LM Hub_RN_Natal_03` tem id
+      10329 e código HUB-LRN-03. Nomes quase iguais, estações diferentes — e foi por isso que ela
+      passou batida quando as duas de Natal entraram mais cedo hoje.
+    */
+    "SoC_PE_Jaboatão dos Guararapes,LM Hub_RN_FX_Natal_03",
     "SoC_SP_Santana,LM Hub_SP_Guarujá",
     "SoC_BA_Simoes Filho,LM Hub_SE_Aracaju_02",
     "SoC_SP_São Bernardo do Campo,LM Hub_SP_Guarujá",
