@@ -62,17 +62,24 @@ async function loadSession(): Promise<SessionResult> {
        * CARGO DESATIVADO NÃO CONCEDE, e a trava é o `and c.ativo` aqui — não a tela. Desativar um
        * cargo tem de tirar o acesso de quem o tem, inclusive de quem já está com a sessão aberta.
        */
+      /**
+       * `users.id` ESCRITO POR EXTENSO, e não `${users.id}` (2026-09-02). Num select de uma tabela
+       * só, o drizzle renderiza a referência como `"id"` sem qualificador; dentro desta subquery o
+       * nome resolve para `cargos.id`, a comparação `uc.user_id = cargos.id` nunca casa, e TODA
+       * sessão nascia sem cargo e sem permissão — a página inicial redirecionava para si mesma
+       * ("redirecionamento em excesso") para todo mundo, inclusive o administrador.
+       */
       cargo: sql<string | null>`(
         select string_agg(c.nome, ', ' order by c.nome)
           from usuario_cargos uc join cargos c on c.id = uc.cargo_id and c.ativo
-         where uc.user_id = ${users.id}
+         where uc.user_id = users.id
       )`.as("cargo"),
       permissoes: sql<string[]>`coalesce((
         select array_agg(distinct cp.permissao)
           from usuario_cargos uc
           join cargos c on c.id = uc.cargo_id and c.ativo
           join cargo_permissoes cp on cp.cargo_id = uc.cargo_id
-         where uc.user_id = ${users.id}
+         where uc.user_id = users.id
       ), '{}')`.as("permissoes"),
     })
     .from(users)
