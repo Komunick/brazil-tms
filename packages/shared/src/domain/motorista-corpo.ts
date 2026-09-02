@@ -44,6 +44,7 @@ export const MOTIVOS_DE_NAO_CADASTRAR = [
   "sem_bairro",
   "sem_cep",
   "sem_nascimento",
+  "nascimento_impossivel",
   "sem_sexo",
   "sem_nome_mae",
   "sem_rg",
@@ -209,6 +210,29 @@ export function cpfValido(bruto: string | null): boolean {
  * CPF divergente e IBGE que não casou exigem decisão de gente; um campo que a leitura não pegou se
  * resolve digitando o que está na imagem ao lado.
  */
+/**
+ * A data cabe numa vida de motorista? — `false` para o que é impossível, não para o improvável.
+ *
+ * Aceita `YYYY-MM-DD` e `DD/MM/YYYY`, que são as duas formas que a leitura da CNH e o formulário
+ * produzem. Texto que não vira data nenhuma NÃO bloqueia aqui: quem cuida disso é o `sem_nascimento`
+ * e o próprio corpo, e dois guardas para a mesma ausência se contradizem no primeiro ajuste.
+ */
+export function nascimentoPlausivel(texto: string, hoje = new Date()): boolean {
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(texto);
+  const br = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(texto);
+  const ano = iso ? Number(iso[1]) : br ? Number(br[3]) : null;
+  const mes = iso ? Number(iso[2]) : br ? Number(br[2]) : null;
+  const dia = iso ? Number(iso[3]) : br ? Number(br[1]) : null;
+  if (ano === null || mes === null || dia === null) return true;
+
+  const data = new Date(Date.UTC(ano, mes - 1, dia));
+  if (Number.isNaN(data.getTime())) return true;
+  if (data.getTime() > hoje.getTime()) return false;
+
+  const anos = (hoje.getTime() - data.getTime()) / (365.2425 * 24 * 60 * 60 * 1000);
+  return anos >= 18 && anos <= 90;
+}
+
 export function motivosDeNaoCadastrar(d: DadosParaSetMotorista): MotivoDeNaoCadastrar[] {
   const m: MotivoDeNaoCadastrar[] = [];
   const c = d.campos;
@@ -233,6 +257,19 @@ export function motivosDeNaoCadastrar(d: DadosParaSetMotorista): MotivoDeNaoCada
   if (!valor(c, "bairro")) m.push("sem_bairro");
   if (!valor(c, "cep")) m.push("sem_cep");
   if (!valor(c, "dataNascimento")) m.push("sem_nascimento");
+  /**
+   * DATA DE NASCIMENTO POSSÍVEL, e não só presente (2026-09-02).
+   *
+   * O primeiro cadastro real enviado à gerenciadora foi com "DataNascimento": "2035-04-25" — uma
+   * pessoa nascida no futuro. **Ela aceitou**, porque a validação desse campo não existe do lado de
+   * lá. O motorista ficou lá dentro com data errada, e desfazer no cadastro DELES custa.
+   *
+   * A regra é frouxa de propósito: nada de futuro, e nada fora de um intervalo em que um motorista
+   * caiba (18 a 90 anos). Não é para adivinhar a data certa — é para pegar o dígito trocado que
+   * transforma 1985 em 2035, que foi exatamente o caso.
+   */
+  const nascimento = valor(c, "dataNascimento");
+  if (nascimento && !nascimentoPlausivel(nascimento)) m.push("nascimento_impossivel");
   if (!valor(c, "sexo")) m.push("sem_sexo");
   if (!valor(c, "nomeMae")) m.push("sem_nome_mae");
   if (!valor(c, "rg")) m.push("sem_rg");
