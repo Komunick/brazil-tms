@@ -370,7 +370,18 @@ export function OfertaDeSpot({
       role="status"
       aria-live="polite"
     >
-      <div className="pointer-events-auto mx-4 mb-2 flex items-center justify-between gap-3">
+      {/*
+        A BARRA ACOMPANHA A LARGURA DO CARTÃO (2026-09-02, a pedido).
+
+        Ela era `mx-4` na largura inteira da tela. Enquanto os cartões ficavam à esquerda isso passava
+        despercebido; depois que a esteira passou a centralizar, a contagem ficou numa borda da tela e
+        o Recolher na outra, com o cartão no meio — o usuário descreveu como "um card de recolher em
+        um lado e no outro", e a leitura estava certa: os dois pareciam soltos.
+
+        560px é a mesma largura do cartão, e `mx-auto` a põe sobre ele. Com mais de um cartão a
+        esteira transborda e a barra continua centrada, que é onde a atenção está.
+      */}
+      <div className="pointer-events-auto mx-auto mb-2 flex w-[560px] max-w-[calc(100%-2rem)] items-center justify-between gap-3">
         <span
           className="flex items-center gap-2 rounded-full py-1 pl-1.5 pr-3 text-xs font-extrabold text-white"
           style={{ background: LARANJA }}

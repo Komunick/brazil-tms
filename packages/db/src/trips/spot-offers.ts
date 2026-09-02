@@ -1,8 +1,10 @@
 import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import {
   dayRangeSaoPaulo,
+  decisaoAindaVisivel,
   estadoDaOferta,
   podeMandarAceite,
+  type DecisaoDaOferta,
   type EstadoDaOferta,
   type SpotOfferInput,
 } from "@brazil-tms/shared";
@@ -35,6 +37,13 @@ export interface SpotOfferView {
    * antes desta fatia existir. Ver `spot-decisao.ts` para o porquê de não copiá-los.
    */
   estado: EstadoDaOferta;
+  /**
+   * A DECISÃO, enquanto a janela dos dez segundos está aberta (2026-09-02).
+   *
+   * Nula na esmagadora maioria das leituras — a oferta passa a vida esperando. Quando existe, o
+   * cartão para de oferecer botão e passa a dizer QUEM decidiu, com uma contagem até sair.
+   */
+  decisao: DecisaoDaOferta | null;
   /** A viagem no TMS, quando ela existe. É o endereço da ordem de aceite. */
   tripId: string | null;
   /** Conveniência da tela para o botão poder DIZER por que está desligado. A autoridade é o servidor. */
@@ -107,17 +116,44 @@ export async function readSpotOffersToday(agora = new Date()): Promise<SpotOffer
   const { from, to } = dayRangeSaoPaulo(agora);
 
   /*
-    A OFERTA IGNORADA SAI PARA TODOS — e por isso esta consulta parou de perguntar QUEM está
-    olhando (2026-09-01).
+    A OFERTA IGNORADA SAI PARA TODOS — e por isso esta consulta não pergunta QUEM está olhando.
 
-    Ela recebia um `userId` e escondia só o que aquela pessoa tinha dispensado. Com a decisão
-    valendo para a equipe, a pergunta virou outra e mais simples: alguém já decidiu sobre esta
-    oferta? O parâmetro sumiu junto com a razão de ele existir.
+    Ela recebia um `userId` e escondia só o que aquela pessoa tinha dispensado (2026-09-01). Com a
+    decisão valendo para a equipe, a pergunta virou outra e mais simples: alguém já decidiu sobre
+    esta oferta?
 
-    `exists` sobre a chave primária, que agora é só a oferta.
+    E em 2026-09-02 ela deixou de ser um SIM/NÃO. Era um `exists`, e a oferta sumia no instante do
+    clique; agora a leitura precisa do INSTANTE e de QUEM, porque a decisão fica dez segundos na
+    tela de todos antes de a oferta sair. Ver `JANELA_DA_DECISAO_MS`.
   */
-  const dispensada = sql<boolean>`exists (
-    select 1 from spot_offer_dispensas d where d.spot_offer_id = ${spotOffers.id}
+  const dispensadaEm = sql<string | null>`(
+    select d.dispensada_em from spot_offer_dispensas d where d.spot_offer_id = ${spotOffers.id}
+  )`;
+
+  const dispensouNome = sql<string | null>`(
+    select u.name from spot_offer_dispensas d join users u on u.id = d.user_id
+     where d.spot_offer_id = ${spotOffers.id}
+  )`;
+
+  const dispensaMotivo = sql<string | null>`(
+    select d.motivo from spot_offer_dispensas d where d.spot_offer_id = ${spotOffers.id}
+  )`;
+
+  /*
+    QUANDO O ACEITE FOI CONFIRMADO PELO PORTAL — e por que só o daqui tem hora.
+
+    `settled_at` da última ordem concluída. Ele existe quando o aceite saiu DESTE sistema; a viagem
+    aceita direto no portal chega ao TMS pela leitura do plano, sem instante de clique e sem a quem
+    creditar. Nesse caso a oferta sai na hora, como sempre saiu — não há aviso a dar.
+
+    Medido em 01/09: das 19 ofertas de dois dias, quase todas foram aceitas direto no portal. Ou
+    seja, o aviso de aceite vale sobretudo para o aceite feito PELO CARTÃO, que é exatamente o gesto
+    que esta fatia criou.
+  */
+  const aceiteEm = sql<string | null>`(
+    select pc.settled_at from portal_commands pc
+     where pc.trip_id = ${trips.id} and pc.action = 'accept' and pc.status = 'done'
+     order by pc.settled_at desc limit 1
   )`;
 
   /*
@@ -164,7 +200,10 @@ export async function readSpotOffersToday(agora = new Date()): Promise<SpotOffer
       ultimoStatus,
       ultimoErro,
       decidiuNome,
-      dispensada,
+      dispensadaEm,
+      dispensouNome,
+      dispensaMotivo,
+      aceiteEm,
     })
     .from(spotOffers)
     .leftJoin(trips, eq(trips.externalTripId, spotOffers.tripNumber))
@@ -174,26 +213,39 @@ export async function readSpotOffersToday(agora = new Date()): Promise<SpotOffer
     .limit(30);
 
   /**
-   * O QUE SAI DA LISTA, E POR QUE SAI ANTES DE CHEGAR À TELA (2026-09-01).
+   * O QUE SAI DA LISTA, E POR QUE SAI ANTES DE CHEGAR À TELA.
    *
-   * `aceito` — a viagem foi aceita no portal, por quem quer que seja, aqui ou lá. É ASSIM que o
-   * cartão sai da tela de todas as pessoas: ele some da lista, e a tela não tem um caminho de código
-   * que o remova. O FR-014 fica provado por construção, e não por disciplina — não havendo o ramo,
-   * não há como um segundo motivo aparecer nele.
+   * Eram dois `filter` sobre assuntos diferentes: o `aceito` sumia na hora e a dispensa sumia na
+   * hora (2026-09-01). Em 2026-09-02 os dois viraram a MESMA pergunta, feita em `paraView`: a
+   * decisão ainda está dentro dos dez segundos? Enquanto estiver, a oferta continua vindo, marcada
+   * com quem decidiu; passados eles, a leitura para de trazê-la e o cartão sai de todas as telas.
    *
-   * `dispensada` — alguém com `decidir_spot` decidiu que a empresa não pega esta. Sai para todos.
+   * O FR-014 CONTINUA PROVADO POR CONSTRUÇÃO. A tela não ganhou caminho de código que remova cartão
+   * por decisão — ela desenha o que a leitura traz. Mudou o QUANDO o servidor para de trazer, não o
+   * QUEM decide isso. É por aqui que a oferta sai da tela de todas as pessoas de uma vez.
    *
-   * A dispensa é filtrada DEPOIS do teto de 30 de propósito: o teto é do dia, não da pessoa. Filtrar
-   * antes faria a lista de quem ignorou muita coisa puxar ofertas mais antigas que as dos colegas —
-   * duas pessoas veriam janelas diferentes do mesmo dia.
+   * O corte é feito DEPOIS do teto de 30 de propósito: o teto é do dia, não da decisão. Filtrar
+   * antes faria um dia com muitas ofertas ignoradas puxar ofertas mais antigas para dentro da
+   * janela — e duas pessoas veriam recortes diferentes do mesmo dia.
    */
-  return (
-    rows
-      .filter((r) => !r.dispensada)
-      .map(paraView)
-      // `aceito` não sai daqui. Ver o comentário acima — é o FR-014 por construção.
-      .filter((v) => v.estado !== "aceito")
-  );
+  return rows.map((r) => paraView(r, agora)).filter((v): v is SpotOfferView => v !== null);
+}
+
+/**
+ * A oferta ainda tem lugar na tela? — e é AQUI que ela sai, nunca no cliente (2026-09-02).
+ *
+ * Antes eram dois `filter` sobre coisas diferentes: a dispensa sumia na hora, e o `aceito` sumia na
+ * hora. Agora as duas passam pela mesma pergunta — "a decisão ainda está dentro dos dez segundos?"
+ * —, e é essa unificação que faz o aviso existir sem um segundo caminho de código.
+ *
+ * `null` significa "não mande para a tela". A tela continua sem qualquer ramo que remova cartão: ela
+ * desenha o que a leitura traz, e some o que a leitura parou de trazer.
+ */
+function decisaoDaLinha(r: LinhaDaOferta, estado: EstadoDaOferta): DecisaoDaOferta | null {
+  if (r.dispensadaEm) {
+    return { tipo: "ignorado", porNome: r.dispensouNome, motivo: r.dispensaMotivo };
+  }
+  return estado === "aceito" ? { tipo: "aceito", porNome: r.decidiuNome, motivo: null } : null;
 }
 
 type LinhaDaOferta = {
@@ -204,10 +256,13 @@ type LinhaDaOferta = {
   ultimoStatus: string | null;
   ultimoErro: string | null;
   decidiuNome: string | null;
-  dispensada: boolean;
+  dispensadaEm: string | null;
+  dispensouNome: string | null;
+  dispensaMotivo: string | null;
+  aceiteEm: string | null;
 };
 
-function paraView(r: LinhaDaOferta): SpotOfferView {
+function paraView(r: LinhaDaOferta, agora: Date): SpotOfferView | null {
   const situacao = {
     tripId: r.tripId,
     aceitacaoDoPortal: r.aceitacaoDoPortal,
@@ -215,6 +270,18 @@ function paraView(r: LinhaDaOferta): SpotOfferView {
     ultimaFalhou: r.ultimoStatus === "failed",
   };
   const estado = estadoDaOferta(situacao);
+  const decisao = decisaoDaLinha(r, estado);
+
+  /*
+    DECIDIDA, MAS AINDA VISÍVEL? — o único lugar que tira a oferta da tela.
+
+    O instante da decisão é o da dispensa, ou o `settled_at` do aceite. Passados os dez segundos, a
+    leitura para de trazer a oferta e o cartão sai de todas as telas de uma vez.
+  */
+  if (decisao) {
+    const quando = decisao.tipo === "ignorado" ? r.dispensadaEm : r.aceiteEm;
+    if (!decisaoAindaVisivel(quando ? new Date(quando) : null, agora)) return null;
+  }
 
   return {
     id: r.oferta.id,
@@ -235,5 +302,6 @@ function paraView(r: LinhaDaOferta): SpotOfferView {
     // Quem decidiu só interessa enquanto a ordem está em voo; depois dela, a informação é a recusa.
     decidiuNome: estado === "enviado" ? r.decidiuNome : null,
     erroDoPortal: estado === "recusado" ? r.ultimoErro : null,
+    decisao,
   };
 }

@@ -58,6 +58,8 @@ export function ofertaDeEnsaio(estado: EstadoDeEnsaio = "esperando"): SpotOfferV
   const agora = new Date();
   return {
     id: `ensaio-${agora.getTime()}`,
+    /* A janela dos dez segundos: o ensaio nasce sem decisão. */
+    decisao: null,
     portalTripId: `ensaio-${agora.getTime()}`,
     tripNumber: "TESTE",
     route: "ENSAIO DE AVISO  ->  ignore este cartão",
