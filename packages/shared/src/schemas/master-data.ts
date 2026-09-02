@@ -343,8 +343,12 @@ export function isOwnershipCarrierValid(data: {
 }
 
 const OWNERSHIP_CARRIER_REFINE = {
+  /*
+    A MENSAGEM CITA OS DOIS VÍNCULOS (2026-09-02). Ela dizia só "subcontratado", e quem escolhia
+    AGREGADO lia sobre outra coisa — a regra vale para os dois, e a frase precisa dizer isso.
+  */
   message:
-    "Recurso subcontratado exige uma transportadora; recurso próprio não pode ter transportadora.",
+    "Agregado e terceiro exigem uma transportadora; recurso próprio não pode ter transportadora.",
   path: ["carrierId"],
 };
 

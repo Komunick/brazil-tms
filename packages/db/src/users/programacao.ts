@@ -184,6 +184,13 @@ export interface LinhaDaProgramacao {
    */
   vinculo: "owned" | "agregado" | "subcontracted" | null;
   /**
+   * O ID DO MOTORISTA NO NOSSO CADASTRO — para o selo poder EDITAR o vínculo (2026-09-02, a pedido).
+   *
+   * Nulo quando o nome do portal não casou com ninguém: aí não há a quem endereçar a alteração, e o
+   * selo vira só leitura em vez de oferecer um gesto que falharia.
+   */
+  driverId: string | null;
+  /**
    * O PREVISTO — quem VAI dirigir, quando ainda não há atribuição (2026-08-26).
    *
    * Vem em branco assim que o portal escala alguém de verdade: a intenção não disputa espaço com
@@ -293,6 +300,7 @@ export async function readProgramacao(
     cpf: string | null;
     telefone: string | null;
     /* O enum cru do banco. Vira o tipo estreito no mapeamento, nunca aqui. */
+    driver_id: string | null;
     vinculo: string | null;
     cor: string | null;
     oculta: boolean;
@@ -321,7 +329,7 @@ export async function readProgramacao(
         ou seja, trocar a chave do CTE inteiro para portal_driver_id é uma melhoria real e
         possível, mas é outra mudança: mexeria em CPF e telefone junto, e não é o que foi pedido.
       */
-      select distinct on (upper(btrim(name))) upper(btrim(name)) as nome, cpf, phone, ownership_type
+      select distinct on (upper(btrim(name))) upper(btrim(name)) as nome, id as driver_id, cpf, phone, ownership_type
         from drivers
        where archived_at is null
        order by upper(btrim(name)), (phone is null), (cpf is null)
@@ -381,6 +389,7 @@ export async function readProgramacao(
       pi.plates_internas as placa_interna,
       m.cpf,
       m.phone as telefone,
+      m.driver_id,
       m.ownership_type::text as vinculo,
       w.cor,
       coalesce(w.oculta, false) as oculta,
@@ -514,6 +523,7 @@ export async function readProgramacao(
       r.vinculo === "owned" || r.vinculo === "agregado" || r.vinculo === "subcontracted"
         ? r.vinculo
         : null,
+    driverId: r.driver_id,
     cor: r.cor,
 
     oculta: r.oculta,

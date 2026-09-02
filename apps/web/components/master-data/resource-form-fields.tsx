@@ -118,7 +118,21 @@ export function OwnershipCarrierFields<T extends FieldValues>({
         />
       </Field>
 
-      {ownershipType === "subcontracted" ? (
+      {/*
+        O SELETOR DE TRANSPORTADORA APARECE PARA TUDO QUE NÃO É PRÓPRIO (2026-09-02).
+
+        Era `=== "subcontracted"`, e o AGREGADO ficava sem ele — enquanto a validação
+        (`isOwnershipCarrierValid`) exige transportadora para os dois. O resultado era uma trava sem
+        saída: escolher Agregado nunca salvava, porque o único campo capaz de satisfazer a regra não
+        estava na tela. E a mensagem de erro falava em "recurso subcontratado", apontando para um
+        campo invisível — quem escolhia Agregado lia sobre subcontratado e concluía que a tela estava
+        quebrada. Estava.
+
+        Os dados confirmam que a EXIGÊNCIA é certa e o que estava errado era só a tela: dos 44
+        motoristas agregados em produção, os 44 têm transportadora; dos 46 veículos agregados,
+        idem. Quem os cadastrou não usou este formulário.
+      */}
+      {ownershipType !== "owned" ? (
         <Field label={t("carrier")} htmlFor={carrierName} required error={carrierError}>
           <Controller
             control={control}
