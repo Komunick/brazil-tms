@@ -172,6 +172,18 @@ export interface LinhaDaProgramacao {
   cpf: string | null;
   telefone: string | null;
   /**
+   * FROTA, AGREGADO OU TERCEIRO — o vínculo do motorista com a empresa (2026-09-02, a pedido).
+   *
+   * Vem do nosso cadastro, não do portal: o portal manda o NOME de quem vai dirigir e não sabe de
+   * quem é o caminhão. É por isso que o selo pode faltar mesmo com motorista na linha — motorista
+   * que o portal escalou e que ainda não existe no nosso cadastro não tem vínculo a mostrar.
+   *
+   * NULO É "NÃO SEI", e a tela não pode inventar. Medido em 02/09: das 137 viagens do dia com
+   * motorista, 137 casaram — mas o dia em que uma não casar, o certo é a coluna ficar vazia, e não
+   * escolher um vínculo qualquer.
+   */
+  vinculo: "owned" | "agregado" | "subcontracted" | null;
+  /**
    * O PREVISTO — quem VAI dirigir, quando ainda não há atribuição (2026-08-26).
    *
    * Vem em branco assim que o portal escala alguém de verdade: a intenção não disputa espaço com
@@ -280,6 +292,8 @@ export async function readProgramacao(
     placa_interna: string | null;
     cpf: string | null;
     telefone: string | null;
+    /* O enum cru do banco. Vira o tipo estreito no mapeamento, nunca aqui. */
+    vinculo: string | null;
     cor: string | null;
     oculta: boolean;
     status_operacional: string | null;
@@ -294,7 +308,20 @@ export async function readProgramacao(
     with motorista_do_portal as (
       -- Um SELECT por viagem para achar CPF e telefone seria uma ida ao banco por linha. Aqui o
       -- cadastro inteiro entra uma vez, dobrado pelo nome, e o casamento vira um join.
-      select distinct on (upper(btrim(name))) upper(btrim(name)) as nome, cpf, phone
+      /*
+        O VÍNCULO ENTRA AQUI, e não num join novo (2026-09-02, a pedido).
+
+        Ele sai do MESMO cadastro que já dá CPF e telefone. Um segundo join — por
+        portal_driver_id, que hoje existe — traria uma segunda opinião sobre QUEM é o motorista
+        desta viagem, e as duas discordariam no primeiro motorista com nome repetido: a linha
+        mostraria o CPF de um e o vínculo de outro, sem erro em lugar nenhum.
+
+        MEDIDO ANTES DE ESCOLHER (2026-09-02, produção): das 502 viagens do dia, 137 têm motorista
+        do portal e **as 137 casam pelo nome**. Casam também pelo id, e NENHUMA depende só do nome —
+        ou seja, trocar a chave do CTE inteiro para portal_driver_id é uma melhoria real e
+        possível, mas é outra mudança: mexeria em CPF e telefone junto, e não é o que foi pedido.
+      */
+      select distinct on (upper(btrim(name))) upper(btrim(name)) as nome, cpf, phone, ownership_type
         from drivers
        where archived_at is null
        order by upper(btrim(name)), (phone is null), (cpf is null)
@@ -354,6 +381,7 @@ export async function readProgramacao(
       pi.plates_internas as placa_interna,
       m.cpf,
       m.phone as telefone,
+      m.ownership_type::text as vinculo,
       w.cor,
       coalesce(w.oculta, false) as oculta,
       /*
@@ -477,6 +505,15 @@ export async function readProgramacao(
     placaInterna: r.placa_interna,
     cpf: r.cpf,
     telefone: r.telefone,
+    /*
+      O `ownership_type` do banco é um enum de três valores. Qualquer outra coisa vira NULO em vez
+      de passar adiante: um valor novo no enum apareceria na tela como texto cru, e a tela ficaria
+      inventando um vínculo que ela não sabe pintar.
+    */
+    vinculo:
+      r.vinculo === "owned" || r.vinculo === "agregado" || r.vinculo === "subcontracted"
+        ? r.vinculo
+        : null,
     cor: r.cor,
 
     oculta: r.oculta,
