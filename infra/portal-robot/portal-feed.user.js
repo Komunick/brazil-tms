@@ -546,6 +546,19 @@
   const ROTAS_DE_INTERESSE = [
     "SoC_GO_Goiânia_02,LM Hub_TO_Palmas",
     "SoC_PE_Jaboatão dos Guararapes,LM Hub_RN_Natal_01",
+    /*
+      AS DUAS DE NATAL, acrescentadas a pedido em 2026-09-02 — e a grafia foi CONFERIDA no portal.
+
+      O pedido veio como `Hub_Natal_SãoJosédeMipibu`, e essa forma teria virado linha morta: o
+      normalizador não separa palavras coladas, então ela produziria `HUB NATAL SAOJOSEDEMIPIBU`
+      contra o `FM HUB RN NATAL S JOSE DE MIPIBU` que o portal manda. Casaria nunca, sem erro em
+      lugar nenhum — exatamente como a `SoC_BA2` ficou.
+
+      As três estações abaixo foram lidas da listagem do portal antes de escrever aqui. Cuidado com
+      o vizinho `LM Hub_RN_FX_Natal_03`, que é OUTRA estação e não entra.
+    */
+    "FM Hub_RN_Natal_S Jose de Mipibu,SoC_PE_Jaboatão dos Guararapes",
+    "SoC_PE_Jaboatão dos Guararapes,LM Hub_RN_Natal_03",
     "SoC_SP_Santana,LM Hub_SP_Guarujá",
     "SoC_BA_Simoes Filho,LM Hub_SE_Aracaju_02",
     "SoC_SP_São Bernardo do Campo,LM Hub_SP_Guarujá",
