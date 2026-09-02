@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Check, ChevronDown, ChevronRight, Copy, Eye, EyeOff, Palette, SlidersHorizontal } from "lucide-react";
 import { useMarcarViagem, useProgramacao } from "@/lib/trips/client";
-import type { LinhaDaProgramacao } from "@brazil-tms/db";
 import { proximasFrentes } from "@/lib/trips/frentes";
 import { deslocamentoDoDia, diaDoDeslocamento } from "@/lib/trips/dias-da-programacao";
 import { usePainelDoUsuario } from "@/lib/ui/painel-do-usuario";
@@ -15,6 +14,7 @@ import { ArrowLeftRight } from "lucide-react";
 import { ComentariosDaLinha } from "@/components/trips/comentarios-da-linha";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { Copiar } from "@/components/trips/copiar";
+import { SeloDeVinculo } from "@/components/trips/selo-de-vinculo";
 import { PrevistoDaViagem } from "@/components/trips/previsto-da-viagem";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -194,9 +194,12 @@ function rotuloDoDia(dia: string, hoje: string, t: (k: string) => string): strin
 export function MinhaProgramacaoClient({
   userId,
   podeAtribuir,
+  podeEditarVinculo,
 }: {
   userId: string;
   podeAtribuir: boolean;
+  /** Editar o vínculo é `manage_fleet_data` — a mesma chave da aba de Motoristas. */
+  podeEditarVinculo: boolean;
 }) {
   const t = useTranslations("Programacao");
   /**
@@ -835,7 +838,11 @@ export function MinhaProgramacaoClient({
                       {l.motorista ? (
                         <span className="inline-flex items-center gap-1">
                           {l.motorista}
-                          <SeloDeVinculo vinculo={l.vinculo} />
+                          <SeloDeVinculo
+                            vinculo={l.vinculo}
+                            driverId={l.driverId}
+                            podeEditar={podeEditarVinculo}
+                          />
                           {/*
                             O MOTORISTA FOI TROCADO (31/08, a pedido).
 
@@ -1074,47 +1081,6 @@ function Previsto({
       <span className="ml-1 rounded bg-muted px-1 py-px text-[10px] font-normal not-italic">
         {rotulo}
       </span>
-    </span>
-  );
-}
-
-/**
- * FROTA, AGREGADO OU TERCEIRO — o vínculo, ao lado do nome (2026-09-02, a pedido).
- *
- * ── POR QUE ELE CABE NA CÉLULA DO MOTORISTA, e não numa coluna ────────────────────────────────
- *
- * Vínculo é um adjetivo do motorista, não um dado da viagem. Uma coluna própria custaria largura em
- * todas as linhas para dizer uma palavra, e afastaria o rótulo justamente do nome a que ele se
- * refere. Ao lado do nome, ele se lê junto.
- *
- * ── TERCEIRO FICA APAGADO, E ISSO NÃO É DESCUIDO ──────────────────────────────────────────────
- *
- * Medido em 02/09, na produção: das 137 viagens do dia com motorista, **98 são terceiro**, 24
- * agregado e 18 frota. Se os três tivessem a mesma força visual, a coluna viraria uma parede de
- * selos coloridos e o olho não acharia mais nada — o que se procura ali é a EXCEÇÃO. Frota e
- * agregado ganham cor; terceiro, que é a regra, fica em cinza.
- *
- * ── SEM VÍNCULO NÃO DESENHA NADA ──────────────────────────────────────────────────────────────
- *
- * O portal manda o nome de quem dirige e não sabe de quem é o caminhão — o vínculo é do NOSSO
- * cadastro. Motorista que o portal escalou e que ainda não existe aqui não tem vínculo, e a célula
- * fica com o nome puro. Inventar um valor seria pior que a ausência: alguém faturaria pela tarifa
- * errada por causa de um selo que ninguém conferiu.
- */
-const CORES_DO_VINCULO = {
-  owned: "border-emerald-300 bg-emerald-50 text-emerald-800",
-  agregado: "border-sky-300 bg-sky-50 text-sky-800",
-  subcontracted: "border-transparent bg-muted text-muted-foreground",
-} as const;
-
-function SeloDeVinculo({ vinculo }: { vinculo: LinhaDaProgramacao["vinculo"] }) {
-  const t = useTranslations("Programacao");
-  if (!vinculo) return null;
-  return (
-    <span
-      className={`shrink-0 rounded border px-1 py-px text-[0.6rem] font-bold uppercase leading-none tracking-wide ${CORES_DO_VINCULO[vinculo]}`}
-    >
-      {t(`vinculo_${vinculo}`)}
     </span>
   );
 }

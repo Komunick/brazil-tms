@@ -34,6 +34,16 @@ export default async function MinhaProgramacaoPage() {
       <MinhaProgramacaoClient
         userId={session.user.id}
         podeAtribuir={can(session.user, "assign_resources")}
+        /*
+          A MESMA CHAVE QUE A ABA DE MOTORISTAS EXIGE (2026-09-02).
+
+          O selo de vínculo passou a ser editável aqui, e editar cadastro de motorista é
+          `manage_fleet_data` — a mesma que a rota `PATCH /api/master-data/drivers/:id` cobra. Sem
+          ela o selo continua aparecendo, só não vira botão: a informação é de todos, a alteração não.
+
+          O botão escondido não é a garantia; a rota recusa de qualquer forma.
+        */
+        podeEditarVinculo={can(session.user, "manage_fleet_data")}
       />
     </div>
   );

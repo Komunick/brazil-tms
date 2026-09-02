@@ -1113,7 +1113,8 @@
   },
   "Ownership": {
     "owned": "Próprio",
-    "subcontracted": "Subcontratado"
+    "subcontracted": "Subcontratado",
+    "agregado": "Agregado"
   },
   "ResourceStatus": {
     "active": "Ativo",
@@ -1606,7 +1607,8 @@
       "platesUsedBefore": "Placas que este motorista já rodou",
       "timesUsed": "{n} viagens",
       "typeToSearch": "Digite {n} letras para buscar",
-      "addPlateInterna": "Acrescentar carreta (fica só no TMS)"
+      "addPlateInterna": "Acrescentar carreta (fica só no TMS)",
+      "driverInactivePortal": "desativado no portal do cliente"
     },
     "melhoresDaRota": {
       "titulo": "Nesta rota",
@@ -2225,7 +2227,11 @@
     "vinculo_agregado": "Agregado",
     "vinculo_subcontracted": "Terceiro",
     "copiarPlacasDoFiltro": "Copiar placas ({placas} placas · {viagens} LHs)",
-    "placasCopiadas": "{placas} placas copiadas"
+    "placasCopiadas": "{placas} placas copiadas",
+    "vinculoDoMotorista": "Vínculo do motorista",
+    "escolhaTransportadora": "Escolha a transportadora",
+    "carregando": "Carregando…",
+    "salvar": "Salvar"
   },
   "HistoricoMotorista": {
     "titulo": "Histórico do motorista",

@@ -196,8 +196,23 @@ export function PortalAssignDialog({
          * bloqueio ainda tem o nome selecionável; quem recusa de verdade é o servidor, dentro da
          * transação que trava a viagem (`enfileirarOrdemDoPortal`).
          */
+        /*
+          DOIS IMPEDIMENTOS, DUAS FRASES (2026-09-02, a pedido).
+
+          O mapa traz a chave para quem está impedido de qualquer jeito, e o VALOR distingue: com
+          motivo escrito é bloqueio NOSSO (dá para desfazer no botão); vazio é a pessoa que o portal
+          do CLIENTE desativou (não é decisão nossa desfazer).
+
+          Sem esta distinção os oito desativados pelo portal ficariam riscados e MUDOS — e riscado
+          sem motivo é o que faz alguém desbloquear no escuro ou desistir sem entender.
+        */
         disabled: m.bloqueio != null,
-        hint: m.bloqueio ? t("driverBlocked") : undefined,
+        hint:
+          m.bloqueio == null
+            ? undefined
+            : m.bloqueio
+              ? `${t("driverBlocked")}: ${m.bloqueio}`
+              : t("driverInactivePortal"),
       })),
     [motoristas.data],
   );
