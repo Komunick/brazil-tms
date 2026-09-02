@@ -63,14 +63,34 @@ export function CargosDaPessoa({
 
   const salvar = useMutation({
     mutationFn: async (ids: string[]) => {
+      /*
+        `PUT`, e não `PATCH` — a rota só exporta `PUT` (2026-09-02).
+
+        Nasceu `PATCH` aqui e ninguém percebeu: o Next responde 405 a um método sem handler, o
+        `catch` transformava isso em "FALHOU", e a tela só piscava um erro sem nome. Ficou assim de
+        01/09 até agora, e o sintoma era "não consigo atribuir mais de um cargo" — na verdade não
+        dava para atribuir NENHUM. A prova foi a auditoria: nem um `usuario.cargo_alterado` gravado,
+        embora a gravação audite dentro da mesma transação.
+
+        E `PUT` é o verbo certo pelo próprio significado da operação: o corpo traz o CONJUNTO INTEIRO
+        de cargos e substitui o que havia — não é um remendo parcial.
+      */
       const res = await fetch(`/api/admin/users/${userId}/cargo`, {
-        method: "PATCH",
+        method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ cargoIds: ids }),
       });
       if (!res.ok) {
+        /*
+          O CÓDIGO HTTP ENTRA NA MENSAGEM QUANDO NÃO HÁ MOTIVO — foi o que faltou (2026-09-02).
+
+          A recusa de negócio vem com `motivos`, e essa mensagem é boa. O resto — 405 de método sem
+          handler, 403 de permissão, 500 — caía todo no mesmo "FALHOU", que não diz nada e não dá o
+          que procurar. Foi assim que o `PATCH` contra uma rota `PUT` passou um dia inteiro parecendo
+          um erro genérico da tela.
+        */
         const corpo = (await res.json().catch(() => ({}))) as { motivos?: string[] };
-        throw new Error(corpo.motivos?.[0] ?? "FALHOU");
+        throw new Error(corpo.motivos?.[0] ?? `FALHOU (HTTP ${res.status})`);
       }
     },
     onSuccess: () => {
