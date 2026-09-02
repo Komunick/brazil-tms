@@ -154,6 +154,27 @@
      */
     spotJanelaSegundos: 60,
     spotDiasAdiante: 3,
+    /**
+     * UM DIA PARA TRÁS — a cegueira que custou uma oferta em 01/09.
+     *
+     * A janela de STA começava em `agora()`, e viagem com horário de origem já vencido ficava fora
+     * da varredura MESMO COM O LEILÃO ABERTO. Medido no portal naquele dia: das 14 viagens em
+     * leilão, **4 tinham STA no passado** e o robô nem chegava a olhar para elas. Uma delas foi
+     * reportada pela operação (`LT1Q9102FJ1L1`, São Bernardo → Guaratinguetá, STA 07:00 quando já
+     * eram 22:15).
+     *
+     * É defeito e não decisão: leilão aberto de viagem ATRASADA é justamente quando mais falta
+     * motorista — o frete não deixa de existir porque a hora passou.
+     *
+     * NÃO ENCARECE A PÁGINA. Quem segura o volume aqui é o `mtime` de 60 segundos, não o `sta`: o
+     * ciclo pergunta "o que mudou no último minuto?", e isso devolve poucas linhas com qualquer
+     * janela de data. (O ciclo lê só a PÁGINA 1, de 100 linhas — outra razão para o `mtime` seguir
+     * sendo o filtro que importa.)
+     *
+     * UM DIA, e não mais: o leilão de uma viagem muito vencida já foi resolvido de outro jeito, e
+     * alargar sem limite traria de volta o barulho que o filtro de rotas existe para evitar.
+     */
+    spotDiasAtras: 1,
     /** `bid_status = 10` é "em leilão". Medido: 10 aparece em 17 de 442; 0 é sem leilão e 40 é encerrado. */
     spotBidStatusAberto: 10,
     intervaloExecucaoMs: 5 * 60 * 1000,
@@ -711,7 +732,7 @@
       "/api/line_haul/agency/trip/list",
       {
         query_type: 1,
-        sta: `${agora()},${agora() + CONFIG.spotDiasAdiante * DIA}`,
+        sta: `${agora() - CONFIG.spotDiasAtras * DIA},${agora() + CONFIG.spotDiasAdiante * DIA}`,
         mtime: `${agora() - CONFIG.spotJanelaSegundos},${agora()}`,
       },
       1,
