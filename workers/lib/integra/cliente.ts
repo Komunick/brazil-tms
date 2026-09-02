@@ -63,7 +63,36 @@ export function credenciaisDaIntegra(): Credenciais | null {
   return { Ambiente: "Producao", Login, Senha, TipoRetorno: "JSON" };
 }
 
-async function chamar<T>(metodo: string, corpo: Record<string, unknown>): Promise<T> {
+/**
+ * O LIMITE DE FREQUÊNCIA DELA — `CodErro 102`, e por que ele merece espera e não falha (2026-09-02).
+ *
+ * A gerenciadora recusa chamadas próximas demais com "CONSUMO INDEVIDO. 30 segundos" e o segundo
+ * exato vem na mensagem. Não é dado errado nem indisponibilidade: é ela pedindo para esperar.
+ *
+ * ACONTECEU DE VERDADE no primeiro cadastro real: três tentativas seguidas morreram nisso
+ * (13:49:30, 13:49:42, 13:50:37) e só a quarta passou. Deu certo porque o usuário insistiu à mão —
+ * e insistência não é estratégia numa leva de cinquenta motoristas.
+ *
+ * A credencial é UMA e é compartilhada: o robô de posições consulta de dois em dois minutos com a
+ * mesma. Então a colisão não é acidente raro, é o funcionamento normal do sistema.
+ *
+ * DUAS ESPERAS, NO MÁXIMO. O suficiente para atravessar a janela que ela pede; mais que isso seria
+ * um job pendurado por minutos, e o pg-boss já tem repetição própria para o que não passa.
+ */
+const COD_ERRO_CONSUMO_INDEVIDO = 102;
+const ESPERAS_NO_LIMITE = 2;
+
+/** "CONSUMO INDEVIDO. 30 segundos" → 30. Sem número na frase, espera o padrão de 30 s. */
+export function segundosDeEspera(msg: string): number {
+  const n = /(\d+)\s*segundo/i.exec(msg);
+  return n ? Number(n[1]) : 30;
+}
+
+async function chamar<T>(
+  metodo: string,
+  corpo: Record<string, unknown>,
+  esperasRestantes = ESPERAS_NO_LIMITE,
+): Promise<T> {
   // As aspas fazem parte do caminho. Sem elas a API devolve 404 — o nome do método É o recurso.
   const url = `${BASE}/${encodeURIComponent(`"${metodo}"`)}`;
 
@@ -89,6 +118,18 @@ async function chamar<T>(metodo: string, corpo: Record<string, unknown>): Promis
   const codErro = Number(r.CodErro ?? -1);
   // Zero é sucesso. Qualquer outro valor é recusa DELA, e a mensagem dela é o que vai para a tela —
   // sem tradução nossa (FR-014).
+  if (codErro === COD_ERRO_CONSUMO_INDEVIDO && esperasRestantes > 0) {
+    /*
+      ESPERA E TENTA DE NOVO, em vez de derrubar o job.
+
+      O `console.warn` fica: uma espera silenciosa esconderia que a credencial está disputada, e é
+      justamente isso que alguém vai querer saber quando a fila começar a demorar.
+    */
+    const segundos = segundosDeEspera(String(r.MsgErro ?? ""));
+    console.warn(`[integra] ${metodo}: limite de consumo, esperando ${segundos}s`);
+    await new Promise((ok) => setTimeout(ok, segundos * 1000));
+    return chamar<T>(metodo, corpo, esperasRestantes - 1);
+  }
   if (codErro !== 0) throw new IntegraRecusou(codErro, String(r.MsgErro ?? ""));
   return r as T;
 }

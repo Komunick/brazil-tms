@@ -4,6 +4,8 @@ import { enfileirar, estadoInicial, novasOfertas } from "./ofertas";
 
 const oferta = (id: string): SpotOfertaTeste => ({
   id,
+  /* A janela dos dez segundos: o ensaio nasce sem decisão. */
+  decisao: null,
   portalTripId: `p-${id}`,
   tripNumber: `LT-${id}`,
   route: "SoC_BA_Simoes Filho  ->  LM Hub_SE_Aracaju_02",
