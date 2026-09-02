@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — alimentador do portal
 // @namespace    braziltransports.com.br
-// @version      1.18.0
+// @version      1.19.0
 // @description  Lê as três listagens do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -154,6 +154,27 @@
      */
     spotJanelaSegundos: 60,
     spotDiasAdiante: 3,
+    /**
+     * UM DIA PARA TRÁS — a cegueira que custou uma oferta em 01/09.
+     *
+     * A janela de STA começava em `agora()`, e viagem com horário de origem já vencido ficava fora
+     * da varredura MESMO COM O LEILÃO ABERTO. Medido no portal naquele dia: das 14 viagens em
+     * leilão, **4 tinham STA no passado** e o robô nem chegava a olhar para elas. Uma delas foi
+     * reportada pela operação (`LT1Q9102FJ1L1`, São Bernardo → Guaratinguetá, STA 07:00 quando já
+     * eram 22:15).
+     *
+     * É defeito e não decisão: leilão aberto de viagem ATRASADA é justamente quando mais falta
+     * motorista — o frete não deixa de existir porque a hora passou.
+     *
+     * NÃO ENCARECE A PÁGINA. Quem segura o volume aqui é o `mtime` de 60 segundos, não o `sta`: o
+     * ciclo pergunta "o que mudou no último minuto?", e isso devolve poucas linhas com qualquer
+     * janela de data. (O ciclo lê só a PÁGINA 1, de 100 linhas — outra razão para o `mtime` seguir
+     * sendo o filtro que importa.)
+     *
+     * UM DIA, e não mais: o leilão de uma viagem muito vencida já foi resolvido de outro jeito, e
+     * alargar sem limite traria de volta o barulho que o filtro de rotas existe para evitar.
+     */
+    spotDiasAtras: 1,
     /** `bid_status = 10` é "em leilão". Medido: 10 aparece em 17 de 442; 0 é sem leilão e 40 é encerrado. */
     spotBidStatusAberto: 10,
     intervaloExecucaoMs: 5 * 60 * 1000,
@@ -525,6 +546,19 @@
   const ROTAS_DE_INTERESSE = [
     "SoC_GO_Goiânia_02,LM Hub_TO_Palmas",
     "SoC_PE_Jaboatão dos Guararapes,LM Hub_RN_Natal_01",
+    /*
+      AS DUAS DE NATAL, acrescentadas a pedido em 2026-09-02 — e a grafia foi CONFERIDA no portal.
+
+      O pedido veio como `Hub_Natal_SãoJosédeMipibu`, e essa forma teria virado linha morta: o
+      normalizador não separa palavras coladas, então ela produziria `HUB NATAL SAOJOSEDEMIPIBU`
+      contra o `FM HUB RN NATAL S JOSE DE MIPIBU` que o portal manda. Casaria nunca, sem erro em
+      lugar nenhum — exatamente como a `SoC_BA2` ficou.
+
+      As três estações abaixo foram lidas da listagem do portal antes de escrever aqui. Cuidado com
+      o vizinho `LM Hub_RN_FX_Natal_03`, que é OUTRA estação e não entra.
+    */
+    "FM Hub_RN_Natal_S Jose de Mipibu,SoC_PE_Jaboatão dos Guararapes",
+    "SoC_PE_Jaboatão dos Guararapes,LM Hub_RN_Natal_03",
     "SoC_SP_Santana,LM Hub_SP_Guarujá",
     "SoC_BA_Simoes Filho,LM Hub_SE_Aracaju_02",
     "SoC_SP_São Bernardo do Campo,LM Hub_SP_Guarujá",
@@ -711,7 +745,7 @@
       "/api/line_haul/agency/trip/list",
       {
         query_type: 1,
-        sta: `${agora()},${agora() + CONFIG.spotDiasAdiante * DIA}`,
+        sta: `${agora() - CONFIG.spotDiasAtras * DIA},${agora() + CONFIG.spotDiasAdiante * DIA}`,
         mtime: `${agora() - CONFIG.spotJanelaSegundos},${agora()}`,
       },
       1,

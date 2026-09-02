@@ -2214,7 +2214,12 @@
     "smNao": "SM Não",
     "motoristaTrocado": "Motorista alterado",
     "motoristaAnterior": "Motorista anterior: {nome}",
-    "quemAlterou": "Quem alterou: {nome}"
+    "quemAlterou": "Quem alterou: {nome}",
+    "vinculo_owned": "Frota",
+    "vinculo_agregado": "Agregado",
+    "vinculo_subcontracted": "Terceiro",
+    "copiarPlacasDoFiltro": "Copiar placas ({placas} placas · {viagens} LHs)",
+    "placasCopiadas": "{placas} placas copiadas"
   },
   "HistoricoMotorista": {
     "titulo": "Histórico do motorista",

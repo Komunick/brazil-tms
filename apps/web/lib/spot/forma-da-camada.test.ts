@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { aoRecolher, formaDaCamada, type FormaDaCamada } from "./forma-da-camada";
 
@@ -60,5 +62,38 @@ describe("recolher encolhe um passo por vez", () => {
 
   it("da pastilha não encolhe mais — ela é o piso", () => {
     expect(aoRecolher("pastilha")).toBe("pastilha");
+  });
+});
+
+/**
+ * A ESTEIRA PRECISA CENTRALIZAR QUANDO CABE — o guarda que nasceu de medir a tela (2026-09-02).
+ *
+ * A regra de POSIÇÃO escolhia `centro` corretamente e o cartão aparecia colado na esquerda: a camada
+ * centraliza as linhas na vertical, mas a faixa horizontal, por rolar, empilha a partir do início.
+ * Medido na produção: x=16 numa janela de 1707. Chegou como "no painel continuou aparecendo no
+ * canto" — e a regra, que é o que este arquivo testa, estava certa o tempo todo.
+ *
+ * O guarda exige as DUAS metades, porque cada uma sozinha é um defeito:
+ *
+ *   · sem `safe`, o `center` corta o início da faixa quando os cartões transbordam, e os primeiros
+ *     ficam inalcançáveis — não há como rolar para antes do começo;
+ *   · sem `center`, volta o cartão na borda.
+ */
+describe("a faixa dos cartões centraliza sem quebrar a rolagem", () => {
+  it("usa `safe center`, e não `center` puro nem o padrão", () => {
+    const camada = readFileSync(
+      join(__dirname, "../../components/spot/oferta-de-spot.tsx"),
+      "utf8",
+    )
+      .replace(/\/\*[\s\S]*?\*\//g, " ")
+      .replace(/(^|[^:])\/\/.*$/gm, "$1 ");
+
+    const faixa = /className="[^"]*overflow-x-auto[^"]*"/.exec(camada)?.[0];
+    expect(faixa, "a faixa com rolagem sumiu — a esteira deixou de existir?").toBeTruthy();
+    expect(
+      faixa,
+      "a faixa perdeu o `safe center`: ou o cartão volta para a borda esquerda, ou o `center` puro " +
+        "corta os primeiros cartões quando a esteira precisa rolar.",
+    ).toContain("[justify-content:safe_center]");
   });
 });
