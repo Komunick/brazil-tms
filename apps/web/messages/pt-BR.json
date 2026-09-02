@@ -2400,7 +2400,8 @@
       "sem_renach": "Renach",
       "sem_mopp": "MOPP (sim/não)",
       "sem_documentos": "a CNH ou o comprovante não subiram",
-      "documentos_grandes": "os arquivos somam mais do que cabe numa chamada"
+      "documentos_grandes": "os arquivos somam mais do que cabe numa chamada",
+      "nascimento_impossivel": "data de nascimento impossível (futuro ou idade fora do plausível)"
     },
     "conferir": "Conferir",
     "ver": "Ver",
