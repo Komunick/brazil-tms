@@ -2217,7 +2217,9 @@
     "quemAlterou": "Quem alterou: {nome}",
     "vinculo_owned": "Frota",
     "vinculo_agregado": "Agregado",
-    "vinculo_subcontracted": "Terceiro"
+    "vinculo_subcontracted": "Terceiro",
+    "copiarPlacasDoFiltro": "Copiar placas ({placas} placas · {viagens} LHs)",
+    "placasCopiadas": "{placas} placas copiadas"
   },
   "HistoricoMotorista": {
     "titulo": "Histórico do motorista",
