@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Loader2, TriangleAlert } from "lucide-react";
+import { Check, Loader2, Minus, TriangleAlert } from "lucide-react";
 import type { SpotOfferView } from "@brazil-tms/db";
 
 /**
@@ -177,13 +177,43 @@ export function CartaoDaOferta({
 
   return (
     <div
-      className={`pointer-events-auto flex w-full flex-col overflow-hidden rounded-[18px] bg-card shadow-[0_24px_50px_-20px_rgba(0,0,0,0.45)] ${
+      className={`pointer-events-auto flex w-full overflow-hidden rounded-[18px] bg-card shadow-[0_1px_2px_rgba(16,24,40,0.06),0_18px_44px_-20px_rgba(0,0,0,0.45)] ${
         alarmando ? "animate-oferta-alarme" : ""
       }`}
-      style={{ border: `3px solid ${MARCA.laranja}` }}
+      /*
+        BORDA DE 1px, e não de 3 (2026-09-02, a pedido).
+
+        Três pixels vinham da época em que a borda era o alarme inteiro. O piscar continua — ele
+        agora troca a COR e uma sombra fina —, e a espessura só engrossava o desenho.
+      */
+      style={{ border: `1px solid ${MARCA.laranja}` }}
       data-oferta={oferta.id}
       data-estado={oferta.estado}
     >
+      {/*
+        A ARTE DA CAMPANHA, INTEIRA (2026-09-02, a pedido).
+
+        `object-contain` e não `cover`: numa tira alta e estreita o `cover` recorta, e recorta
+        justamente por baixo — sumia o "SPOT NA TELA", que é o nome da coisa.
+
+        O fundo é o degradê das BORDAS da própria imagem, medido pixel a pixel (topo #f84401, base
+        #d73802). É ele que faz a sobra em cima e embaixo continuar sendo a arte, em vez de virar uma
+        faixa de cor diferente. TROCAR A IMAGEM OBRIGA A REFAZER ESSA MEDIDA — senão aparece a emenda.
+      */}
+      <div
+        className={`relative shrink-0 self-stretch overflow-hidden ${compacto ? "w-[112px]" : "w-[168px]"}`}
+        style={{ background: "linear-gradient(#f84401, #d73802)" }}
+        aria-hidden
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- estático em /public, já no tamanho */}
+        <img
+          src="/clientes/spot-na-tela.webp"
+          alt=""
+          className="h-full w-full object-contain object-center"
+        />
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col">
       {/* ── A FAIXA DO CLIENTE ─────────────────────────────────────────────────────────────── */}
       <div
         className={`flex items-center justify-between gap-3 ${compacto ? "px-4 py-2.5" : "px-5 py-3"}`}
@@ -222,53 +252,45 @@ export function CartaoDaOferta({
         </span>
 
         {/*
-          O MASCOTE E A BANDEIRA.
+        {/*
+          O MASCOTE DA SHOPEE, na DIREITA da faixa (2026-09-02, a pedido).
 
-          O mascote vem num CÍRCULO branco porque o arquivo não tem transparência — colado direto no
-          laranja, apareceria um quadrado claro em volta dele, e o quadrado leria como defeito. O
-          círculo faz o mesmo fundo virar decisão.
+          Ele ficava grande, do outro lado, com uma bandeirinha nossa saindo por trás. Com a arte da
+          campanha ocupando a lateral, os dois desenhos passaram a disputar o mesmo canto — o mascote
+          cobria o celular e parte do rosto. A bandeira saiu junto: era um enfeite a mais competindo
+          com uma peça que já tem movimento próprio.
 
-          O tamanho para em 88px: o arquivo tem 240px de lado, então até aí a tela só o REDUZ, que é
-          onde raster fica bom. Passar disso começaria a borrar.
-
-          A bandeira é nossa e sai por trás do círculo, para não cobrir o desenho.
+          Aqui ele é um selo: a faixa cresce um pouco, ele desce alguns pixels para fora do laranja,
+          e nada mais briga com ele.
         */}
-        <span className="relative flex shrink-0 items-center" aria-hidden>
-          <span
-            className={`absolute bottom-1 ${compacto ? "right-[3.1rem]" : "right-[4rem]"} leading-none ${
-              alarmando ? "animate-oferta-bandeira-mastro" : ""
-            }`}
-          >
-            <svg
-              viewBox="0 0 30 52"
-              className={compacto ? "h-9 w-5" : "h-12 w-7"}
-              fill="none"
-            >
-              <path d="M4 52V4" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" />
-              <g
-                className={alarmando ? "animate-oferta-bandeira" : ""}
-                style={{ transformOrigin: "4px 6px" }}
-                transform="translate(4 4)"
-              >
-                <path d="M0 0c7 2.5 12-2.5 19 0v13c-7-2.5-12 2.5-19 0V0z" fill={MARCA.alerta} />
-              </g>
-            </svg>
-          </span>
-          {/* eslint-disable-next-line @next/next/no-img-element -- estático em /public; o Image
-              do Next só acrescentaria otimização a um arquivo de 8 KB que já está no tamanho certo */}
-          <img
-            src="/clientes/shopee-mascote.webp"
-            alt=""
-            width={88}
-            height={88}
-            className={`relative z-[1] block rounded-full bg-white object-cover shadow-[0_4px_14px_-4px_rgba(0,0,0,0.35)] ${
-              compacto ? "h-[62px] w-[62px]" : "h-[88px] w-[88px]"
-            } ${alarmando ? "animate-oferta-mascote" : ""}`}
-          />
-        </span>
+        {/* eslint-disable-next-line @next/next/no-img-element -- estático em /public; 8 KB, já no tamanho */}
+        <img
+          src="/clientes/shopee-mascote.webp"
+          alt=""
+          width={46}
+          height={46}
+          className={`relative z-[1] -my-2 shrink-0 rounded-full border-2 border-white bg-white object-cover shadow-[0_4px_12px_-4px_rgba(0,0,0,0.45)] ${
+            compacto ? "h-9 w-9" : "h-[46px] w-[46px]"
+          } ${alarmando ? "animate-oferta-mascote" : ""}`}
+        />
       </div>
 
-      {/* ── O CORPO ────────────────────────────────────────────────────────────────────────── */}
+      {/*
+        ── A DECISÃO TOMA O CARTÃO POR DEZ SEGUNDOS (2026-09-02, a pedido) ──────────────────────
+
+        Nas palavras do usuário: "agora você aperta ignorar e só some". Quem clicava via sumir; para
+        o resto da equipe o cartão simplesmente desaparecia, sem dizer se alguém decidiu, quem foi,
+        ou se o sistema falhou.
+
+        O aviso SUBSTITUI o corpo em vez de aparecer junto: o cartão já não tem mais o que perguntar,
+        e manter os botões ao lado de "fulano ignorou" convidaria a clicar no que já foi decidido.
+
+        Quem controla o tempo é o SERVIDOR — a oferta some quando a leitura para de trazê-la. Aqui
+        não há temporizador que remova nada: só a barra, que é a mesma janela desenhada.
+      */}
+      {oferta.decisao ? (
+        <AvisoDaDecisao decisao={oferta.decisao} lh={oferta.tripNumber} compacto={compacto} />
+      ) : (
       <div className={`flex flex-col ${compacto ? "gap-2.5 px-4 py-3.5" : "gap-3 px-5 py-4"}`}>
         {oferta.tripNumber ? (
           <span
@@ -489,6 +511,75 @@ export function CartaoDaOferta({
           </div>
         ) : null}
       </div>
+      )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * QUEM DECIDIU, e a contagem até a oferta sair (2026-09-02, a pedido).
+ *
+ * ── POR QUE A BARRA É UMA ANIMAÇÃO, e não um número recalculado ───────────────────────────────
+ *
+ * A primeira versão do desenho recalculava a largura a cada segundo: dez saltos, e um relógio a mais
+ * para manter em dia. Aqui é uma animação de `scaleX` de dez segundos, linear — ela escoa lisa,
+ * roda fora da linha principal e não precisa de nenhum estado.
+ *
+ * Ela é ILUSTRAÇÃO, não autoridade: quem tira a oferta da tela é o servidor, quando a leitura para
+ * de trazê-la. Se a barra e a leitura discordarem por meio segundo, o que vale é a leitura.
+ *
+ * ── O ACEITE TAMBÉM ESPERA OS DEZ SEGUNDOS ───────────────────────────────────────────────────
+ *
+ * A resposta do portal chega em 3 s na mediana. Sem a janela, o aviso do aceite sairia antes de
+ * alguém conseguir lê-lo — e é o aviso que mais importa, porque aceitar não tem volta.
+ */
+function AvisoDaDecisao({
+  decisao,
+  lh,
+  compacto,
+}: {
+  decisao: NonNullable<SpotOfferView["decisao"]>;
+  lh: string | null;
+  compacto: boolean;
+}) {
+  const t = useTranslations("Spot");
+  const aceito = decisao.tipo === "aceito";
+
+  return (
+    <div className="flex flex-col">
+      <div className={`flex items-center gap-3 ${compacto ? "px-4 py-3.5" : "px-5 py-4"}`}>
+        <span
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white"
+          style={{ background: aceito ? "#12925A" : "#6B7280" }}
+          aria-hidden
+        >
+          {aceito ? <Check className="h-5 w-5" /> : <Minus className="h-5 w-5" />}
+        </span>
+
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-extrabold leading-tight">
+            {/*
+              SEM NOME, SEM MENTIRA. A aceitação feita direto no portal chega ao TMS pela leitura do
+              plano, e não há a quem creditar — a frase então diz só o que aconteceu.
+            */}
+            {decisao.porNome
+              ? t(aceito ? "aceitoPorAlguem" : "ignoradoPorAlguem", { nome: decisao.porNome })
+              : t(aceito ? "aceitoSemNome" : "ignoradoSemNome")}
+          </span>
+          <span className="block truncate text-xs text-muted-foreground">
+            {lh ? `${lh} · ` : ""}
+            {decisao.motivo ? decisao.motivo : t(aceito ? "esperandoPortal" : "naoVamosPegar")}
+          </span>
+        </span>
+      </div>
+
+      <span className="block h-[3px] w-full bg-muted" aria-hidden>
+        <span
+          className="block h-full w-full origin-left animate-oferta-escoar"
+          style={{ background: aceito ? "#12925A" : "#6B7280" }}
+        />
+      </span>
     </div>
   );
 }

@@ -69,14 +69,19 @@ describe("as duas leituras são assimétricas de propósito", () => {
    * registro do dia do outro: uma leitura é a fila do que falta decidir, a outra é a história do que
    * aconteceu. Uniformizá-las pareceria faxina e quebraria a garantia por construção.
    */
-  it("o cartão exclui a oferta aceita; o painel não", () => {
-    expect(cartao, "o cartão parou de excluir o aceito — o FR-014 depende disso").toMatch(
-      /estado\s*!==\s*"aceito"/,
-    );
+  it("o cartão larga a oferta decidida; o painel a guarda", () => {
+    expect(
+      cartao,
+      "o cartão parou de largar a oferta decidida — ele viraria um registro, que é papel do painel",
+    ).toContain("decisaoAindaVisivel");
     expect(
       fonte,
       "o painel passou a excluir o aceito — ele é o registro do dia e precisa mostrá-lo",
     ).not.toMatch(/estado\s*!==\s*"aceito"/);
+    expect(
+      fonte,
+      "o painel ganhou a janela de dez segundos — ali a linha fica para sempre, é o registro do dia",
+    ).not.toContain("decisaoAindaVisivel");
   });
 
   /**
@@ -88,7 +93,7 @@ describe("as duas leituras são assimétricas de propósito", () => {
    * oferta chegou.
    */
   it("o cartão esconde o ignorado; o painel apenas marca quem ignorou", () => {
-    expect(cartao).toMatch(/!\s*r\.dispensada\b/);
+    expect(cartao, "o cartão parou de ler a hora da dispensa").toContain("dispensadaEm");
     expect(fonte).toContain("ignoradaPor");
     expect(fonte, "o painel passou a FILTRAR a dispensa — ali ela só marca").not.toMatch(
       /filter\([^)]*ignoradaPor/,

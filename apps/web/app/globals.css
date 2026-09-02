@@ -457,8 +457,15 @@
   }
 }
 
+/*
+  ELE RESPIRA, NÃO PISCA (2026-09-02, a pedido de "animação mais fluida").
+
+  Era 1,1 s: dois quadros por segundo, que numa tela ligada o dia inteiro cansa e "serrilha". Em
+  2,4 s a borda esquenta e esfria — chama a mesma atenção sem ser um estrobo. O prazo continua o
+  mesmo (`MINUTOS_PISCANDO`), e é ele que faz o alarme se calar.
+*/
 .animate-oferta-alarme {
-  animation: oferta-alarme 1.1s ease-in-out infinite;
+  animation: oferta-alarme 2.4s ease-in-out infinite;
 }
 
 /* O mascote balança no mesmo sentido que as linhas de movimento do desenho já sugerem. */
@@ -476,34 +483,31 @@
   animation: oferta-mascote 0.85s ease-in-out infinite;
 }
 
-/* A bandeira ondula; o mastro acompanha de leve, senão ela parece solta no ar. */
-@keyframes oferta-bandeira {
-  0%,
-  100% {
-    transform: rotate(-8deg) skewY(0deg);
+/*
+  A BANDEIRA SAIU em 2026-09-02, e as animações dela saíram junto.
+
+  Ela era nossa e ondulava atrás do mascote. Com a arte da campanha ocupando a lateral do cartão,
+  virou enfeite competindo com uma peça que já tem movimento próprio — o pedido foi para tirá-la.
+  Se voltar algum dia, volta com o desenho; keyframes órfãos só enganam quem procura.
+*/
+
+/*
+  A BARRA DOS DEZ SEGUNDOS — uma animação só, e não dez recálculos.
+
+  `scaleX` com origem à esquerda: escoa liso, roda fora da linha principal e não custa layout. Ela é
+  ILUSTRAÇÃO da janela; quem tira a oferta da tela é o servidor.
+*/
+@keyframes oferta-escoar {
+  from {
+    transform: scaleX(1);
   }
-  50% {
-    transform: rotate(10deg) skewY(-6deg);
+  to {
+    transform: scaleX(0);
   }
 }
 
-.animate-oferta-bandeira {
-  animation: oferta-bandeira 0.85s ease-in-out infinite;
-}
-
-@keyframes oferta-bandeira-mastro {
-  0%,
-  100% {
-    transform: rotate(-2deg);
-  }
-  50% {
-    transform: rotate(2deg);
-  }
-}
-
-.animate-oferta-bandeira-mastro {
-  transform-origin: bottom center;
-  animation: oferta-bandeira-mastro 0.85s ease-in-out infinite;
+.animate-oferta-escoar {
+  animation: oferta-escoar 10s linear forwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -513,9 +517,12 @@
     border-color: #e02020 !important;
   }
 
-  .animate-oferta-mascote,
-  .animate-oferta-bandeira,
-  .animate-oferta-bandeira-mastro {
+  /*
+    A BARRA DOS DEZ SEGUNDOS FICA, e é a única exceção aqui: ali o movimento É a informação —
+    parada, ela diria que a oferta nunca sai. As outras são ênfase, e ênfase é o que esta preferência
+    pede para desligar.
+  */
+  .animate-oferta-mascote {
     animation: none;
   }
 }

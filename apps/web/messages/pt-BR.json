@@ -2034,7 +2034,13 @@
     "motivoExemplo": "Ex.: sem caminhão na região, prazo curto…",
     "semPermissaoDeDecidir": "Só quem tem a permissão de decidir oferta de spot pode aceitar ou ignorar.",
     "abrir": "Abrir",
-    "decidir": "Decidir"
+    "decidir": "Decidir",
+    "aceitoPorAlguem": "{nome} aceitou",
+    "ignoradoPorAlguem": "{nome} ignorou",
+    "aceitoSemNome": "Aceita no portal",
+    "ignoradoSemNome": "Ignorada",
+    "esperandoPortal": "esperando o portal confirmar",
+    "naoVamosPegar": "a empresa não vai pegar esta"
   },
   "Wallboard": {
     "title": "Brazil Transports · Torre",

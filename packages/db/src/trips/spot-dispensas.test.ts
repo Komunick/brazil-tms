@@ -102,14 +102,27 @@ describe("readSpotOffersToday exclui o que não é decisão de ninguém", () => 
     .replace(/(^|[^:])\/\/.*$/gm, "$1 ");
 
   /**
-   * FR-014 por construção: o cartão sai de todas as telas quando o portal diz `Accepted`, e a
-   * garantia não é disciplina — é que a oferta aceita simplesmente não chega à tela. Não havendo o
-   * dado, não há como um segundo motivo tirar o cartão.
+   * FR-014 por construção — e o MECANISMO mudou em 2026-09-02, a garantia não.
+   *
+   * Este guarda exigia `estado !== "aceito"`: a oferta aceita não chegava à tela, ponto. Agora ela
+   * chega por DEZ SEGUNDOS, marcada com quem aceitou, para a equipe ver quem decidiu — e só depois o
+   * servidor para de trazê-la.
+   *
+   * O que se garante continua igual: **quem tira o cartão da tela é o SERVIDOR**. Mudou o QUANDO ele
+   * para de trazer, não o QUEM decide isso. Por isso a asserção passou a exigir a JANELA, que é o
+   * que hoje faz a oferta sair.
+   *
+   * As duas formas de quebrar isto são silenciosas: sem a janela, o aviso some e ninguém vê quem
+   * decidiu; sem o descarte, o cartão fica preso na tela para sempre.
    */
-  it("a oferta aceita não é devolvida", () => {
-    expect(fonte, "a exclusão do estado aceito sumiu — ver FR-014").toMatch(
-      /estado\s*!==\s*"aceito"/,
+  it("a oferta decidida sai da lista pela janela dos dez segundos", () => {
+    expect(fonte, "a janela da decisão sumiu — a oferta decidida nunca sairia").toContain(
+      "decisaoAindaVisivel",
     );
+    expect(
+      fonte,
+      "a leitura parou de descartar a decisão vencida — o cartão ficaria preso na tela",
+    ).toContain("return null");
   });
 
   /**
@@ -122,8 +135,10 @@ describe("readSpotOffersToday exclui o que não é decisão de ninguém", () => 
    * Filtrar aqui e não na tela continua valendo pelo mesmo motivo de antes: na tela, o ignorar
    * dependeria de cada uma das três telas lembrar de filtrar.
    */
-  it("a oferta ignorada não é devolvida a ninguém", () => {
-    expect(fonte, "o filtro da dispensa saiu do servidor").toMatch(/!\s*r\.dispensada\b/);
+  it("a oferta ignorada sai para todos, e quem a tira é o servidor", () => {
+    expect(fonte, "a leitura parou de olhar a HORA da dispensa — sem ela não há janela").toContain(
+      "dispensadaEm",
+    );
     expect(
       fonte,
       "voltou a filtrar por pessoa — a decisão vale para a equipe desde 01/09",

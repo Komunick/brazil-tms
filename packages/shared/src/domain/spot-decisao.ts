@@ -93,3 +93,52 @@ export function podeMandarAceite(situacao: SituacaoDaOferta): boolean {
   const estado = estadoDaOferta(situacao);
   return estado === "esperando" || estado === "recusado";
 }
+
+/**
+ * A DECISÃO FICA DEZ SEGUNDOS NA TELA DE TODOS, antes de a oferta sair (2026-09-02, a pedido).
+ *
+ * ── O DEFEITO QUE ISTO CORRIGE ────────────────────────────────────────────────────────────────
+ *
+ * Nas palavras do usuário: "agora você aperta ignorar e só some". Quem clicava via o cartão sumir;
+ * para o resto da equipe ele simplesmente desaparecia da tela, sem dizer se alguém tinha decidido,
+ * quem foi, ou se o sistema tinha falhado. Uma decisão invisível parece defeito.
+ *
+ * ── DEZ SEGUNDOS, E POR QUE NÃO MENOS ─────────────────────────────────────────────────────────
+ *
+ * A leitura do cartão roda de 5 em 5 segundos. Uma janela de 5 s poderia cair inteira entre duas
+ * leituras de uma aba e não ser vista por ninguém. Dez cobre duas leituras — quem estiver com a
+ * tela aberta vê, mesmo sem estar olhando no instante do clique.
+ *
+ * ── VALE PARA OS DOIS, e o aceite é o caso mais fácil de errar ────────────────────────────────
+ *
+ * No aceite, a resposta do portal chega em 3 s na mediana (medido em 396 ordens). Sem esta janela, o
+ * cartão sairia ANTES de alguém conseguir ler quem aceitou — justamente o aviso que mais importa,
+ * porque aceitar não tem volta.
+ *
+ * ── O QUE NÃO MUDA: quem tira o cartão da tela continua sendo o SERVIDOR ──────────────────────
+ *
+ * A tela não ganhou um caminho de código que remova cartão por decisão. A oferta continua saindo
+ * porque a leitura seguinte não a traz — só que agora o servidor espera dez segundos antes de parar
+ * de trazê-la. O FR-014 segue provado por construção; mudou o QUANDO, não o QUEM.
+ */
+export const JANELA_DA_DECISAO_MS = 10_000;
+
+/** O que aconteceu com a oferta, enquanto a janela dos dez segundos está aberta. */
+export interface DecisaoDaOferta {
+  tipo: "aceito" | "ignorado";
+  /** Quem decidiu. Nulo quando a aceitação veio de fora do TMS e não há a quem creditar. */
+  porNome: string | null;
+  /** Só no ignorar, e opcional — quem ignora não é obrigado a explicar. */
+  motivo: string | null;
+}
+
+/**
+ * A decisão ainda está dentro da janela?
+ *
+ * `quando` nulo significa "não sabemos a hora" — é o caso da viagem aceita DIRETO NO PORTAL, que o
+ * TMS descobre na leitura seguinte do plano e para a qual não há instante de clique. Aí a oferta sai
+ * na hora, como sempre saiu: não há aviso a dar, porque não há quem creditar nem quando.
+ */
+export function decisaoAindaVisivel(quando: Date | null, agora: Date): boolean {
+  return quando !== null && agora.getTime() - quando.getTime() < JANELA_DA_DECISAO_MS;
+}
