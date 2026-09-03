@@ -23,7 +23,7 @@ manda dentro de `trips.customer_fields`.
 | Carreta | 2ª placa do mesmo campo | vazia quando não há segunda — nunca repete o cavalo |
 | Data de início | `trips.planned_pickup_window_start` | 772/772 preenchidas |
 | Data de conclusão | `trips.planned_delivery_window_start` | 772/772 preenchidas |
-| Situação | derivada de `trips.current_status` | R9 |
+| Situação | derivada de `trips.current_status` | R9 — canceladas nem entram |
 | Impedimento | `drivers.blocked_at` e `drivers.status` | via `bloqueiosPorIdDoPortal`, que já existe |
 
 ---
@@ -36,15 +36,15 @@ manda dentro de `trips.customer_fields`.
    com o motorista resolvido: id do portal → drivers, e a atribuição nossa como complemento
 
 2. A ÚLTIMA DE CADA UM             (SQL)
+   canceladas já ficaram de fora na varredura — não entram na aba de jeito nenhum
    por motorista, nesta ordem:
-     1º  viagem EM ANDAMENTO ganha de viagem terminada   ← sem isto, quem dirige vira "livre"
+     1º  viagem EM ANDAMENTO ganha de viagem concluída   ← sem isto, quem dirige vira "livre"
      2º  a de MAIOR data de conclusão planejada
-     3º  no empate exato, a concluída ganha da cancelada  ← só uma delas significa carga entregue
-     4º  identificador da viagem (o desempate estável)
+     3º  identificador da viagem (o desempate estável)
 
 3. CABE NA ABA?                    (função pura)
    a caminho ...... conclusão cai HOJE ou AMANHÃ (São Paulo)  → mostra o status corrente
-   disponível ..... viagem concluída ou cancelada, conclusão nos últimos 7 dias
+   disponível ..... viagem CONCLUÍDA, conclusão nos últimos 7 dias  → FINALIZADO
    fora .......... qualquer outro caso
 ```
 
@@ -96,8 +96,10 @@ A primeira metade é a que importa, e é a que só a simulação revelou: com "a
 último" pura, **dois motoristas `in_transit` apareciam como livres**, porque a última deles pela data
 era uma viagem CANCELADA que chegaria mais tarde.
 
-**I4 — Cancelada nunca é FINALIZADO.** Nenhuma linha com viagem cancelada recebe o rótulo de
-concluída. As duas contagens do cabeçalho também as separam.
+**I4 — Cancelada não entra na aba.** Nenhuma linha descreve uma viagem cancelada — ela é filtrada na
+varredura, antes de qualquer rótulo. Decisão do usuário em 03/09, e ela CORRIGE nove linhas: eram
+nove motoristas cuja cancelada estava na frente de uma viagem concluída de verdade. Sete motoristas
+somem em troca — a cancelada era a única viagem recente deles.
 
 **I5 — Estabilidade.** Duas leituras seguidas, sem mudança no banco, produzem exatamente a mesma
 lista, na mesma ordem, descrevendo as mesmas viagens.

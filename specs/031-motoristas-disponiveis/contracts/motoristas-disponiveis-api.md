@@ -33,7 +33,7 @@ o servidor faria a lista recarregar a cada tecla e mudaria o resultado debaixo d
       "carreta": null,              // null, nunca a placa do cavalo repetida
       "inicio": "2026-09-02T12:01:00.000Z",   // UTC; a tela formata em São Paulo
       "conclusao": "2026-09-03T06:00:00.000Z",
-      "situacao": "finalizado",     // "finalizado" | "cancelada" | "a_caminho"
+      "situacao": "finalizado",     // "finalizado" | "a_caminho" — cancelada nunca aparece
       "statusDaViagem": "completed",// o status corrente, para o rótulo do "a caminho"
       "tripId": "uuid",             // para o link até a viagem
       "impedimento": null           // ou { "motivo": "inativo" | "bloqueado", "detalhe": "..." }
@@ -78,4 +78,4 @@ uma resposta legítima — a tela diz isso em palavras (FR-024).
 ## Frescor
 
 A tela relê a cada **60 segundos** (R7), sem atualização em segundo plano. O custo medido da consulta
-é **10,9 ms** contra a produção, devolvendo 215 linhas.
+é **9,9 ms** contra a produção, devolvendo ~205 linhas.

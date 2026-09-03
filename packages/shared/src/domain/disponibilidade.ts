@@ -21,8 +21,32 @@ import { APP_TIME_ZONE } from "../formatting";
  * lados da meia-noite, em duas datas, todas as vezes.
  */
 
-/** O que a coluna de situação diz. Três palavras, porque são três decisões diferentes. */
-export type SituacaoDoMotorista = "finalizado" | "cancelada" | "a_caminho";
+/** O que a coluna de situação diz. Duas palavras: ou terminou, ou está a caminho. */
+export type SituacaoDoMotorista = "finalizado" | "a_caminho";
+
+/**
+ * VIAGEM CANCELADA NÃO ENTRA NA ABA — decisão do usuário em 03/09 ("canceladas pode ignorar").
+ *
+ * ── Por que ela chegou a ser considerada ──────────────────────────────────────────────────────
+ *
+ * Uma viagem cancelada também deixa o motorista livre, então a primeira versão a tratava como um
+ * terceiro rótulo, ao lado de FINALIZADO. Isso trouxe dois problemas de uma vez:
+ *
+ *   · **ela atropelava a viagem em andamento.** Dois motoristas `in_transit` apareciam como LIVRES
+ *     porque a última deles *pela data* era uma cancelada que chegaria mais tarde;
+ *   · **ela escondia a viagem que aconteceu.** Medido: ignorando as canceladas, **nove** motoristas
+ *     passam a aparecer corretamente como FINALIZADO — a cancelada estava na frente de uma viagem
+ *     concluída de verdade.
+ *
+ * ── O que se perde, e por que tudo bem ────────────────────────────────────────────────────────
+ *
+ * Sete motoristas somem da aba: a cancelada era a única viagem recente deles. Estão livres, mas a
+ * aba não tem nada de verdadeiro para contar sobre a última rota — e uma linha sobre uma carga que
+ * não aconteceu vale menos que uma linha a menos.
+ */
+export function viagemContaParaAAba(status: string): boolean {
+  return status !== "cancelled";
+}
 
 /**
  * DEPOIS DE QUANTOS DIAS PARADO O MOTORISTA SAI DA ABA.
@@ -46,22 +70,20 @@ export const DIAS_ATE_SAIR_DA_ABA = 7;
 /**
  * O QUE A VIAGEM SIGNIFICA para quem procura motorista livre.
  *
- * ── CANCELADA NÃO É FINALIZADA, e esta é a linha que não pode ser cruzada ─────────────────────
+ * FINALIZADO quer dizer, para quem lê, que a carga CHEGOU — e é por isso que só a viagem concluída
+ * o recebe. Todo o resto ainda está acontecendo.
  *
- * As duas deixam o motorista livre, e por isso é tentador juntá-las num rótulo só. Mas FINALIZADO
- * quer dizer, para quem lê, que a carga CHEGOU. Escrevê-lo sobre uma viagem cancelada é a tela
- * afirmando uma entrega que não houve — e é o tipo de afirmação que só é descoberta quando alguém
- * cobra o frete. Eram 19 das 215 linhas no dia em que a regra foi escrita.
+ * Cancelada não chega aqui: ela é filtrada antes, por `viagemContaParaAAba`. Se chegasse, cairia em
+ * `a_caminho`, que erra para o lado seguro — é melhor a aba omitir alguém livre do que afirmar que
+ * quem está dirigindo pode pegar carga.
  */
 export function situacaoDaViagem(status: string): SituacaoDoMotorista {
-  if (status === "completed") return "finalizado";
-  if (status === "cancelled") return "cancelada";
-  return "a_caminho";
+  return status === "completed" ? "finalizado" : "a_caminho";
 }
 
-/** Motorista livre é quem terminou — de um jeito ou de outro. */
+/** Motorista livre é quem terminou a viagem. */
 export function estaLivre(situacao: SituacaoDoMotorista): boolean {
-  return situacao !== "a_caminho";
+  return situacao === "finalizado";
 }
 
 /**

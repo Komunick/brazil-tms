@@ -42,26 +42,25 @@ import { db } from "../client";
  * Oito dias bastam: o corte da aba é de sete, e viagem futura entra por não haver limite superior.
  * Medido: 8 dias custam 10,9 ms; 45 dias custam 18,3 ms para o MESMO resultado.
  *
- * ══ A CANCELADA QUE ATROPELAVA A VIAGEM EM ANDAMENTO ════════════════════════════════════════
+ * ══ A ORDEM DA ESCOLHA, e o que a simulação ensinou ═════════════════════════════════════════
  *
  * "A última viagem é a que chega por último" está quase certo, e o "quase" foi achado SIMULANDO
  * contra a produção — nenhum teste de unidade pegaria, porque a regra estava sendo obedecida.
  *
- * Dois motoristas apareceriam como LIVRES estando na estrada: a última viagem deles, pela data,
- * era uma **cancelada** que chegaria mais tarde, e a viagem `in_transit` (Departed no portal) que
- * eles estavam de fato rodando chegava ANTES. Cancelada conta como livre, e a aba diria que quem
- * está dirigindo pode pegar carga.
+ * Dois motoristas apareceriam como LIVRES estando na estrada: a última deles, pela data, era uma
+ * viagem **cancelada** que chegaria mais tarde, e a viagem `in_transit` que eles rodavam de fato
+ * chegava antes.
  *
- * A correção é a ordenação: **viagem aberta ganha de viagem terminada**, e só depois vale a data.
- * É o que o pedido do usuário já dizia — "o motorista sai da aba quando entrar em uma viagem" —,
- * e uma viagem cancelada nunca foi um compromisso.
+ * Isso levou a duas correções, nesta ordem:
  *
- * Entre viagens ABERTAS continua valendo a mais distante; entre TERMINADAS, a mais recente.
+ *   1. **Viagem aberta ganha de viagem concluída**, e só depois vale a data. É o que o pedido do
+ *      usuário já dizia — "o motorista sai da aba quando entrar em uma viagem".
+ *   2. **Cancelada não entra na aba** (usuário, 03/09: "canceladas pode ignorar"). Além de resolver
+ *      o mesmo caso pela raiz, isso CORRIGE nove linhas: eram nove motoristas cuja cancelada estava
+ *      na frente de uma viagem concluída de verdade, e que agora aparecem como FINALIZADO.
  *
- * E no EMPATE EXATO de data entre uma concluída e uma cancelada, ganha a concluída: as duas deixam
- * o motorista livre, mas só uma delas significa que a carga chegou, e é essa a história certa para
- * a linha contar. Havia um caso assim na produção em 03/09. O `trip_id` continua sendo o último
- * critério, e é ele que torna a lista estável entre leituras.
+ * O preço são **sete motoristas** que somem — a cancelada era a única viagem recente deles. Estão
+ * livres, mas a aba não teria nada de verdadeiro para contar sobre a última rota.
  *
  * ══ O CUSTO, MEDIDO ═════════════════════════════════════════════════════════════════════════
  *
@@ -139,13 +138,14 @@ export async function motoristasDisponiveis(
         on a.trip_id = t.id and a.is_current and a.driver_id is not null
       where t.planned_delivery_window_start > now() - interval '${sql.raw(String(DIAS_DE_VARREDURA))} days'
         and coalesce(dp.id, a.driver_id) is not null
+        -- Cancelada NÃO entra na aba (decisão do usuário, 03/09). Ver viagemContaParaAAba.
+        and t.current_status <> 'cancelled'
     ),
     ultima as (
-      -- VIAGEM ABERTA GANHA DE VIAGEM TERMINADA. Ver "A CANCELADA QUE ATROPELAVA" no cabeçalho.
+      -- VIAGEM ABERTA GANHA DE VIAGEM CONCLUÍDA. Ver "A ORDEM DA ESCOLHA" no cabeçalho.
       select distinct on (driver_id) *
       from viagens_com_motorista
-      order by driver_id, (status in ('completed','cancelled')) asc, conclusao desc,
-               (status = 'cancelled') asc, trip_id
+      order by driver_id, (status = 'completed') asc, conclusao desc, trip_id
     )
     select
       u.driver_id, d.name as nome, u.trip_id, u.status, u.inicio, u.conclusao, u.placas_portal,

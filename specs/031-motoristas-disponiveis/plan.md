@@ -17,8 +17,9 @@ pessoa** — em todos os 18, o `ID do motorista (portal)` resolve para o nome do
 atribuição nossa é a versão velha de uma viagem reatribuída lá depois. Construir a aba sobre a
 atribuição faria motorista em viagem aparecer como livre e motorista livre não aparecer.
 
-A consulta candidata foi medida contra a produção: **10,9 ms**, 215 linhas (116 finalizados, 19
-cancelados, 80 a caminho), tudo em cache, sem índice novo.
+A consulta foi medida contra a produção: **9,9 ms**, ~205 linhas (121 finalizados, 84 a caminho),
+tudo em cache, sem índice novo. Viagem cancelada não entra (usuário, 03/09) — ignorá-la CORRIGE nove
+linhas, porque a cancelada estava na frente de uma viagem concluída de verdade.
 
 ## Technical Context
 
@@ -28,9 +29,9 @@ cancelados, 80 a caminho), tudo em cache, sem índice novo.
 **Testing**: Vitest (derivação pura + leitura) · Playwright (a tela)
 **Target Platform**: Web, navegador de mesa na operação
 **Project Type**: Monorepo — `apps/web`, `packages/{shared,db}`
-**Performance Goals**: consulta em **menos de 50 ms** (medida hoje: 10,9 ms); lista abre em menos de 2 s com ~215 linhas
+**Performance Goals**: consulta em **menos de 50 ms** (medida hoje: 9,9 ms); lista abre em menos de 2 s com ~205 linhas
 **Constraints**: sem Realtime/Edge Functions/broker · autorização no BFF · fuso America/Sao_Paulo · pt-BR
-**Scale/Scope**: ~215 motoristas na janela, ~4.000 viagens em 8 dias, 1.518 motoristas cadastrados
+**Scale/Scope**: ~205 motoristas na janela, ~4.000 viagens em 8 dias, 1.518 motoristas cadastrados
 
 ## Constitution Check
 
@@ -55,7 +56,7 @@ specs/031-motoristas-disponiveis/
 ├── spec.md
 ├── plan.md              # este arquivo
 ├── research.md          # R1..R10 — as dez decisões, cada uma com a alternativa recusada
-├── data-model.md        # a derivação, os invariantes I1..I4
+├── data-model.md        # a derivação, os invariantes I1..I5
 ├── contracts/
 │   └── motoristas-disponiveis-api.md
 ├── quickstart.md
@@ -96,9 +97,9 @@ apps/web/messages/pt-BR.json      # ALTERADO — os rótulos
 
 ### 1. A derivação pura (`packages/shared`)
 
-A função que, dado o estado de uma viagem e a data de conclusão, devolve o rótulo (`finalizado`,
-`cancelado`, `a_caminho`) e diz se a linha ainda cabe na aba. Sem chamador nenhum, sob teste. É onde
-a regra do corte de 7 dias e a distinção "cancelada não é finalizada" se provam sem banco.
+A função que, dado o estado de uma viagem e a data de conclusão, devolve o rótulo (`finalizado` ou
+`a_caminho`), diz se a viagem conta para a aba (cancelada não conta) e se a linha ainda cabe. Sem
+chamador nenhum, sob teste. É onde o corte de 7 dias e a virada do dia se provam sem banco.
 
 **Não muda nada para ninguém.**
 
@@ -140,12 +141,14 @@ o sistema meio feito.
    pessoa errada em 18 casos. A fonte é o portal (`ID do motorista (portal)` → `portal_driver_id`),
    com a atribuição como complemento para o que o portal ainda não refletiu. Há teste de fonte.
 
-2. **"ÚLTIMA VIAGEM" É A QUE CHEGA POR ÚLTIMO.** 15 motoristas têm mais de uma viagem aberta ao mesmo
-   tempo. Ordenar por criação, ou pegar "a única aberta", descreve a viagem errada e chama de livre
-   quem já tem a próxima carga. É também o que faz o "sai quando entra em viagem" acontecer sozinho.
+2. **A ÚLTIMA VIAGEM: EM ANDAMENTO GANHA, e só depois vale a data.** 23 motoristas têm mais de uma
+   viagem aberta ao mesmo tempo. Ordenar por criação, ou pegar "a única aberta", descreve a viagem
+   errada. E ordenar SÓ pela data faz quem está dirigindo virar "livre" — dois casos medidos, achados
+   simulando. É também o que faz o "sai quando entra em viagem" acontecer sozinho.
 
-3. **CANCELADA NÃO É FINALIZADA.** 19 das 215 linhas de hoje são canceladas. O motorista está livre,
-   mas escrever FINALIZADO nele seria a tela afirmando que uma carga foi entregue.
+3. **CANCELADA NÃO ENTRA NA ABA** (usuário, 03/09: "canceladas pode ignorar"). Ela é filtrada na
+   varredura, antes de qualquer rótulo. Deixá-la voltar traz DOIS problemas juntos, nenhum com erro:
+   ela atropela a viagem em andamento, e esconde a viagem concluída de verdade — foram nove linhas.
 
 4. **O FUSO.** "Hoje", "amanhã" e o corte de 7 dias são em São Paulo. Em UTC a lista troca de conteúdo
    às 21h — passa em qualquer teste feito de manhã e quebra no turno da noite.

@@ -117,8 +117,10 @@ motivo, e que a marca some quando o impedimento é resolvido.
   hoje ou amanhã" o esconderia, "só sai quando entrar em viagem" o manteria. São **20 motoristas** nessa
   situação agora. Decidido: **a janela decide quem entra, só viagem nova faz sair** — e o parado some
   sozinho depois de sete dias. É exceção declarada, não defeito.
-- **Viagem cancelada.** Há 8 canceladas chegando amanhã e 3 hoje. O motorista está livre de fato, mas
-  o status **não é FINALIZADO** — dizer o contrário afirmaria que uma carga foi entregue.
+- **Viagem cancelada.** Ela é **ignorada por inteiro** (decisão do usuário, 03/09). Medido: ignorá-la
+  faz **nove** motoristas aparecerem corretamente como FINALIZADO — a cancelada estava na frente de
+  uma viagem concluída de verdade —, ao custo de **sete** que somem, porque a cancelada era a única
+  viagem recente deles. Estão livres, mas a aba não teria nada de verdadeiro a contar sobre a rota.
 - **Viagem sem motorista atribuído.** Não produz linha nenhuma: a aba é de motoristas, não de viagens.
 - **A virada do dia.** "Hoje", "amanhã" e o corte de sete dias são contados no fuso de São Paulo. Uma
   contagem em fuso universal muda de dia às 21h e faz a lista trocar de conteúdo no meio do turno da
@@ -126,12 +128,12 @@ motivo, e que a marca some quando o impedimento é resolvido.
 - **Motorista que recebe viagem enquanto alguém olha a lista.** Ele deixa a lista sozinho na leitura
   seguinte, sem ninguém remover — é o "sai quando entra em viagem" do pedido.
 - **Duas viagens do mesmo motorista chegando no mesmo instante.** O desempate precisa ser estável, para
-  a linha não alternar entre uma e outra a cada leitura. Havia um caso na produção com uma concluída e
-  uma cancelada na mesma hora: ganha a **concluída**, porque só ela significa carga entregue.
-- **A cancelada que chega depois da viagem em andamento.** Medido em 03/09: **dois motoristas**
-  apareceriam como livres estando `in_transit`, porque a última deles *pela data* era uma cancelada
-  com chegada mais tarde. Viagem em andamento tem de ganhar de viagem terminada (FR-004a) — foi
-  achado simulando contra a produção, não testando.
+  a linha não alternar entre uma e outra a cada leitura.
+- **A viagem terminada que chega depois da que está em andamento.** Medido em 03/09: **dois
+  motoristas** apareceriam como livres estando `in_transit`, porque a última deles *pela data* era uma
+  cancelada com chegada mais tarde. Duas correções: viagem em andamento ganha de viagem concluída
+  (FR-004a), e cancelada não entra (FR-014). Foi achado **simulando** contra a produção, não testando
+  — a regra escrita estava sendo obedecida.
 
 ---
 
@@ -152,9 +154,9 @@ motivo, e que a marca some quando o impedimento é resolvido.
 - **FR-004**: A viagem descrita na linha MUST ser a **última viagem do motorista**, escolhida nesta
   ordem: **viagem em andamento ganha de viagem terminada**; entre as de mesma condição, a de
   **conclusão planejada mais distante**. Não é a mais recentemente criada, nem "a única aberta".
-- **FR-004a**: Uma viagem **cancelada ou concluída MUST NOT** ser escolhida como a última quando o
-  motorista tem qualquer viagem **em andamento** na varredura — mesmo que a terminada chegue depois.
-  Sem isso, um motorista dirigindo aparece como livre.
+- **FR-004a**: Uma viagem **concluída MUST NOT** ser escolhida como a última quando o motorista tem
+  qualquer viagem **em andamento** na varredura — mesmo que a concluída chegue depois. Sem isso, um
+  motorista dirigindo aparece como livre.
 - **FR-005**: O desempate entre duas viagens com a mesma data de conclusão MUST ser estável, de modo
   que leituras repetidas descrevam sempre a mesma viagem.
 - **FR-006**: A lista MUST ser ordenável e MUST vir ordenada, por padrão, de forma que o disponível há
@@ -178,8 +180,9 @@ motivo, e que a marca some quando o impedimento é resolvido.
 
 - **FR-013**: O status **FINALIZADO** MUST ser mostrado quando, e somente quando, a última viagem
   estiver concluída. FINALIZADO significa, para quem lê, motorista disponível.
-- **FR-014**: Viagem **cancelada** MUST NOT ser mostrada como FINALIZADO; ela MUST ter rótulo próprio,
-  ainda que o motorista conte como livre para efeito de aparecer na lista.
+- **FR-014**: Viagem **cancelada** MUST NOT entrar na aba — nem como linha, nem como rótulo, nem na
+  escolha da última viagem. O motorista dela aparece pela viagem concluída anterior, se houver, ou
+  não aparece.
 - **FR-015**: Viagens ainda em andamento MUST mostrar o status corrente, visualmente distinto de
   FINALIZADO.
 - **FR-016**: O status MUST ser derivado do estado da viagem a cada leitura. O sistema MUST NOT

@@ -29,8 +29,9 @@ Monorepo: `packages/shared` (regra pura) · `packages/db` (leitura) · `apps/web
    49 órfãs), com a atribuição nossa como complemento por `coalesce`.
 2. **"ÚLTIMA VIAGEM" É A QUE CHEGA POR ÚLTIMO.** 15 motoristas têm mais de uma viagem aberta ao mesmo
    tempo. Ordenar por criação, ou pegar "a única aberta", descreve a viagem errada.
-3. **CANCELADA NÃO É FINALIZADA** (I4). 19 das 215 linhas. FINALIZADO numa cancelada é a tela
-   afirmando que uma carga foi entregue.
+3. **CANCELADA NÃO ENTRA NA ABA** (I4; usuário, 03/09: "canceladas pode ignorar"). Filtrada na
+   varredura, antes de qualquer rótulo. Deixá-la voltar atropela a viagem em andamento E esconde a
+   viagem concluída de verdade — foram nove linhas.
 4. **O FUSO.** São Paulo, sempre. Uma conclusão às 23h30 daqui é 02h30 do dia seguinte em UTC — o
    teste precisa de caso **dos dois lados da meia-noite**, senão passa e não prova nada.
 5. **NÃO COPIAR O ESTADO** (I2, FR-016). Nenhuma coluna nossa guarda "disponível".
@@ -65,20 +66,20 @@ ela se prova sem tela e sem viagem de mentira.
 ### A derivação pura (etapa 1 do plano)
 
 - [X] T002 Criar `packages/shared/src/domain/disponibilidade.ts` com o tipo `SituacaoDoMotorista`
-      (`"finalizado" | "cancelada" | "a_caminho"`) e a constante do corte (`DIAS_ATE_SAIR_DA_ABA = 7`),
+      (`"finalizado" | "a_caminho"`) e a constante do corte (`DIAS_ATE_SAIR_DA_ABA = 7`),
       documentando no cabeçalho **por que** o corte existe: sem ele, 117 motoristas parados há mais de
       7 dias e 72 há mais de 30 entram na lista, e ela deixa de responder "quem está livre agora"
 - [X] T003 Em `packages/shared/src/domain/disponibilidade.ts`, implementar `situacaoDaViagem(status)`
-      → `"finalizado"` para viagem concluída, `"cancelada"` para cancelada, `"a_caminho"` para o
-      resto. **Cancelada nunca devolve `finalizado`** (I4, armadilha 3)
+      → `"finalizado"` para viagem concluída, `"a_caminho"` para o resto; e `viagemContaParaAAba`,
+      que devolve `false` para cancelada — ela é filtrada, não rotulada (I4, armadilha 3)
 - [X] T004 Em `packages/shared/src/domain/disponibilidade.ts`, implementar `cabeNaAba({ situacao,
       conclusao, agora })` → hoje/amanhã em **São Paulo** para quem está a caminho; até **7 dias** da
-      conclusão para finalizado e cancelada; `false` no resto (FR-008, FR-009, FR-010, armadilha 4)
+      conclusão para quem já terminou; `false` no resto (FR-008, FR-009, FR-010, armadilha 4)
 - [X] T005 Criar `packages/shared/src/domain/disponibilidade.test.ts` cobrindo, no mínimo:
       **(a)** a virada do dia com caso **dos dois lados da meia-noite** — 23h30 em São Paulo é 02h30
       do dia seguinte em UTC, e o teste deve falhar se alguém trocar o fuso;
       **(b)** o sétimo dia ainda aparece e o oitavo não;
-      **(c)** cancelada nunca vira `finalizado` (I4);
+      **(c)** cancelada não conta para a aba, e nunca vira `finalizado` (I4);
       **(d)** hoje e amanhã entram, depois de amanhã não
 - [X] T006 Exportar `disponibilidade` no barril `packages/shared/src/index.ts`
 
@@ -94,8 +95,8 @@ ela se prova sem tela e sem viagem de mentira.
       ainda não refletiu
 - [X] T009 Em `motoristas-disponiveis.ts`, ordenar a escolha da última viagem nesta ordem:
       **(1)** viagem EM ANDAMENTO ganha de viagem terminada; **(2)** conclusão mais distante;
-      **(3)** no empate exato, a concluída ganha da cancelada; **(4)** `trip_id`, o desempate estável
-      (FR-004, FR-004a, FR-005, R4, I3, I5).
+      **(3)** `trip_id`, o desempate estável — e a cancelada é filtrada na varredura, antes de tudo
+      (FR-004, FR-004a, FR-014, FR-005, R4, I3, I4, I5).
       ⚠️ **A regra (1) foi acrescentada DEPOIS, pela simulação contra a produção (T037)**: sem ela,
       dois motoristas `in_transit` apareciam como LIVRES, porque a última deles pela data era uma
       viagem cancelada que chegaria mais tarde. Nunca desempatar por data de criação nem por nome de
@@ -173,7 +174,7 @@ status atual, e que nenhum deles aparece como FINALIZADO.
       palavra, não só cor (FR-015)
 - [X] T026 [US2] Cabeçalho com as **duas contagens** — disponíveis e a caminho —, de modo que o total
       seja conferível sem contar linha por linha (FR-023). A contagem de disponíveis soma
-      `finalizado` **e** `cancelada` (contrato), mas as duas continuam distintas na linha (I4)
+      os `finalizado` — cancelada não entra na aba, então não entra na conta (contrato, I4)
 - [X] T027 [P] [US2] Busca por nome, estação e placa (FR-007), **como estado da tela** — nunca
       parâmetro da consulta; a atualização de 60 s não pode apagar o que a pessoa digitou (SC-008)
 - [X] T028 [P] [US2] Ordenação por coluna, também como estado da tela (FR-006)
@@ -219,7 +220,7 @@ torna alcançável — e a única que muda o que todo mundo vê.
       procurando verbo de escrita, ignorando comentário antes de asseverar
 - [X] T036 Medir a consulta contra a produção com `explain (analyze, buffers)` em **modo leitura** e
       conferir contra o medido em 03/09: **abaixo de 50 ms** (medido: 10,9 ms), buffers em
-      `shared hit`, ~215 linhas (116 finalizados, 19 cancelados, 80 a caminho)
+      `shared hit`, ~205 linhas (121 finalizados, 84 a caminho)
 - [X] T037 Conferir contra a produção, em consulta de leitura, os três invariantes do quickstart:
       **(a)** nenhum motorista com viagem aberta aparece como disponível — alvo certo são os **15**
       com mais de uma viagem aberta (SC-004);
@@ -313,7 +314,7 @@ agora**. Sem menu ainda — alcançável pela URL, o que permite conferir com o 
 | FR-007 (busca) | T027 |
 | FR-008..FR-010 (entra, fica, corte de 7 dias) | T004, T005 |
 | FR-011, FR-012 (sai sozinho, sem gesto) | T007, T009 |
-| FR-013..FR-015 (FINALIZADO, cancelada, a caminho) | T003, T021, T025 |
+| FR-013..FR-015 (FINALIZADO, cancelada fora, a caminho) | T003, T007, T021, T025 |
 | FR-016 (não guardar estado) | T012, T035 |
 | FR-017..FR-019 (impedimento) | T011, T029, T030, T031 |
 | FR-020 (frescor) | T017 |
@@ -330,7 +331,7 @@ agora**. Sem menu ainda — alcançável pela URL, o que permite conferir com o 
 | I1 (nenhuma escrita) | T012, T035 |
 | I2 (estado não copiado) | T012, T035 |
 | I3 (maior conclusão) | T037b |
-| I4 (cancelada ≠ finalizada) | T003, T005, T026 |
+| I4 (cancelada não entra na aba) | T003, T005, T007, T012 |
 | I5 (estabilidade) | T009, T037c |
 
 **39 tarefas** — 1 setup · 14 fundação · 9 US1 · 4 US2 · 3 US3 · 2 navegação · 6 polimento.

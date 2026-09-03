@@ -4,6 +4,7 @@ import {
   DIAS_ATE_SAIR_DA_ABA,
   estaLivre,
   situacaoDaViagem,
+  viagemContaParaAAba,
   type SituacaoDoMotorista,
 } from "./disponibilidade";
 
@@ -27,14 +28,13 @@ describe("situacaoDaViagem", () => {
   });
 
   /**
-   * A LINHA QUE NÃO PODE SER CRUZADA (I4).
+   * CANCELADA NUNCA É FINALIZADO (I4).
    *
-   * As duas deixam o motorista livre, e por isso é tentador juntá-las. Mas FINALIZADO quer dizer,
-   * para quem lê, que a carga CHEGOU — e escrevê-lo sobre uma cancelada é a tela afirmando uma
-   * entrega que não houve. Eram 19 das 215 linhas no dia em que a regra foi escrita.
+   * Ela nem chega aqui — é filtrada antes, por `viagemContaParaAAba`. Mas se chegasse, cair em
+   * `finalizado` seria a tela afirmando que uma carga chegou quando ela foi cancelada, e é o tipo de
+   * afirmação que só é descoberta quando alguém cobra o frete.
    */
-  it("cancelada NUNCA é finalizado, mesmo deixando o motorista livre", () => {
-    expect(situacaoDaViagem("cancelled")).toBe("cancelada");
+  it("cancelada nunca é finalizado", () => {
     expect(situacaoDaViagem("cancelled")).not.toBe("finalizado");
   });
 
@@ -63,10 +63,29 @@ describe("situacaoDaViagem", () => {
 });
 
 describe("estaLivre", () => {
-  it("finalizado e cancelada estão livres; a caminho, não", () => {
+  it("só quem terminou está livre", () => {
     expect(estaLivre("finalizado")).toBe(true);
-    expect(estaLivre("cancelada")).toBe(true);
     expect(estaLivre("a_caminho")).toBe(false);
+  });
+});
+
+/**
+ * CANCELADA NÃO ENTRA NA ABA — decisão do usuário em 03/09 ("canceladas pode ignorar").
+ *
+ * Ela também deixa o motorista livre, e a primeira versão a tratava como um terceiro rótulo. Isso
+ * fazia duas coisas erradas ao mesmo tempo: atropelava a viagem em andamento (dois motoristas
+ * `in_transit` viravam "livres") e escondia a viagem que aconteceu de verdade — **nove** motoristas
+ * passaram a aparecer corretamente como FINALIZADO depois que ela saiu.
+ */
+describe("viagemContaParaAAba", () => {
+  it("cancelada não conta", () => {
+    expect(viagemContaParaAAba("cancelled")).toBe(false);
+  });
+
+  it("todo o resto conta", () => {
+    for (const s of ["completed", "in_transit", "assigned", "at_origin", "received"]) {
+      expect(viagemContaParaAAba(s), `${s} deveria contar`).toBe(true);
+    }
   });
 });
 
@@ -141,10 +160,6 @@ describe("cabeNaAba — quem JÁ TERMINOU fica até o corte", () => {
    */
   it("terminou ONTEM e não pegou nada: CONTINUA na aba", () => {
     expect(cabe("finalizado", "2026-09-02T15:00:00Z")).toBe(true);
-  });
-
-  it("cancelada de ontem também continua — o motorista está livre do mesmo jeito", () => {
-    expect(cabe("cancelada", "2026-09-02T15:00:00Z")).toBe(true);
   });
 
   it("o sétimo dia ainda aparece", () => {

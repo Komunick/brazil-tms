@@ -2528,8 +2528,7 @@
       "situacao": "Status"
     },
     "situacao": {
-      "finalizado": "FINALIZADO",
-      "cancelada": "CANCELADA"
+      "finalizado": "FINALIZADO"
     },
     "impedido": "Impedido",
     "impedimento": {

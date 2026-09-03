@@ -76,21 +76,21 @@ describe("a fonte de quem está dirigindo", () => {
    * ela parece um detalhe de `order by` e é a diferença entre a aba estar certa e mentir.
    */
   /**
-   * NO EMPATE EXATO, A CONCLUÍDA GANHA DA CANCELADA.
+   * CANCELADA NÃO ENTRA NA ABA (usuário, 03/09: "canceladas pode ignorar").
    *
-   * As duas deixam o motorista livre, mas só uma significa que a carga chegou — e é essa a história
-   * que a linha deve contar. Havia um caso assim na produção em 03/09: mesma data, mesma hora, uma
-   * cancelada e uma concluída.
+   * Tirá-la resolve pela raiz o caso do `in_transit` atropelado E corrige nove linhas: eram nove
+   * motoristas cuja cancelada estava na frente de uma viagem concluída de verdade. Deixá-la voltar
+   * traz os dois problemas juntos, e nenhum deles dá erro.
    */
-  it("no empate de data, a concluída ganha da cancelada", () => {
-    expect(fonte).toContain("(status = 'cancelled') asc");
+  it("a cancelada é filtrada na varredura, e não rotulada depois", () => {
+    expect(fonte, "a cancelada voltou para a aba").toContain("current_status <> 'cancelled'");
   });
 
-  it("viagem ABERTA ganha de viagem terminada na escolha da última", () => {
+  it("viagem ABERTA ganha de viagem concluída na escolha da última", () => {
     expect(
       fonte,
-      "a cancelada voltou a atropelar a viagem em andamento — motorista na estrada vira 'livre'",
-    ).toContain("(status in ('completed','cancelled')) asc");
+      "a concluída voltou a poder atropelar a viagem em andamento — quem dirige vira 'livre'",
+    ).toContain("(status = 'completed') asc");
   });
 
   /**

@@ -19,7 +19,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 
 /**
  * A ABA DE MOTORISTAS DISPONÍVEIS (fatia 031, 03/09).
@@ -268,9 +267,8 @@ export function MotoristasDisponiveisClient() {
 /**
  * A COLUNA QUE RESPONDE "POSSO DAR CARGA?".
  *
- * FINALIZADO é a palavra que a operação já usa para "está livre". CANCELADA precisa ser distinta
- * porque o motorista está livre do mesmo jeito, mas a carga **não foi entregue** — juntar as duas
- * faria a tela afirmar uma entrega que não houve.
+ * FINALIZADO é a palavra que a operação já usa para "está livre", e é o único rótulo de livre que
+ * existe: viagem cancelada não entra na aba (decisão do usuário, 03/09).
  *
  * O "a caminho" usa o catálogo de status que a Torre de Controle já tem. Um segundo catálogo aqui
  * divergiria dele no primeiro status novo, e a mesma viagem teria dois nomes em duas telas.
@@ -293,15 +291,8 @@ function Situacao({
   }
 
   return (
-    <Badge
-      className={cn(
-        "whitespace-nowrap",
-        m.situacao === "finalizado"
-          ? "bg-emerald-600 text-white hover:bg-emerald-600 dark:bg-emerald-500"
-          : "bg-muted text-muted-foreground hover:bg-muted",
-      )}
-    >
-      {t(`situacao.${m.situacao}`)}
+    <Badge className="bg-emerald-600 whitespace-nowrap text-white hover:bg-emerald-600 dark:bg-emerald-500">
+      {t("situacao.finalizado")}
     </Badge>
   );
 }

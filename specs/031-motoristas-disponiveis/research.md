@@ -38,8 +38,14 @@ quem foi escalado direto no portal.
 
 ## R2 — Qual é "a última viagem" do motorista
 
-**Decisão**: a viagem com a **maior data de conclusão planejada** entre as viagens daquele motorista
-na varredura. Desempate por identificador da viagem (R4).
+**Decisão**, nesta ordem: **(1)** viagem EM ANDAMENTO ganha de viagem concluída; **(2)** a de maior
+data de conclusão planejada; **(3)** identificador da viagem, o desempate estável (R4). Canceladas já
+ficaram de fora na varredura (R10).
+
+**A regra (1) foi acrescentada DEPOIS, pela simulação** — e é o achado que mais mudou a fatia. Com
+"a última é a que chega por último" pura, **dois motoristas `in_transit` apareciam como LIVRES**: a
+última deles pela data era uma viagem que chegaria mais tarde. Nenhum teste de unidade pegaria, porque
+a regra escrita estava sendo obedecida.
 
 **Rationale**: **15 motoristas têm mais de uma viagem aberta ao mesmo tempo** — nove com duas, três
 com três, três com quatro. Qualquer outro critério descreve a viagem errada. E é este critério que
@@ -79,8 +85,8 @@ Registrado em Complexity Tracking no plano.
 
 ## R4 — O desempate estável
 
-**Decisão**: `order by driver_id, conclusao desc, trip_id`. O segundo critério é o **identificador da
-viagem**, que nunca muda.
+**Decisão**: `order by driver_id, (status = 'completed') asc, conclusao desc, trip_id`. O último
+critério é o **identificador da viagem**, que nunca muda.
 
 **Rationale**: o FR-005 exige que leituras repetidas descrevam sempre a mesma viagem. Sem desempate,
 o Postgres pode devolver qualquer uma das empatadas, e a linha alternaria entre duas rotas a cada
@@ -116,7 +122,7 @@ muda de estado entre uma consulta e a outra.
 | varredura | Planning | Execution | linhas |
 |-----------|----------|-----------|--------|
 | 45 dias | 5,45 ms | 18,3 ms | — |
-| **8 dias** | 6,44 ms | **10,9 ms** | **215** |
+| **8 dias** | ~6 ms | **9,9 ms** | **~205** |
 
 Todos os buffers vieram de `shared hit` — nada de disco. O plano usa `hash join` sobre varredura
 sequencial de tabelas pequenas (1.518 motoristas, 4.056 viagens em 8 dias); índice em
@@ -176,31 +182,44 @@ em dois lugares); agrupar por região (a região não entrou na spec, e é fatia
 
 ## R9 — Os rótulos, e onde eles moram
 
-**Decisão**: **três palavras na coluna de situação** — `FINALIZADO`, `CANCELADA` e o status corrente
-para o resto — reusando a tradução de status que a Torre de Controle já tem em `pt-BR.json`.
+**Decisão**: **duas palavras na coluna de situação** — `FINALIZADO` para quem terminou, e o status
+corrente para quem está a caminho, reusando a tradução que a Torre de Controle já tem em `pt-BR.json`.
 
 **Rationale**: quem lê a aba precisa de uma decisão, não de um relatório: *posso dar carga?*.
-FINALIZADO é a palavra que a operação já usa e significa "livre". CANCELADA precisa ser distinta
-porque o motorista está livre mas a carga **não foi entregue** (R10). O resto — `assigned`,
-`at_origin`, `loading`, `in_transit`, `at_destination`, `unloading` — já tem tradução no catálogo
-existente, e criar um segundo catálogo aqui faria os dois divergirem no primeiro status novo.
+FINALIZADO é a palavra que a operação já usa e significa "livre". O resto — `assigned`, `at_origin`,
+`loading`, `in_transit`, `at_destination`, `unloading` — já tem tradução no catálogo existente, e
+criar um segundo catálogo aqui faria os dois divergirem no primeiro status novo.
 
-**Alternativas recusadas**: só "FINALIZADO vs o resto" (perde a distinção da cancelada e some com a
-informação de *onde* o caminhão está); catálogo próprio da aba (segunda fonte de tradução).
+**Alternativas recusadas**: só "livre vs ocupado" (some com a informação de *onde* o caminhão está,
+que é o que permite estimar); catálogo próprio da aba (segunda fonte de tradução).
 
 ---
 
-## R10 — Cancelada, e o motorista que fica sem viagem nenhuma
+## R10 — Cancelada: ignorada por inteiro
 
-**Decisão**: viagem **cancelada** conta para o motorista **entrar** na aba (ele está livre de fato),
-mas com rótulo **próprio**, nunca FINALIZADO.
+**Decisão**: viagem **cancelada não entra na aba** — nem como linha, nem como rótulo, nem na escolha
+da última viagem. Decisão do usuário em 03/09: *"canceladas pode ignorar"*.
 
-**Rationale**: são 19 das 215 linhas de hoje — 8 chegando amanhã e 3 hoje entre as canceladas
-recentes. Escrever FINALIZADO numa viagem cancelada seria a tela afirmando que uma carga foi
-entregue, e é o tipo de afirmação que só é descoberta quando alguém cobra o frete.
+**Rationale**: a primeira versão a tratava como um terceiro rótulo, já que ela também deixa o
+motorista livre. A simulação contra a produção mostrou que isso fazia duas coisas erradas ao mesmo
+tempo:
 
-**Sobre as ofertas que nunca viram viagem e os motoristas sem viagem nenhuma**: um motorista que nunca
-teve viagem na varredura simplesmente não aparece. Não é ausência silenciosa — é a definição da aba,
-que é sobre quem **terminou** algo, não sobre o cadastro inteiro. O corte de sete dias tem o mesmo
-papel: sem ele, 117 motoristas parados há mais de 7 dias e 72 parados há mais de 30 entrariam na
-lista, e ela deixaria de responder "quem está livre agora" para responder "quem existe".
+- **atropelava a viagem em andamento** — dois motoristas `in_transit` apareciam como LIVRES, porque a
+  última deles *pela data* era uma cancelada que chegaria mais tarde;
+- **escondia a viagem que aconteceu** — medido: ignorando as canceladas, **nove** motoristas passam a
+  aparecer corretamente como FINALIZADO, porque a cancelada estava na frente de uma viagem concluída
+  de verdade.
+
+O saldo é claro: 121 finalizados corretos em vez de 112, e nenhum rótulo ambíguo na tela.
+
+**O que se perde**: **sete motoristas** somem da aba — a cancelada era a única viagem recente deles.
+Estão livres, mas a aba não teria nada de verdadeiro a contar sobre a última rota, e uma linha sobre
+uma carga que não aconteceu vale menos que uma linha a menos.
+
+**Alternativas recusadas**: rótulo próprio para cancelada (traz os dois problemas acima); tratá-la
+como FINALIZADO (a tela afirmaria uma entrega que não houve).
+
+**Sobre os motoristas sem viagem nenhuma**: quem não teve viagem na varredura simplesmente não
+aparece. É a definição da aba — ela é sobre quem **terminou** algo, não sobre o cadastro inteiro. O
+corte de sete dias tem o mesmo papel: sem ele, 117 motoristas parados há mais de 7 dias e 72 há mais
+de 30 entrariam, e a lista deixaria de responder "quem está livre agora" para responder "quem existe".
