@@ -4,12 +4,24 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, ExternalLink, FileImage, Save, Search, Send } from "lucide-react";
 import {
+  ArrowLeft,
+  ExternalLink,
+  FileImage,
+  RefreshCw,
+  Save,
+  Search,
+  Send,
+  ShieldQuestion,
+} from "lucide-react";
+import {
+  decidirPedidoDePesquisa,
   formatDateTime,
   motivosDeNaoCadastrar,
+  SITUACAO_DA_PESQUISA,
   type CampoDoCadastro,
   type CamposDoPreCadastro,
+  type PesquisaEncontrada,
 } from "@brazil-tms/shared";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -75,6 +87,19 @@ interface Conferencia {
     acabou?: boolean;
     resposta?: Record<string, unknown>;
   } | null;
+  /**
+   * O QUE A GERENCIADORA JÁ SABE — leitura de graça (2026-09-03).
+   *
+   * Nulo quer dizer "ninguém perguntou", e não "não há nada lá". A tela precisa dos dois estados
+   * separados: o primeiro pede um clique, o segundo é o que autoriza gastar.
+   */
+  conferencia: {
+    em: string;
+    cadastrado: boolean;
+    codigoNaGerenciadora: number | null;
+    pesquisas: PesquisaEncontrada[];
+    erro?: string;
+  } | null;
   recebidoEm: string;
 }
 
@@ -115,6 +140,26 @@ export const GRUPOS: { titulo: string; campos: CampoDoCadastro[] }[] = [
 ];
 
 const TODOS_OS_CAMPOS = GRUPOS.flatMap((g) => g.campos);
+
+/** A sigla da gerenciadora por extenso — `AD` sozinho não diz nada a quem lê a tela. */
+function situacaoLegivel(situacao: string | undefined): string {
+  if (!situacao) return "";
+  return SITUACAO_DA_PESQUISA[situacao] ?? situacao;
+}
+
+/**
+ * A VALIDADE DA PESQUISA — `2027-03-01` vira `01/03/2027`, sem passar por fuso.
+ *
+ * `formatDate` NÃO serve aqui, e o motivo é sutil: ela existe para INSTANTES gravados em UTC e
+ * converte para São Paulo. Uma data pura entraria como meia-noite UTC e sairia como o dia
+ * ANTERIOR — a pesquisa que vale até 01/03 apareceria valendo até 28/02.
+ *
+ * Isto aqui não é um instante: é o dia que a gerenciadora escreveu. Não há hora para converter.
+ */
+function dataPuraBr(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : iso;
+}
 
 /**
  * O QUE IMPEDIU A APROVAÇÃO, por extenso.
@@ -175,7 +220,8 @@ export function ConferenciaClient({ id }: { id: string }): React.ReactElement {
       const limpo = valor.trim();
       const anterior = item?.campos[chave]?.valor ?? null;
       if (limpo === (anterior ?? "")) continue;
-      base[chave] = limpo === "" ? { valor: null, origem: null } : { valor: limpo, origem: "digitado" };
+      base[chave] =
+        limpo === "" ? { valor: null, origem: null } : { valor: limpo, origem: "digitado" };
     }
     return base;
   }, [item, rascunho]);
@@ -272,6 +318,25 @@ export function ConferenciaClient({ id }: { id: string }): React.ReactElement {
     onError: () => avisar({ tipo: "erro", texto: t("envioFalhou") }),
   });
 
+  /**
+   * A CONFERÊNCIA — a mutação de graça que existe para a de baixo não gastar à toa.
+   *
+   * A gerenciadora não bloqueia pesquisa repetida (usuário, 03/09): mandar duas vezes cria duas e
+   * cobra as duas, sem erro nenhum. Esta pergunta é o que impede isso, e ela não custa — só tempo.
+   *
+   * O aviso fala em "cerca de um minuto e meio" porque é a verdade medida: são quatro chamadas em
+   * série, e a Integra recusa chamadas próximas demais com 30 s de espera entre elas. Dizer "em
+   * instantes" faria alguém achar que quebrou e clicar de novo.
+   */
+  const conferir = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/pre-cadastros/${id}/conferir-raster`, { method: "POST" });
+      if (!res.ok) throw new Error(String(res.status));
+    },
+    onSuccess: () => avisar({ tipo: "ok", texto: t("conferenciaPedida") }),
+    onError: () => avisar({ tipo: "erro", texto: t("conferenciaFalhou") }),
+  });
+
   const [pedindoPesquisa, setPedindoPesquisa] = useState(false);
   /**
    * ⚠️ A ÚNICA MUTAÇÃO DESTA TELA QUE GASTA DINHEIRO.
@@ -313,6 +378,15 @@ export function ConferenciaClient({ id }: { id: string }): React.ReactElement {
   }
 
   const jaFoi = Boolean(item.enviadoEm);
+
+  /*
+    A MESMA FUNÇÃO QUE O WORKER USARIA, e não uma regra escrita de novo aqui.
+
+    Ela é pura e mora em `packages/shared`. Uma segunda leitura do que "conta como pesquisa válida"
+    nesta tela divergiria da real no dia em que a gerenciadora acrescentasse uma situação — e
+    divergiria para o lado caro, liberando o botão sobre uma pesquisa que já existe.
+  */
+  const decisao = decidirPedidoDePesquisa(item.conferencia?.pesquisas ?? []);
   const rotulo = (c: string): string => (t.has(`campo.${c}`) ? t(`campo.${c}`) : c);
   const faltandoLegivel = (c: string): string => (t.has(`faltando.${c}`) ? t(`faltando.${c}`) : c);
 
@@ -434,9 +508,7 @@ export function ConferenciaClient({ id }: { id: string }): React.ReactElement {
                           id={`campo-${campo}`}
                           value={rascunho[campo] ?? ""}
                           disabled={jaFoi}
-                          onChange={(e) =>
-                            setRascunho((r) => ({ ...r, [campo]: e.target.value }))
-                          }
+                          onChange={(e) => setRascunho((r) => ({ ...r, [campo]: e.target.value }))}
                           className={vazio ? "border-amber-500 dark:border-amber-400" : undefined}
                         />
                       </div>
@@ -448,6 +520,67 @@ export function ConferenciaClient({ id }: { id: string }): React.ReactElement {
           ))}
         </div>
       </div>
+
+      {/*
+        O RETRATO DA GERENCIADORA — o que ela respondeu, e QUANDO.
+
+        Ele fica logo acima da barra de ação, ao alcance do olho de quem vai decidir gastar. Só
+        aparece depois de alguém perguntar: um bloco permanente dizendo "nunca conferido" seria uma
+        acusação em toda tela, inclusive nas dezenas em que conferir não vem ao caso.
+
+        A HORA APARECE SEMPRE porque a resposta envelhece: uma pesquisa `EP` vira `AD` sozinha do
+        lado deles, e um retrato de ontem diria "espere" sobre algo que já terminou. Sem a hora, a
+        tela pareceria estar dizendo a verdade de agora.
+      */}
+      {item.conferencia ? (
+        <Card>
+          <CardContent className="space-y-2 py-3 text-sm">
+            <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
+              <ShieldQuestion className="size-3.5" />
+              {t("conferenciaEm", { quando: formatDateTime(item.conferencia.em) })}
+            </div>
+            {item.conferencia.erro ? (
+              <p className="text-destructive">
+                {t("conferenciaErro", { erro: item.conferencia.erro })}
+              </p>
+            ) : (
+              <>
+                <p>
+                  {item.conferencia.cadastrado
+                    ? t("conferenciaCadastrado", {
+                        codigo: item.conferencia.codigoNaGerenciadora ?? 0,
+                      })
+                    : t("conferenciaNaoCadastrado")}
+                </p>
+                {item.conferencia.pesquisas.length === 0 ? (
+                  <p className="text-muted-foreground">{t("conferenciaSemPesquisa")}</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {item.conferencia.pesquisas.map((pq) => (
+                      <li key={`${pq.vinculo}-${pq.codigo}`} className="flex flex-wrap gap-2">
+                        <Badge variant="outline">
+                          {t("conferenciaPesquisaLinha", {
+                            vinculo: pq.vinculo,
+                            situacao: situacaoLegivel(pq.situacao),
+                            codigo: pq.codigo,
+                          })}
+                        </Badge>
+                        {pq.dataExpiracao ? (
+                          <span className="text-muted-foreground">
+                            {t("conferenciaPesquisaValidade", {
+                              data: dataPuraBr(pq.dataExpiracao),
+                            })}
+                          </span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* A BARRA DE AÇÃO fica grudada embaixo: a coluna de campos é longa, e um botão de enviar que
           exige rolar até o fim é um botão que alguém aperta sem ter chegado ao fim. */}
@@ -488,6 +621,26 @@ export function ConferenciaClient({ id }: { id: string }): React.ReactElement {
             {t("enviarParaGerenciadora")}
           </Button>
           {/*
+            CONFERIR NA GERENCIADORA — de graça, e por isso sem cerimônia nenhuma.
+
+            Ele fica DO LADO do botão que gasta de propósito: é o gesto que se faz antes. E não
+            some depois de usado, ao contrário do de pesquisa, porque a resposta envelhece — uma
+            pesquisa `EP` vira `AD` sozinha do lado deles.
+
+            POR QUE NÃO É AUTOMÁTICO ao abrir a tela: a resposta demora perto de um minuto e meio
+            (quatro chamadas em série, com a espera de 30 s que a Integra impõe entre elas). Rodar
+            sozinho penduraria toda abertura de pré-cadastro por isso. Decisão do usuário, 03/09.
+          */}
+          <Button
+            variant="outline"
+            disabled={conferir.isPending}
+            onClick={() => conferir.mutate()}
+            title={t("conferirNaRasterAjuda")}
+          >
+            {conferir.isPending ? <RefreshCw className="animate-spin" /> : <ShieldQuestion />}
+            {conferir.isPending ? t("conferindo") : t("conferirNaRaster")}
+          </Button>
+          {/*
             A PESQUISA SÓ APARECE DEPOIS DO ENVIO, e é o inverso do botão ao lado.
 
             Enviar é de graça e não some depois de feito; pedir pesquisa CUSTA e some assim que foi
@@ -517,11 +670,55 @@ export function ConferenciaClient({ id }: { id: string }): React.ReactElement {
                 : item.pesquisa.situacao}
             </Badge>
           ) : null}
+          {/*
+            A TRAVA CONTRA PAGAR DUAS VEZES.
+
+            A gerenciadora ACEITA pesquisa repetida e cobra as duas (usuário, 03/09). Quando a
+            conferência achou uma válida, o botão fica travado e diz QUAL — vínculo, situação e até
+            quando vale —, porque "desabilitado sem motivo" é o que faz alguém procurar outro
+            caminho até o mesmo gasto.
+
+            ── E EXISTE A SAÍDA, no `title` e num segundo clique ────────────────────────────────
+
+            Refazer uma pesquisa válida é raro, mas não é proibido ("muito raro a primeira opção",
+            usuário). Um bloqueio sem saída obrigaria a pedir pela tela da gerenciadora, que é
+            justamente a ida e volta que esta fatia veio eliminar — e lá ninguém vê o aviso.
+
+            ── SEM CONFERÊNCIA, O BOTÃO CONTINUA LIBERADO ──────────────────────────────────────
+
+            Não conferir não é prova de que não existe pesquisa. Travar por ausência de resposta
+            transformaria uma leitura opcional em obrigação silenciosa, e o primeiro dia em que a
+            Integra ficasse fora do ar seria um dia sem conseguir pesquisar ninguém.
+          */}
           {jaFoi && !item.pesquisa ? (
-            <Button variant="destructive" onClick={() => setPedindoPesquisa(true)}>
-              <Search />
-              {t("pedirPesquisa")}
-            </Button>
+            decisao.podePedir ? (
+              <Button variant="destructive" onClick={() => setPedindoPesquisa(true)}>
+                <Search />
+                {t("pedirPesquisa")}
+              </Button>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="max-w-md text-sm text-amber-700 dark:text-amber-400">
+                  {decisao.motivo === "ja_esta_em_andamento"
+                    ? t("pesquisaJaAndando", {
+                        vinculo: decisao.bloqueadaPor?.vinculo ?? "",
+                        codigo: decisao.bloqueadaPor?.codigo ?? 0,
+                      })
+                    : t("pesquisaJaExiste", {
+                        vinculo: decisao.bloqueadaPor?.vinculo ?? "",
+                        situacao: situacaoLegivel(decisao.bloqueadaPor?.situacao),
+                        validade: decisao.bloqueadaPor?.dataExpiracao
+                          ? t("conferenciaPesquisaValidade", {
+                              data: dataPuraBr(decisao.bloqueadaPor.dataExpiracao),
+                            })
+                          : "",
+                      })}
+                </span>
+                <Button variant="outline" size="sm" onClick={() => setPedindoPesquisa(true)}>
+                  {t("pesquisaPedirMesmoAssim")}
+                </Button>
+              </div>
+            )
           ) : null}
         </div>
       </div>

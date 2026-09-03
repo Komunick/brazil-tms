@@ -17,6 +17,7 @@ import { registerTurnoFecharAtrasados } from "./turno";
 import { registerPerfilLimparFotos } from "./perfil/limpar-fotos";
 import { registerCnhLer } from "./cnh";
 import { registerMotoristaCadastrar } from "./motorista";
+import { registerMotoristaConferirRaster } from "./motorista/conferir-raster";
 import { registerMotoristaPesquisar } from "./motorista/pesquisa";
 import { registerMotoristaResultado } from "./motorista/resultado";
 
@@ -102,5 +103,6 @@ export async function registerJobHandlers(boss: PgBoss): Promise<void> {
   // solicitação de pesquisa, que custa, continua sendo clique de uma pessoa e não passa por aqui.
   await registerMotoristaCadastrar(boss);
   await registerMotoristaPesquisar(boss);
+  await registerMotoristaConferirRaster(boss);
   await registerMotoristaResultado(boss);
 }

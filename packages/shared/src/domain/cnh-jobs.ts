@@ -54,6 +54,14 @@ export const MOTORISTA_JOBS = {
    * E NÃO EXISTE VARREDURA que a enfileire. O único caminho até esta fila é um botão.
    */
   motoristaPesquisar: "motorista.pesquisar",
+  /**
+   * PERGUNTA À GERENCIADORA o que ela já sabe deste CPF (2026-09-03).
+   *
+   * Só LEITURA: `getMotorista` e a pesquisa nos três vínculos. Não cria nada e não custa — o que
+   * ela evita é o `setMotorista` duplicado e, sobretudo, a pesquisa repetida, que a gerenciadora
+   * aceita e cobra sem reclamar.
+   */
+  motoristaConferirRaster: "motorista.conferir_raster",
   /** O resultado da pesquisa. LEITURA, de graça — por isso pode ser agendado (etapa 7). */
   motoristaResultado: "motorista.resultado",
 } as const;
@@ -90,8 +98,19 @@ export interface MotoristaPesquisarPayload {
   biometrica: boolean;
 }
 
+/**
+ * QUEM CONFERIR — e só isso.
+ *
+ * Não viaja escolha nenhuma aqui, ao contrário do pedido de pesquisa, que carrega três opções que
+ * mudam o preço. Não existe variante cara de uma pergunta: a conferência é leitura.
+ */
+export interface MotoristaConferirRasterPayload {
+  preRegistrationId: string;
+}
+
 export interface MotoristaJobPayloads {
   "motorista.cadastrar": MotoristaCadastrarPayload;
   "motorista.pesquisar": MotoristaPesquisarPayload;
+  "motorista.conferir_raster": MotoristaConferirRasterPayload;
   "motorista.resultado": Record<string, never>;
 }
