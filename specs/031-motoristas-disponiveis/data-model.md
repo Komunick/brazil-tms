@@ -36,8 +36,11 @@ manda dentro de `trips.customer_fields`.
    com o motorista resolvido: id do portal → drivers, e a atribuição nossa como complemento
 
 2. A ÚLTIMA DE CADA UM             (SQL)
-   por motorista, a de MAIOR data de conclusão planejada
-   desempate: identificador da viagem (estável)
+   por motorista, nesta ordem:
+     1º  viagem EM ANDAMENTO ganha de viagem terminada   ← sem isto, quem dirige vira "livre"
+     2º  a de MAIOR data de conclusão planejada
+     3º  no empate exato, a concluída ganha da cancelada  ← só uma delas significa carga entregue
+     4º  identificador da viagem (o desempate estável)
 
 3. CABE NA ABA?                    (função pura)
    a caminho ...... conclusão cai HOJE ou AMANHÃ (São Paulo)  → mostra o status corrente
@@ -85,9 +88,13 @@ procurando vocabulário de escrita.
 coluna, campo de tabela ou chave persistida em lugar nenhum. Se aparecerem, a cópia começou a
 divergir do portal — o erro que a 030 documentou.
 
-**I3 — A última viagem é a que chega por último.** Para todo motorista da lista, não existe outra
-viagem dele, na varredura, com data de conclusão maior. Vale mesmo para os 15 que têm mais de uma
-viagem aberta ao mesmo tempo.
+**I3 — Quem está em viagem nunca aparece como livre.** Para todo motorista da lista: se ele tem
+alguma viagem EM ANDAMENTO na varredura, a linha descreve a viagem em andamento de conclusão mais
+distante; se não tem nenhuma, descreve a terminada de conclusão mais distante.
+
+A primeira metade é a que importa, e é a que só a simulação revelou: com "a última é a que chega por
+último" pura, **dois motoristas `in_transit` apareciam como livres**, porque a última deles pela data
+era uma viagem CANCELADA que chegaria mais tarde.
 
 **I4 — Cancelada nunca é FINALIZADO.** Nenhuma linha com viagem cancelada recebe o rótulo de
 concluída. As duas contagens do cabeçalho também as separam.

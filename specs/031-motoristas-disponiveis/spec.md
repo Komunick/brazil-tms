@@ -126,7 +126,12 @@ motivo, e que a marca some quando o impedimento é resolvido.
 - **Motorista que recebe viagem enquanto alguém olha a lista.** Ele deixa a lista sozinho na leitura
   seguinte, sem ninguém remover — é o "sai quando entra em viagem" do pedido.
 - **Duas viagens do mesmo motorista chegando no mesmo instante.** O desempate precisa ser estável, para
-  a linha não alternar entre uma e outra a cada leitura.
+  a linha não alternar entre uma e outra a cada leitura. Havia um caso na produção com uma concluída e
+  uma cancelada na mesma hora: ganha a **concluída**, porque só ela significa carga entregue.
+- **A cancelada que chega depois da viagem em andamento.** Medido em 03/09: **dois motoristas**
+  apareceriam como livres estando `in_transit`, porque a última deles *pela data* era uma cancelada
+  com chegada mais tarde. Viagem em andamento tem de ganhar de viagem terminada (FR-004a) — foi
+  achado simulando contra a produção, não testando.
 
 ---
 
@@ -144,8 +149,12 @@ motivo, e que a marca some quando o impedimento é resolvido.
 - **FR-003**: Quando a viagem tem carreta, as **duas** placas MUST aparecer, identificadas
   separadamente. Quando não tem, o campo da carreta MUST ficar vazio e assinalado como vazio, nunca
   preenchido com a placa do cavalo.
-- **FR-004**: A viagem descrita na linha MUST ser a **última viagem do motorista pela data de
-  conclusão planejada** — não a mais recentemente criada, nem a única aberta.
+- **FR-004**: A viagem descrita na linha MUST ser a **última viagem do motorista**, escolhida nesta
+  ordem: **viagem em andamento ganha de viagem terminada**; entre as de mesma condição, a de
+  **conclusão planejada mais distante**. Não é a mais recentemente criada, nem "a única aberta".
+- **FR-004a**: Uma viagem **cancelada ou concluída MUST NOT** ser escolhida como a última quando o
+  motorista tem qualquer viagem **em andamento** na varredura — mesmo que a terminada chegue depois.
+  Sem isso, um motorista dirigindo aparece como livre.
 - **FR-005**: O desempate entre duas viagens com a mesma data de conclusão MUST ser estável, de modo
   que leituras repetidas descrevam sempre a mesma viagem.
 - **FR-006**: A lista MUST ser ordenável e MUST vir ordenada, por padrão, de forma que o disponível há

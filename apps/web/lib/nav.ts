@@ -100,6 +100,22 @@ export const NAV_ITEMS: readonly NavItem[] = [
     // É a Torre de Controle filtrada pelo que ESTA pessoa acompanha — o exemplo que o usuário deu.
     pai: "trips",
   },
+  /**
+   * Motoristas disponíveis (2026-09-03, fatia 031) — a planilha PROGRAMAÇÃO SHOPEE FROTA, viva.
+   *
+   * Filha da Torre de Controle, ao lado de Minha Programação, porque é a mesma pergunta vista de
+   * outro lado: aquela mostra viagens, esta mostra quem está livre para pegar a próxima.
+   *
+   * `view_all_trips` porque a lista é feita de viagens — quem não pode vê-las não teria o que ler.
+   */
+  {
+    key: "motoristasDisponiveis",
+    href: "/motoristas-disponiveis",
+    icon: "UserCheck",
+    permission: "view_all_trips",
+    grupo: "operacao",
+    pai: "trips",
+  },
   // 005 — Control Tower board (view_all_trips: all 7 internal roles).
   {
     key: "trips",

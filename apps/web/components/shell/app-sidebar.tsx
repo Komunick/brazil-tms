@@ -26,6 +26,7 @@ import {
   TowerControl,
   Truck,
   Upload,
+  UserCheck,
   Users,
   type LucideIcon,
   Activity,
@@ -40,6 +41,7 @@ const ICONS: Record<string, LucideIcon> = {
   LayoutDashboard,
   Star,
   TowerControl,
+  UserCheck,
   PackageCheck,
   Coins,
   Table2,
@@ -151,7 +153,6 @@ export function AppSidebar({
     </aside>
   );
 }
-
 
 /**
  * A LISTA DE ITENS, uma só para as duas casas (2026-08-28).
