@@ -63,6 +63,14 @@
     "homeWelcome": "Bem-vindo(a), {name}",
     "homeSubtitle": "Painel de execução de linehaul (control tower)."
   },
+  "Conexao": {
+    "servidorFora": "Sistema fora do ar",
+    "servidorForaDetalhe": "Sua internet está funcionando — quem não está respondendo é o servidor do TMS. Avise a equipe; não adianta reiniciar o roteador.",
+    "semInternet": "Sem internet",
+    "semInternetDetalhe": "Este computador está sem acesso à internet. O TMS pode estar no ar normalmente — confira a rede daqui antes de avisar a equipe.",
+    "lenta": "Conexão lenta",
+    "lentaDetalhe": "O TMS está respondendo, porém devagar. As telas devem carregar, só que com atraso."
+  },
   "Nav": {
     "administration": "Administração",
     "home": "Início",
