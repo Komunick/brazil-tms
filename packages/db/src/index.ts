@@ -39,7 +39,11 @@ export { listarFilaDePreCadastros, arquivarPreCadastro } from "./pre-cadastro/fi
 export type { ItemDaFila } from "./pre-cadastro/fila";
 export { chaveDoDocumentoDePreCadastro } from "./pre-cadastro/fila";
 export { documentoParaLeitura, gravarLeituraDaCnh } from "./pre-cadastro/fila";
-export { candidatosAoCadastro, marcarCadastroEnviado, gravarFalhaDoCadastro } from "./pre-cadastro/fila";
+export {
+  candidatosAoCadastro,
+  marcarCadastroEnviado,
+  gravarFalhaDoCadastro,
+} from "./pre-cadastro/fila";
 export {
   reivindicarPesquisa,
   devolverReivindicacaoDaPesquisa,
@@ -73,7 +77,12 @@ export {
   type CancellationOptionItem,
 } from "./trips/trip-cancellation";
 export { addTripNote } from "./trips/trip-events";
-export { lerProgramacaoDaViagem, salvarPrevisto, marcarStatus, marcarSm } from "./trips/trip-programacao";
+export {
+  lerProgramacaoDaViagem,
+  salvarPrevisto,
+  marcarStatus,
+  marcarSm,
+} from "./trips/trip-programacao";
 export type { ProgramacaoDaViagem } from "./trips/trip-programacao";
 export { listarPlacasDoPortal } from "./trips/portal-placas";
 export { marcasDaProgramacao } from "./users/marcas-da-programacao";
@@ -329,6 +338,11 @@ export {
   motoristasBloqueadosEntre,
   type MotoristaBloqueado,
 } from "./fleet/driver-block";
+export { motoristasDisponiveis } from "./fleet/motoristas-disponiveis";
+export type {
+  MotoristaDisponivel,
+  MotoristasDisponiveisResposta,
+} from "./fleet/motoristas-disponiveis";
 
 // A fila da aba GR — uma consulta, não uma tabela (027).
 export { filaDaGR, linhaDaFilaGR, type LinhaDaFilaGR } from "./trips/gr-fila";

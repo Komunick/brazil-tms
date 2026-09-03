@@ -68,6 +68,7 @@
     "home": "Início",
     "programacao": "Programação",
     "trips": "Torre de Controle",
+    "motoristasDisponiveis": "Motoristas disponíveis",
     "dispatch": "Expedição",
     "adminUsers": "Usuários e Perfis",
     "adminAudit": "Auditoria",
@@ -2506,6 +2507,36 @@
       "AC": "A consultar",
       "B": "Análise biométrica"
     }
+  },
+  "MotoristasDisponiveis": {
+    "title": "Motoristas disponíveis",
+    "subtitle": "Quem terminou a viagem e ainda não pegou outra, e quem chega hoje ou amanhã. A situação vem do portal — ninguém precisa digitar.",
+    "buscar": "Buscar por motorista, estação ou placa",
+    "disponiveis": "{n} disponíveis",
+    "aCaminho": "{n} a caminho",
+    "vazio": "Nenhum motorista disponível ou chegando hoje e amanhã.",
+    "vazioBusca": "Nenhum motorista encontrado para essa busca.",
+    "erro": "Não foi possível carregar a lista.",
+    "coluna": {
+      "nome": "Nome",
+      "origem": "Origem",
+      "destino": "Destino",
+      "inicio": "Data de início",
+      "conclusao": "Data de conclusão",
+      "cavalo": "Cavalo",
+      "carreta": "Carreta",
+      "situacao": "Status"
+    },
+    "situacao": {
+      "finalizado": "FINALIZADO"
+    },
+    "impedido": "Impedido",
+    "impedimento": {
+      "bloqueado": "Bloqueado por nós",
+      "inativo": "Cadastro não está ativo no portal do cliente",
+      "aviso": "A atribuição vai recusar este motorista."
+    },
+    "semCarreta": "sem carreta"
   },
   "GR": {
     "title": "GR — Pré-SM",
