@@ -13,11 +13,13 @@ import {
   type ImpedimentoDaAtribuicao,
   type ImpedimentoParaAtribuir,
   type PortalAction,
+  type PortalTrip,
   type Veredito,
 } from "@brazil-tms/shared";
 import { db } from "../client";
 import { drivers, portalCommands, tripEvents, trips } from "../../schema";
 import { writeAudit } from "../audit/write-audit";
+import { writePortalFacts } from "./portal-trip-facts";
 
 /**
  * A FILA DE ORDENS PARA O PORTAL (2026-08-21).
@@ -648,6 +650,68 @@ export async function encerrarOrdemDoPortal(entrada: {
     .returning();
   const ordem = linhas[0];
   if (!ordem) return { encerrada: false, confirmada: false };
+
+  /**
+   * O QUE O PORTAL ACABOU DE DEVOLVER VAI PARA A VIAGEM (2026-09-04, a pedido).
+   *
+   * ── O DEFEITO ────────────────────────────────────────────────────────────────────────────────
+   *
+   * O relato foi "depois de atribuir tenho que dar F5 para a atribuição mudar visualmente" — e o F5
+   * não era o que consertava. A releitura do portal era JULGADA (vira o veredito) e ARQUIVADA (vira
+   * `releituraDoPortal` na auditoria), e nunca aplicada à viagem. A linha continuava com o motorista
+   * velho até o robô do PLANO passar de novo, que é de quinze em quinze minutos.
+   *
+   * Quem recarregava e via a mudança tinha esbarrado no ciclo do robô. Quem recarregava antes dele
+   * recarregava para ver a mesma coisa — e concluía que o TMS "às vezes não atualiza".
+   *
+   * ── POR QUE ISTO NÃO É INVENTAR ESTADO ──────────────────────────────────────────────────────
+   *
+   * Não estamos escrevendo o que PEDIMOS: estamos escrevendo o que o portal RESPONDEU quando
+   * perguntamos "e aí, mudou?", segundos atrás. É exatamente o mesmo dado que o robô do plano traria
+   * — pelo mesmo mapeador, `writePortalFacts` — só que quinze minutos antes.
+   *
+   * ── SÓ QUANDO A CONFERÊNCIA CONFIRMOU ───────────────────────────────────────────────────────
+   *
+   * `confirmado === true`, e nada mais. Um veredito falso significa que o portal desmentiu, e
+   * gravar o que ele devolveu ali seria gravar o estado que prova a falha como se fosse sucesso.
+   * `null` é "não deu para conferir" — e o que não se conferiu não se escreve.
+   */
+  if (veredito?.confirmado === true) {
+    const cru = (entrada.confirmacao as { data?: Record<string, unknown> } | null)?.data;
+    const texto = (v: unknown): string | null =>
+      typeof v === "string" && v.trim() !== "" ? v.trim() : null;
+    const numero = (v: unknown): string | null =>
+      typeof v === "number" && Number.isFinite(v) && v > 0 ? String(v) : texto(v);
+
+    if (cru && typeof cru === "object") {
+      const [viagem] = await db
+        .select({ customerFields: trips.customerFields, preco: trips.customerPriceCents })
+        .from(trips)
+        .where(eq(trips.id, ordem.tripId))
+        .limit(1);
+
+      /*
+        SÓ OS TRÊS CAMPOS QUE A ATRIBUIÇÃO MUDA.
+
+        O detalhe traz dezenas, e o plano é quem tem a leitura completa. Escrever tudo daqui faria
+        esta chamada competir com o robô sobre campos que ela não veio tratar — e a que perdesse a
+        corrida sobrescreveria a outra sem ninguém entender por quê.
+
+        `writePortalFacts` ignora o que vier nulo, então mandar só estes três é seguro por
+        construção: ele preenche o que existe e não apaga o que não veio.
+      */
+      await writePortalFacts(
+        ordem.tripId,
+        {
+          driverLabel: texto(cru.driver_name),
+          driverExternalId: numero(cru.driver),
+          plateLabel: texto(cru.vehicle_number),
+        } as PortalTrip,
+        viagem?.customerFields,
+        viagem?.preco ?? null,
+      );
+    }
+  }
 
   /**
    * A PROVA, gravada fora da transação do clique.
