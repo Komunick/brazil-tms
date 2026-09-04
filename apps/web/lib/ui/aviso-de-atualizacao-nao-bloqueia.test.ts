@@ -65,6 +65,26 @@ describe("a faixa de atualização", () => {
   });
 
   /**
+   * A PRÉVIA NÃO PODE VIRAR UM SEGUNDO CAMINHO DA REGRA.
+   *
+   * `?aviso=teste` existe para conferir texto, cor e posição fora das 12h — uma faixa que só vive
+   * dez minutos por dia é impossível de revisar de outro jeito sem mexer no relógio da máquina.
+   *
+   * Mas ela só força a RENDERIZAÇÃO. Quem decide quando a faixa aparece de verdade continua sendo
+   * `avisoDaAtualizacao`, e só ela. Se a prévia começar a calcular horário por conta própria, passam
+   * a existir duas respostas para "estamos na janela?" — e a errada seria a que ninguém testa.
+   */
+  it("a prévia força a renderização, mas não recalcula a janela", () => {
+    expect(fonte, "a prévia sumiu — a faixa voltou a ser inconferível fora das 12h").toContain(
+      '"aviso"',
+    );
+    expect(fonte, "a prévia passou a montar o horário à mão").toContain("horarioDaJanela()");
+    expect(fonte, "apareceu uma segunda conta de janela na prévia").not.toMatch(
+      /setHours|setMinutes|new Date\([^)]+\)/,
+    );
+  });
+
+  /**
    * SEM BOTÃO DE FECHAR: dispensar por reflexo às 12:01 e esquecer às 12:09 é o modo de falha do
    * aviso, e o botão é o que o torna possível.
    */

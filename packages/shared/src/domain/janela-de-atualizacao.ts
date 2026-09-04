@@ -33,6 +33,17 @@ export const HORA_DA_ATUALIZACAO = { hora: 12, minuto: 10 } as const;
 /** Quantos minutos antes o aviso começa a aparecer. */
 export const MINUTOS_DE_AVISO = 10;
 
+/**
+ * `12:10` por extenso, montado a partir das constantes acima.
+ *
+ * Existe para o modo de prévia da tela, que precisa do horário sem estar dentro da janela. Escrever
+ * "12:10" à mão lá seria um segundo lugar para mudar no dia em que a janela mudar de hora.
+ */
+export function horarioDaJanela(): string {
+  const dois = (n: number): string => String(n).padStart(2, "0");
+  return `${dois(HORA_DA_ATUALIZACAO.hora)}:${dois(HORA_DA_ATUALIZACAO.minuto)}`;
+}
+
 export interface AvisoDaAtualizacao {
   /** Minutos inteiros que faltam, arredondados para cima. Entre 1 e `MINUTOS_DE_AVISO`. */
   minutosRestantes: number;

@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { TriangleAlert } from "lucide-react";
-import { avisoDaAtualizacao, type AvisoDaAtualizacao } from "@brazil-tms/shared";
+import {
+  avisoDaAtualizacao,
+  horarioDaJanela,
+  MINUTOS_DE_AVISO,
+  type AvisoDaAtualizacao,
+} from "@brazil-tms/shared";
 
 /**
  * A FAIXA DA JANELA DE ATUALIZAÇÃO (03/09, a pedido).
@@ -41,7 +46,25 @@ export function AvisoDeAtualizacao() {
       até um minuto atrasada para quem abriu a tela às 11:59:55, e o último minuto é o que importa.
       Dez segundos custam nada: é uma comparação de datas, sem rede e sem banco.
     */
-    const conferir = (): void => setAviso(avisoDaAtualizacao(new Date()));
+    /*
+      O MODO DE PRÉVIA — `?aviso=teste`.
+
+      Uma faixa que só existe dez minutos por dia é uma faixa que ninguém consegue conferir quando
+      precisa: para vê-la seria preciso estar na frente da tela às 12h, ou mexer no relógio da
+      máquina. Isto força a renderização a qualquer hora, sem tocar na regra.
+
+      Ele NÃO falseia a janela: `avisoDaAtualizacao` continua sendo a única a decidir quando a faixa
+      aparece de verdade. Isto aqui só pinta a mesma faixa com o horário certo e o número cheio de
+      minutos, para conferir texto, cor e posição.
+    */
+    const previa = new URLSearchParams(window.location.search).get("aviso") === "teste";
+
+    const conferir = (): void =>
+      setAviso(
+        previa
+          ? { minutosRestantes: MINUTOS_DE_AVISO, horario: horarioDaJanela() }
+          : avisoDaAtualizacao(new Date()),
+      );
     conferir();
     const t = setInterval(conferir, 10_000);
     return () => clearInterval(t);
