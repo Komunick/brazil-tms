@@ -203,6 +203,35 @@ const DEPOIS_DA_ESTACAO = new Set([
  * A ordem aqui é a da TABELA, de propósito: o painel lê como a linha se lê, e quem procura uma
  * coluna a encontra no lugar em que ela aparece.
  */
+/**
+ * QUANTOS DIAS PARA TRÁS O QUADRO ALCANÇA (2026-09-04, a pedido: "estenda por mais 3 dias").
+ *
+ * Eram dois, e dois não bastam: uma viagem longa sai hoje e chega depois de amanhã, e nesse meio
+ * tempo ela é justamente a que alguém está acompanhando. Ao passar de dois dias ela sumia da tela
+ * ainda em movimento.
+ *
+ * Medido no dia do pedido: **seis viagens ainda rodando** estavam fora — cinco com coleta há três
+ * dias (três em trânsito, duas no destino) e uma há quatro, em trânsito. Não é muito, e é exatamente
+ * a lista que alguém procura quando pergunta "cadê o motorista tal?".
+ *
+ * Cinco, e não mais: o passado cresce sem limite e o quadro é de trabalho, não de histórico. O que
+ * já chegou tem a sua tela; aqui interessa o que ainda está na estrada.
+ */
+const DIAS_ATRAS = 5;
+
+/**
+ * QUANTOS DIAS PARA A FRENTE — sete, como sempre foi (decisão do usuário, 04/09).
+ *
+ * Chegou a ser escolhível (7/15/30) e voltou a ser fixo a pedido. Fica registrado o que a escolha
+ * escondia, porque o número não some junto com o controle: no dia da decisão havia **260 viagens**
+ * além do sétimo dia, e **as 260 esperando atribuição** — a fila inteira do que ainda não foi
+ * escalado, com coleta em 12, 13 e 14/09.
+ *
+ * O que sobrevive daquela investigação é o RÓTULO: a tela diz de quando até quando ela vai. Foi a
+ * borda invisível que fez alguém conferir dez LHs à mão e concluir que o TMS não estava recebendo.
+ */
+const DIAS_ADIANTE = 7;
+
 const COLUNAS_OCULTAVEIS = [
   "statusOperacional",
   "sm",
@@ -293,6 +322,23 @@ export function MinhaProgramacaoClient({
   const [colunasEscondidas, setColunasEscondidas] = useState<Set<string>>(new Set());
 
   /**
+   * O ÚLTIMO DIA QUE O QUADRO ALCANÇA, por extenso.
+   *
+   * Existe para ser MOSTRADO. Uma janela que corta em silêncio faz quem procura concluir que o dado
+   * não existe — foi o que aconteceu em 04/09, com dez LHs conferidas à mão que estavam no banco o
+   * tempo todo. A borda continua existindo; o que muda é que ela passa a ser visível.
+   */
+  const janela = useMemo(() => {
+    const dia = (deslocamento: number): string => {
+      const d = new Date(`${hoje}T12:00:00`);
+      d.setDate(d.getDate() + deslocamento);
+      return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    };
+    // AS DUAS BORDAS, e não só a da frente: a de trás foi a que escondeu seis viagens ainda rodando.
+    return { inicio: dia(-DIAS_ATRAS), fim: dia(DIAS_ADIANTE) };
+  }, [hoje]);
+
+  /**
    * A COLUNA APARECE? — a mesma pergunta para o cabeçalho e para a célula.
    *
    * UMA função, e não duas condições parecidas: se as duas divergissem, a tabela sairia com uma
@@ -359,7 +405,14 @@ export function MinhaProgramacaoClient({
     lembrar({ dias: [...novo].map((d) => deslocamentoDoDia(d, hoje)) });
   };
 
-  const consulta = useProgramacao(frentes, { atras: 2, adiante: 7 });
+  /*
+    A JANELA VAI ATÉ ONDE A PESSOA ESCOLHEU (2026-09-04, a pedido).
+
+    Era fixa em sete dias. Em 04/09 a operação conferiu DEZ LHs à mão e concluiu que o TMS não estava
+    recebendo — as dez estavam no banco, com coleta oito e nove dias à frente. A tela não ia até lá, e
+    não dizia que não ia.
+  */
+  const consulta = useProgramacao(frentes, { atras: DIAS_ATRAS, adiante: DIAS_ADIANTE });
 
   const alternarFrente = (valor: string) => {
     const proximas = proximasFrentes(frentes, valor);
@@ -542,8 +595,19 @@ export function MinhaProgramacaoClient({
               : t("dias")}
           </Button>
 
-          <span className="ml-auto text-xs text-muted-foreground">
-            {t("totalLinhas", { n: visiveis.length })}
+          {/*
+            O TOTAL E O FIM DA JANELA, LADO A LADO — e o segundo é o que faltava (2026-09-04).
+
+            "142 viagens" sem dizer ATÉ QUANDO é a metade da frase que importa. Em 04/09 a operação
+            conferiu dez LHs à mão e concluiu que o TMS não recebia; as dez tinham coleta oito dias à
+            frente, fora de uma janela que a tela nunca mencionou.
+
+            Aqui, e não só dentro do painel de filtros: o painel abre fechado, e um aviso que só
+            aparece para quem procura não avisa ninguém.
+          */}
+          <span className="text-muted-foreground ml-auto text-xs">
+            {t("totalLinhas", { n: visiveis.length })} ·{" "}
+            {t("deAte", { de: janela.inicio, ate: janela.fim })}
           </span>
 
           {painelDeDias ? (
@@ -634,6 +698,24 @@ export function MinhaProgramacaoClient({
                     {t("verTodosOsStatus")}
                   </Button>
                 ) : null}
+              </div>
+
+              {/*
+                ATÉ ONDE O QUADRO VAI — a tela passou a dizer (2026-09-04).
+
+                A janela sempre foi fixa e a tela nunca contou isso. Em 04/09 a operação conferiu DEZ
+                LHs à mão, uma a uma, e concluiu que o TMS não estava recebendo. As dez estavam no
+                banco, carimbadas pelo robô minutos antes — a coleta era oito e nove dias à frente,
+                fora de uma borda que ninguém via.
+
+                Esticar a janela chegou a ser uma escolha na tela, e o usuário preferiu voltar ao
+                fixo. A borda continua existindo; o que não pode é ela ser invisível — e é por isso
+                que esta frase fica, mesmo sem o controle ao lado.
+              */}
+              <div className="space-y-2 border-t pt-2">
+                <p className="text-muted-foreground text-xs">
+                  {t("ateQuandoVai", { de: janela.inicio, ate: janela.fim })}
+                </p>
               </div>
 
               {/*

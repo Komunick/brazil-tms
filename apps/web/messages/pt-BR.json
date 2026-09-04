@@ -613,6 +613,8 @@
       "periodPlaceholder": "AAAA-MM",
       "value": "Valor",
       "missingProof": "Comprovação pendente",
+      "emptyPorEscopo": "Nenhuma viagem ATIVA neste recorte. Existem {n} já concluídas ou canceladas.",
+      "verTodasDoPeriodo": "Ver todas do período",
       "empty": "Nenhuma viagem encontrada."
     },
     "export": {
@@ -2179,6 +2181,8 @@
     "fecharAtribuicao": "Fechar",
     "abrirTelaCompleta": "Abrir a viagem",
     "dias": "Filtros",
+    "deAte": "de {de} até {ate}",
+    "ateQuandoVai": "O quadro vai de {de} até {ate}, pela data da coleta. O que estiver fora não aparece aqui.",
     "quaisColunas": "Quais colunas ficam na tela",
     "verTodasAsColunas": "Ver todas as colunas",
     "quaisDias": "Quais dias você quer ver?",
