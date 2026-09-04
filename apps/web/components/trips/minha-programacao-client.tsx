@@ -307,7 +307,7 @@ export function MinhaProgramacaoClient({
   const [diasEscondidos, setDiasEscondidos] = useState<Set<string>>(new Set());
   const [statusEscondidos, setStatusEscondidos] = useState<Set<string>>(new Set());
   const [colunasEscondidas, setColunasEscondidas] = useState<Set<string>>(new Set());
-  const [diasAdiante, setDiasAdiante] = useState(7);
+  const [diasAdiante, setDiasAdiante] = useState(15);
 
   /**
    * O ÚLTIMO DIA QUE O QUADRO ALCANÇA, por extenso.
@@ -356,7 +356,7 @@ export function MinhaProgramacaoClient({
     setFrentes(prefs.programacao.frentes);
     setStatusEscondidos(new Set(prefs.programacao.status));
     setColunasEscondidas(new Set(prefs.programacao.colunas ?? []));
-    setDiasAdiante(prefs.programacao.diasAdiante ?? 7);
+    setDiasAdiante(prefs.programacao.diasAdiante ?? 15);
     /*
       Os dias voltam do DESLOCAMENTO guardado — ver `programacaoPrefsSchema`. `-1` guardado ontem
       continua querendo dizer "ontem" hoje, que é o que faz o filtro sobreviver à virada do dia.

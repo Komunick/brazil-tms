@@ -108,8 +108,17 @@ export const programacaoPrefsSchema = z.object({
    *
    * O teto de 30 é o mesmo que a rota já aceitava: aqui nada de novo é permitido, só passa a ser
    * alcançável sem editar a URL à mão.
+   *
+   * ── E O PADRÃO É QUINZE, NÃO SETE (decisão do usuário, 04/09) ─────────────────────────────
+   *
+   * Medido no dia: **260 viagens** estavam além dos sete dias, e **as 260 esperando atribuição** —
+   * não era uma amostra qualquer, era a fila inteira de trabalho que ainda não tinha sido feita.
+   *
+   * Quinze cobre com folga porque o horizonte do PORTAL é o limite de verdade: naquele dia ele
+   * publicava até 14/09, dez dias à frente, e parava. Não existe programação de um mês para
+   * carregar — o teto não é a nossa escolha, é o quanto o cliente publica.
    */
-  diasAdiante: z.number().int().min(1).max(30).optional().default(7),
+  diasAdiante: z.number().int().min(1).max(30).optional().default(15),
 });
 
 export type ProgramacaoPrefs = z.infer<typeof programacaoPrefsSchema>;
@@ -132,8 +141,8 @@ export const PADRAO_DA_PROGRAMACAO: ProgramacaoPrefs = {
   mostrarOcultas: false,
   // Nenhuma escondida: a linha inteira à vista é o que faz sentido para quem chega sem escolha.
   colunas: [],
-  // Uma semana: o que a tela sempre mostrou, e continua sendo o padrão de quem não escolheu.
-  diasAdiante: 7,
+  // Quinze dias: cobre tudo o que o portal publica hoje, com folga. Ver o porquê no schema.
+  diasAdiante: 15,
 };
 
 export const dashboardPrefsSchema = z.object({
