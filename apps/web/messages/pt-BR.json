@@ -2179,6 +2179,8 @@
     "fecharAtribuicao": "Fechar",
     "abrirTelaCompleta": "Abrir a viagem",
     "dias": "Filtros",
+    "quaisColunas": "Quais colunas ficam na tela",
+    "verTodasAsColunas": "Ver todas as colunas",
     "quaisDias": "Quais dias você quer ver?",
     "verTodosOsDias": "Ver todos os dias",
     "naoDaParaEditar": "Esta viagem já saiu — a atribuição não pode mais ser alterada.",
