@@ -47,6 +47,16 @@ ENTREGA="${ENTREGA:-/home/ubuntu/robo-portal/entrega}"
 # As chaves do bloco CONFIG que pertencem À MÁQUINA e nunca ao repositório.
 CHAVES=(tms token)
 
+# Chaves OPCIONAIS: preservadas se existirem, ignoradas em silêncio se não (2026-09-04).
+#
+# São os tokens do heartbeat para o Uptime Kuma. Elas têm exatamente o mesmo problema de `token` —
+# segredo que mora na máquina — e por isso a mesma solução.
+#
+# Mas NÃO podem entrar em `CHAVES`: lá, chave ausente ABORTA o script. E abortaria em toda VM que
+# ainda não tem monitoramento instalado, transformando uma adoção gradual em parada geral. Aqui,
+# robô sem heartbeat continua publicando normalmente — ele só não é monitorado ainda.
+CHAVES_OPCIONAIS=(hb_base hb_vivo hb_ciclo)
+
 listar() {
   echo "Robôs disponíveis:"
   find "$REPO/infra" -name "*.user.js" -printf "  %f\n" 2>/dev/null | sed 's/\.user\.js//'
@@ -81,9 +91,19 @@ for k in "${CHAVES[@]}"; do
   ATUAL["$k"]="$v"
 done
 
+# As opcionais NÃO abortam: só entram na lista se tiverem valor de verdade.
+PRESERVAR=("${CHAVES[@]}")
+for k in "${CHAVES_OPCIONAIS[@]}"; do
+  v="$(sed -nE "s|^ *$k: \"([^\"]*)\".*|\1|p" "$DESTINO" | head -1)"
+  if [ -n "$v" ] && [[ "$v" != COLE_* ]]; then
+    ATUAL["$k"]="$v"
+    PRESERVAR+=("$k")
+  fi
+done
+
 # ── 3. Copia o código novo e repõe a configuração ─────────────────────────────────────────────
 cp "$ORIGEM" "$DESTINO"
-for k in "${CHAVES[@]}"; do
+for k in "${PRESERVAR[@]}"; do
   # O valor vai por variável de ambiente e não interpolado na expressão: token com `&` ou `|`
   # dentro viraria referência de substituição do sed e sairia corrompido, sem erro nenhum.
   V="${ATUAL[$k]}" K="$k" perl -pi -e 's|^( *\Q$ENV{K}\E: ")[^"]*(".*)|$1$ENV{V}$2|' "$DESTINO"
@@ -93,7 +113,7 @@ done
 VERSAO_NOVA="$(sed -nE 's|^// *@version *(.*)$|\1|p' "$DESTINO" | head -1)"
 echo "  arquivo : $DESTINO"
 echo "  versão  : $VERSAO_ANTIGA  ->  $VERSAO_NOVA"
-for k in "${CHAVES[@]}"; do
+for k in "${PRESERVAR[@]}"; do
   v="$(sed -nE "s|^ *$k: \"([^\"]*)\".*|\1|p" "$DESTINO" | head -1)"
   if [ "$v" != "${ATUAL[$k]}" ]; then
     echo "ERRO: '$k' não foi preservado. Restaurando o backup."
@@ -102,6 +122,17 @@ for k in "${CHAVES[@]}"; do
   fi
   echo "  $k: ${v:0:6}… (${#v} caracteres) — preservado"
 done
+
+# Aviso, não erro: robô sem heartbeat publica normalmente, só não é monitorado.
+FALTANDO_HB=()
+for k in "${CHAVES_OPCIONAIS[@]}"; do
+  [[ " ${PRESERVAR[*]} " == *" $k "* ]] || FALTANDO_HB+=("$k")
+done
+if [ ${#FALTANDO_HB[@]} -gt 0 ] && [ ${#FALTANDO_HB[@]} -lt ${#CHAVES_OPCIONAIS[@]} ]; then
+  echo ""
+  echo "AVISO: heartbeat PARCIALMENTE configurado. Faltam: ${FALTANDO_HB[*]}"
+  echo "       O robô roda, mas o monitoramento dele fica incompleto."
+fi
 
 if [ "$VERSAO_ANTIGA" = "$VERSAO_NOVA" ]; then
   echo ""
