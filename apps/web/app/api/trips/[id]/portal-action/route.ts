@@ -84,6 +84,8 @@ export async function POST(
       requestedBy: ctx.userId,
       // Só a auditoria a recebe; o portal não tem este campo. Ver `portal-commands.ts`.
       origem: body.origem ?? null,
+      // Exigido só na TROCA, e quem recusa é o banco — ver o guarda em portal-commands.
+      motivoDaTroca: body.motivoDaTroca ?? null,
     });
 
     /**
@@ -141,6 +143,11 @@ function traduzir(error: unknown): unknown {
       );
     case "motivo_invalido":
       return new Conflict("INVALID_REASON", "Escolha um dos motivos que o portal aceita.");
+    case "motivo_da_troca_obrigatorio":
+      return new Conflict(
+        "REASSIGN_REASON_REQUIRED",
+        "Esta viagem já tem motorista. Diga por que está trocando — o motivo fica na linha do tempo.",
+      );
     case "sem_motorista":
       return new Conflict("NO_DRIVER", "Escolha o motorista.");
     case "sem_placa":

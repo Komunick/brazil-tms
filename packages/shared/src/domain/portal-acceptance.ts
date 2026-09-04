@@ -67,7 +67,15 @@ export type ImpedimentoDaAcao =
   /** Nasceu de planilha ou de criação manual: não existe do lado do portal. */
   | "sem_id_do_portal"
   /** Já tem uma ordem em voo. Duas ordens viram dois POSTs, e aceitar duas vezes não se desfaz. */
-  | "ordem_em_andamento";
+  | "ordem_em_andamento"
+  /**
+   * Está trocando quem já estava escalado e não disse por quê (2026-09-04, a pedido).
+   *
+   * Não é impedimento do PORTAL como os três de cima — é regra nossa. Entra no mesmo vocabulário
+   * porque sai pelo mesmo caminho e a tela o traduz no mesmo lugar; um segundo vocabulário para
+   * recusar a mesma ação daria duas formas de dizer não.
+   */
+  | "motivo_da_troca_obrigatorio";
 
 /**
  * Por que esta viagem NÃO pode ser aceita/rejeitada daqui — ou `null` quando pode.

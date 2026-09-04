@@ -5,8 +5,10 @@ import { useTranslations } from "next-intl";
 import { Truck } from "lucide-react";
 import {
   alertaDoMotorista,
+  ehTrocaDeAtribuicao,
   formatDate,
   impedimentoDaAtribuicao,
+  motivoDaTrocaServe,
   normalizarPlaca,
   placasDoPortal,
   placasEsperadas,
@@ -15,6 +17,7 @@ import {
 import type { MotoristaDoPortal } from "@brazil-tms/db";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -137,6 +140,25 @@ export function PortalAssignDialog({
 
   const quantas = placasEsperadas(vehicleType);
   const [driverId, setDriverId] = useState(driverAtual ?? "");
+  /*
+    O MOTIVO DA TROCA (2026-09-04, a pedido).
+
+    Só existe quando a viagem JÁ tem alguém escalado e se está pondo OUTRO. A primeira atribuição do
+    dia não pede nada — são centenas por dia, e um campo obrigatório que atrapalha o trabalho normal
+    vira "asdf" digitado por reflexo.
+
+    Reenviar o MESMO motorista também não pede: acontece ao corrigir a placa ou ao repetir uma ordem
+    que falhou no portal, e cobrar motivo ali puniria justamente quem está consertando.
+
+    A tela pede; quem RECUSA é o banco, dentro da transação que trava a viagem. Tela não é garantia:
+    quem tem a página aberta desde antes desta regra continuaria mandando sem nada.
+  */
+  const [motivoDaTroca, setMotivoDaTroca] = useState("");
+  // A MESMA função que o banco usa. Duas versões desta regra produziriam o pior erro possível: a
+  // tela não mostra o campo, a pessoa aperta, e o servidor recusa pedindo o que ela não tem onde
+  // escrever. Ver `troca-de-atribuicao.ts`.
+  const ehTroca = ehTrocaDeAtribuicao({ motoristaAtual: driverAtual, motoristaNovo: driverId });
+  const faltaMotivo = ehTroca && !motivoDaTrocaServe(motivoDaTroca);
   const [secondDriverId, setSecondDriverId] = useState("");
   /**
    * AS PLACAS DO PORTAL VÊM NUMA STRING SÓ, separadas por vírgula (2026-08-22).
@@ -575,9 +597,7 @@ export function PortalAssignDialog({
                 <Label htmlFor={`placa-${tripId}-${i}`}>
                   {placas.length > 1 ? t("plateN", { n: String(i + 1) }) : t("plate")}
                   {i >= quantas ? (
-                    <span className="ml-1.5 font-normal text-muted-foreground">
-                      {t("soNoTms")}
-                    </span>
+                    <span className="ml-1.5 font-normal text-muted-foreground">{t("soNoTms")}</span>
                   ) : null}
                 </Label>
                 <div className="flex gap-2">
@@ -697,16 +717,38 @@ export function PortalAssignDialog({
           />
         </div>
 
+        {ehTroca ? (
+          <div className="space-y-1 rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/40">
+            <label
+              htmlFor="motivo-da-troca"
+              className="text-sm font-medium text-amber-900 dark:text-amber-200"
+            >
+              {t("motivoDaTrocaRotulo")}
+            </label>
+            <Textarea
+              id="motivo-da-troca"
+              value={motivoDaTroca}
+              onChange={(e) => setMotivoDaTroca(e.target.value)}
+              placeholder={t("motivoDaTrocaExemplo")}
+              rows={2}
+              maxLength={500}
+            />
+            <p className="text-xs text-amber-800 dark:text-amber-300">{t("motivoDaTrocaAjuda")}</p>
+          </div>
+        ) : null}
+
         <DialogFooter>
           <Button variant="ghost" disabled={emVoo} onClick={() => onOpenChange(false)}>
             {t("cancel")}
           </Button>
           <Button
-            disabled={emVoo || impedimento !== null}
+            disabled={emVoo || impedimento !== null || faltaMotivo}
             onClick={() =>
               acao.mutate(
                 {
                   action: "assign",
+                  // Vai só quando é troca — mandar sempre encheria a auditoria de campo vazio.
+                  motivoDaTroca: ehTroca ? motivoDaTroca.trim() : null,
                   driverId: Number(driverId),
                   secondDriverId: secondDriverId ? Number(secondDriverId) : null,
                   plates: preenchidas,
@@ -847,7 +889,15 @@ function ConfirmadoNoPortal() {
     <div className="relative flex h-10 w-24 items-center justify-center" aria-hidden>
       <Truck className="absolute h-6 w-6 text-primary animate-caminhao-sai" />
       <svg viewBox="0 0 52 52" className="h-10 w-10 animate-selo-entra">
-        <circle cx="26" cy="26" r="24" fill="none" stroke="currentColor" strokeWidth="3" className="text-success/30" />
+        <circle
+          cx="26"
+          cy="26"
+          r="24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="3"
+          className="text-success/30"
+        />
         <path
           d="M15 27 l8 8 l15 -16"
           fill="none"
