@@ -80,10 +80,25 @@ cp -p "$DESTINO" "$BACKUP"
 #
 # Antes de copiar qualquer coisa: se algum valor faltar, é melhor abortar com o robô velho rodando
 # do que publicar um com placeholder. Robô velho funciona; robô sem token não.
+# Alguns robôs guardam o token no armazenamento do Tampermonkey (`GM_setValue`) e
+# mantêm o PLACEHOLDER no arquivo de propósito — `portal-drivers` e `etorre-feed`
+# fazem isso, e dá para reconhecê-los pelo `TOKEN_DE_EXEMPLO` que eles definem.
+#
+# Para eles, placeholder não é sintoma de configuração destruída: é o estado normal.
+# Abortar ali impedia publicar esses dois robôs por completo.
+GUARDA_EM_GM=0
+grep -q "TOKEN_DE_EXEMPLO" "$DESTINO" && GUARDA_EM_GM=1
+
 declare -A ATUAL
 for k in "${CHAVES[@]}"; do
   v="$(sed -nE "s|^ *$k: \"([^\"]*)\".*|\1|p" "$DESTINO" | head -1)"
   if [ -z "$v" ] || [[ "$v" == COLE_* ]]; then
+    if [ "$k" = "token" ] && [ "$GUARDA_EM_GM" -eq 1 ]; then
+      echo "  token: placeholder — este robô guarda o token no Tampermonkey (GM_setValue)."
+      continue
+    fi
+    # O aborto é um alarme, não frescura: placeholder aqui costuma significar que
+    # uma publicação anterior destruiu o valor. Melhor o robô velho rodando.
     echo "ERRO: '$k' está vazio ou é placeholder no arquivo em uso ($DESTINO)."
     echo "      Nada foi alterado. Corrija à mão antes de usar este script."
     exit 1
@@ -92,7 +107,7 @@ for k in "${CHAVES[@]}"; do
 done
 
 # As opcionais NÃO abortam: só entram na lista se tiverem valor de verdade.
-PRESERVAR=("${CHAVES[@]}")
+PRESERVAR=("${!ATUAL[@]}")
 for k in "${CHAVES_OPCIONAIS[@]}"; do
   v="$(sed -nE "s|^ *$k: \"([^\"]*)\".*|\1|p" "$DESTINO" | head -1)"
   if [ -n "$v" ] && [[ "$v" != COLE_* ]]; then
