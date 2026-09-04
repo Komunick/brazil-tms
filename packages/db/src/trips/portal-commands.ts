@@ -514,11 +514,37 @@ export async function encerrarOrdemDoPortal(entrada: {
         action: portalCommands.action,
         portalTripId: portalCommands.portalTripId,
         plates: portalCommands.plates,
+        driverId: portalCommands.driverId,
+        secondDriverId: portalCommands.secondDriverId,
       })
       .from(portalCommands)
       .where(eq(portalCommands.id, entrada.id))
       .limit(1)
   )[0];
+
+  /**
+   * OS NOMES DE QUEM FOI ESCALADO — para a confirmação poder comparar (2026-09-04).
+   *
+   * A ordem guarda o ID do motorista NO PORTAL; a releitura do portal devolve o NOME
+   * (`driver_name`) e nenhum id. Sem esta tradução não há como perguntar "é a mesma pessoa?", e era
+   * justamente essa pergunta que não estava sendo feita — a confirmação olhava só a placa, que é a
+   * mesma independentemente de quem dirige.
+   *
+   * Quem não estiver no nosso cadastro simplesmente não entra na lista, e aí a conferência do
+   * motorista não acontece para aquela ordem. Falta de dado NOSSO não pode reprovar o portal.
+   */
+  const idsEscalados = [ordemPrevia?.driverId, ordemPrevia?.secondDriverId]
+    .filter((d): d is number => d != null)
+    .map(String);
+  const nomesEscalados =
+    idsEscalados.length === 0
+      ? []
+      : (
+          await db
+            .select({ nome: drivers.name })
+            .from(drivers)
+            .where(inArray(drivers.portalDriverId, idsEscalados))
+        ).map((d) => d.nome);
 
   /**
    * A SEGUNDA PERGUNTA: "e aí, mudou?" (2026-08-28, a pedido).
@@ -591,6 +617,7 @@ export async function encerrarOrdemDoPortal(entrada: {
         .split(",")
         .map((p) => p.trim())
         .filter(Boolean),
+      motoristasEnviados: nomesEscalados,
       portal: alvo,
     });
   })();

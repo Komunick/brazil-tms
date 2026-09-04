@@ -127,11 +127,9 @@ export function OfertaDeSpot({
     const novas = novasOfertas(memoria.current, data.ofertas);
     for (const nova of novas) {
       tocarAviso();
-      avisarNoSistema(
-        t("systemTitle"),
-        [nova.route, nova.price].filter(Boolean).join(" · "),
-        { somenteSeEscondido: ensaiada.current !== nova.id },
-      );
+      avisarNoSistema(t("systemTitle"), [nova.route, nova.price].filter(Boolean).join(" · "), {
+        somenteSeEscondido: ensaiada.current !== nova.id,
+      });
     }
     /*
       UMA OFERTA NOVA REABRE O CONJUNTO (2026-09-01). Recolher é "me dá a tela por um minuto", não
@@ -176,30 +174,27 @@ export function OfertaDeSpot({
    *
    * A oferta de ensaio não vai ao servidor: ela nunca existiu lá.
    */
-  const ignorar = useCallback(
-    async (oferta: SpotOfferView, motivo: string | null) => {
-      setSaindo((s) => new Set(s).add(oferta.id));
-      if (oferta.id.startsWith("ensaio-")) {
-        setEnsaios((atuais) => atuais.filter((o) => o.id !== oferta.id));
-        return;
-      }
-      try {
-        await fetch(`/api/spot-offers/${oferta.id}/dispensar`, {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ motivo }),
-        });
-      } catch {
-        // Falhou: o cartão volta, porque o servidor não gravou e a leitura seguinte o trará.
-        setSaindo((s) => {
-          const novo = new Set(s);
-          novo.delete(oferta.id);
-          return novo;
-        });
-      }
-    },
-    [],
-  );
+  const ignorar = useCallback(async (oferta: SpotOfferView, motivo: string | null) => {
+    setSaindo((s) => new Set(s).add(oferta.id));
+    if (oferta.id.startsWith("ensaio-")) {
+      setEnsaios((atuais) => atuais.filter((o) => o.id !== oferta.id));
+      return;
+    }
+    try {
+      await fetch(`/api/spot-offers/${oferta.id}/dispensar`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ motivo }),
+      });
+    } catch {
+      // Falhou: o cartão volta, porque o servidor não gravou e a leitura seguinte o trará.
+      setSaindo((s) => {
+        const novo = new Set(s);
+        novo.delete(oferta.id);
+        return novo;
+      });
+    }
+  }, []);
 
   /**
    * ACEITAR — a MESMA ordem que a tela de viagem grava, pelo MESMO caminho.
@@ -339,7 +334,6 @@ export function OfertaDeSpot({
     );
   }
 
-
   /*
     OS CARTÕES FICAM GRANDES, sempre (2026-09-01, correção a pedido).
 
@@ -378,10 +372,10 @@ export function OfertaDeSpot({
         o Recolher na outra, com o cartão no meio — o usuário descreveu como "um card de recolher em
         um lado e no outro", e a leitura estava certa: os dois pareciam soltos.
 
-        560px é a mesma largura do cartão, e `mx-auto` a põe sobre ele. Com mais de um cartão a
+        760px é a mesma largura do cartão, e `mx-auto` a põe sobre ele. Com mais de um cartão a
         esteira transborda e a barra continua centrada, que é onde a atenção está.
       */}
-      <div className="pointer-events-auto mx-auto mb-2 flex w-[560px] max-w-[calc(100%-2rem)] items-center justify-between gap-3">
+      <div className="pointer-events-auto mx-auto mb-2 flex w-[760px] max-w-[calc(100%-2rem)] items-center justify-between gap-3">
         <span
           className="flex items-center gap-2 rounded-full py-1 pl-1.5 pr-3 text-xs font-extrabold text-white"
           style={{ background: LARANJA }}
@@ -433,11 +427,11 @@ export function OfertaDeSpot({
         {/*
           560 px por cartão — o inteiro, e não o encolhido.
 
-          Numa tela de 1920 cabem três; numa de 1366, dois. É de propósito: quem decide um leilão lê
+          Numa tela de 1920 cabem dois; numa de 1366, um e um pedaço do seguinte. É de propósito: quem decide um leilão lê
           UMA oferta de cada vez, e as outras não somem — a esteira anda até elas.
         */}
         {naTela.map((oferta) => (
-          <div key={oferta.id} className="w-[560px] shrink-0">
+          <div key={oferta.id} className="w-[760px] max-w-[calc(100vw-2rem)] shrink-0">
             <CartaoDaOferta
               oferta={oferta}
               podeDecidir={podeDecidir}
