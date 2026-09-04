@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Check, X } from "lucide-react";
 import { flexRender, getCoreRowModel, useReactTable, type ColumnDef } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
 import {
+  ACTIVE_TRIP_STATUSES,
   formatDateTime,
   VEHICLE_TYPE_VALUES,
   type TripBoardQuery,
@@ -42,6 +43,9 @@ export const BOARD_ANCHOR = "viagens";
  * later-slice dimensions (assignment → 006, SLA risk → 007, documents/billing detail → 008) are not
  * rendered as filterable/sortable columns here.
  */
+/** O mesmo conjunto que o servidor usa no escopo "Ativas" — nunca uma segunda lista. */
+const ATIVAS = new Set<string>(ACTIVE_TRIP_STATUSES);
+
 export function ControlTowerTable({
   filterOptions: initialFilterOptions,
 }: {
@@ -86,6 +90,23 @@ export function ControlTowerTable({
   }, [board.isLoading]);
 
   const items = board.data?.items ?? [];
+
+  /**
+   * QUANTAS O ESCOPO "ATIVAS" ESTÁ ESCONDENDO neste recorte (2026-09-04, a pedido).
+   *
+   * `statusCounts` vem da consulta com escopo "todas" e sem o filtro de status — é a contagem que os
+   * chips já usam. Aqui ela responde outra pergunta: se a lista veio vazia, existe algo neste período
+   * que só não é ATIVO?
+   *
+   * Zero quando o escopo já é "todas": aí o vazio é vazio de verdade, e oferecer um botão que não
+   * muda nada seria pior do que não oferecer nada.
+   */
+  const escondidasPeloEscopo =
+    query.scope === "active"
+      ? Object.entries(board.data?.statusCounts ?? {})
+          .filter(([status]) => !ATIVAS.has(status))
+          .reduce((n, [, quantos]) => n + (quantos ?? 0), 0)
+      : 0;
   const total = board.data?.total ?? 0;
   const limit = query.limit;
   const offset = query.offset;
@@ -288,10 +309,7 @@ export function ControlTowerTable({
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    className="whitespace-nowrap"
-                  >
+                  <TableHead key={header.id} className="whitespace-nowrap">
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -314,7 +332,47 @@ export function ControlTowerTable({
             ) : items.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={columnCount} className="text-muted-foreground">
-                  {t("board.empty")}
+                  {/*
+                    O VAZIO EXPLICA QUEM O CAUSOU (2026-09-04, a pedido).
+
+                    ── O QUE ACONTECEU ────────────────────────────────────────────────────────
+
+                    "A parte de filtrar por data não está funcionando, quero pegar viagens de 1 mês
+                    atrás e não está indo." O filtro de data funcionava. O que zerava o resultado era
+                    o escopo **Ativas**, que vem ligado por padrão e só deixa passar viagem em
+                    andamento — de `received` a `unloaded`.
+
+                    Viagem de um mês atrás já terminou. Medido no dia: das 529 com coleta entre 04 e
+                    10/08, **419 concluídas e 110 canceladas** — e ZERO ativas. A data fazia o
+                    trabalho dela e o escopo derrubava tudo depois.
+
+                    ── POR QUE EXPLICAR, E NÃO CONSERTAR SOZINHO ─────────────────────────────
+
+                    A saída fácil seria soltar o escopo automaticamente ao ver uma data. Ela adivinha:
+                    quem filtra "ontem" procurando o que ainda está rodando passaria a ver as
+                    concluídas junto, sem ter pedido.
+
+                    Aqui a tela conta o que houve e oferece o botão. Quem decide continua sendo quem
+                    olha — e da próxima vez ela sabe por quê, em vez de concluir que o filtro quebrou.
+
+                    A contagem sai de `statusCounts`, que a consulta JÁ devolve com escopo "todas" —
+                    nenhuma consulta nova para dizer isto.
+                  */}
+                  {escondidasPeloEscopo > 0 ? (
+                    <span className="flex flex-wrap items-center gap-2">
+                      {t("board.emptyPorEscopo", { n: escondidasPeloEscopo })}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setFilters({ scope: "all" })}
+                      >
+                        {t("board.verTodasDoPeriodo")}
+                      </Button>
+                    </span>
+                  ) : (
+                    t("board.empty")
+                  )}
                 </TableCell>
               </TableRow>
             ) : (
@@ -356,7 +414,6 @@ export function ControlTowerTable({
           </Button>
         </div>
       </div>
-
     </div>
   );
 }

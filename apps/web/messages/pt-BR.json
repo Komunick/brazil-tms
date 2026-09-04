@@ -613,6 +613,8 @@
       "periodPlaceholder": "AAAA-MM",
       "value": "Valor",
       "missingProof": "Comprovação pendente",
+      "emptyPorEscopo": "Nenhuma viagem ATIVA neste recorte. Existem {n} já concluídas ou canceladas.",
+      "verTodasDoPeriodo": "Ver todas do período",
       "empty": "Nenhuma viagem encontrada."
     },
     "export": {
