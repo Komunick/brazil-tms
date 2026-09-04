@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { decideAccess, verifySession } from "@/lib/auth/session";
 import { AppSidebar } from "@/components/shell/app-sidebar";
 import { Topbar } from "@/components/shell/topbar";
+import { AvisoDeAtualizacao } from "@/components/shell/aviso-de-atualizacao";
 import { OfertaDeSpot } from "@/components/spot/oferta-de-spot";
 import { COOKIE_MENU } from "@/lib/ui/menu-recolhido";
 
@@ -31,6 +32,17 @@ export default async function ShellLayout({ children }: { children: ReactNode })
           userName={session.user.name}
           permissoes={[...session.user.permissoes]}
         />
+        {/*
+          A FAIXA DA JANELA DE ATUALIZAÇÃO fica ENTRE a barra de topo e o conteúdo, no fluxo.
+
+          Aqui ela empurra a página para baixo em vez de cobri-la — ao contrário do aviso de spot,
+          logo abaixo, que se posiciona SOBRE a tela. A diferença é de propósito: o spot precisa
+          interromper, este precisa apenas ser lido sem atrapalhar quem está atribuindo.
+
+          No shell, e não em cada tela, porque a operação passa o dia na Expedição e na Torre — um
+          aviso que só existisse no Início não seria visto por ninguém.
+        */}
+        <AvisoDeAtualizacao />
         {/* `p-4 md:p-6`: no telefone, 24px de cada lado saíam da largura útil do conteúdo. */}
         <main className="flex-1 p-4 md:p-6">{children}</main>
       </div>

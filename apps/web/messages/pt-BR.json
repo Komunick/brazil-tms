@@ -2508,6 +2508,9 @@
       "B": "Análise biométrica"
     }
   },
+  "AvisoDeAtualizacao": {
+    "mensagem": "Janela de atualização às {horario} — em {minutos, plural, one {# minuto} other {# minutos}}. O sistema pode reiniciar; termine o que estiver fazendo."
+  },
   "MotoristasDisponiveis": {
     "title": "Motoristas disponíveis",
     "subtitle": "Quem terminou a viagem e ainda não pegou outra, e quem chega hoje ou amanhã. A situação vem do portal — ninguém precisa digitar.",
