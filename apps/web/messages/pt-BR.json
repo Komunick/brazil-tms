@@ -68,6 +68,7 @@
     "home": "Início",
     "programacao": "Programação",
     "trips": "Torre de Controle",
+    "motoristasDisponiveis": "Motoristas disponíveis",
     "dispatch": "Expedição",
     "adminUsers": "Usuários e Perfis",
     "adminAudit": "Auditoria",
@@ -1573,6 +1574,9 @@
       "action": "Atribuir no portal",
       "actionEdit": "Editar no portal",
       "assignedTo": "Escalado",
+      "motivoDaTrocaRotulo": "Por que está trocando o motorista?",
+      "motivoDaTrocaExemplo": "Ex.: motorista recusou a viagem; caminhão quebrou na origem",
+      "motivoDaTrocaAjuda": "Obrigatório ao trocar quem já estava escalado. Fica na linha do tempo da viagem.",
       "titleEdit": "Editar atribuição",
       "cnhVencida": "CNH VENCIDA em {data}. Confira antes de escalar.",
       "cnhVencendo": "CNH vence em {data}.",
@@ -2218,6 +2222,11 @@
     "copiarTelefone": "Copiar o telefone",
     "copiarPlaca": "Copiar a placa",
     "smPergunta": "A SM foi emitida?",
+    "sm": "SM",
+    "cte": "CTE",
+    "cteSim": "CTE emitido",
+    "cteNao": "CTE não emitido",
+    "veioDeSpot": "Esta LH veio de uma oferta de spot",
     "smSim": "SM Sim",
     "smNao": "SM Não",
     "motoristaTrocado": "Motorista alterado",
@@ -2467,6 +2476,22 @@
       "validadeMopp": "Validade do MOPP"
     },
     "pedirPesquisa": "Pedir pesquisa",
+    "conferirNaRaster": "Conferir na gerenciadora",
+    "conferirNaRasterAjuda": "Consulta de graça: pergunta se ele já está cadastrado lá e se já existe pesquisa. Leva cerca de um minuto e meio.",
+    "conferindo": "Perguntando à gerenciadora…",
+    "conferenciaPedida": "Conferência pedida. A resposta aparece aqui em cerca de um minuto e meio.",
+    "conferenciaFalhou": "Não foi possível pedir a conferência.",
+    "conferenciaNunca": "Nunca conferido na gerenciadora.",
+    "conferenciaEm": "Conferido na gerenciadora {quando}",
+    "conferenciaCadastrado": "Já cadastrado lá (código {codigo})",
+    "conferenciaNaoCadastrado": "Ainda não cadastrado lá",
+    "conferenciaSemPesquisa": "Nenhuma pesquisa encontrada nos três vínculos",
+    "conferenciaPesquisaLinha": "{vinculo} · {situacao} · nº {codigo}",
+    "conferenciaPesquisaValidade": "vale até {data}",
+    "conferenciaErro": "A gerenciadora não respondeu: {erro}",
+    "pesquisaJaExiste": "Já existe pesquisa {situacao} no vínculo {vinculo}, {validade}. Pedir outra cria uma segunda e cobra as duas.",
+    "pesquisaJaAndando": "Já existe pesquisa em andamento no vínculo {vinculo} (nº {codigo}). Espere ela terminar.",
+    "pesquisaPedirMesmoAssim": "Pedir mesmo assim",
     "pesquisaTitulo": "Pedir pesquisa à gerenciadora",
     "pesquisaAviso": "Esta solicitação é COBRADA pela gerenciadora. Não há como desfazer.",
     "pesquisaVinculo": "Vínculo do motorista",
@@ -2490,6 +2515,39 @@
       "AC": "A consultar",
       "B": "Análise biométrica"
     }
+  },
+  "AvisoDeAtualizacao": {
+    "mensagem": "Janela de atualização às {horario} — em {minutos, plural, one {# minuto} other {# minutos}}. O sistema pode reiniciar; termine o que estiver fazendo."
+  },
+  "MotoristasDisponiveis": {
+    "title": "Motoristas disponíveis",
+    "subtitle": "Quem terminou a viagem e ainda não pegou outra, e quem chega hoje ou amanhã. A situação vem do portal — ninguém precisa digitar.",
+    "buscar": "Buscar por motorista, estação ou placa",
+    "disponiveis": "{n} disponíveis",
+    "aCaminho": "{n} a caminho",
+    "vazio": "Nenhum motorista disponível ou chegando hoje e amanhã.",
+    "vazioBusca": "Nenhum motorista encontrado para essa busca.",
+    "erro": "Não foi possível carregar a lista.",
+    "coluna": {
+      "nome": "Nome",
+      "origem": "Origem",
+      "destino": "Destino",
+      "inicio": "Data de início",
+      "conclusao": "Data de conclusão",
+      "cavalo": "Cavalo",
+      "carreta": "Carreta",
+      "situacao": "Status"
+    },
+    "situacao": {
+      "finalizado": "FINALIZADO"
+    },
+    "impedido": "Impedido",
+    "impedimento": {
+      "bloqueado": "Bloqueado por nós",
+      "inativo": "Cadastro não está ativo no portal do cliente",
+      "aviso": "A atribuição vai recusar este motorista."
+    },
+    "semCarreta": "sem carreta"
   },
   "GR": {
     "title": "GR — Pré-SM",

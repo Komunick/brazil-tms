@@ -29,14 +29,19 @@ import { tripComments, tripProgramacao } from "../../schema";
  */
 describe("as migrações da programação e o schema", () => {
   /*
-    A `0061` entrou em 31/08 com a SM. Ler as três juntas é o que mantém a afirmação verdadeira: o
-    teste diz "toda coluna do schema existe nas migrações", e sem a nova ele passaria a acusar como
-    ausente uma coluna que existe — ensinando quem vier depois a desconfiar dele.
+    A `0061` entrou em 31/08 com a SM; a `0065` em 04/09 com o CTE. Ler todas juntas é o que mantém a
+    afirmação verdadeira: o teste diz "toda coluna do schema existe nas migrações", e sem a nova ele
+    passaria a acusar como ausente uma coluna que existe — ensinando quem vier depois a desconfiar
+    dele.
+
+    QUEM ACRESCENTAR COLUNA A ESTA TABELA acrescenta a migração aqui. O teste falha primeiro com a
+    mensagem certa ("cte não está nas migrações"), e é assim que ele avisa.
   */
   const migracoes = [
     "0050_previsto_e_comentario",
     "0051_status_da_programacao",
     "0061_sm_da_programacao",
+    "0065_cte_da_programacao",
   ]
     .map((tag) => readFileSync(join(__dirname, `../../migrations/${tag}.sql`), "utf8"))
     .join("\n");

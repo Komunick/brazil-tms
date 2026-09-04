@@ -97,6 +97,19 @@ export const tripProgramacao = pgTable(
     sm: boolean("sm"),
     smPorUserId: uuid("sm_por_user_id").references(() => users.id),
     smEm: timestamp("sm_em", { withTimezone: true }),
+
+    /**
+     * O CTE FOI EMITIDO? (2026-09-04, a pedido) — os mesmos três estados do SM, pela mesma razão.
+     *
+     * `null` = ninguém olhou. `false` = alguém olhou e afirmou que não. `true` = emitido.
+     *
+     * Coluna irmã da SM e não um campo dentro dela: são duas perguntas independentes. Uma viagem
+     * pode ter SM e não ter CTE, e o contrário também — juntá-las num só valor obrigaria a tela a
+     * escolher qual das duas mostrar.
+     */
+    cte: boolean("cte"),
+    ctePorUserId: uuid("cte_por_user_id").references(() => users.id),
+    cteEm: timestamp("cte_em", { withTimezone: true }),
   },
   (table) => [
     /**
@@ -108,7 +121,7 @@ export const tripProgramacao = pgTable(
      */
     check(
       "trip_programacao_algo_ck",
-      sql`nullif(btrim(${table.portalDriverId}), '') IS NOT NULL OR nullif(btrim(${table.placa}), '') IS NOT NULL OR ${table.status} IS NOT NULL OR ${table.sm} IS NOT NULL`,
+      sql`nullif(btrim(${table.portalDriverId}), '') IS NOT NULL OR nullif(btrim(${table.placa}), '') IS NOT NULL OR ${table.status} IS NOT NULL OR ${table.sm} IS NOT NULL OR ${table.cte} IS NOT NULL`,
     ),
     /**
      * O CHECK trava a lista, e não é preciosismo: este valor PINTA a linha. Um `PROG 0K` com zero

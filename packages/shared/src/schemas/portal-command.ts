@@ -32,6 +32,20 @@ export const portalActionBodySchema = z
     /** Observação livre de quem decidiu. Vai junto para o portal e fica no registro daqui. */
     remark: z.string().trim().max(500).nullish(),
     /**
+     * POR QUE ESTÁ TROCANDO QUEM JÁ ESTAVA ESCALADO (2026-09-04, a pedido).
+     *
+     * Obrigatório só na TROCA — a primeira atribuição do dia não pede nada, porque é o trabalho
+     * normal e um campo obrigatório em centenas de gestos por dia vira "asdf" digitado por reflexo.
+     *
+     * Texto livre por decisão do usuário. Ele NÃO vai para o portal: é registro nosso, e vai para a
+     * linha do tempo da viagem, que é onde alguém procura "por que trocaram este motorista?".
+     *
+     * Quem recusa é o banco, dentro da transação que trava a viagem — ver `enfileirarOrdemDoPortal`.
+     * A tela pede antes, mas tela não é garantia: quem tem a página aberta desde antes da regra
+     * continuaria mandando sem motivo.
+     */
+    motivoDaTroca: z.string().trim().min(3).max(500).nullish(),
+    /**
      * DE ONDE A DECISÃO SAIU (2026-09-01, fatia 030).
      *
      * NÃO vai para o portal — ele não tem este campo. Vai para a auditoria, para que a revisão
@@ -58,7 +72,10 @@ export const portalActionBodySchema = z
      */
     vinculos: z
       .object({
-        placas: z.array(z.enum(["owned", "agregado", "terceiro"]).nullable()).max(3).optional(),
+        placas: z
+          .array(z.enum(["owned", "agregado", "terceiro"]).nullable())
+          .max(3)
+          .optional(),
         motorista: z.enum(["owned", "agregado", "terceiro"]).nullish(),
         segundoMotorista: z.enum(["owned", "agregado", "terceiro"]).nullish(),
       })

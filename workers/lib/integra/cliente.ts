@@ -516,3 +516,103 @@ export async function getResultadoPesquisaConsulta(
 ): Promise<Record<string, unknown>> {
   return chamar<Record<string, unknown>>("getResultadoPesquisaConsulta", { ...cred, ...pedido });
 }
+
+// ---------------------------------------------------------------------------
+// O que a gerenciadora JÁ SABE — as duas leituras que evitam gastar (2026-09-03)
+// ---------------------------------------------------------------------------
+
+/**
+ * O MOTORISTA JÁ EXISTE NO CADASTRO DELA? — leitura, de graça.
+ *
+ * ⚠️ **O CPF VAI NA RAIZ, NÃO DENTRO DE `Motorista`** — e isso contraria a tabela do manual.
+ *
+ * A página 52 documenta a requisição como um registro `Motorista` com `CPF` dentro, igual ao
+ * `setMotorista`. Mandando assim, a API responde `CodErro 105 — campo obrigatório: CPF`, que PARECE
+ * "o motorista não existe" e é fácil de ler como resposta negativa. Medido em produção em 03/09: com
+ * o CPF na raiz, o mesmo motorista volta com `CodErro 0` e o cadastro inteiro.
+ *
+ * É a mesma armadilha do `getTabela` (`NomeTabela`, não `Tabela`) e do `getCidades`
+ * (`FiltroCidade`, não `Cidade`): errar o nome do parâmetro devolve 105 e mente sobre a existência
+ * do recurso.
+ *
+ * `null` quando ela não conhece o CPF. Qualquer outro erro sobe como `IntegraRecusou`.
+ */
+export async function getMotorista(
+  cred: Credenciais,
+  cpf: string,
+): Promise<Record<string, unknown> | null> {
+  try {
+    const r = await chamar<{ Motorista?: Record<string, unknown> }>("getMotorista", {
+      ...cred,
+      CPF: cpf,
+    });
+    const m = r.Motorista;
+    // Registro vazio é "não conheço": ela devolve `{}` em vez de erro nesse caso.
+    return m && Object.keys(m).length > 0 ? m : null;
+  } catch (e) {
+    if (e instanceof IntegraRecusou && e.codErro === COD_ERRO_SEM_CADASTRO) return null;
+    throw e;
+  }
+}
+
+/** "Não existe Pesquisa/Consulta com esses dados" — resposta legítima, não falha. */
+const COD_ERRO_SEM_PESQUISA = 182;
+/** O mesmo espírito para o cadastro: ausência não é erro. */
+const COD_ERRO_SEM_CADASTRO = 181;
+
+/** O que ela devolve sobre uma pesquisa que já existe. */
+export interface PesquisaNaGerenciadora {
+  codigo: number;
+  /** `SP` sem pesquisa · `EP` em pesquisa · `AP` aguardando · `AD` adequado ao risco ·
+   *  `NA` inconclusivo · `EX` expirado · `AC` a consultar · `B` análise biométrica. */
+  situacao: string;
+  /** `AAAA-MM-DD`. Depois dela a pesquisa não vale mais e refazer é o certo. */
+  dataExpiracao: string | null;
+  /** O que impediu a aprovação, quando há. */
+  justificativas: { codigo: number; descricao: string }[];
+}
+
+/**
+ * JÁ EXISTE PESQUISA PARA ESTE CPF E VÍNCULO? — leitura, de graça, e é o que impede a duplicata.
+ *
+ * ⚠️ **A GERENCIADORA NÃO BLOQUEIA PESQUISA REPETIDA** (informado pelo usuário em 03/09): mandar
+ * duas vezes cria DUAS pesquisas, e cada uma é cobrada. O guarda tem de ser nosso.
+ *
+ * ── O VÍNCULO FAZ PARTE DA CHAVE, e é aqui que um guarda ingênuo falha ────────────────────────
+ *
+ * A consulta só encontra a pesquisa se o `Vinculo` bater. Medido em produção: a pesquisa do CPF
+ * 08389766469 existe sob **A** (agregado); consultando como F ou T, a API responde `CodErro 182 —
+ * não existe`. Um guarda que perguntasse só pelo vínculo escolhido na hora responderia "pode
+ * mandar" no caso exato que se quer evitar — pedir como Frota para quem já tem como Agregado.
+ *
+ * Por isso quem chama varre os TRÊS.
+ *
+ * Envelopa o `getResultadoPesquisaConsulta` acima em vez de repetir a chamada: aquele é o que o job
+ * de pesquisa já usa para ler o desfecho do que pagou, e duas portas para a mesma pergunta
+ * divergiriam no primeiro ajuste. `null` = não existe pesquisa com esse vínculo.
+ */
+export async function pesquisaExistente(
+  cred: Credenciais,
+  entrada: { codFilial: number; cpf: string; vinculo: "F" | "A" | "T" },
+): Promise<PesquisaNaGerenciadora | null> {
+  try {
+    const r = await getResultadoPesquisaConsulta(cred, {
+      CodFilial: entrada.codFilial,
+      TipoIdentificacao: "P",
+      Identificacao: entrada.cpf,
+      Vinculo: entrada.vinculo,
+    });
+    return {
+      codigo: Number(r.Codigo ?? 0),
+      situacao: String(r.Situacao ?? ""),
+      dataExpiracao: (r.DataExpiracao as string | undefined) ?? null,
+      justificativas: ((r.Justificativas as { Codigo?: number; Descricao?: string }[] | undefined) ?? []).map((j) => ({
+        codigo: Number(j.Codigo ?? 0),
+        descricao: String(j.Descricao ?? ""),
+      })),
+    };
+  } catch (e) {
+    if (e instanceof IntegraRecusou && e.codErro === COD_ERRO_SEM_PESQUISA) return null;
+    throw e;
+  }
+}

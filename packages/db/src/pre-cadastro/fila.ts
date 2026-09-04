@@ -128,7 +128,10 @@ export async function listarFilaDePreCadastros(): Promise<ItemDaFila[]> {
       )`,
     })
     .from(driverPreregistrations)
-    .leftJoin(ultimo, and(eq(ultimo.preregistrationId, driverPreregistrations.id), eq(ultimo.posicao, 1)))
+    .leftJoin(
+      ultimo,
+      and(eq(ultimo.preregistrationId, driverPreregistrations.id), eq(ultimo.posicao, 1)),
+    )
     .leftJoin(drivers, eq(drivers.id, driverPreregistrations.driverId))
     .where(isNull(driverPreregistrations.arquivadoEm))
     .orderBy(desc(driverPreregistrations.createdAt));
@@ -147,8 +150,8 @@ export async function listarFilaDePreCadastros(): Promise<ItemDaFila[]> {
       envios: Number(l.envios ?? 0),
       pendenciaToxicologico: l.pendenciaToxicologico,
       leituraCnh:
-        (((l.camposConsolidados ?? {}) as Record<string, unknown>).leituraCnh as ItemDaFila["leituraCnh"]) ??
-        null,
+        (((l.camposConsolidados ?? {}) as Record<string, unknown>)
+          .leituraCnh as ItemDaFila["leituraCnh"]) ?? null,
       documentoCnhId: l.documentoCnhId ?? null,
       documentoComprovanteId: l.documentoComprovanteId ?? null,
       enviadoEm: l.enviadoEm?.toISOString() ?? null,
@@ -315,7 +318,13 @@ export async function documentoParaLeitura(documentoId: string): Promise<{
 export async function gravarLeituraDaCnh(
   preregistrationId: string,
   campos: Record<string, unknown>,
-  leitura: { estado: string; motivo?: string; lidos?: number; total?: number; cpfDivergente?: string },
+  leitura: {
+    estado: string;
+    motivo?: string;
+    lidos?: number;
+    total?: number;
+    cpfDivergente?: string;
+  },
 ): Promise<void> {
   await db
     .update(driverPreregistrations)
@@ -354,7 +363,30 @@ export interface PreCadastroParaConferencia {
   enviadoEm: string | null;
   cadastro: ItemDaFila["cadastro"];
   /** O pedido de PESQUISA — a metade cobrada. Presente = já foi pedida, não peça de novo. */
-  pesquisa: { em: string; motivos?: string[]; erro?: string; resposta?: Record<string, unknown> } | null;
+  pesquisa: {
+    em: string;
+    motivos?: string[];
+    erro?: string;
+    resposta?: Record<string, unknown>;
+  } | null;
+  /**
+   * O QUE A GERENCIADORA JÁ SABE — leitura de graça, nunca escrita (2026-09-03).
+   *
+   * Nulo = ninguém perguntou ainda, e é diferente de "perguntamos e não há nada". A tela precisa
+   * distinguir os dois: o primeiro pede um clique, o segundo libera o pedido de pesquisa.
+   */
+  conferencia: {
+    em: string;
+    cadastrado: boolean;
+    codigoNaGerenciadora: number | null;
+    pesquisas: {
+      vinculo: string;
+      codigo: number;
+      situacao: string;
+      dataExpiracao: string | null;
+    }[];
+    erro?: string;
+  } | null;
   recebidoEm: string;
 }
 
@@ -401,7 +433,20 @@ export async function preCadastroParaConferencia(
     : [];
 
   const todos = (linha.campos ?? {}) as Record<string, unknown>;
-  const { leituraCnh, cadastroGerenciadora, pesquisaGerenciadora, ...campos } = todos;
+  /*
+    OS BLOCOS DE PROCEDÊNCIA SAEM DAQUI.
+
+    `campos` é o formulário — catorze campos com valor e origem. Os blocos guardados no mesmo objeto
+    são de outra natureza: retratos do que a gerenciadora respondeu. Deixá-los passar faria a tela
+    desenhar uma linha "conferenciaGerenciadora" com um objeto dentro, no meio do nome e do CPF.
+  */
+  const {
+    leituraCnh,
+    cadastroGerenciadora,
+    pesquisaGerenciadora,
+    conferenciaGerenciadora,
+    ...campos
+  } = todos;
   const dados = (ultimo?.dados ?? {}) as Record<string, unknown>;
 
   return {
@@ -419,6 +464,7 @@ export async function preCadastroParaConferencia(
     enviadoEm: linha.enviadoEm?.toISOString() ?? null,
     cadastro: (cadastroGerenciadora as ItemDaFila["cadastro"]) ?? null,
     pesquisa: (pesquisaGerenciadora as PreCadastroParaConferencia["pesquisa"]) ?? null,
+    conferencia: (conferenciaGerenciadora as PreCadastroParaConferencia["conferencia"]) ?? null,
     recebidoEm: linha.criadoEm.toISOString(),
   };
 }
@@ -449,7 +495,10 @@ export async function salvarCamposConferidos(
 ): Promise<{ salvo: boolean; mudou: string[] }> {
   return db.transaction(async (tx) => {
     const [linha] = await tx
-      .select({ campos: driverPreregistrations.campos, enviadoEm: driverPreregistrations.enviadoEm })
+      .select({
+        campos: driverPreregistrations.campos,
+        enviadoEm: driverPreregistrations.enviadoEm,
+      })
       .from(driverPreregistrations)
       .where(eq(driverPreregistrations.id, id))
       .limit(1);
@@ -469,7 +518,8 @@ export async function salvarCamposConferidos(
       antes[chave] = anterior;
       depois[chave] = limpo;
       // Apagado volta a ser o campo VAZIO E ASSINALADO, não um campo com origem e sem valor.
-      novos[chave] = limpo === null ? { valor: null, origem: null } : { valor: limpo, origem: "digitado" };
+      novos[chave] =
+        limpo === null ? { valor: null, origem: null } : { valor: limpo, origem: "digitado" };
     }
 
     const mudou = Object.keys(depois);
@@ -826,4 +876,47 @@ export async function pesquisasEmAndamento(
       | undefined;
     return { id: l.id, cpf: l.cpf, vinculo: p?.vinculo ?? null };
   });
+}
+
+/**
+ * GRAVA O QUE A GERENCIADORA JÁ SABE sobre este CPF (2026-09-03, a pedido).
+ *
+ * O bloco fica em `campos.conferenciaGerenciadora` e é sempre SUBSTITUÍDO por inteiro: ele é um retrato do
+ * que ela respondeu num instante, não um histórico. Guardar o retrato anterior faria a tela ter de
+ * escolher qual acreditar — e o único que importa é o último.
+ *
+ * A HORA VAI JUNTO porque a resposta envelhece: uma pesquisa `EP` (em pesquisa) vira `AD` sozinha do
+ * lado deles, e um retrato de ontem diria "espere" sobre algo que já terminou. A tela mostra a hora
+ * para quem lê poder decidir se vale conferir de novo.
+ */
+export async function gravarConferenciaNaRaster(
+  id: string,
+  retrato: {
+    cadastrado: boolean;
+    codigoNaGerenciadora: number | null;
+    pesquisas: {
+      vinculo: string;
+      codigo: number;
+      situacao: string;
+      dataExpiracao: string | null;
+    }[];
+    erro?: string;
+  },
+): Promise<void> {
+  const [antes] = await db
+    .select({ campos: driverPreregistrations.campos })
+    .from(driverPreregistrations)
+    .where(eq(driverPreregistrations.id, id))
+    .limit(1);
+
+  await db
+    .update(driverPreregistrations)
+    .set({
+      campos: {
+        ...((antes?.campos ?? {}) as Record<string, unknown>),
+        conferenciaGerenciadora: { em: new Date().toISOString(), ...retrato },
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(driverPreregistrations.id, id));
 }

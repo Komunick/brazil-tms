@@ -73,7 +73,33 @@ Start with two packages (`shared`, `db`); add more only with justification.
 - Code style is enforced by ESLint/Prettier — not by this file. Tests: Vitest + Playwright.
 
 <!-- SPECKIT START -->
-Active feature plan: `specs/030-aceite-de-spot/plan.md` — **aceitar a oferta de spot no próprio
+Active feature plan: `specs/031-motoristas-disponiveis/plan.md` — **a aba "Motoristas disponíveis"
+na Torre de Controle**: a planilha PROGRAMAÇÃO SHOPEE FROTA virando lista viva. Quem acabou de chegar
+é quem está livre. **Nenhuma tabela, coluna ou migração** — a disponibilidade é conclusão tirada a
+cada leitura.
+
+**A DESCOBERTA QUE GOVERNA A FATIA**: `trip_assignments` **NÃO é a fonte de quem está dirigindo**. O
+portal é. Medido em 03/09: **49 viagens de 760** têm motorista no portal e nenhuma atribuição nossa
+(o inverso é ZERO), e em **18 de 406 pares a atribuição aponta para OUTRA PESSOA** — em todos os 18 o
+`ID do motorista (portal)` resolve para o nome do portal, ou seja, a nossa é a versão velha de uma
+viagem reatribuída lá. Na janela da aba isso são **67 motoristas invisíveis**. É o mesmo erro que
+`placas-do-motorista.ts` já documenta no cabeçalho.
+
+**A segunda armadilha**: "a última viagem" é a que **CHEGA POR ÚLTIMO** — 15 motoristas têm mais de
+uma viagem aberta ao mesmo tempo (um deles quatro). É também o que faz o "sai quando entra em viagem"
+acontecer sozinho, sem ninguém remover nada.
+
+**Medido**: consulta em **10,9 ms** com varredura de 8 dias, 215 linhas (116 finalizados, 19
+cancelados, 80 a caminho), sem índice novo. Polling de 60 s, sem segundo plano — não é leilão.
+
+**Decidido pelo usuário (03/09)**: a janela decide quem ENTRA, só viagem nova faz SAIR, com corte de
+7 dias parado (contra a janela estrita, que perderia 20 livres, e contra a permanência sem corte, que
+traria 72 parados há +30 dias). E o motorista livre que a atribuição vai recusar **aparece marcado**,
+não escondido — são 4 dos 36 finalizados de hoje e ontem.
+
+---
+
+**A 030 (aceite de spot) está NO AR**: `specs/030-aceite-de-spot/plan.md` — **aceitar a oferta de spot no próprio
 cartão** que aparece na tela de todo mundo, em dois gestos, mais Ignorar (que limpa só a tela de quem
 clicou). O cartão para de sair sozinho em 30 s e **só some quando o PORTAL confirmar**.
 
