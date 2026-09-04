@@ -93,6 +93,15 @@ export const portalCommands = pgTable(
      * compartilham, e que o robô de leitura já traz desde agosto. `second_driver_id` é o que o portal
      * chama de `driver_pool`, e a presença dele MUDA A ROTA da chamada: ver `rotaDaAtribuicao`.
      *
+     * ── `driver_pool` É UMA LISTA, E O PORTAL ACEITA ATÉ NOVE (usuário, 2026-09-04) ────────────
+     *
+     * Guardamos UM. É um limite nosso, não do portal, e está aqui escrito para não ser confundido
+     * com a regra do outro lado: quem precisar de três motoristas numa viagem não consegue pedir
+     * pelo TMS, e a tela do portal continua sendo o caminho.
+     *
+     * Passar a guardar vários é fatia própria — mexe nesta coluna, no diálogo e no guarda. Não é
+     * difícil; é que fazer pela metade (aceitar três e mandar dois) seria pior que não aceitar.
+     *
      * As placas vão como TEXTO separado por vírgula, e não como coluna de array, porque é o que elas
      * são para nós: uma ou duas etiquetas que o portal valida. Guardar array aqui pediria um tipo
      * novo para ganhar nada — quem interpreta é quem monta o payload, e são duas.

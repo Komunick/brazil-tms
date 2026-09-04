@@ -13,11 +13,13 @@ import {
   type ImpedimentoDaAtribuicao,
   type ImpedimentoParaAtribuir,
   type PortalAction,
+  type PortalTrip,
   type Veredito,
 } from "@brazil-tms/shared";
 import { db } from "../client";
 import { drivers, portalCommands, tripEvents, trips } from "../../schema";
 import { writeAudit } from "../audit/write-audit";
+import { writePortalFacts } from "./portal-trip-facts";
 
 /**
  * A FILA DE ORDENS PARA O PORTAL (2026-08-21).
@@ -502,6 +504,14 @@ export async function encerrarOrdemDoPortal(entrada: {
   error?: string | null;
   /** O corpo cru do `/trip/detail`, relido pelo robô logo depois da ação. Ver o bloco abaixo. */
   confirmacao?: unknown;
+  /**
+   * A ROTA DA AGÊNCIA escolhida pelo robô no revezamento (2026-09-04).
+   *
+   * Só auditoria. Não decide nada aqui, e é de propósito: quem escolheu foi o robô, dentro da sessão
+   * do portal, e o que este campo faz é deixar a escolha revisável — sem ele o TMS não teria como
+   * responder "por que esta viagem foi registrada neste trajeto?".
+   */
+  rotaDaAgencia?: number | null;
 }): Promise<{ encerrada: boolean; confirmada: boolean }> {
   const agora = new Date();
 
@@ -642,6 +652,68 @@ export async function encerrarOrdemDoPortal(entrada: {
   if (!ordem) return { encerrada: false, confirmada: false };
 
   /**
+   * O QUE O PORTAL ACABOU DE DEVOLVER VAI PARA A VIAGEM (2026-09-04, a pedido).
+   *
+   * ── O DEFEITO ────────────────────────────────────────────────────────────────────────────────
+   *
+   * O relato foi "depois de atribuir tenho que dar F5 para a atribuição mudar visualmente" — e o F5
+   * não era o que consertava. A releitura do portal era JULGADA (vira o veredito) e ARQUIVADA (vira
+   * `releituraDoPortal` na auditoria), e nunca aplicada à viagem. A linha continuava com o motorista
+   * velho até o robô do PLANO passar de novo, que é de quinze em quinze minutos.
+   *
+   * Quem recarregava e via a mudança tinha esbarrado no ciclo do robô. Quem recarregava antes dele
+   * recarregava para ver a mesma coisa — e concluía que o TMS "às vezes não atualiza".
+   *
+   * ── POR QUE ISTO NÃO É INVENTAR ESTADO ──────────────────────────────────────────────────────
+   *
+   * Não estamos escrevendo o que PEDIMOS: estamos escrevendo o que o portal RESPONDEU quando
+   * perguntamos "e aí, mudou?", segundos atrás. É exatamente o mesmo dado que o robô do plano traria
+   * — pelo mesmo mapeador, `writePortalFacts` — só que quinze minutos antes.
+   *
+   * ── SÓ QUANDO A CONFERÊNCIA CONFIRMOU ───────────────────────────────────────────────────────
+   *
+   * `confirmado === true`, e nada mais. Um veredito falso significa que o portal desmentiu, e
+   * gravar o que ele devolveu ali seria gravar o estado que prova a falha como se fosse sucesso.
+   * `null` é "não deu para conferir" — e o que não se conferiu não se escreve.
+   */
+  if (veredito?.confirmado === true) {
+    const cru = (entrada.confirmacao as { data?: Record<string, unknown> } | null)?.data;
+    const texto = (v: unknown): string | null =>
+      typeof v === "string" && v.trim() !== "" ? v.trim() : null;
+    const numero = (v: unknown): string | null =>
+      typeof v === "number" && Number.isFinite(v) && v > 0 ? String(v) : texto(v);
+
+    if (cru && typeof cru === "object") {
+      const [viagem] = await db
+        .select({ customerFields: trips.customerFields, preco: trips.customerPriceCents })
+        .from(trips)
+        .where(eq(trips.id, ordem.tripId))
+        .limit(1);
+
+      /*
+        SÓ OS TRÊS CAMPOS QUE A ATRIBUIÇÃO MUDA.
+
+        O detalhe traz dezenas, e o plano é quem tem a leitura completa. Escrever tudo daqui faria
+        esta chamada competir com o robô sobre campos que ela não veio tratar — e a que perdesse a
+        corrida sobrescreveria a outra sem ninguém entender por quê.
+
+        `writePortalFacts` ignora o que vier nulo, então mandar só estes três é seguro por
+        construção: ele preenche o que existe e não apaga o que não veio.
+      */
+      await writePortalFacts(
+        ordem.tripId,
+        {
+          driverLabel: texto(cru.driver_name),
+          driverExternalId: numero(cru.driver),
+          plateLabel: texto(cru.vehicle_number),
+        } as PortalTrip,
+        viagem?.customerFields,
+        viagem?.preco ?? null,
+      );
+    }
+  }
+
+  /**
    * A PROVA, gravada fora da transação do clique.
    *
    * Não vai junto do `update` numa transação porque um erro ao escrever a auditoria não pode
@@ -666,6 +738,15 @@ export async function encerrarOrdemDoPortal(entrada: {
         commandId: ordem.id,
         portalTripId: ordem.portalTripId,
         externalTripId: ordem.externalTripId,
+        /*
+          A ROTA DA AGÊNCIA que o robô escolheu (2026-09-04).
+
+          Só aparece nas viagens de revezamento — as com ponto de troca no meio do caminho, onde o
+          portal exige escolher trajeto. O robô resolve dentro da sessão dele porque o `section_id` é
+          interno do portal e o TMS não o conhece; registrar aqui é o que torna essa escolha
+          revisável, em vez de uma decisão que o robô tomou sozinho e ninguém consegue explicar.
+        */
+        rotaDaAgencia: entrada.rotaDaAgencia ?? null,
         desfecho: !deuCerto
           ? veredito?.confirmado === false
             ? "o portal respondeu OK e a releitura desmentiu"

@@ -211,6 +211,45 @@ describe("mapPortalApiTrips", () => {
     const t = mapPortalApiTrips(envelope(viagem({ driver: 0, driver_name: "" }))).trips[0]!;
     expect({ id: t.driverExternalId, nome: t.driverLabel }).toEqual({ id: null, nome: null });
   });
+
+  /**
+   * O SEGUNDO MOTORISTA vinha na mesma listagem e era descartado (2026-09-04, a pedido).
+   *
+   * A linha da programação mostrava um motorista só. Numa viagem de dois isso é meia informação:
+   * quem escala não tem como saber se a dupla está fechada ou se ainda falta gente — e a resposta
+   * estava chegando em todo ciclo do robô, sendo jogada fora no mapeador.
+   */
+  it("guarda o SEGUNDO motorista, nome e id", () => {
+    const t = mapPortalApiTrips(
+      envelope(
+        viagem({
+          driver: 181446,
+          driver_name: "FELIPE MAIA",
+          second_driver_id: 2848730,
+          second_driver_name: "EMIVALDO PEREIRA NETO",
+        }),
+      ),
+    ).trips[0]!;
+    expect({ id: t.secondDriverExternalId, nome: t.secondDriverLabel }).toEqual({
+      id: "2848730",
+      nome: "EMIVALDO PEREIRA NETO",
+    });
+  });
+
+  /**
+   * A viagem de UM motorista é a esmagadora maioria, e nela o segundo tem de ficar NULO — não zero,
+   * não string vazia. A tela decide desenhar a segunda linha pela existência dele, e um zero faria
+   * toda viagem comum ganhar um "2º" apontando para ninguém.
+   */
+  it("viagem de um motorista só deixa o segundo NULO", () => {
+    const t = mapPortalApiTrips(
+      envelope(viagem({ driver: 181446, driver_name: "FELIPE MAIA", second_driver_id: 0 })),
+    ).trips[0]!;
+    expect({ id: t.secondDriverExternalId, nome: t.secondDriverLabel }).toEqual({
+      id: null,
+      nome: null,
+    });
+  });
   it("lê a ACEITAÇÃO como eixo próprio — e o zero é um valor, não ausência", () => {
     /**
      * Medido no portal: Pending + Assigning = 44 (alguém precisa aceitar), Accepted + Assigning =
