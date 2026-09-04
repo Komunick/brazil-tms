@@ -5,6 +5,7 @@ import {
   lerProgramacaoDaViagem,
   marcarStatus,
   marcarSm,
+  marcarCte,
   salvarPrevisto,
 } from "@brazil-tms/db";
 import { requireAuth, requirePermission } from "@/lib/auth/require-auth";
@@ -58,6 +59,16 @@ const statusSchema = z.object({
  */
 const smSchema = z.object({
   sm: z.boolean().nullable().optional(),
+});
+
+/**
+ * O CTE — a terceira marcação, e o mesmo desenho da SM (2026-09-04, a pedido).
+ *
+ * `undefined` quer dizer "esta requisição não é sobre o CTE", que é o que permite os três gestos
+ * dividirem o mesmo PATCH sem cada um precisar saber dos outros.
+ */
+const cteSchema = z.object({
+  cte: z.boolean().nullable().optional(),
 });
 
 export async function GET(
@@ -134,6 +145,12 @@ export async function PATCH(
     const comSm = smSchema.safeParse(corpo);
     if (comSm.success && comSm.data.sm !== undefined) {
       await marcarSm(id, ctx.userId, comSm.data.sm);
+      return NextResponse.json({ programacao: await lerProgramacaoDaViagem(id) });
+    }
+
+    const comCte = cteSchema.safeParse(corpo);
+    if (comCte.success && comCte.data.cte !== undefined) {
+      await marcarCte(id, ctx.userId, comCte.data.cte);
       return NextResponse.json({ programacao: await lerProgramacaoDaViagem(id) });
     }
 

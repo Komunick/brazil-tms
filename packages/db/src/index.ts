@@ -82,6 +82,7 @@ export {
   salvarPrevisto,
   marcarStatus,
   marcarSm,
+  marcarCte,
 } from "./trips/trip-programacao";
 export type { ProgramacaoDaViagem } from "./trips/trip-programacao";
 export { listarPlacasDoPortal } from "./trips/portal-placas";

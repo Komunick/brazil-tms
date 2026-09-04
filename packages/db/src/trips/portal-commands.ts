@@ -1,9 +1,11 @@
 import { and, asc, eq, inArray, isNotNull, lt, sql } from "drizzle-orm";
 import {
   confirmarAcaoNoPortal,
+  ehTrocaDeAtribuicao,
   impedimentoDaAcao,
   impedimentoDaAtribuicao,
   impedimentoParaAtribuir,
+  motivoDaTrocaServe,
   motivoValido,
   normalizarPlaca,
   placasEsperadas,
@@ -14,7 +16,7 @@ import {
   type Veredito,
 } from "@brazil-tms/shared";
 import { db } from "../client";
-import { drivers, portalCommands, trips } from "../../schema";
+import { drivers, portalCommands, tripEvents, trips } from "../../schema";
 import { writeAudit } from "../audit/write-audit";
 
 /**
@@ -142,6 +144,13 @@ export async function enfileirarOrdemDoPortal(entrada: {
    * registro não os separava.
    */
   origem?: "oferta_spot" | "tela_da_viagem" | null;
+  /**
+   * POR QUE ESTÁ TROCANDO quem já estava escalado (2026-09-04, a pedido).
+   *
+   * Exigido só quando a viagem JÁ tem motorista no portal e o novo é OUTRO. Ver o guarda dentro da
+   * transação — é lá que a regra vale, e não na tela.
+   */
+  motivoDaTroca?: string | null;
 }): Promise<OrdemDoPortal> {
   if (entrada.action === "assign") {
     // As regras vivem em `shared`, sob teste. Aqui só se recusa o que elas apontarem, com o mesmo
@@ -261,6 +270,37 @@ export async function enfileirarOrdemDoPortal(entrada: {
       entrada.action === "assign" ? impedimentoParaAtribuir(alvo) : impedimentoDaAcao(alvo);
     if (impedimento) throw new OrdemRecusada(impedimento);
 
+    /**
+     * TROCAR QUEM JÁ ESTAVA ESCALADO EXIGE MOTIVO (2026-09-04, a pedido).
+     *
+     * ── POR QUE AQUI, E NÃO NA TELA ───────────────────────────────────────────────────────────
+     *
+     * A tela pede o motivo antes — é o certo, e é o que faz o gesto ser bom. Mas tela não é
+     * garantia: quem tem a página aberta desde antes desta regra continuaria mandando sem nada, e a
+     * troca entraria sem registro. Aqui é dentro da transação que TRAVA a viagem, e é o ponto por
+     * onde toda atribuição passa.
+     *
+     * ── O QUE CONTA COMO TROCA ────────────────────────────────────────────────────────────────
+     *
+     * O portal já tem um motorista nesta viagem, e o que está sendo mandado é OUTRO. Duas exclusões
+     * deliberadas:
+     *
+     *   · a PRIMEIRA atribuição não pede nada — é o trabalho normal, são centenas por dia, e um
+     *     campo obrigatório que atrapalha vira "asdf" digitado por reflexo;
+     *   · reenviar o MESMO motorista não é troca. Acontece ao corrigir placa, ou ao repetir uma
+     *     ordem que falhou no portal — exigir motivo ali puniria quem está consertando.
+     */
+    const ehTroca =
+      entrada.action === "assign" &&
+      ehTrocaDeAtribuicao({
+        motoristaAtual: campos["ID do motorista (portal)"] as string | undefined,
+        motoristaNovo: entrada.driverId,
+      });
+    const motivo = entrada.motivoDaTroca?.trim() || null;
+    if (ehTroca && !motivoDaTrocaServe(motivo)) {
+      throw new OrdemRecusada("motivo_da_troca_obrigatorio");
+    }
+
     const linha = await tx
       .insert(portalCommands)
       .values({
@@ -304,8 +344,42 @@ export async function enfileirarOrdemDoPortal(entrada: {
         platesInternas: linha[0]!.platesInternas,
         // De onde a pessoa decidiu — ver o comentário do campo na entrada. Só a auditoria a recebe.
         origem: entrada.origem ?? "tela_da_viagem",
+        // O motivo da troca entra na auditoria TAMBÉM: a linha do tempo é para quem lê a viagem, a
+        // auditoria é para quem revisa depois, e as duas precisam contar a mesma história.
+        motivoDaTroca: ehTroca ? motivo : null,
       },
     });
+
+    /**
+     * O MOTIVO DA TROCA VAI PARA A LINHA DO TEMPO (2026-09-04, a pedido).
+     *
+     * ── POR QUE NA LINHA DO TEMPO, E NÃO SÓ NA AUDITORIA ──────────────────────────────────────
+     *
+     * A auditoria existe e já registraria isto. Mas ela é a tela de quem REVISA depois, com filtro e
+     * data; a pergunta "por que trocaram o motorista desta LH?" é feita por quem está OLHANDO A
+     * VIAGEM, no meio do dia. Um registro que só vive na auditoria é um registro que a operação não
+     * lê.
+     *
+     * ── `note`, e não um tipo de evento novo ──────────────────────────────────────────────────
+     *
+     * O vocabulário de eventos é fechado de propósito, e o próprio schema avisa que `note` é a
+     * ÚNICA extensão livre. Um tipo novo obrigaria migração de enum e apareceria em toda tela que
+     * desenha marcos — para um texto que é, literalmente, uma nota.
+     *
+     * Na MESMA transação da ordem: se a ordem não nascer, a nota não existe. O contrário — nota sem
+     * troca — seria pior que não registrar, porque afirmaria algo que não aconteceu.
+     */
+    if (ehTroca && motivo) {
+      await tx.insert(tripEvents).values({
+        tripId: entrada.tripId,
+        eventType: "note",
+        source: "operator_manual",
+        actorUserId: entrada.requestedBy,
+        eventTimestamp: new Date(),
+        notes: `Troca de atribuição: ${motivo}`,
+      });
+    }
+
     return paraOrdem(linha[0]!);
   });
 }
@@ -372,10 +446,7 @@ export async function expirarOrdensVencidas(): Promise<number> {
     .where(
       and(
         eq(portalCommands.status, "pending"),
-        lt(
-          portalCommands.requestedAt,
-          new Date(Date.now() - VALIDADE_DA_ORDEM_MIN * 60_000),
-        ),
+        lt(portalCommands.requestedAt, new Date(Date.now() - VALIDADE_DA_ORDEM_MIN * 60_000)),
       ),
     )
     .returning({ id: portalCommands.id });
@@ -499,7 +570,9 @@ export async function encerrarOrdemDoPortal(entrada: {
     const alvo = {
       acceptanceStatus:
         typeof cru.acceptance_status === "number"
-          ? (cru.acceptance_status === 1 ? "Accepted" : "Pending")
+          ? cru.acceptance_status === 1
+            ? "Accepted"
+            : "Pending"
           : null,
       status: null,
       plateLabel: texto(cru.vehicle_number),
@@ -514,7 +587,10 @@ export async function encerrarOrdemDoPortal(entrada: {
     }
     return confirmarAcaoNoPortal({
       acao,
-      enviadas: (ordemPrevia?.plates ?? "").split(",").map((p) => p.trim()).filter(Boolean),
+      enviadas: (ordemPrevia?.plates ?? "")
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean),
       portal: alvo,
     });
   })();

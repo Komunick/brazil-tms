@@ -2,14 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { Check, ChevronDown, ChevronRight, Copy, Eye, EyeOff, Palette, SlidersHorizontal } from "lucide-react";
-import { useMarcarViagem, useProgramacao } from "@/lib/trips/client";
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Copy,
+  Palette,
+  SlidersHorizontal,
+  Zap,
+} from "lucide-react";
+import { useMarcarCte, useMarcarSm, useMarcarViagem, useProgramacao } from "@/lib/trips/client";
 import { proximasFrentes } from "@/lib/trips/frentes";
 import { deslocamentoDoDia, diaDoDeslocamento } from "@/lib/trips/dias-da-programacao";
 import { usePainelDoUsuario } from "@/lib/ui/painel-do-usuario";
 import { ProgramacaoDetalhe } from "@/components/trips/programacao-detalhe";
 import { StatusDaLinha } from "@/components/trips/status-da-linha";
-import { SmDaLinha } from "@/components/trips/sm-da-linha";
+import { MarcaVouX } from "@/components/trips/marca-v-ou-x";
 import { ArrowLeftRight } from "lucide-react";
 import { ComentariosDaLinha } from "@/components/trips/comentarios-da-linha";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
@@ -242,7 +250,6 @@ export function MinhaProgramacaoClient({
 
   const prefs = usePainelDoUsuario();
   const [frentes, setFrentes] = useState<string[]>([]);
-  const [mostrarOcultas, setMostrarOcultas] = useState(false);
   const [busca, setBusca] = useState("");
   const [paletaAberta, setPaletaAberta] = useState<string | null>(null);
   const [recolhidos, setRecolhidos] = useState<Set<string>>(new Set());
@@ -270,7 +277,6 @@ export function MinhaProgramacaoClient({
       continua querendo dizer "ontem" hoje, que é o que faz o filtro sobreviver à virada do dia.
     */
     setDiasEscondidos(new Set(prefs.programacao.dias.map((d) => diaDoDeslocamento(d, hoje))));
-    setMostrarOcultas(prefs.programacao.mostrarOcultas);
     setAplicado(true);
   }, [aplicado, prefs.carregado, prefs.programacao, hoje]);
 
@@ -281,7 +287,8 @@ export function MinhaProgramacaoClient({
       frentes,
       status: [...statusEscondidos],
       dias: [...diasEscondidos].map((d) => deslocamentoDoDia(d, hoje)),
-      mostrarOcultas,
+      // Sem efeito desde 04/09 — repassada como está para não apagar o que já estava guardado.
+      mostrarOcultas: prefs.programacao.mostrarOcultas,
       ...mudanca,
     });
   };
@@ -315,13 +322,20 @@ export function MinhaProgramacaoClient({
   const visiveis = useMemo(() => {
     const termo = busca.trim().toUpperCase();
     return linhas.filter((l) => {
-      if (l.oculta && !mostrarOcultas) return false;
+      /*
+        NÃO SE ESCONDE MAIS LINHA (2026-09-04, a pedido: "não é mais necessário").
+
+        O filtro que existia aqui é o que trazia de volta as 33 LHs que 9 pessoas tinham escondido:
+        tirar só o botão e deixar o filtro faria essas 33 sumirem para sempre, sem nenhum caminho de
+        volta. A coluna `oculta` continua no banco, marcada como estava — descartar arquiva, não
+        apaga —, e simplesmente deixou de ter efeito.
+      */
       if (termo === "") return true;
       return [l.externalTripId, l.origem, l.destino, l.motorista, l.placa]
         .filter(Boolean)
         .some((c) => String(c).toUpperCase().includes(termo));
     });
-  }, [linhas, busca, mostrarOcultas]);
+  }, [linhas, busca]);
 
   /** Agrupado por dia, na ordem em que o servidor devolveu — que já é a da hora de coleta. */
   const porDia = useMemo(() => {
@@ -410,8 +424,6 @@ export function MinhaProgramacaoClient({
     return [...mapa.entries()].sort((a, b) => b[1] - a[1]);
   }, [visiveis, diasEscondidos]);
 
-  const ocultas = linhas.filter((l) => l.oculta).length;
-
   return (
     <div className="space-y-4">
       <Card>
@@ -451,26 +463,6 @@ export function MinhaProgramacaoClient({
           />
 
           <CopiarPlacas placas={placasNaTela} viagens={viagensNaTela} />
-
-          {/* Só aparece quando existe algo escondido: um botão que nunca faz nada é ruído. */}
-          {ocultas > 0 ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setMostrarOcultas(!mostrarOcultas);
-                lembrar({ mostrarOcultas: !mostrarOcultas });
-              }}
-            >
-              {mostrarOcultas ? (
-                <EyeOff className="mr-1 h-3.5 w-3.5" aria-hidden />
-              ) : (
-                <Eye className="mr-1 h-3.5 w-3.5" aria-hidden />
-              )}
-              {mostrarOcultas ? t("esconderOcultas") : t("verOcultas", { n: ocultas })}
-            </Button>
-          ) : null}
 
           {/*
             O FILTRO DE DIAS ABRE NUM SUBCARD (2026-08-24, a pedido).
@@ -642,6 +634,9 @@ export function MinhaProgramacaoClient({
                   {/* A coluna das MARCAÇÕES: a cor (pessoal) e o status (de todos). */}
                   <TableHead className="w-8" />
                   <TableHead className="w-24">{t("statusOperacional")}</TableHead>
+                  {/* SM e CTE: duas perguntas independentes, uma coluna cada. */}
+                  <TableHead className="w-16">{t("sm")}</TableHead>
+                  <TableHead className="w-16">{t("cte")}</TableHead>
                   <TableHead>{t("lh")}</TableHead>
                   <TableHead>{t("rota")}</TableHead>
                   <TableHead>{t("etaOrigem")}</TableHead>
@@ -652,7 +647,6 @@ export function MinhaProgramacaoClient({
                   <TableHead>{t("motorista")}</TableHead>
                   <TableHead>{t("placa")}</TableHead>
                   <TableHead>{t("contato")}</TableHead>
-                  <TableHead className="w-8" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -664,7 +658,7 @@ export function MinhaProgramacaoClient({
                       nascem `opacity-0` e sobem com `group-hover`. Sem esta classe aqui, os cinco
                       botões ficariam invisíveis para sempre, e o recurso seria código morto.
                     */
-                    className={cn("group", classeDaCor(l.cor), l.oculta && "opacity-40")}
+                    className={cn("group", classeDaCor(l.cor))}
                   >
                     {/* A paleta abre na própria linha: pintar é gesto de tela, não vale uma janela. */}
                     <TableCell className="p-1">
@@ -712,18 +706,34 @@ export function MinhaProgramacaoClient({
                     */}
                     <TableCell className="p-1">
                       {/*
-                        O SM FICA AO LADO DO STATUS (31/08, a pedido), e não dentro dele: o status é
-                        uma escada (a enviar → enviado → prog OK) e a SM convive com qualquer degrau.
-                        Como quinto valor, a tela teria de escolher entre dizer uma coisa ou a outra.
+                        O SM SAIU DAQUI e virou COLUNA (2026-09-04, a pedido).
+
+                        Ele morava colado no status porque nasceu como um selo. Virando marcação de
+                        um clique, e ganhando um irmão (o CTE), os dois pedem coluna com título — um
+                        par de ícones sem cabeçalho no meio da linha não diz o que está marcando.
                       */}
-                      <div className="flex items-center gap-1">
-                        <StatusDaLinha
-                          tripId={l.tripId}
-                          status={l.statusOperacional}
-                          podeMarcar={podeAtribuir}
-                        />
-                        <SmDaLinha tripId={l.tripId} sm={l.sm} podeMarcar={podeAtribuir} />
-                      </div>
+                      <StatusDaLinha
+                        tripId={l.tripId}
+                        status={l.statusOperacional}
+                        podeMarcar={podeAtribuir}
+                      />
+                    </TableCell>
+
+                    <TableCell className="p-1">
+                      <MarcaDaLinha
+                        tripId={l.tripId}
+                        valor={l.sm}
+                        campo="sm"
+                        podeMarcar={podeAtribuir}
+                      />
+                    </TableCell>
+                    <TableCell className="p-1">
+                      <MarcaDaLinha
+                        tripId={l.tripId}
+                        valor={l.cte}
+                        campo="cte"
+                        podeMarcar={podeAtribuir}
+                      />
                     </TableCell>
 
                     <TableCell className="font-mono text-xs">
@@ -744,6 +754,27 @@ export function MinhaProgramacaoClient({
                       {/* A LH é o que se leva para o portal — é o campo mais copiado da tela. */}
                       {l.externalTripId ? (
                         <Copiar valor={l.externalTripId} rotulo={t("copiarLh")} className="ml-1" />
+                      ) : null}
+                      {/*
+                        O RAIO MARCA A LH QUE VEIO DE LEILÃO (2026-09-04, a pedido).
+
+                        Medido no dia: 27 das 69 viagens de dois dias vieram de oferta de spot — 39%.
+                        Elas se pagam e se cobram diferente, e até aqui só dava para saber abrindo
+                        uma por uma.
+
+                        Um ÍCONE e não uma coluna: a linha já tem quinze colunas, e isto é um sim/não
+                        que só interessa quando é sim. Colado no número da LH porque é sobre ELA — em
+                        qualquer outro canto viraria um símbolo solto que ninguém sabe a que se
+                        refere.
+                      */}
+                      {l.veioDeSpot ? (
+                        <span
+                          title={t("veioDeSpot")}
+                          aria-label={t("veioDeSpot")}
+                          className="ml-1 inline-flex items-center align-middle text-amber-600 dark:text-amber-400"
+                        >
+                          <Zap className="size-3" aria-hidden />
+                        </span>
                       ) : null}
                       {/*
                         O RECADO ABRE NO PRÓPRIO MARCADOR (2026-08-26, a pedido).
@@ -967,21 +998,6 @@ export function MinhaProgramacaoClient({
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell className="p-1 text-right">
-                      <button
-                        type="button"
-                        aria-label={l.oculta ? t("mostrar") : t("esconder")}
-                        title={l.oculta ? t("mostrar") : t("esconder")}
-                        onClick={() => marcar.mutate({ tripId: l.tripId, oculta: !l.oculta })}
-                        className="rounded p-1 text-muted-foreground hover:text-foreground"
-                      >
-                        {l.oculta ? (
-                          <Eye className="h-3.5 w-3.5" aria-hidden />
-                        ) : (
-                          <EyeOff className="h-3.5 w-3.5" aria-hidden />
-                        )}
-                      </button>
-                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -1026,6 +1042,43 @@ export function MinhaProgramacaoClient({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/**
+ * A MARCA DA LINHA — o V e o X de SM e de CTE (2026-09-04, a pedido).
+ *
+ * Um componente para os dois porque são o mesmo gesto sobre campos diferentes: se um ganhasse um
+ * comportamento que o outro não tem, a linha passaria a se comportar de dois jeitos em duas colunas
+ * vizinhas — e ninguém saberia dizer qual é a certa.
+ *
+ * O gancho é escolhido pelo campo, e não recebido de fora: quem usa a coluna diz O QUE está
+ * marcando, não COMO gravar. É o que impede a tela de chamar o gancho errado.
+ */
+function MarcaDaLinha({
+  tripId,
+  valor,
+  campo,
+  podeMarcar,
+}: {
+  tripId: string;
+  valor: boolean | null;
+  campo: "sm" | "cte";
+  podeMarcar: boolean;
+}) {
+  const t = useTranslations("Programacao");
+  const marcarSm = useMarcarSm(tripId);
+  const marcarCte = useMarcarCte(tripId);
+  const marcar = campo === "sm" ? marcarSm : marcarCte;
+
+  return (
+    <MarcaVouX
+      valor={valor}
+      podeMarcar={podeMarcar}
+      aoMarcar={(v) => marcar.mutate(v)}
+      rotuloSim={t(campo === "sm" ? "smSim" : "cteSim")}
+      rotuloNao={t(campo === "sm" ? "smNao" : "cteNao")}
+    />
   );
 }
 

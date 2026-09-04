@@ -51,6 +51,12 @@ export interface MarcaDaProgramacao {
    * que é exatamente o desperdício que este arquivo existe para evitar.
    */
   sm: boolean | null;
+  /**
+   * O CTE FOI EMITIDO? Irmã da SM, e viaja pela mesma consulta rápida e pelo mesmo motivo: é
+   * marcação de gesto humano, e quem marca precisa ver o efeito antes do ciclo de um minuto — a
+   * colega ao lado também, senão as duas marcam a mesma viagem.
+   */
+  cte: boolean | null;
   comentarios: number;
 }
 
@@ -59,11 +65,13 @@ export async function marcasDaProgramacao(): Promise<MarcaDaProgramacao[]> {
     trip_id: string;
     status: string | null;
     sm: boolean | null;
+    cte: boolean | null;
     comentarios: number;
   }>(sql`
     with marcadas as (
       -- As duas fontes de marca, unidas: uma viagem pode ter status, comentário, ou os dois.
-      select trip_id from trip_programacao where status is not null or sm is not null
+      select trip_id from trip_programacao
+       where status is not null or sm is not null or cte is not null
       union
       select trip_id from trip_comments where apagado_em is null
     )
@@ -71,6 +79,7 @@ export async function marcasDaProgramacao(): Promise<MarcaDaProgramacao[]> {
       m.trip_id,
       p.status,
       p.sm,
+      p.cte,
       (select count(*)::int from trip_comments tc
         where tc.trip_id = m.trip_id and tc.apagado_em is null) as comentarios
     from marcadas m
@@ -88,6 +97,7 @@ export async function marcasDaProgramacao(): Promise<MarcaDaProgramacao[]> {
     tripId: r.trip_id,
     status: (r.status as StatusDaProgramacao | null) ?? null,
     sm: r.sm,
+    cte: r.cte,
     comentarios: Number(r.comentarios ?? 0),
   }));
 }

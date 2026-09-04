@@ -487,6 +487,8 @@ export function useProgramacao(
         ...l,
         statusOperacional: m?.status ?? null,
         sm: m?.sm ?? null,
+        // O CTE entra pelo MESMO caminho do SM, e pelo mesmo motivo — ver o comentário acima.
+        cte: m?.cte ?? null,
         comentarios: m?.comentarios ?? 0,
       };
     });
@@ -594,14 +596,22 @@ export function useMarcarStatus(tripId: string) {
       if (antes) {
         const outras = antes.marcas.filter((m) => m.tripId !== tripId);
         const minha = antes.marcas.find((m) => m.tripId === tripId);
-        // Tirar o status NÃO tira a linha das marcas quando ela ainda tem comentários — a contagem
-        // continua valendo, e removê-la faria o marcador de recado sumir junto.
+        /*
+          O QUE NÃO É DESTE CLIQUE VIAJA JUNTO — e isto era um defeito (2026-09-04).
+
+          A marca otimista era montada como `{ tripId, status, comentarios }`, sem o `sm`. Marcar um
+          status fazia o selo da SM SUMIR da tela na hora, voltando sozinho na leitura seguinte — e
+          ninguém ligaria uma coisa à outra: a pessoa clica em "Enviado" e o SM pisca para fora.
+
+          Achado ao acrescentar o CTE, que cairia na mesma armadilha. As três marcas convivem na
+          mesma linha, e cada gesto só pode mexer na sua.
+        */
+        const sm = minha?.sm ?? null;
+        const cte = minha?.cte ?? null;
         const comentarios = minha?.comentarios ?? 0;
+        const some = status === null && sm === null && cte === null && comentarios === 0;
         queryClient.setQueryData(chave, {
-          marcas:
-            status === null && comentarios === 0
-              ? outras
-              : [...outras, { tripId, status, comentarios }],
+          marcas: some ? outras : [...outras, { tripId, status, sm, cte, comentarios }],
         });
       }
       return { antes };
@@ -656,10 +666,58 @@ export function useMarcarSm(tripId: string) {
           junto até a próxima leitura do quadro.
         */
         const status = minha?.status ?? null;
+        const cte = minha?.cte ?? null;
         const comentarios = minha?.comentarios ?? 0;
-        const some = sm === null && status === null && comentarios === 0;
+        const some = sm === null && status === null && cte === null && comentarios === 0;
         queryClient.setQueryData(chave, {
-          marcas: some ? outras : [...outras, { tripId, status, sm, comentarios }],
+          marcas: some ? outras : [...outras, { tripId, status, sm, cte, comentarios }],
+        });
+      }
+      return { antes };
+    },
+    onError: (_erro, _v, ctx) => {
+      if (ctx?.antes) queryClient.setQueryData([...PROGRAMACAO, "marcas"], ctx.antes);
+    },
+    onSuccess: (dados) => {
+      queryClient.setQueryData([...TRIPS_ROOT, tripId, "programacao"], dados);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: [...PROGRAMACAO, "marcas"] });
+    },
+  });
+}
+
+/**
+ * O CTE MARCA COMO A SM — irmão em tudo (2026-09-04, a pedido).
+ *
+ * Mesmo PATCH, mesma marca otimista, mesma trava contra apagar o que não é deste clique. Se um dia
+ * os dois divergirem, é sinal de que um foi mexido sem o outro.
+ */
+export function useMarcarCte(tripId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    meta: { silencioso: true },
+    mutationFn: async (cte: boolean | null) =>
+      asJson<{ programacao: ProgramacaoDaViagem | null }>(
+        await fetch(`/api/trips/${tripId}/programacao`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cte }),
+        }),
+      ),
+    onMutate: async (cte) => {
+      const chave = [...PROGRAMACAO, "marcas"];
+      await queryClient.cancelQueries({ queryKey: chave });
+      const antes = queryClient.getQueryData<{ marcas: MarcaDaProgramacao[] }>(chave);
+      if (antes) {
+        const outras = antes.marcas.filter((m) => m.tripId !== tripId);
+        const minha = antes.marcas.find((m) => m.tripId === tripId);
+        const status = minha?.status ?? null;
+        const sm = minha?.sm ?? null;
+        const comentarios = minha?.comentarios ?? 0;
+        const some = cte === null && status === null && sm === null && comentarios === 0;
+        queryClient.setQueryData(chave, {
+          marcas: some ? outras : [...outras, { tripId, status, sm, cte, comentarios }],
         });
       }
       return { antes };
