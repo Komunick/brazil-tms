@@ -120,6 +120,18 @@ export interface PortalTrip {
    */
   driverExternalId?: string | null;
   /**
+   * O SEGUNDO MOTORISTA, quando a viagem tem dois (2026-09-04, a pedido).
+   *
+   * O portal manda `second_driver_name` e `second_driver_id` na MESMA listagem que já lemos — vinham
+   * sendo jogados fora. A linha da programação mostrava um motorista só, e numa viagem de dois isso
+   * é meia informação: quem escala precisa saber que a dupla está fechada.
+   *
+   * Nulos na esmagadora maioria. Sete viagens tinham dois no dia em que isto foi medido, mas o
+   * portal aceita até nove — o limite de guardar UM é nosso, na ordem de atribuição, e não dele.
+   */
+  secondDriverLabel?: string | null;
+  secondDriverExternalId?: string | null;
+  /**
    * "Pending" / "Accepted" — o cliente já aceitou esta viagem? Eixo INDEPENDENTE do `status`: uma
    * viagem aceita e ainda sem motorista está esperando atribuição, e são 359 delas hoje.
    */

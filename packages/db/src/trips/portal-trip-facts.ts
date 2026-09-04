@@ -45,6 +45,19 @@ export async function writePortalFacts(
   // O id do motorista no sistema do cliente. Guardado porque é a única chave que os dois lados
   // compartilham, e porque um dado que o cliente entrega de graça não se joga fora.
   if (portal.driverExternalId) fields["ID do motorista (portal)"] = portal.driverExternalId;
+  /*
+    O SEGUNDO MOTORISTA (2026-09-04, a pedido).
+
+    Campos próprios, e não o primeiro com os dois nomes grudados: a linha precisa mostrá-los
+    separados, e a atribuição precisa do id de cada um. Juntá-los num texto obrigaria toda leitura a
+    desfazer a junção, e a primeira que esquecesse mostraria "FULANO, SICRANO" como se fosse gente.
+
+    Ausentes na esmagadora maioria — e ausência aqui não apaga nada, porque só se escreve o que veio.
+  */
+  if (portal.secondDriverLabel) fields["Segundo motorista (portal)"] = portal.secondDriverLabel;
+  if (portal.secondDriverExternalId) {
+    fields["ID do segundo motorista (portal)"] = portal.secondDriverExternalId;
+  }
   if (portal.plateLabel) fields["Placa (portal)"] = portal.plateLabel;
   if (portal.operatorLabel) fields["Operador (portal)"] = portal.operatorLabel;
   /**

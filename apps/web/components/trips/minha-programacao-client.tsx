@@ -382,7 +382,7 @@ export function MinhaProgramacaoClient({
         apaga —, e simplesmente deixou de ter efeito.
       */
       if (termo === "") return true;
-      return [l.externalTripId, l.origem, l.destino, l.motorista, l.placa]
+      return [l.externalTripId, l.origem, l.destino, l.motorista, l.segundoMotorista, l.placa]
         .filter(Boolean)
         .some((c) => String(c).toUpperCase().includes(termo));
     });
@@ -1062,6 +1062,27 @@ export function MinhaProgramacaoClient({
                             aoDefinir={podeAtribuir ? () => setPrevendo(l.tripId) : undefined}
                           />
                         )}
+                        {/*
+                          O SEGUNDO MOTORISTA, EMBAIXO DO PRIMEIRO (2026-09-04, a pedido).
+
+                          Ele vinha na mesma listagem do portal desde sempre e era descartado no
+                          mapeador. Numa viagem de dois, mostrar só um é meia informação: quem escala
+                          não tem como saber se a dupla está fechada ou se ainda falta gente.
+
+                          Só desenha quando existe. Um "—" fixo diria "não tem segundo" sobre quase
+                          todas as viagens, e uma linha a mais em cada uma delas — ruído em troca de
+                          nada, numa tabela que já tem quinze colunas.
+
+                          O "2º" na frente é o que evita a leitura errada: sem ele, dois nomes
+                          empilhados parecem o mesmo campo repetido ou um nome que quebrou de linha.
+                        */}
+                        {l.segundoMotorista ? (
+                          <span className="text-muted-foreground flex items-center gap-1 text-[0.7rem]">
+                            <span className="font-semibold">2º</span>
+                            {l.segundoMotorista}
+                            <Copiar valor={l.segundoMotorista} rotulo={t("copiarMotorista")} />
+                          </span>
+                        ) : null}
                         {/*
                           O CPF EMBAIXO DO NOME (31/08, a pedido).
 

@@ -157,6 +157,13 @@ export interface LinhaDaProgramacao {
   acceptanceStatus: string | null;
   portalStatus: string | null;
   motorista: string | null;
+  /**
+   * O SEGUNDO MOTORISTA, quando a viagem tem dois (2026-09-04, a pedido).
+   *
+   * Nulo na esmagadora maioria. A coluna só desenha a segunda linha quando ele existe — um traço
+   * fixo diria "não tem" sobre todas as viagens de um motorista só, que são quase todas.
+   */
+  segundoMotorista: string | null;
   placa: string | null;
   /**
    * A PLACA QUE FICOU SÓ NO TMS (30/08, a pedido).
@@ -308,6 +315,7 @@ export async function readProgramacao(
     aceitacao: string | null;
     status_portal: string | null;
     motorista: string | null;
+    segundo_motorista: string | null;
     placa: string | null;
     placa_interna: string | null;
     cpf: string | null;
@@ -390,6 +398,15 @@ export async function readProgramacao(
       t.customer_fields ->> 'Aceitação (portal)' as aceitacao,
       t.customer_fields ->> 'Status (portal)' as status_portal,
       t.customer_fields ->> 'Motorista (portal)' as motorista,
+      /*
+        O SEGUNDO MOTORISTA (2026-09-04, a pedido).
+
+        Vinha na mesma listagem do portal e era descartado no mapeador. Numa viagem de dois, mostrar
+        só o primeiro é meia informação: quem escala não tem como saber se a dupla está fechada.
+
+        Nulo na esmagadora maioria — e a coluna só desenha a segunda linha quando ele existe.
+      */
+      t.customer_fields ->> 'Segundo motorista (portal)' as segundo_motorista,
       t.customer_fields ->> 'Placa (portal)' as placa,
       /*
        * A PLACA QUE NÃO FOI AO PORTAL — a carreta que rodou no lugar do truck (30/08).
@@ -539,6 +556,7 @@ export async function readProgramacao(
     acceptanceStatus: r.aceitacao,
     portalStatus: r.status_portal,
     motorista: r.motorista,
+    segundoMotorista: r.segundo_motorista,
     placa: r.placa,
     placaInterna: r.placa_interna,
     cpf: r.cpf,
