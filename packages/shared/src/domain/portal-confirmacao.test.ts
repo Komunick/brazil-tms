@@ -178,3 +178,104 @@ describe("recusa", () => {
     expect(v.confirmado).not.toBe(false);
   });
 });
+
+/**
+ * O MOTORISTA PASSOU A SER CONFERIDO (2026-09-04) — e este bloco é o defeito que ele fecha.
+ *
+ * O relato do usuário foi exato: **"no portal não atribui, no TMS fala que sim"**. A confirmação
+ * olhava só a PLACA, e a placa é a mesma independentemente de quem dirige — então o portal podia
+ * escalar outra pessoa e a ordem virava `done` do mesmo jeito.
+ *
+ * Medido nas 7 atribuições de dois motoristas marcadas como concluídas em produção: em QUATRO o
+ * portal ficou com quem mandamos como SEGUNDO, e numa delas (LT0Q8R02ES091) com um terceiro que não
+ * pedimos. Todas passaram.
+ */
+describe("assign — o motorista também é conferido", () => {
+  const placa = "QWB7I69";
+  const portalBase = {
+    acceptanceStatus: null,
+    status: null,
+    plateLabel: placa,
+  };
+
+  /**
+   * O CASO ES091, o que doeu: pedimos dois e o portal ficou com um terceiro. Antes disto, `done`.
+   */
+  it("reprova quando o portal mostra alguém que NÃO foi escalado", () => {
+    const v = confirmarAcaoNoPortal({
+      acao: "assign",
+      enviadas: [placa],
+      motoristasEnviados: ["ANTONIO PAULO REBOUCAS DA SILVA", "EDUARDO ESTEVAO CORREA ALENCAR"],
+      portal: { ...portalBase, driverLabel: "WARLEY AURELIO DOS SANTOS" },
+    });
+    expect(v.confirmado).toBe(false);
+  });
+
+  /**
+   * O portal ora mostra o da primeira etapa, ora o do pool. Exigir que fosse o PRIMEIRO reprovaria
+   * quatro atribuições que estavam certas — bater com qualquer um dos dois é a prova que existe.
+   */
+  it("aceita quando o portal mostra o SEGUNDO dos escalados", () => {
+    const v = confirmarAcaoNoPortal({
+      acao: "assign",
+      enviadas: [placa],
+      motoristasEnviados: ["ANTONIO PAULO REBOUCAS DA SILVA", "EDUARDO ESTEVAO CORREA ALENCAR"],
+      portal: { ...portalBase, driverLabel: "EDUARDO ESTEVAO CORREA ALENCAR" },
+    });
+    expect(v.confirmado).toBe(true);
+  });
+
+  /** Acento não faz duas pessoas — o portal escreve sem, o cadastro escreve com. */
+  it("o acento não separa a mesma pessoa", () => {
+    const v = confirmarAcaoNoPortal({
+      acao: "assign",
+      enviadas: [placa],
+      motoristasEnviados: ["JOÃO PEDRO PEREIRA"],
+      portal: { ...portalBase, driverLabel: "JOAO PEDRO PEREIRA" },
+    });
+    expect(v.confirmado).toBe(true);
+  });
+
+  /**
+   * FALTA DE DADO NOSSO NÃO REPROVA O PORTAL — a mesma lição que já custou duas correções aqui.
+   * Se não sabemos o nome de quem escalamos, a conferência do motorista não acontece; ela não vira
+   * desmentido.
+   */
+  it("sem os nossos nomes, confere só a placa e não reprova", () => {
+    const v = confirmarAcaoNoPortal({
+      acao: "assign",
+      enviadas: [placa],
+      motoristasEnviados: [],
+      portal: { ...portalBase, driverLabel: "QUEM QUER QUE SEJA" },
+    });
+    expect(v.confirmado).toBe(true);
+    if (v.confirmado === true) expect(v.motoristasConferidos).toBe(0);
+  });
+
+  it("o portal sem nome nenhum também não reprova", () => {
+    const v = confirmarAcaoNoPortal({
+      acao: "assign",
+      enviadas: [placa],
+      motoristasEnviados: ["ANTONIO PAULO REBOUCAS DA SILVA"],
+      portal: { ...portalBase, driverLabel: null },
+    });
+    expect(v.confirmado).toBe(true);
+    if (v.confirmado === true) expect(v.motoristasConferidos).toBe(0);
+  });
+
+  /**
+   * O PORTAL MOSTRA UM NOME SÓ. Numa atribuição de dois, no máximo um é conferível — e o veredito
+   * diz isso em vez de deixar parecer que os dois foram vistos. Foi confirmar o que não se olhou
+   * que produziu o defeito.
+   */
+  it("declara que conferiu UM motorista, mesmo tendo escalado dois", () => {
+    const v = confirmarAcaoNoPortal({
+      acao: "assign",
+      enviadas: [placa],
+      motoristasEnviados: ["ANTONIO PAULO REBOUCAS DA SILVA", "EDUARDO ESTEVAO CORREA ALENCAR"],
+      portal: { ...portalBase, driverLabel: "ANTONIO PAULO REBOUCAS DA SILVA" },
+    });
+    expect(v.confirmado).toBe(true);
+    if (v.confirmado === true) expect(v.motoristasConferidos).toBe(1);
+  });
+});
