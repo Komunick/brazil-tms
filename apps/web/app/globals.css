@@ -526,3 +526,53 @@
     animation: none;
   }
 }
+
+/*
+ * O RECADO NOVO NA LINHA DA PROGRAMAÇÃO (2026-09-04, a pedido).
+ *
+ * ── O QUE ESTAVA ERRADO ───────────────────────────────────────────────────────────────────────
+ *
+ * O marcador de comentário era um ícone de 12px herdando a cor do texto da linha. Numa tela onde as
+ * linhas são pintadas por cor de marcação, ele desaparecia dentro do próprio fundo — a operação
+ * reclamou de não ver, e estava certa: um sinal que herda a cor de onde mora não é um sinal.
+ *
+ * ── O QUE FAZ ELE APARECER ────────────────────────────────────────────────────────────────────
+ *
+ * Fundo PRÓPRIO e opaco, não herdado. É isso que o faz sobrepor a cor da linha em vez de se diluir
+ * nela. O anel que cresce por fora é o que chama o olho de longe, sem empurrar a linha: ele mora num
+ * `box-shadow`, que não ocupa espaço no fluxo.
+ *
+ * ── E POR QUE ELE PARA ────────────────────────────────────────────────────────────────────────
+ *
+ * Ver `comentarios-da-linha.tsx`: pisca pelo que CHEGOU, não pelo que existe. Um marcador que pisca
+ * enquanto houver comentário deixaria metade do quadro piscando o dia inteiro — e o que pisca sempre
+ * some da vista igual ao que não pisca nunca.
+ */
+@keyframes recado-chamando {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(238, 77, 45, 0.75);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(238, 77, 45, 0);
+    transform: scale(1.18);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-recado-chamando {
+    animation: recado-chamando 1.2s ease-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /*
+    Sem movimento, o sinal continua dito — aceso e parado, com o anel na maior abertura. É a mesma
+    escolha do alarme da oferta de spot: quem pede menos movimento não está pedindo menos aviso.
+  */
+  .animate-recado-chamando {
+    animation: none;
+    box-shadow: 0 0 0 3px rgba(238, 77, 45, 0.55);
+  }
+}

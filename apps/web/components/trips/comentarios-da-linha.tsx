@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { MessageSquare } from "lucide-react";
 import { ComentariosDaViagem } from "@/components/trips/comentarios-da-viagem";
@@ -49,6 +49,38 @@ export function ComentariosDaLinha({
   const t = useTranslations("Programacao");
   const [aberto, setAberto] = useState(false);
 
+  /*
+    ── PISCA PELO QUE CHEGOU, NÃO PELO QUE EXISTE (2026-09-04, a pedido) ─────────────────────────
+
+    O pedido foi "que chame atenção quando alguém comenta". A leitura fácil seria piscar sempre que
+    houvesse comentário — e seria o erro: numa manhã comum dezenas de linhas têm recado, o quadro
+    inteiro passaria a piscar, e o que pisca sempre some da vista igual ao que não pisca nunca.
+
+    Então a memória é da CONTAGEM: guarda quantos havia e acende quando o número cresce.
+
+    ── A PRIMEIRA LEITURA NUNCA ACENDE ─────────────────────────────────────────────────────────
+
+    `vistos` nasce com o que a linha já trazia. Sem isso, abrir a tela de manhã faria acender tudo
+    que tem recado desde ontem — é a mesma armadilha que o aviso de oferta de spot documenta com o
+    seu `estadoInicial`, e pela mesma razão: "novo para mim agora" não é "existe".
+
+    ── E APAGA AO ABRIR ────────────────────────────────────────────────────────────────────────
+
+    Quem abriu, leu. Manter aceso depois disso ensinaria a ignorar o sinal, que é o defeito que este
+    componente veio consertar.
+  */
+  const vistos = useRef(quantos);
+  const [chegou, setChegou] = useState(false);
+
+  useEffect(() => {
+    if (quantos > vistos.current) setChegou(true);
+    vistos.current = quantos;
+  }, [quantos]);
+
+  useEffect(() => {
+    if (aberto) setChegou(false);
+  }, [aberto]);
+
   return (
     <>
       <button
@@ -56,14 +88,23 @@ export function ComentariosDaLinha({
         onClick={() => setAberto(true)}
         title={quantos > 0 ? t("temComentarios", { n: quantos }) : t("comentar")}
         className={cn(
-          "ml-1.5 inline-flex items-center gap-0.5 align-middle transition-colors",
+          "ml-1.5 inline-flex items-center gap-0.5 rounded-full align-middle transition-colors",
+          /*
+            FUNDO PRÓPRIO quando há recado — e é isto que o faz aparecer.
+
+            Antes ele herdava a cor do texto da linha, e a linha é pintada pela cor de marcação: o
+            sinal se diluía no próprio fundo. Com fundo opaco ele SOBREPÕE a cor em vez de competir
+            com ela, que foi o pedido.
+          */
           quantos > 0
-            ? "text-foreground/70 hover:text-foreground"
+            ? "bg-foreground px-1.5 py-0.5 font-bold text-background"
             : "text-muted-foreground/40 hover:text-foreground",
+          // Chegou recado agora: laranja da marca, com o anel pulsando. Ver `globals.css`.
+          chegou && "animate-recado-chamando bg-[#EE4D2D] text-white",
         )}
       >
-        <MessageSquare className="h-3 w-3" aria-hidden />
-        {quantos > 0 ? <span className="text-[10px] tabular-nums">{quantos}</span> : null}
+        <MessageSquare className={cn("h-3 w-3", quantos > 0 && "h-3.5 w-3.5")} aria-hidden />
+        {quantos > 0 ? <span className="text-[11px] tabular-nums">{quantos}</span> : null}
         <span className="sr-only">
           {quantos > 0 ? t("temComentarios", { n: quantos }) : t("comentar")}
         </span>
