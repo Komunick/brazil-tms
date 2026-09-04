@@ -93,6 +93,23 @@ export const programacaoPrefsSchema = z.object({
    * preferência salva — o pior tipo de defeito, porque a coluna existiria e ninguém a veria.
    */
   colunas: z.array(z.string().trim().max(40)).max(30).optional().default([]),
+  /**
+   * ATÉ QUANTOS DIAS À FRENTE O QUADRO VAI (2026-09-04, a pedido).
+   *
+   * ── O QUE ACONTECEU ───────────────────────────────────────────────────────────────────────
+   *
+   * A janela era fixa em sete dias. Em 04/09 a operação conferiu DEZ LHs à mão, uma a uma, e
+   * concluiu que o TMS não estava recebendo — "NÃO ESTÁ TMS", dez vezes. As dez estavam no banco,
+   * carimbadas pelo robô minutos antes: a coleta delas era 12 e 13 de setembro, oito e nove dias à
+   * frente, e a tela simplesmente não ia até lá.
+   *
+   * O alarme era falso; o custo dele, não. E se repetiria em qualquer número que escolhêssemos —
+   * por isso a janela virou escolha, e a tela passou a DIZER até quando ela vai.
+   *
+   * O teto de 30 é o mesmo que a rota já aceitava: aqui nada de novo é permitido, só passa a ser
+   * alcançável sem editar a URL à mão.
+   */
+  diasAdiante: z.number().int().min(1).max(30).optional().default(7),
 });
 
 export type ProgramacaoPrefs = z.infer<typeof programacaoPrefsSchema>;
@@ -115,6 +132,8 @@ export const PADRAO_DA_PROGRAMACAO: ProgramacaoPrefs = {
   mostrarOcultas: false,
   // Nenhuma escondida: a linha inteira à vista é o que faz sentido para quem chega sem escolha.
   colunas: [],
+  // Uma semana: o que a tela sempre mostrou, e continua sendo o padrão de quem não escolheu.
+  diasAdiante: 7,
 };
 
 export const dashboardPrefsSchema = z.object({
