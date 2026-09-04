@@ -89,7 +89,9 @@ export function SeloDeVinculo({
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const r = await fetch("/api/master-data/carriers?limit=500", { credentials: "include" });
-      const j = (await r.json()) as { items?: Array<{ id: string; name: string; status?: string }> };
+      const j = (await r.json()) as {
+        items?: Array<{ id: string; name: string; status?: string }>;
+      };
       return (j.items ?? []).filter((c) => c.status !== "inactive");
     },
   });
@@ -142,8 +144,16 @@ export function SeloDeVinculo({
       /*
         A linha inteira vem da programação, então é ELA que precisa ser relida — sem isto o selo só
         mudaria no ciclo seguinte, e quem acabou de clicar acharia que não salvou.
+
+        ── A CHAVE ESTAVA ERRADA, e o sintoma parecia outra coisa (corrigido em 04/09) ───────────
+
+        Era `["programacao"]`. A chave real do quadro é `["trips", "minha-programacao", …]`, então a
+        invalidação NÃO CASAVA COM NADA e nem quem clicava via o efeito antes do ciclo de 60 s.
+
+        O relato foi "está alterando apenas para o usuário". A gravação sempre foi global — o PATCH
+        escreve em `drivers`, e a linha lê `ownership_type` de lá. O que faltava era a tela reler.
       */
-      await qc.invalidateQueries({ queryKey: ["programacao"] });
+      await qc.invalidateQueries({ queryKey: ["trips", "minha-programacao"] });
     } catch (e) {
       setErro(e instanceof Error ? e.message : "FALHOU");
     } finally {

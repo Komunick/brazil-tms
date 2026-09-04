@@ -212,6 +212,13 @@ export interface LinhaDaProgramacao {
    * campo mora aqui porque é aqui que a LINHA é descrita. Ver o comentário logo abaixo.
    */
   sm: boolean | null;
+  /**
+   * O CTE FOI EMITIDO? Como a SM, sempre NULO aqui — quem preenche é a tela, pelas marcas.
+   *
+   * As duas viajam pela consulta rápida porque são gesto humano; o resto desta linha vem do portal
+   * e muda em minutos, na melhor das hipóteses.
+   */
+  cte: boolean | null;
   /*
     A SM NÃO VEM POR AQUI, e é de propósito (31/08).
 
@@ -242,6 +249,12 @@ export interface LinhaDaProgramacao {
   /** A camada pessoal: cor posta por quem está olhando, e se ela escondeu esta linha. */
   cor: string | null;
   oculta: boolean;
+  /**
+   * A LH veio de um leilão de SPOT? (2026-09-04, a pedido)
+   *
+   * 27 das 69 viagens de dois dias vieram — não é caso raro. A linha marca, e quem olha decide.
+   */
+  veioDeSpot: boolean;
 }
 
 export async function readProgramacao(
@@ -283,14 +296,14 @@ export async function readProgramacao(
     eta_destino: string | null;
     perfil: string | null;
     solicitacao: string | null;
-  /**
-   * A DOCA (30/08, a pedido: "a função de doca junto com o carregamento").
-   *
-   * Vem do mesmo `operational_fields` da solicitação. Aparece na linha ANTES do status, porque é a
-   * informação que quem acompanha o carregamento procura junto com ele — saber que a viagem está
-   * "Carregando" sem saber ONDE manda a pessoa perguntar por rádio.
-   */
-  doca: string | null;
+    /**
+     * A DOCA (30/08, a pedido: "a função de doca junto com o carregamento").
+     *
+     * Vem do mesmo `operational_fields` da solicitação. Aparece na linha ANTES do status, porque é a
+     * informação que quem acompanha o carregamento procura junto com ele — saber que a viagem está
+     * "Carregando" sem saber ONDE manda a pessoa perguntar por rádio.
+     */
+    doca: string | null;
     status: string;
     aceitacao: string | null;
     status_portal: string | null;
@@ -304,6 +317,7 @@ export async function readProgramacao(
     vinculo: string | null;
     cor: string | null;
     oculta: boolean;
+    veio_de_spot: boolean | null;
     status_operacional: string | null;
     trocou_motorista: boolean | null;
     motorista_anterior: string | null;
@@ -393,6 +407,21 @@ export async function readProgramacao(
       m.ownership_type::text as vinculo,
       w.cor,
       coalesce(w.oculta, false) as oculta,
+      /*
+        VEIO DE OFERTA DE SPOT? (2026-09-04, a pedido)
+
+        Medido em produção no dia: 27 das 69 viagens de dois dias — 39% — vieram de um leilão de
+        spot. Elas se pagam e se cobram diferente, e hoje não há como distingui-las na linha sem
+        abrir uma por uma.
+
+        EXISTS e não JOIN: a resposta é sim/não, e um JOIN duplicaria a linha no dia em que a
+        mesma LH aparecesse em duas ofertas — o que acontece quando um leilão é reaberto.
+
+        O casamento é por trip_number, o mesmo campo que a fatia 030 mediu: das 132 ofertas, 98
+        acharam a viagem por ele. As que não acham simplesmente não marcam nada — nunca inventam.
+      */
+      exists (select 1 from spot_offers so where so.trip_number = t.external_trip_id)
+        as veio_de_spot,
       /*
         O PREVISTO SÓ APARECE ENQUANTO NÃO HÁ ATRIBUIÇÃO.
         Assim que o portal escala alguém, a intenção some da linha — mostrar os dois lado a lado
@@ -527,9 +556,11 @@ export async function readProgramacao(
     cor: r.cor,
 
     oculta: r.oculta,
+    veioDeSpot: r.veio_de_spot === true,
 
-    // Sempre nulo AQUI: quem preenche é a tela, a partir das marcas. Ver o tipo lá em cima.
+    // Sempre nulos AQUI: quem preenche é a tela, a partir das marcas. Ver o tipo lá em cima.
     sm: null,
+    cte: null,
     trocouMotorista: r.trocou_motorista === true,
     motoristaAnterior: r.motorista_anterior,
     trocadoPor: r.trocado_por,

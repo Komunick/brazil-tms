@@ -456,6 +456,13 @@
       "when": 1788530400009,
       "tag": "0064_cargos_multiplos",
       "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1788616800009,
+      "tag": "0065_cte_da_programacao",
+      "breakpoints": true
     }
   ]
 }

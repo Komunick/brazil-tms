@@ -102,7 +102,7 @@ export async function salvarPrevisto(
      */
     await db.execute(sql`
       delete from trip_programacao
-       where trip_id = ${tripId} and status is null and sm is null
+       where trip_id = ${tripId} and status is null and sm is null and cte is null
     `);
     await db.execute(sql`
       update trip_programacao
@@ -150,6 +150,7 @@ export async function marcarStatus(
          and nullif(btrim(portal_driver_id), '') is null
          and nullif(btrim(placa), '') is null
          and sm is null
+         and cte is null
     `);
     await db.execute(sql`
       update trip_programacao
@@ -189,11 +190,7 @@ function limpar(v: string | null | undefined): string | null {
  * limpar o status de uma viagem apagaria junto uma SM marcada — e ninguém ligaria uma coisa à outra:
  * a pessoa tirou o "Enviado" e o "SM: Sim" sumiu.
  */
-export async function marcarSm(
-  tripId: string,
-  userId: string,
-  sm: boolean | null,
-): Promise<void> {
+export async function marcarSm(tripId: string, userId: string, sm: boolean | null): Promise<void> {
   if (sm === null) {
     await db.execute(sql`
       delete from trip_programacao
@@ -201,6 +198,7 @@ export async function marcarSm(
          and nullif(btrim(portal_driver_id), '') is null
          and nullif(btrim(placa), '') is null
          and status is null
+         and cte is null
     `);
     await db.execute(sql`
       update trip_programacao
@@ -216,5 +214,48 @@ export async function marcarSm(
     .onConflictDoUpdate({
       target: tripProgramacao.tripId,
       set: { sm, smPorUserId: userId, smEm: sql`now()` },
+    });
+}
+
+/**
+ * O CTE FOI EMITIDO? — a terceira marcação da linha (2026-09-04, a pedido).
+ *
+ * Irmã de `marcarSm` em tudo: mesmos três estados, mesma limpeza, mesma trava de linha vazia. Se um
+ * dia as duas divergirem, é sinal de que uma delas foi mexida sem a outra.
+ *
+ * ── E OS OUTROS TRÊS CAMINHOS DE LIMPEZA GANHARAM `and cte is null` ───────────────────────────
+ *
+ * Pelo mesmo motivo que já valia para o SM: sem essa condição, limpar o status de uma viagem
+ * apagaria junto um CTE marcado — e ninguém ligaria uma coisa à outra. A pessoa tira o "Enviado" e o
+ * V do CTE some.
+ */
+export async function marcarCte(
+  tripId: string,
+  userId: string,
+  cte: boolean | null,
+): Promise<void> {
+  if (cte === null) {
+    await db.execute(sql`
+      delete from trip_programacao
+       where trip_id = ${tripId}
+         and nullif(btrim(portal_driver_id), '') is null
+         and nullif(btrim(placa), '') is null
+         and status is null
+         and sm is null
+    `);
+    await db.execute(sql`
+      update trip_programacao
+         set cte = null, cte_por_user_id = null, cte_em = null
+       where trip_id = ${tripId}
+    `);
+    return;
+  }
+
+  await db
+    .insert(tripProgramacao)
+    .values({ tripId, cte, ctePorUserId: userId, cteEm: sql`now()` })
+    .onConflictDoUpdate({
+      target: tripProgramacao.tripId,
+      set: { cte, ctePorUserId: userId, cteEm: sql`now()`, atualizadoEm: sql`now()` },
     });
 }
