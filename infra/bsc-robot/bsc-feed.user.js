@@ -212,17 +212,17 @@
           });
           return;
         }
-      } catch (_) { /* cai para a próxima camada */ }
+      } catch { /* cai para a próxima camada */ }
 
       try {
         fetch(url, { method: "GET", mode: "no-cors", cache: "no-store", keepalive: true })
           .catch(() => {});
         return;
-      } catch (_) { /* cai para a próxima camada */ }
+      } catch { /* cai para a próxima camada */ }
 
       try {
         new Image().src = url;
-      } catch (_) { /* desiste em silêncio: o Kuma marca DOWN pela ausência */ }
+      } catch { /* desiste em silêncio: o Kuma marca DOWN pela ausência */ }
     }
 
     function enviar(token, opcoes) {
@@ -236,7 +236,7 @@
         const ping = o.ping;
         if (ping != null && isFinite(ping)) q.set("ping", String(Math.round(ping)));
         disparar(BASE.replace(/\/+$/, "") + "/" + token + "?" + q.toString());
-      } catch (_) { /* nunca propague erro do heartbeat para o robô */ }
+      } catch { /* nunca propague erro do heartbeat para o robô */ }
     }
 
     // -- API pública ---------------------------------------------------------
