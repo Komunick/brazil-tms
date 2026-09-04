@@ -199,6 +199,12 @@
    * Não é revezamento · o detalhe não veio · a lista não trouxe rota. Nos três a atribuição segue
    * sem `route_id`, que é exatamente como ela sempre foi. Inventar um id seria pior do que não
    * mandar: o portal aceitaria a chamada e escalaria o motorista no trecho errado.
+   *
+   * ── QUANTOS MOTORISTAS CABEM ────────────────────────────────────────────────────────────────
+   *
+   * O `driver_pool` do portal aceita até NOVE (usuário, 04/09), então uma rota com vários pontos de
+   * troca é possível do lado dele. O TMS guarda UM segundo motorista, e é esse o limite: com um
+   * ponto de troca — o caso medido — um basta.
    */
   async function rotaDaAgencia(ordem) {
     const estacao = localStorage.getItem("stationId");
@@ -279,6 +285,11 @@
             ? {
                 ...base,
                 driver_id: ordem.driverId,
+                /*
+                  `driver_pool` É A LISTA DOS MOTORISTAS SEGUINTES, e o portal aceita até NOVE
+                  (usuário, 04/09). Mandamos um só porque é um só que o TMS guarda — o limite é
+                  nosso, e está dito aqui para ninguém ler este `[um]` como sendo regra do portal.
+                */
                 driver_pool: [ordem.secondDriverId],
                 vehicle_plate_number_list: ordem.plates,
                 /*
