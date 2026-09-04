@@ -56,6 +56,8 @@ export async function POST(request: Request): Promise<NextResponse> {
         error: body.error ?? null,
         // A releitura da viagem, feita pelo robô logo depois da ação. Ver `encerrarOrdemDoPortal`.
         confirmacao: body.confirmacao,
+        // A rota que o robô escolheu no revezamento — vai para a auditoria, e só para ela.
+        rotaDaAgencia: body.rotaDaAgencia ?? null,
       });
       /**
        * A PRÉ-SM É PEDIDA AQUI, e só quando `encerrada` é `true` (2026-08-25, fatia 026).

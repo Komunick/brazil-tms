@@ -502,6 +502,14 @@ export async function encerrarOrdemDoPortal(entrada: {
   error?: string | null;
   /** O corpo cru do `/trip/detail`, relido pelo robô logo depois da ação. Ver o bloco abaixo. */
   confirmacao?: unknown;
+  /**
+   * A ROTA DA AGÊNCIA escolhida pelo robô no revezamento (2026-09-04).
+   *
+   * Só auditoria. Não decide nada aqui, e é de propósito: quem escolheu foi o robô, dentro da sessão
+   * do portal, e o que este campo faz é deixar a escolha revisável — sem ele o TMS não teria como
+   * responder "por que esta viagem foi registrada neste trajeto?".
+   */
+  rotaDaAgencia?: number | null;
 }): Promise<{ encerrada: boolean; confirmada: boolean }> {
   const agora = new Date();
 
@@ -666,6 +674,15 @@ export async function encerrarOrdemDoPortal(entrada: {
         commandId: ordem.id,
         portalTripId: ordem.portalTripId,
         externalTripId: ordem.externalTripId,
+        /*
+          A ROTA DA AGÊNCIA que o robô escolheu (2026-09-04).
+
+          Só aparece nas viagens de revezamento — as com ponto de troca no meio do caminho, onde o
+          portal exige escolher trajeto. O robô resolve dentro da sessão dele porque o `section_id` é
+          interno do portal e o TMS não o conhece; registrar aqui é o que torna essa escolha
+          revisável, em vez de uma decisão que o robô tomou sozinho e ninguém consegue explicar.
+        */
+        rotaDaAgencia: entrada.rotaDaAgencia ?? null,
         desfecho: !deuCerto
           ? veredito?.confirmado === false
             ? "o portal respondeu OK e a releitura desmentiu"
