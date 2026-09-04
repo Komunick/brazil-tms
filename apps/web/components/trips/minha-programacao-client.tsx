@@ -219,6 +219,19 @@ const DEPOIS_DA_ESTACAO = new Set([
  */
 const DIAS_ATRAS = 5;
 
+/**
+ * QUANTOS DIAS PARA A FRENTE — sete, como sempre foi (decisão do usuário, 04/09).
+ *
+ * Chegou a ser escolhível (7/15/30) e voltou a ser fixo a pedido. Fica registrado o que a escolha
+ * escondia, porque o número não some junto com o controle: no dia da decisão havia **260 viagens**
+ * além do sétimo dia, e **as 260 esperando atribuição** — a fila inteira do que ainda não foi
+ * escalado, com coleta em 12, 13 e 14/09.
+ *
+ * O que sobrevive daquela investigação é o RÓTULO: a tela diz de quando até quando ela vai. Foi a
+ * borda invisível que fez alguém conferir dez LHs à mão e concluir que o TMS não estava recebendo.
+ */
+const DIAS_ADIANTE = 7;
+
 const COLUNAS_OCULTAVEIS = [
   "statusOperacional",
   "sm",
@@ -307,7 +320,6 @@ export function MinhaProgramacaoClient({
   const [diasEscondidos, setDiasEscondidos] = useState<Set<string>>(new Set());
   const [statusEscondidos, setStatusEscondidos] = useState<Set<string>>(new Set());
   const [colunasEscondidas, setColunasEscondidas] = useState<Set<string>>(new Set());
-  const [diasAdiante, setDiasAdiante] = useState(15);
 
   /**
    * O ÚLTIMO DIA QUE O QUADRO ALCANÇA, por extenso.
@@ -323,8 +335,8 @@ export function MinhaProgramacaoClient({
       return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
     };
     // AS DUAS BORDAS, e não só a da frente: a de trás foi a que escondeu seis viagens ainda rodando.
-    return { inicio: dia(-DIAS_ATRAS), fim: dia(diasAdiante) };
-  }, [hoje, diasAdiante]);
+    return { inicio: dia(-DIAS_ATRAS), fim: dia(DIAS_ADIANTE) };
+  }, [hoje]);
 
   /**
    * A COLUNA APARECE? — a mesma pergunta para o cabeçalho e para a célula.
@@ -356,7 +368,6 @@ export function MinhaProgramacaoClient({
     setFrentes(prefs.programacao.frentes);
     setStatusEscondidos(new Set(prefs.programacao.status));
     setColunasEscondidas(new Set(prefs.programacao.colunas ?? []));
-    setDiasAdiante(prefs.programacao.diasAdiante ?? 15);
     /*
       Os dias voltam do DESLOCAMENTO guardado — ver `programacaoPrefsSchema`. `-1` guardado ontem
       continua querendo dizer "ontem" hoje, que é o que faz o filtro sobreviver à virada do dia.
@@ -375,7 +386,6 @@ export function MinhaProgramacaoClient({
       // Sem efeito desde 04/09 — repassada como está para não apagar o que já estava guardado.
       mostrarOcultas: prefs.programacao.mostrarOcultas,
       colunas: [...colunasEscondidas],
-      diasAdiante,
       ...mudanca,
     });
   };
@@ -402,7 +412,7 @@ export function MinhaProgramacaoClient({
     recebendo — as dez estavam no banco, com coleta oito e nove dias à frente. A tela não ia até lá, e
     não dizia que não ia.
   */
-  const consulta = useProgramacao(frentes, { atras: DIAS_ATRAS, adiante: diasAdiante });
+  const consulta = useProgramacao(frentes, { atras: DIAS_ATRAS, adiante: DIAS_ADIANTE });
 
   const alternarFrente = (valor: string) => {
     const proximas = proximasFrentes(frentes, valor);
@@ -691,42 +701,21 @@ export function MinhaProgramacaoClient({
               </div>
 
               {/*
-                ATÉ ONDE O QUADRO VAI — e a tela passou a dizer (2026-09-04).
+                ATÉ ONDE O QUADRO VAI — a tela passou a dizer (2026-09-04).
 
-                A janela era fixa em sete dias e a tela não contava isso. Em 04/09 a operação
-                conferiu DEZ LHs à mão, uma a uma, e concluiu que o TMS não estava recebendo. As dez
-                estavam no banco, carimbadas pelo robô minutos antes — a coleta era oito e nove dias
-                à frente.
+                A janela sempre foi fixa e a tela nunca contou isso. Em 04/09 a operação conferiu DEZ
+                LHs à mão, uma a uma, e concluiu que o TMS não estava recebendo. As dez estavam no
+                banco, carimbadas pelo robô minutos antes — a coleta era oito e nove dias à frente,
+                fora de uma borda que ninguém via.
 
-                Dois consertos, e o segundo é o que impede a repetição: dá para esticar a janela, E a
-                data do fim fica escrita. Qualquer número que escolhêssemos teria uma borda; o que não
-                pode é a borda ser invisível.
+                Esticar a janela chegou a ser uma escolha na tela, e o usuário preferiu voltar ao
+                fixo. A borda continua existindo; o que não pode é ela ser invisível — e é por isso
+                que esta frase fica, mesmo sem o controle ao lado.
               */}
               <div className="space-y-2 border-t pt-2">
                 <p className="text-muted-foreground text-xs">
                   {t("ateQuandoVai", { de: janela.inicio, ate: janela.fim })}
                 </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {[7, 15, 30].map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      aria-pressed={diasAdiante === n}
-                      onClick={() => {
-                        setDiasAdiante(n);
-                        lembrar({ diasAdiante: n });
-                      }}
-                      className={cn(
-                        "rounded-full border px-3 py-1 text-xs transition-colors",
-                        diasAdiante === n
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "text-muted-foreground",
-                      )}
-                    >
-                      {t("proximosDias", { n })}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               {/*
