@@ -7,6 +7,7 @@ import { LogOut } from "lucide-react";
 import type { PermissionKey } from "@brazil-tms/shared";
 import { Button } from "@/components/ui/button";
 import { MenuMovel } from "@/components/shell/menu-movel";
+import { SeloDeConexao } from "@/components/shell/selo-de-conexao";
 import { MeuPerfil } from "@/components/usuarios/meu-perfil";
 
 export function Topbar({
@@ -50,6 +51,10 @@ export function Topbar({
             empurrava o "sair" para fora. */}
         <MeuPerfil userId={userId} nome={userName} />
       </div>
+      {/* O AVISO DE CONEXÃO fica entre o nome e a saída: é o ponto que não sai da tela em nenhum
+          tamanho, e a barra é o único lugar comum a todas as páginas. Não desenha nada enquanto
+          está tudo bem, então em dia normal esta linha não ocupa espaço algum. */}
+      <SeloDeConexao />
       <Button variant="ghost" size="sm" onClick={signOut} disabled={loading} className="shrink-0">
         <LogOut className="mr-2 h-4 w-4" aria-hidden />
         {t("signOut")}
