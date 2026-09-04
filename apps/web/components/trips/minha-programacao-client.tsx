@@ -203,6 +203,22 @@ const DEPOIS_DA_ESTACAO = new Set([
  * A ordem aqui é a da TABELA, de propósito: o painel lê como a linha se lê, e quem procura uma
  * coluna a encontra no lugar em que ela aparece.
  */
+/**
+ * QUANTOS DIAS PARA TRÁS O QUADRO ALCANÇA (2026-09-04, a pedido: "estenda por mais 3 dias").
+ *
+ * Eram dois, e dois não bastam: uma viagem longa sai hoje e chega depois de amanhã, e nesse meio
+ * tempo ela é justamente a que alguém está acompanhando. Ao passar de dois dias ela sumia da tela
+ * ainda em movimento.
+ *
+ * Medido no dia do pedido: **seis viagens ainda rodando** estavam fora — cinco com coleta há três
+ * dias (três em trânsito, duas no destino) e uma há quatro, em trânsito. Não é muito, e é exatamente
+ * a lista que alguém procura quando pergunta "cadê o motorista tal?".
+ *
+ * Cinco, e não mais: o passado cresce sem limite e o quadro é de trabalho, não de histórico. O que
+ * já chegou tem a sua tela; aqui interessa o que ainda está na estrada.
+ */
+const DIAS_ATRAS = 5;
+
 const COLUNAS_OCULTAVEIS = [
   "statusOperacional",
   "sm",
@@ -300,10 +316,14 @@ export function MinhaProgramacaoClient({
    * não existe — foi o que aconteceu em 04/09, com dez LHs conferidas à mão que estavam no banco o
    * tempo todo. A borda continua existindo; o que muda é que ela passa a ser visível.
    */
-  const fimDaJanela = useMemo(() => {
-    const d = new Date(`${hoje}T12:00:00`);
-    d.setDate(d.getDate() + diasAdiante);
-    return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const janela = useMemo(() => {
+    const dia = (deslocamento: number): string => {
+      const d = new Date(`${hoje}T12:00:00`);
+      d.setDate(d.getDate() + deslocamento);
+      return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    };
+    // AS DUAS BORDAS, e não só a da frente: a de trás foi a que escondeu seis viagens ainda rodando.
+    return { inicio: dia(-DIAS_ATRAS), fim: dia(diasAdiante) };
   }, [hoje, diasAdiante]);
 
   /**
@@ -382,7 +402,7 @@ export function MinhaProgramacaoClient({
     recebendo — as dez estavam no banco, com coleta oito e nove dias à frente. A tela não ia até lá, e
     não dizia que não ia.
   */
-  const consulta = useProgramacao(frentes, { atras: 2, adiante: diasAdiante });
+  const consulta = useProgramacao(frentes, { atras: DIAS_ATRAS, adiante: diasAdiante });
 
   const alternarFrente = (valor: string) => {
     const proximas = proximasFrentes(frentes, valor);
@@ -576,7 +596,8 @@ export function MinhaProgramacaoClient({
             aparece para quem procura não avisa ninguém.
           */}
           <span className="text-muted-foreground ml-auto text-xs">
-            {t("totalLinhas", { n: visiveis.length })} · {t("ateData", { data: fimDaJanela })}
+            {t("totalLinhas", { n: visiveis.length })} ·{" "}
+            {t("deAte", { de: janela.inicio, ate: janela.fim })}
           </span>
 
           {painelDeDias ? (
@@ -683,7 +704,7 @@ export function MinhaProgramacaoClient({
               */}
               <div className="space-y-2 border-t pt-2">
                 <p className="text-muted-foreground text-xs">
-                  {t("ateQuandoVai", { data: fimDaJanela })}
+                  {t("ateQuandoVai", { de: janela.inicio, ate: janela.fim })}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {[7, 15, 30].map((n) => (
