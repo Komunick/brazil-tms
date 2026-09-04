@@ -63,6 +63,14 @@
     "homeWelcome": "Bem-vindo(a), {name}",
     "homeSubtitle": "Painel de execução de linehaul (control tower)."
   },
+  "Conexao": {
+    "servidorFora": "Sistema fora do ar",
+    "servidorForaDetalhe": "Sua internet está funcionando — quem não está respondendo é o servidor do TMS. Avise a equipe; não adianta reiniciar o roteador.",
+    "semInternet": "Sem internet",
+    "semInternetDetalhe": "Este computador está sem acesso à internet. O TMS pode estar no ar normalmente — confira a rede daqui antes de avisar a equipe.",
+    "lenta": "Conexão lenta",
+    "lentaDetalhe": "O TMS está respondendo, porém devagar. As telas devem carregar, só que com atraso."
+  },
   "Nav": {
     "administration": "Administração",
     "home": "Início",
@@ -613,6 +621,8 @@
       "periodPlaceholder": "AAAA-MM",
       "value": "Valor",
       "missingProof": "Comprovação pendente",
+      "emptyPorEscopo": "Nenhuma viagem ATIVA neste recorte. Existem {n} já concluídas ou canceladas.",
+      "verTodasDoPeriodo": "Ver todas do período",
       "empty": "Nenhuma viagem encontrada."
     },
     "export": {
@@ -2179,6 +2189,10 @@
     "fecharAtribuicao": "Fechar",
     "abrirTelaCompleta": "Abrir a viagem",
     "dias": "Filtros",
+    "deAte": "de {de} até {ate}",
+    "ateQuandoVai": "O quadro vai de {de} até {ate}, pela data da coleta. O que estiver fora não aparece aqui.",
+    "quaisColunas": "Quais colunas ficam na tela",
+    "verTodasAsColunas": "Ver todas as colunas",
     "quaisDias": "Quais dias você quer ver?",
     "verTodosOsDias": "Ver todos os dias",
     "naoDaParaEditar": "Esta viagem já saiu — a atribuição não pode mais ser alterada.",

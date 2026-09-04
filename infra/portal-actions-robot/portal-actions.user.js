@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Brazil TMS — executor de decisões no portal
 // @namespace    braziltransports.com.br
-// @version      0.5.0
+// @version      0.6.0
 // @description  Executa no portal as decisões tomadas no TMS: aceitar e rejeitar viagem. NÃO decide nada.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tmsdev.braziltransports.com.br
@@ -117,6 +117,18 @@
      * "e aí, mudou?". Quem decide se a resposta confirma é o TMS; este robô só relê e entrega.
      */
     detalhe: "/api/line_haul/agency/trip/detail",
+    /**
+     * A LISTA DE ROTAS DA AGÊNCIA (2026-09-04, a pedido) — a caixinha "Rota" da tela de atribuir.
+     *
+     * Existe só para as viagens de REVEZAMENTO: aquelas com ponto de troca no meio do caminho, onde
+     * o portal exige um motorista por trecho. Nelas o detalhe traz
+     * `express_route_info.need_select_agency_route: true` e a atribuição sem `route_id` não passa.
+     *
+     * Lida com origem e destino da própria viagem. Devolve `section_id` — que é o valor do campo —
+     * e `show_id`, que é só o número que a tela mostra entre colchetes. Mandar o `show_id` seria
+     * mandar o rótulo no lugar da chave.
+     */
+    rotasDaAgencia: "/api/line_haul/agency/route_management/express_route/list",
   };
 
   /** A versão vem do CABEÇALHO, não de uma constante copiada — que envelhece calada. */
@@ -164,6 +176,70 @@
    * `retcode: 0` é o "deu certo" do portal, e um HTTP 200 com retcode diferente de zero é FALHA —
    * confundir os dois faria o TMS dar por aceita uma viagem que continua pendente.
    */
+  /**
+   * A ROTA DA AGÊNCIA, quando a viagem é de REVEZAMENTO (2026-09-04, a pedido).
+   *
+   * ── O QUE É UMA VIAGEM DE REVEZAMENTO ────────────────────────────────────────────────────────
+   *
+   * É a que tem ponto de troca no meio do caminho. Medido na LH LT0Q9202FC691 (Goiânia_02 →
+   * Barreiras, 808 km): um ponto, "P1 - GOIANIA X BARREIRAS", na BR-020. O portal exige um motorista
+   * por trecho e, na tela dele, uma caixinha "Rota" obrigatória.
+   *
+   * ── POR QUE O ROBÔ RESOLVE, E NÃO O TMS ─────────────────────────────────────────────────────
+   *
+   * O `section_id` é identificador interno do portal, servido por uma lista que só existe dentro da
+   * sessão dele. O TMS não tem como sabê-lo sem espelhar mais um cadastro — e ele muda do lado de
+   * lá sem avisar. Aqui a resposta é lida no instante do envio, que é quando ela vale.
+   *
+   * O que foi usado volta no resultado (`rotaDaAgencia`), e o TMS grava na auditoria: sem isso o
+   * robô estaria decidindo algo que ninguém consegue revisar depois.
+   *
+   * ── DEVOLVE `null` EM TRÊS CASOS, e nenhum deles é falha ────────────────────────────────────
+   *
+   * Não é revezamento · o detalhe não veio · a lista não trouxe rota. Nos três a atribuição segue
+   * sem `route_id`, que é exatamente como ela sempre foi. Inventar um id seria pior do que não
+   * mandar: o portal aceitaria a chamada e escalaria o motorista no trecho errado.
+   *
+   * ── QUANTOS MOTORISTAS CABEM ────────────────────────────────────────────────────────────────
+   *
+   * O `driver_pool` do portal aceita até NOVE (usuário, 04/09), então uma rota com vários pontos de
+   * troca é possível do lado dele. O TMS guarda UM segundo motorista, e é esse o limite: com um
+   * ponto de troca — o caso medido — um basta.
+   */
+  async function rotaDaAgencia(ordem) {
+    const estacao = localStorage.getItem("stationId");
+    if (!estacao) return null;
+
+    const det = await conferir(ordem);
+    const info = det?.data?.express_route_info;
+    // Só as de revezamento pedem. O portal diz qual é qual — não se adivinha pelo tipo de veículo.
+    if (!info || info.need_select_agency_route !== true) return null;
+    if (!info.start_station || !info.end_station) return null;
+
+    const u = new URL(CONFIG.rotasDaAgencia, location.origin);
+    u.searchParams.set("count", "50");
+    u.searchParams.set("origin", String(info.start_station));
+    u.searchParams.set("destination", String(info.end_station));
+    const r = await fetch(u.toString(), { credentials: "include" });
+    if (!r.ok) return null;
+    const corpo = await r.json().catch(() => null);
+    if (corpo?.retcode !== 0) return null;
+
+    const lista = corpo?.data?.list;
+    if (!Array.isArray(lista) || lista.length === 0) return null;
+    /*
+      UMA SÓ, OU NENHUMA.
+
+      Com mais de uma rota entre as mesmas duas estações não há como o robô escolher — a decisão é
+      de quem conhece o trajeto, e chutar mandaria o motorista pelo caminho errado. Devolver `null`
+      faz a atribuição sair sem `route_id` e o portal recusar, que é o desfecho honesto: a pessoa vê
+      a recusa e atribui na tela dele.
+    */
+    if (lista.length > 1) return null;
+    const secao = lista[0]?.section_id;
+    return Number.isFinite(secao) && secao > 0 ? Number(secao) : null;
+  }
+
   async function executar(ordem) {
     const doisMotoristas = ordem.action === "assign" && Boolean(ordem.secondDriverId);
     const caminho =
@@ -191,6 +267,15 @@
       trip_id: Number(ordem.portalTripId),
       agency_current_station_id: Number(estacao),
     };
+
+    /*
+      A ROTA É RESOLVIDA ANTES, e só para atribuição de dois.
+
+      Uma chamada a mais por atribuição de revezamento — que são poucas. Não vale para aceite nem
+      recusa, que não têm este campo, e não vale para atribuição de um motorista: essas não passam
+      pelo caminho de revezamento do portal.
+    */
+    const rota = doisMotoristas ? await rotaDaAgencia(ordem) : null;
     const corpo =
       ordem.action === "accept"
         ? base
@@ -200,8 +285,21 @@
             ? {
                 ...base,
                 driver_id: ordem.driverId,
+                /*
+                  `driver_pool` É A LISTA DOS MOTORISTAS SEGUINTES, e o portal aceita até NOVE
+                  (usuário, 04/09). Mandamos um só porque é um só que o TMS guarda — o limite é
+                  nosso, e está dito aqui para ninguém ler este `[um]` como sendo regra do portal.
+                */
                 driver_pool: [ordem.secondDriverId],
                 vehicle_plate_number_list: ordem.plates,
+                /*
+                  A ROTA, só quando a viagem é de revezamento (2026-09-04).
+
+                  `rota` é nula na esmagadora maioria — e aí o campo simplesmente não vai, que é
+                  como a atribuição sempre foi. Mandar `route_id: null` seria diferente de não
+                  mandar: o portal trata ausência e nulo de formas que não medimos.
+                */
+                ...(rota ? { route_id: rota } : {}),
               }
             : {
                 ...base,
@@ -229,7 +327,15 @@
         response: payload,
       };
     }
-    return { ok: true, error: null, response: payload };
+    /*
+      A ROTA USADA VOLTA NO RELATO (2026-09-04).
+
+      O robô escolheu algo — qual trajeto o portal vai registrar — e escolha sem rastro é escolha que
+      ninguém consegue revisar depois. O TMS grava na auditoria ao lado de quem pediu a atribuição.
+
+      Nula quando não era revezamento, que é a esmagadora maioria.
+    */
+    return { ok: true, error: null, response: payload, rotaDaAgencia: rota };
   }
 
   /**

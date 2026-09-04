@@ -214,27 +214,27 @@ export function CartaoDaOferta({
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-      {/* ── A FAIXA DO CLIENTE ─────────────────────────────────────────────────────────────── */}
-      <div
-        className={`flex items-center justify-between gap-3 ${compacto ? "px-4 py-2.5" : "px-5 py-3"}`}
-        style={{
-          background: `linear-gradient(135deg, ${MARCA.laranjaClaro} 0%, ${MARCA.laranja} 45%, ${MARCA.laranjaEscuro} 100%)`,
-        }}
-      >
-        <span className="flex min-w-0 flex-col leading-none text-white">
-          {/*
+        {/* ── A FAIXA DO CLIENTE ─────────────────────────────────────────────────────────────── */}
+        <div
+          className={`flex items-center justify-between gap-3 ${compacto ? "px-4 py-2.5" : "px-5 py-3"}`}
+          style={{
+            background: `linear-gradient(135deg, ${MARCA.laranjaClaro} 0%, ${MARCA.laranja} 45%, ${MARCA.laranjaEscuro} 100%)`,
+          }}
+        >
+          <span className="flex min-w-0 flex-col leading-none text-white">
+            {/*
             A ORDEM IMPORTA: primeiro O QUE É (spot na tela), depois DE QUEM (o cliente). Quem opera
             três frentes reconhece a origem pela cor antes de ler — e a palavra confirma.
           */}
-          <span
-            className={`font-black uppercase tracking-[0.16em] ${compacto ? "text-[0.8rem]" : "text-base"}`}
-          >
-            {t("spotNaTela")}
-          </span>
-          <span
-            className={`mt-1 flex items-center font-bold text-white/75 ${compacto ? "text-[0.72rem]" : "text-sm"}`}
-          >
-            {/*
+            <span
+              className={`font-black uppercase tracking-[0.16em] ${compacto ? "text-[0.8rem]" : "text-base"}`}
+            >
+              {t("spotNaTela")}
+            </span>
+            <span
+              className={`mt-1 flex items-center font-bold text-white/75 ${compacto ? "text-[0.72rem]" : "text-sm"}`}
+            >
+              {/*
               O NOME DO CLIENTE VEM DE UM RÓTULO, e não fixo no JSX — o lint pegou, e ele tem razão
               por um motivo maior que a regra dele.
 
@@ -246,12 +246,12 @@ export function CartaoDaOferta({
               Quando isso acontecer, o conserto é a oferta CARREGAR o cliente (`spot_offers` não tem
               essa coluna hoje) e este bloco lê dela. Fica escrito para não ser descoberto na tela.
             */}
-            <LogoDoCliente className={compacto ? "mr-1.5 h-4 w-4" : "mr-2 h-5 w-5"} />
-            {t("clienteDoSpot")}
+              <LogoDoCliente className={compacto ? "mr-1.5 h-4 w-4" : "mr-2 h-5 w-5"} />
+              {t("clienteDoSpot")}
+            </span>
           </span>
-        </span>
 
-        {/*
+          {/*
         {/*
           O MASCOTE DA SHOPEE, na DIREITA da faixa (2026-09-02, a pedido).
 
@@ -263,19 +263,19 @@ export function CartaoDaOferta({
           Aqui ele é um selo: a faixa cresce um pouco, ele desce alguns pixels para fora do laranja,
           e nada mais briga com ele.
         */}
-        {/* eslint-disable-next-line @next/next/no-img-element -- estático em /public; 8 KB, já no tamanho */}
-        <img
-          src="/clientes/shopee-mascote.webp"
-          alt=""
-          width={46}
-          height={46}
-          className={`relative z-[1] -my-2 shrink-0 rounded-full border-2 border-white bg-white object-cover shadow-[0_4px_12px_-4px_rgba(0,0,0,0.45)] ${
-            compacto ? "h-9 w-9" : "h-[46px] w-[46px]"
-          } ${alarmando ? "animate-oferta-mascote" : ""}`}
-        />
-      </div>
+          {/* eslint-disable-next-line @next/next/no-img-element -- estático em /public; 8 KB, já no tamanho */}
+          <img
+            src="/clientes/shopee-mascote.webp"
+            alt=""
+            width={46}
+            height={46}
+            className={`relative z-[1] -my-2 shrink-0 rounded-full border-2 border-white bg-white object-cover shadow-[0_4px_12px_-4px_rgba(0,0,0,0.45)] ${
+              compacto ? "h-9 w-9" : "h-[46px] w-[46px]"
+            } ${alarmando ? "animate-oferta-mascote" : ""}`}
+          />
+        </div>
 
-      {/*
+        {/*
         ── A DECISÃO TOMA O CARTÃO POR DEZ SEGUNDOS (2026-09-02, a pedido) ──────────────────────
 
         Nas palavras do usuário: "agora você aperta ignorar e só some". Quem clicava via sumir; para
@@ -288,140 +288,157 @@ export function CartaoDaOferta({
         Quem controla o tempo é o SERVIDOR — a oferta some quando a leitura para de trazê-la. Aqui
         não há temporizador que remova nada: só a barra, que é a mesma janela desenhada.
       */}
-      {oferta.decisao ? (
-        <AvisoDaDecisao decisao={oferta.decisao} lh={oferta.tripNumber} compacto={compacto} />
-      ) : (
-      <div className={`flex flex-col ${compacto ? "gap-2.5 px-4 py-3.5" : "gap-3 px-5 py-4"}`}>
-        {oferta.tripNumber ? (
-          <span
-            className={`self-start rounded-lg px-2.5 py-1 font-black tracking-[0.1em] tabular-nums ${
-              compacto ? "text-[0.84rem]" : "text-base"
-            }`}
-            style={{ background: "rgba(238,77,45,0.12)", color: MARCA.laranjaEscuro }}
-          >
-            {oferta.tripNumber}
-          </span>
-        ) : null}
+        {oferta.decisao ? (
+          <AvisoDaDecisao decisao={oferta.decisao} lh={oferta.tripNumber} compacto={compacto} />
+        ) : (
+          <div className={`flex flex-col ${compacto ? "gap-2.5 px-4 py-3.5" : "gap-3 px-5 py-4"}`}>
+            {oferta.tripNumber ? (
+              <span
+                className={`self-start rounded-lg px-2.5 py-1 font-black tracking-[0.1em] tabular-nums ${
+                  compacto ? "text-[0.84rem]" : "text-base"
+                }`}
+                style={{ background: "rgba(238,77,45,0.12)", color: MARCA.laranjaEscuro }}
+              >
+                {oferta.tripNumber}
+              </span>
+            ) : null}
 
-        {/*
+            {/*
           A ROTA EM UMA LINHA SÓ, e a letra encolhe conforme ela cresce. Quebrada, ela parte no meio
           do nome da estação ("LM Hub_PB_João / Pessoa_Gramame") e o olho para para remontar a
           palavra — e é ela que decide se alguém corre atrás do frete.
-        */}
-        <div
-          className="w-full overflow-hidden whitespace-nowrap font-extrabold leading-tight"
-          style={{
-            fontSize: compacto
-              ? `clamp(0.7rem, ${(60 / Math.max(oferta.route.length, 1)).toFixed(2)}vw, 1rem)`
-              : `clamp(0.85rem, ${(110 / Math.max(oferta.route.length, 1)).toFixed(2)}vw, 1.35rem)`,
-          }}
-          title={oferta.route}
-        >
-          {oferta.route}
-        </div>
 
-        {/*
+          ── E ELA ESTAVA SENDO CORTADA (2026-09-04, a pedido) ──────────────────────────────────
+
+          Medido nas 179 ofertas gravadas: a maior rota tem 65 caracteres
+          ("SoC_PE_Jaboatão dos Guararapes -> LM Hub_PB_João Pessoa_Gramame"), o p95 tem 61, a média
+          44. Com o cartão a 560px e a faixa da arte ocupando 168, sobravam ~360px de texto — e no
+          piso da letra (0.85rem) 65 caracteres em negrito pedem perto de 490. O fim da rota sumia,
+          sem reticências e sem aviso: o destino, que é metade da decisão, simplesmente não estava lá.
+
+          O cartão foi para 760px. O piso desceu para 0.78rem como rede: se um dia aparecer rota
+          maior que as 179 medidas, ela encolhe mais em vez de ser cortada. `title` continua com o
+          texto inteiro, que é o que salva o caso extremo.
+        */}
+            <div
+              className="w-full overflow-hidden whitespace-nowrap font-extrabold leading-tight"
+              style={{
+                fontSize: compacto
+                  ? `clamp(0.7rem, ${(60 / Math.max(oferta.route.length, 1)).toFixed(2)}vw, 1rem)`
+                  : `clamp(0.78rem, ${(150 / Math.max(oferta.route.length, 1)).toFixed(2)}vw, 1.35rem)`,
+              }}
+              title={oferta.route}
+            >
+              {oferta.route}
+            </div>
+
+            {/*
           O PREÇO SAIU (a pedido, 01/09) — e é a segunda vez que ele sai deste cartão.
           A maioria das ofertas chega como "preço não exibido", e um campo que quase sempre não diz
           nada rouba o lugar do que decide. O que decide é a rota e o STA da origem.
         */}
-        <div className="flex flex-wrap gap-x-3 gap-y-1.5">
-          {oferta.originArrival ? (
-            <Dado rotulo={t("originArrival")} valor={oferta.originArrival} compacto={compacto} />
-          ) : null}
-          {oferta.vehicle ? (
-            <Dado rotulo={t("vehicle")} valor={oferta.vehicle} compacto={compacto} />
-          ) : null}
-        </div>
-
-        {/* ── O QUE MUDA COM O ESTADO ───────────────────────────────────────────────────────── */}
-
-        {oferta.estado === "enviado" ? (
-          <div
-            className="flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm"
-            style={{ background: "rgba(238,77,45,0.1)", borderColor: "rgba(238,77,45,0.4)" }}
-          >
-            <Loader2 className="h-4 w-4 shrink-0 animate-spin" style={{ color: MARCA.laranja }} />
-            <span className="leading-snug">
-              {t("aguardandoPortal")}
-              {oferta.decidiuNome ? (
-                <span className="block text-xs text-muted-foreground">
-                  {t("aceitoPor", { nome: oferta.decidiuNome })}
-                </span>
+            <div className="flex flex-wrap gap-x-3 gap-y-1.5">
+              {oferta.originArrival ? (
+                <Dado
+                  rotulo={t("originArrival")}
+                  valor={oferta.originArrival}
+                  compacto={compacto}
+                />
               ) : null}
-            </span>
-          </div>
-        ) : null}
-
-        {erro && oferta.estado === "recusado" ? (
-          <div
-            className="flex w-full flex-col gap-1.5 rounded-xl border px-3 py-2.5 text-left"
-            style={{ background: "rgba(224,32,32,0.1)", borderColor: "rgba(224,32,32,0.45)" }}
-          >
-            <span
-              className="flex items-center gap-2 text-sm font-extrabold"
-              style={{ color: MARCA.alerta }}
-            >
-              <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
-              {t("portalRecusou")}
-            </span>
-            {/* A frase nossa quando existe; o texto do portal SEMPRE. Ver `EXPLICACAO_DO_PORTAL`. */}
-            {erro.frase ? <span className="text-xs leading-snug">{erro.frase}</span> : null}
-            <span className="break-words text-[0.68rem] leading-snug text-muted-foreground">
-              {erro.cru}
-            </span>
-          </div>
-        ) : null}
-
-        {oferta.estado === "sem_viagem" ? (
-          <p
-            className="w-full rounded-lg px-2.5 py-1.5 text-xs leading-snug"
-            style={{ background: "rgba(238,77,45,0.09)", color: MARCA.laranjaEscuro }}
-          >
-            {t("semViagemAinda")}
-          </p>
-        ) : null}
-
-        {/* ── OS GESTOS ─────────────────────────────────────────────────────────────────────── */}
-
-        {podeDecidir && confirmando ? (
-          <div
-            className="flex w-full flex-col gap-2.5 rounded-xl border p-3"
-            style={{ background: "rgba(238,77,45,0.09)", borderColor: "rgba(238,77,45,0.45)" }}
-          >
-            <p className="m-0 text-sm leading-snug">
-              {t.rich("confirmarAceite", {
-                lh: oferta.tripNumber ?? "",
-                forte: (c) => (
-                  <strong style={{ color: MARCA.laranjaEscuro }}>{c}</strong>
-                ),
-              })}
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={enviando}
-                onClick={() => {
-                  setConfirmando(false);
-                  onAceitar();
-                }}
-                className="flex-1 rounded-lg px-4 py-2 text-sm font-extrabold text-white disabled:opacity-60"
-                style={{ background: MARCA.laranja }}
-              >
-                {enviando ? t("enviando") : t("confirmarBotao")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setConfirmando(false)}
-                className="rounded-lg border px-4 py-2 text-sm font-semibold text-muted-foreground"
-              >
-                {t("voltar")}
-              </button>
+              {oferta.vehicle ? (
+                <Dado rotulo={t("vehicle")} valor={oferta.vehicle} compacto={compacto} />
+              ) : null}
             </div>
-          </div>
-        ) : null}
 
-        {/*
+            {/* ── O QUE MUDA COM O ESTADO ───────────────────────────────────────────────────────── */}
+
+            {oferta.estado === "enviado" ? (
+              <div
+                className="flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left text-sm"
+                style={{ background: "rgba(238,77,45,0.1)", borderColor: "rgba(238,77,45,0.4)" }}
+              >
+                <Loader2
+                  className="h-4 w-4 shrink-0 animate-spin"
+                  style={{ color: MARCA.laranja }}
+                />
+                <span className="leading-snug">
+                  {t("aguardandoPortal")}
+                  {oferta.decidiuNome ? (
+                    <span className="block text-xs text-muted-foreground">
+                      {t("aceitoPor", { nome: oferta.decidiuNome })}
+                    </span>
+                  ) : null}
+                </span>
+              </div>
+            ) : null}
+
+            {erro && oferta.estado === "recusado" ? (
+              <div
+                className="flex w-full flex-col gap-1.5 rounded-xl border px-3 py-2.5 text-left"
+                style={{ background: "rgba(224,32,32,0.1)", borderColor: "rgba(224,32,32,0.45)" }}
+              >
+                <span
+                  className="flex items-center gap-2 text-sm font-extrabold"
+                  style={{ color: MARCA.alerta }}
+                >
+                  <TriangleAlert className="h-4 w-4 shrink-0" aria-hidden />
+                  {t("portalRecusou")}
+                </span>
+                {/* A frase nossa quando existe; o texto do portal SEMPRE. Ver `EXPLICACAO_DO_PORTAL`. */}
+                {erro.frase ? <span className="text-xs leading-snug">{erro.frase}</span> : null}
+                <span className="break-words text-[0.68rem] leading-snug text-muted-foreground">
+                  {erro.cru}
+                </span>
+              </div>
+            ) : null}
+
+            {oferta.estado === "sem_viagem" ? (
+              <p
+                className="w-full rounded-lg px-2.5 py-1.5 text-xs leading-snug"
+                style={{ background: "rgba(238,77,45,0.09)", color: MARCA.laranjaEscuro }}
+              >
+                {t("semViagemAinda")}
+              </p>
+            ) : null}
+
+            {/* ── OS GESTOS ─────────────────────────────────────────────────────────────────────── */}
+
+            {podeDecidir && confirmando ? (
+              <div
+                className="flex w-full flex-col gap-2.5 rounded-xl border p-3"
+                style={{ background: "rgba(238,77,45,0.09)", borderColor: "rgba(238,77,45,0.45)" }}
+              >
+                <p className="m-0 text-sm leading-snug">
+                  {t.rich("confirmarAceite", {
+                    lh: oferta.tripNumber ?? "",
+                    forte: (c) => <strong style={{ color: MARCA.laranjaEscuro }}>{c}</strong>,
+                  })}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={enviando}
+                    onClick={() => {
+                      setConfirmando(false);
+                      onAceitar();
+                    }}
+                    className="flex-1 rounded-lg px-4 py-2 text-sm font-extrabold text-white disabled:opacity-60"
+                    style={{ background: MARCA.laranja }}
+                  >
+                    {enviando ? t("enviando") : t("confirmarBotao")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmando(false)}
+                    className="rounded-lg border px-4 py-2 text-sm font-semibold text-muted-foreground"
+                  >
+                    {t("voltar")}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {/*
           IGNORAR TAMBÉM PEDE CONFIRMAÇÃO, e aceita um MOTIVO — opcional (2026-09-01).
 
           Ele passou a tirar a oferta da tela de todos, então virou uma decisão como o aceite: um
@@ -431,49 +448,49 @@ export function CartaoDaOferta({
           campo, e um registro cheio de "n" é pior que um vazio — parece informação, e ninguém
           desconfia dele. Em branco, o registro ainda guarda quem e quando.
         */}
-        {podeDecidir && ignorando ? (
-          <div className="flex w-full flex-col gap-2.5 rounded-xl border bg-muted/40 p-3">
-            <p className="m-0 text-sm leading-snug">
-              {t.rich("confirmarIgnorar", {
-                lh: oferta.tripNumber ?? "",
-                forte: (c) => <strong>{c}</strong>,
-              })}
-            </p>
-            <label className="text-[0.62rem] font-extrabold uppercase tracking-[0.1em] text-muted-foreground">
-              {t("motivoOpcional")}
-            </label>
-            <textarea
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              maxLength={200}
-              rows={2}
-              placeholder={t("motivoExemplo")}
-              className="w-full resize-y rounded-lg border bg-background p-2 text-xs"
-            />
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={enviando}
-                onClick={() => {
-                  setIgnorando(false);
-                  onIgnorar(motivo.trim() || null);
-                }}
-                className="flex-1 rounded-lg bg-muted-foreground px-4 py-2 text-sm font-extrabold text-background disabled:opacity-60"
-              >
-                {t("ignorar")}
-              </button>
-              <button
-                type="button"
-                onClick={() => setIgnorando(false)}
-                className="rounded-lg border px-4 py-2 text-sm font-semibold text-muted-foreground"
-              >
-                {t("voltar")}
-              </button>
-            </div>
-          </div>
-        ) : null}
+            {podeDecidir && ignorando ? (
+              <div className="flex w-full flex-col gap-2.5 rounded-xl border bg-muted/40 p-3">
+                <p className="m-0 text-sm leading-snug">
+                  {t.rich("confirmarIgnorar", {
+                    lh: oferta.tripNumber ?? "",
+                    forte: (c) => <strong>{c}</strong>,
+                  })}
+                </p>
+                <label className="text-[0.62rem] font-extrabold uppercase tracking-[0.1em] text-muted-foreground">
+                  {t("motivoOpcional")}
+                </label>
+                <textarea
+                  value={motivo}
+                  onChange={(e) => setMotivo(e.target.value)}
+                  maxLength={200}
+                  rows={2}
+                  placeholder={t("motivoExemplo")}
+                  className="w-full resize-y rounded-lg border bg-background p-2 text-xs"
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={enviando}
+                    onClick={() => {
+                      setIgnorando(false);
+                      onIgnorar(motivo.trim() || null);
+                    }}
+                    className="flex-1 rounded-lg bg-muted-foreground px-4 py-2 text-sm font-extrabold text-background disabled:opacity-60"
+                  >
+                    {t("ignorar")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIgnorando(false)}
+                    className="rounded-lg border px-4 py-2 text-sm font-semibold text-muted-foreground"
+                  >
+                    {t("voltar")}
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
-        {/*
+            {/*
           OS DOIS BOTÕES APARECEM PARA TODO MUNDO, travados para quem não tem `decidir_spot`.
 
           Decisão do usuário (01/09), e ela tem um ganho concreto sobre escondê-los: quem não decide
@@ -481,37 +498,39 @@ export function CartaoDaOferta({
           — escondido, a operação acharia que o cartão é só aviso, que era o problema antes desta
           fatia. Recolher continua funcionando para todos.
         */}
-        {!confirmando && !ignorando ? (
-          <div className="flex w-full gap-2.5">
-            <button
-              type="button"
-              disabled={!podeDecidir || !oferta.podeAceitar || enviando}
-              onClick={() => setConfirmando(true)}
-              title={
-                !podeDecidir
-                  ? t("semPermissaoDeDecidir")
-                  : oferta.podeAceitar
-                    ? undefined
-                    : t("aceiteIndisponivel")
-              }
-              className="flex-1 rounded-xl px-4 py-3 text-sm font-extrabold text-white transition-colors disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
-              style={podeDecidir && oferta.podeAceitar ? { background: MARCA.laranja } : undefined}
-            >
-              {oferta.estado === "recusado" ? t("tentarDeNovo") : t("aceitar")}
-            </button>
-            <button
-              type="button"
-              disabled={!podeDecidir}
-              onClick={() => setIgnorando(true)}
-              title={podeDecidir ? undefined : t("semPermissaoDeDecidir")}
-              className="rounded-xl border-[1.5px] px-5 py-3 text-sm font-semibold text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {t("ignorar")}
-            </button>
+            {!confirmando && !ignorando ? (
+              <div className="flex w-full gap-2.5">
+                <button
+                  type="button"
+                  disabled={!podeDecidir || !oferta.podeAceitar || enviando}
+                  onClick={() => setConfirmando(true)}
+                  title={
+                    !podeDecidir
+                      ? t("semPermissaoDeDecidir")
+                      : oferta.podeAceitar
+                        ? undefined
+                        : t("aceiteIndisponivel")
+                  }
+                  className="flex-1 rounded-xl px-4 py-3 text-sm font-extrabold text-white transition-colors disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+                  style={
+                    podeDecidir && oferta.podeAceitar ? { background: MARCA.laranja } : undefined
+                  }
+                >
+                  {oferta.estado === "recusado" ? t("tentarDeNovo") : t("aceitar")}
+                </button>
+                <button
+                  type="button"
+                  disabled={!podeDecidir}
+                  onClick={() => setIgnorando(true)}
+                  title={podeDecidir ? undefined : t("semPermissaoDeDecidir")}
+                  className="rounded-xl border-[1.5px] px-5 py-3 text-sm font-semibold text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {t("ignorar")}
+                </button>
+              </div>
+            ) : null}
           </div>
-        ) : null}
-      </div>
-      )}
+        )}
       </div>
     </div>
   );
@@ -584,15 +603,7 @@ function AvisoDaDecisao({
   );
 }
 
-function Dado({
-  rotulo,
-  valor,
-  compacto,
-}: {
-  rotulo: string;
-  valor: string;
-  compacto: boolean;
-}) {
+function Dado({ rotulo, valor, compacto }: { rotulo: string; valor: string; compacto: boolean }) {
   return (
     <span className="rounded-lg bg-muted px-2.5 py-1.5 leading-tight">
       <span className="block text-[0.6rem] font-extrabold uppercase tracking-[0.13em] text-muted-foreground">

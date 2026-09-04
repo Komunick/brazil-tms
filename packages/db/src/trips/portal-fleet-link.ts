@@ -1,5 +1,12 @@
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
-import type { AssignTripInput, PortalTrip, TripStatus, VehicleType } from "@brazil-tms/shared";
+import {
+  ACENTOS_PARA_DOBRAR,
+  foldName,
+  type AssignTripInput,
+  type PortalTrip,
+  type TripStatus,
+  type VehicleType,
+} from "@brazil-tms/shared";
 import { db } from "../client";
 import { drivers, trailers, tripAssignments, trips, vehicles } from "../../schema";
 import { assignTrip, mirrorAssignmentFromPortal } from "./trip-assignments";
@@ -81,23 +88,19 @@ const foldPlate = (value: string): string => value.replace(/[^A-Za-z0-9]/g, "").
  * Isto NÃO afrouxa o casamento: continua exigindo o nome inteiro, igual palavra por palavra. Só
  * para de tratar Ô e O como letras diferentes, do mesmo jeito que a placa já ignora o hífen.
  */
-const ACENTOS = "ÁÀÃÂÄÉÈÊËÍÌÎÏÓÒÕÔÖÚÙÛÜÇÑáàãâäéèêëíìîïóòõôöúùûüçñ";
-const SEM_ACENTO = "AAAAAEEEEIIIIOOOOOUUUUCNAAAAAEEEEIIIIOOOOOUUUUCN";
+/*
+  O DOBRAMENTO MUDOU-SE PARA `packages/shared` (2026-09-04).
 
-export function foldName(value: string): string {
-  const semAcento = [...value]
-    .map((c) => {
-      const i = ACENTOS.indexOf(c);
-      return i === -1 ? c : SEM_ACENTO[i]!;
-    })
-    .join("");
-  return semAcento.replace(/\s+/g, " ").trim().toUpperCase();
-}
+  A confirmação da atribuição passou a comparar MOTORISTA, e ela é função pura em `shared`. Escrever
+  um segundo dobramento lá faria os dois divergirem no primeiro acento que alguém acrescentasse a um
+  — e o sintoma seria o pior tipo: o mesmo nome casando num caminho e não no outro.
 
-/** O mesmo dobramento, feito pelo Postgres, para a comparação acontecer dentro da consulta. */
-/** Exportado para o preenchimento de telefone da frota usar EXATAMENTE o mesmo dobramento. */
+  Reexportado aqui porque este arquivo era a casa dele e os vizinhos o conhecem por este caminho.
+*/
+export { foldName };
+
 export const foldNameSql = (col: SQL | ReturnType<typeof sql.raw>): SQL =>
-  sql`upper(btrim(regexp_replace(translate(${col}, ${ACENTOS}, ${SEM_ACENTO}), '\\s+', ' ', 'g')))`;
+  sql`upper(btrim(regexp_replace(translate(${col}, ${ACENTOS_PARA_DOBRAR.de}, ${ACENTOS_PARA_DOBRAR.para}), '\\s+', ' ', 'g')))`;
 
 /** The two plates the portal packs into one field: tractor first, trailer second. */
 function platesOf(label: string | null): { vehicle: string | null; trailer: string | null } {
@@ -330,7 +333,9 @@ export async function linkFleetFromPortal(
     "Atribuição espelhada do portal do cliente.",
     // Fica escrito na própria atribuição que ela SUBSTITUIU outra, e por quê. Sem isso, quem abrir a
     // viagem amanhã vê um motorista trocado e nenhuma explicação.
-    substituindo ? "Substituiu a anterior: o cliente trocou motorista ou caminhão no portal." : null,
+    substituindo
+      ? "Substituiu a anterior: o cliente trocou motorista ou caminhão no portal."
+      : null,
     emCurso ? `Registrada com a viagem já em curso (${trip.currentStatus}).` : null,
     carrierDiverges
       ? "Transportadora tomada do motorista; o veículo está cadastrado sob outra."

@@ -53,9 +53,21 @@ export type AcaoConfirmavel = "accept" | "reject" | "assign";
  * decide gasto.
  */
 export type Veredito =
-  | { confirmado: true; detalhe: string; placasConferidas: number }
+  | {
+      confirmado: true;
+      detalhe: string;
+      placasConferidas: number;
+      /**
+       * Quantos motoristas deu para conferir. O portal mostra UM nome em `driver_name`, então numa
+       * atribuição de dois este número é 1 — e dizê-lo é o ponto: confirmar o que não se olhou é o
+       * que produziu o defeito que este campo nasceu para não repetir.
+       */
+      motoristasConferidos: number;
+    }
   | { confirmado: false; motivo: string }
   | { confirmado: null; motivo: string };
+
+import { nomeEntre } from "./nome-dobrado";
 
 /** Placa comparável: só letras e números, maiúsculas. `ABC-1D23` e `abc1d23` são a mesma. */
 function normalizar(placa: string): string {
@@ -71,13 +83,26 @@ function normalizar(placa: string): string {
 export function confirmarAcaoNoPortal(entrada: {
   acao: AcaoConfirmavel;
   enviadas: string[];
+  /**
+   * OS NOMES dos motoristas que foram escalados, como o NOSSO cadastro os escreve.
+   *
+   * Nomes e não ids porque é o que o portal devolve: `/trip/detail` traz `driver_name` e nenhum id.
+   * Vazio quando não foi possível resolver o nome — e aí a conferência do motorista simplesmente não
+   * acontece, em vez de reprovar por falta de dado nosso.
+   */
+  motoristasEnviados?: string[];
   portal: ViagemNoPortal;
 }): Veredito {
   const { acao, portal } = entrada;
 
   if (acao === "accept") {
     if (portal.acceptanceStatus === "Accepted") {
-      return { confirmado: true, detalhe: "o portal mostra a viagem como aceita", placasConferidas: 0 };
+      return {
+        confirmado: true,
+        detalhe: "o portal mostra a viagem como aceita",
+        placasConferidas: 0,
+        motoristasConferidos: 0,
+      };
     }
     return {
       confirmado: false,
@@ -95,7 +120,10 @@ export function confirmarAcaoNoPortal(entrada: {
      * porque o robô manda a releitura para qualquer ação bem-sucedida. Isto é ausência de prova,
      * não prova de ausência.
      */
-    return { confirmado: null, motivo: "recusa não tem confirmação: o portal não expõe esse estado" };
+    return {
+      confirmado: null,
+      motivo: "recusa não tem confirmação: o portal não expõe esse estado",
+    };
   }
 
   // ── assign ──────────────────────────────────────────────────────────────────────────────────
@@ -128,7 +156,10 @@ export function confirmarAcaoNoPortal(entrada: {
     return { confirmado: false, motivo: "nenhuma placa foi enviada — não há o que conferir" };
   }
   if (!noPortal) {
-    return { confirmado: false, motivo: "o portal respondeu OK mas não mostra placa nenhuma na viagem" };
+    return {
+      confirmado: false,
+      motivo: "o portal respondeu OK mas não mostra placa nenhuma na viagem",
+    };
   }
   // `includes` e não igualdade: quando há cavalo e carreta o portal às vezes devolve as duas no
   // mesmo campo, separadas por vírgula ou barra. Exigir igualdade recusaria uma atribuição correta.
@@ -139,6 +170,38 @@ export function confirmarAcaoNoPortal(entrada: {
     };
   }
 
+  /**
+   * ── E O MOTORISTA? A pergunta que faltava (2026-09-04, achada pelo usuário) ─────────────────
+   *
+   * Até aqui a confirmação olhava só a PLACA. E a placa é a mesma independentemente de quem dirige:
+   * o portal podia escalar outra pessoa — ou ignorar o segundo motorista — que o TMS confirmava
+   * assim mesmo e gravava `done`.
+   *
+   * O relato foi exato: "no portal não atribui, no TMS fala que sim". Medido nas 7 atribuições de
+   * dois motoristas marcadas como concluídas: em QUATRO o portal ficou com o motorista que mandamos
+   * como SEGUNDO, e em uma (LT0Q8R02ES091) com um terceiro que não pedimos — WARLEY AURELIO DOS
+   * SANTOS, no lugar dos dois enviados. Todas passaram, porque a placa batia.
+   *
+   * ── O QUE DÁ PARA PROVAR, E O QUE NÃO DÁ ───────────────────────────────────────────────────
+   *
+   * O portal devolve UM nome. Numa atribuição de dois, no máximo um é conferível — e é por isso que
+   * o veredito diz quantos foram (`motoristasConferidos`), do mesmo jeito que já dizia das placas.
+   *
+   * Bater com QUALQUER um dos enviados conta como confirmado: o portal ora mostra o da primeira
+   * etapa, ora o do pool, e exigir que fosse o primeiro reprovaria atribuições corretas. O que não
+   * pode passar é o caso do ES091 — nome que não é nenhum dos dois.
+   */
+  const nomes = (entrada.motoristasEnviados ?? []).filter((n) => n.trim() !== "");
+  const doPortal = portal.driverLabel?.trim() ?? "";
+  if (nomes.length > 0 && doPortal !== "" && nomeEntre(doPortal, nomes) === null) {
+    return {
+      confirmado: false,
+      motivo: `o portal mostra o motorista "${doPortal}" e nós escalamos ${nomes
+        .map((n) => `"${n}"`)
+        .join(" e ")}`,
+    };
+  }
+
   const conferidas = enviadas.filter((p) => noPortal.includes(p)).length;
   return {
     confirmado: true,
@@ -146,5 +209,7 @@ export function confirmarAcaoNoPortal(entrada: {
       portal.driverLabel ? ` e o motorista ${portal.driverLabel}` : ""
     }`,
     placasConferidas: conferidas,
+    // Um, quando deu para olhar. Zero quando o portal não mostrou nome ou não soubemos os nossos.
+    motoristasConferidos: nomes.length > 0 && doPortal !== "" ? 1 : 0,
   };
 }

@@ -10,6 +10,7 @@ import {
   type TripBoardQuery,
   type TripDisplayStatus,
   REGION_ORDER,
+  ehDataCompleta,
   saoPauloDate,
   termosDaBusca,
 } from "@brazil-tms/shared";
@@ -28,7 +29,7 @@ import type { TripFilterOptions } from "@brazil-tms/db";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { TripStatusBadge } from "@/components/trips/trip-status-badge";
 import { exportHref } from "@/lib/trips/client";
-import { SlidersHorizontal } from "lucide-react";
+import { Search, SlidersHorizontal } from "lucide-react";
 import { DEFAULT_TRIP_VIEWS } from "@/lib/trips/views";
 import { cn } from "@/lib/utils";
 
@@ -123,9 +124,6 @@ export function TripFilters({
     setPickupTo(query.pickupTo ?? "");
   }, [query.pickupTo]);
 
-  /** `yyyy-MM-dd` completo — o único formato que o campo nativo entrega quando termina de ser lido. */
-  const DATA_COMPLETA = /^d{4}-d{2}-d{2}$/;
-
   const locationList = options.locations;
   const codeOf = new Map(locationList.map((l) => [l.id, l.code]));
 
@@ -214,6 +212,27 @@ export function TripFilters({
                 {t("board.searchTerms", { count: termosDaBusca(q).length })}
               </p>
             ) : null}
+          </div>
+
+          {/*
+            O BOTÃO DE BUSCAR (2026-09-04, a pedido).
+
+            A busca sempre aplicou ao SAIR do campo ou com Enter, e nunca disse isso. Quem digita e
+            clica direto num filtro ao lado vê a tela não mudar e conclui que a busca não funciona —
+            ela funcionou, só não naquele instante.
+
+            Um botão não muda a regra: ele a torna visível. As duas formas antigas continuam valendo,
+            porque tirar o Enter puniria quem já se acostumou com ele.
+          */}
+          <div className="space-y-1.5">
+            {/* O rótulo invisível mantém o botão alinhado com os campos que têm rótulo por cima. */}
+            <Label className="invisible block" aria-hidden>
+              .
+            </Label>
+            <Button type="button" size="sm" onClick={applySearch}>
+              <Search className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+              {tCommon("search")}
+            </Button>
           </div>
 
           <div className="space-y-1.5">
@@ -556,12 +575,11 @@ export function TripFilters({
                   value={pickupFrom}
                   onChange={(e) => {
                     setPickupFrom(e.target.value);
-                    if (DATA_COMPLETA.test(e.target.value))
-                      setFilters({ pickupFrom: e.target.value });
+                    if (ehDataCompleta(e.target.value)) setFilters({ pickupFrom: e.target.value });
                   }}
                   onBlur={() =>
                     setFilters({
-                      pickupFrom: DATA_COMPLETA.test(pickupFrom) ? pickupFrom : undefined,
+                      pickupFrom: ehDataCompleta(pickupFrom) ? pickupFrom : undefined,
                     })
                   }
                 />
@@ -575,11 +593,10 @@ export function TripFilters({
                   value={pickupTo}
                   onChange={(e) => {
                     setPickupTo(e.target.value);
-                    if (DATA_COMPLETA.test(e.target.value))
-                      setFilters({ pickupTo: e.target.value });
+                    if (ehDataCompleta(e.target.value)) setFilters({ pickupTo: e.target.value });
                   }}
                   onBlur={() =>
-                    setFilters({ pickupTo: DATA_COMPLETA.test(pickupTo) ? pickupTo : undefined })
+                    setFilters({ pickupTo: ehDataCompleta(pickupTo) ? pickupTo : undefined })
                   }
                 />
               </div>

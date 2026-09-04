@@ -269,6 +269,16 @@ export function mapPortalApiTrips(payload: PortalApiEnvelope): PortalParseResult
        * tipo de perda que só aparece quando já é tarde.
        */
       driverExternalId: positive(raw.driver) != null ? String(raw.driver) : null,
+      /*
+        O SEGUNDO MOTORISTA vinha na mesma listagem e era descartado (2026-09-04, a pedido).
+
+        `second_driver_name` e `second_driver_id`, ao lado dos dois de cima. Numa viagem de dois
+        motoristas, mostrar só o primeiro é meia informação — e quem olha não tem como saber se a
+        dupla está fechada ou se falta gente.
+      */
+      secondDriverLabel: trimmed(raw.second_driver_name),
+      secondDriverExternalId:
+        positive(raw.second_driver_id) != null ? String(raw.second_driver_id) : null,
       // 0 é um valor VÁLIDO aqui (Pending), então não dá para usar `positive`: o zero é justamente a
       // fila que precisa de gente.
       acceptanceStatus:

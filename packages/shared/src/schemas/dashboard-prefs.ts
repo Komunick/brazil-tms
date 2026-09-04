@@ -79,8 +79,20 @@ export const programacaoPrefsSchema = z.object({
    * para que mexer na janela não faça o Zod recusar a preferência inteira de quem já tinha uma.
    */
   dias: z.array(z.number().int().min(-60).max(60)).max(40).optional().default([]),
-  /** As linhas que a pessoa ocultou estão à mostra? */
+  /** As linhas que a pessoa ocultou estão à mostra? Sem efeito desde 04/09 — ver a tela. */
   mostrarOcultas: z.boolean().optional().default(false),
+  /**
+   * AS COLUNAS ESCONDIDAS (2026-09-04, a pedido).
+   *
+   * A linha tem quinze colunas e cabe numa tela larga; em notebook, não. Quem trabalha só com a
+   * expedição não quer ver SM e CTE; quem confere documento não quer ver ETA. Antes disso a saída
+   * era rolar a tabela para o lado o dia inteiro.
+   *
+   * Guarda as ESCONDIDAS, como o resto deste objeto: vazio quer dizer "todas à vista", que é o
+   * padrão, e guardar as visíveis faria uma coluna NOVA nascer escondida para quem já tinha
+   * preferência salva — o pior tipo de defeito, porque a coluna existiria e ninguém a veria.
+   */
+  colunas: z.array(z.string().trim().max(40)).max(30).optional().default([]),
 });
 
 export type ProgramacaoPrefs = z.infer<typeof programacaoPrefsSchema>;
@@ -101,6 +113,8 @@ export const PADRAO_DA_PROGRAMACAO: ProgramacaoPrefs = {
   // Nenhum dia escondido: a janela inteira à vista é o que faz sentido para quem chega sem escolha.
   dias: [],
   mostrarOcultas: false,
+  // Nenhuma escondida: a linha inteira à vista é o que faz sentido para quem chega sem escolha.
+  colunas: [],
 };
 
 export const dashboardPrefsSchema = z.object({

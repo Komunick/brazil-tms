@@ -117,6 +117,17 @@ export const portalCommandResultSchema = z.object({
    * auditoria diz que NÃO foi verificada — o que é diferente de dizer que foi.
    */
   confirmacao: z.unknown().optional(),
+  /**
+   * A ROTA DA AGÊNCIA que o robô usou na atribuição de revezamento (2026-09-04).
+   *
+   * Nula ou ausente na esmagadora maioria: só as viagens com ponto de troca no meio do caminho
+   * exigem escolher rota, e só nelas o campo existe.
+   *
+   * Ela vem para ser AUDITADA. O robô resolve o `section_id` dentro da sessão do portal — o TMS não
+   * tem como sabê-lo — e uma escolha que o robô faz sozinho, sem rastro, é uma escolha que ninguém
+   * consegue revisar depois. Aqui ela fica ao lado de quem pediu a atribuição.
+   */
+  rotaDaAgencia: z.number().int().positive().nullish(),
 });
 
 export type PortalCommandResult = z.infer<typeof portalCommandResultSchema>;

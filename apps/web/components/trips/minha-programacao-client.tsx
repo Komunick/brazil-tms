@@ -187,6 +187,66 @@ const DEPOIS_DA_ESTACAO = new Set([
   "cancelled",
 ]);
 
+/**
+ * AS COLUNAS QUE DÁ PARA ESCONDER (2026-09-04, a pedido).
+ *
+ * A linha tem quinze colunas e cabe numa tela larga; em notebook, não. Quem trabalha só com a
+ * expedição não quer ver SM e CTE; quem confere documento não quer ver ETA. A saída até aqui era
+ * rolar a tabela para o lado o dia inteiro.
+ *
+ * ── A LH NÃO ENTRA NA LISTA, e é a única de fora ──────────────────────────────────────────────
+ *
+ * Ela é a identidade da linha: sem o número, a linha deixa de ser uma viagem e vira um punhado de
+ * campos que ninguém consegue casar com o portal. Esconder o resto é escolha de quem olha; esconder
+ * a LH é perder o assunto.
+ *
+ * A ordem aqui é a da TABELA, de propósito: o painel lê como a linha se lê, e quem procura uma
+ * coluna a encontra no lugar em que ela aparece.
+ */
+/**
+ * QUANTOS DIAS PARA TRÁS O QUADRO ALCANÇA (2026-09-04, a pedido: "estenda por mais 3 dias").
+ *
+ * Eram dois, e dois não bastam: uma viagem longa sai hoje e chega depois de amanhã, e nesse meio
+ * tempo ela é justamente a que alguém está acompanhando. Ao passar de dois dias ela sumia da tela
+ * ainda em movimento.
+ *
+ * Medido no dia do pedido: **seis viagens ainda rodando** estavam fora — cinco com coleta há três
+ * dias (três em trânsito, duas no destino) e uma há quatro, em trânsito. Não é muito, e é exatamente
+ * a lista que alguém procura quando pergunta "cadê o motorista tal?".
+ *
+ * Cinco, e não mais: o passado cresce sem limite e o quadro é de trabalho, não de histórico. O que
+ * já chegou tem a sua tela; aqui interessa o que ainda está na estrada.
+ */
+const DIAS_ATRAS = 5;
+
+/**
+ * QUANTOS DIAS PARA A FRENTE — sete, como sempre foi (decisão do usuário, 04/09).
+ *
+ * Chegou a ser escolhível (7/15/30) e voltou a ser fixo a pedido. Fica registrado o que a escolha
+ * escondia, porque o número não some junto com o controle: no dia da decisão havia **260 viagens**
+ * além do sétimo dia, e **as 260 esperando atribuição** — a fila inteira do que ainda não foi
+ * escalado, com coleta em 12, 13 e 14/09.
+ *
+ * O que sobrevive daquela investigação é o RÓTULO: a tela diz de quando até quando ela vai. Foi a
+ * borda invisível que fez alguém conferir dez LHs à mão e concluir que o TMS não estava recebendo.
+ */
+const DIAS_ADIANTE = 7;
+
+const COLUNAS_OCULTAVEIS = [
+  "statusOperacional",
+  "sm",
+  "cte",
+  "rota",
+  "etaOrigem",
+  "cptOrigem",
+  "etaDestino",
+  "perfil",
+  "status",
+  "motorista",
+  "placa",
+  "contato",
+] as const;
+
 /** ONTEM/HOJE/AMANHÃ por extenso; do terceiro dia em diante a data já diz mais que a palavra. */
 function rotuloDoDia(dia: string, hoje: string, t: (k: string) => string): string {
   const d = new Date(`${dia}T12:00:00`);
@@ -259,6 +319,41 @@ export function MinhaProgramacaoClient({
   const [painelDeDias, setPainelDeDias] = useState(false);
   const [diasEscondidos, setDiasEscondidos] = useState<Set<string>>(new Set());
   const [statusEscondidos, setStatusEscondidos] = useState<Set<string>>(new Set());
+  const [colunasEscondidas, setColunasEscondidas] = useState<Set<string>>(new Set());
+
+  /**
+   * O ÚLTIMO DIA QUE O QUADRO ALCANÇA, por extenso.
+   *
+   * Existe para ser MOSTRADO. Uma janela que corta em silêncio faz quem procura concluir que o dado
+   * não existe — foi o que aconteceu em 04/09, com dez LHs conferidas à mão que estavam no banco o
+   * tempo todo. A borda continua existindo; o que muda é que ela passa a ser visível.
+   */
+  const janela = useMemo(() => {
+    const dia = (deslocamento: number): string => {
+      const d = new Date(`${hoje}T12:00:00`);
+      d.setDate(d.getDate() + deslocamento);
+      return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    };
+    // AS DUAS BORDAS, e não só a da frente: a de trás foi a que escondeu seis viagens ainda rodando.
+    return { inicio: dia(-DIAS_ATRAS), fim: dia(DIAS_ADIANTE) };
+  }, [hoje]);
+
+  /**
+   * A COLUNA APARECE? — a mesma pergunta para o cabeçalho e para a célula.
+   *
+   * UMA função, e não duas condições parecidas: se as duas divergissem, a tabela sairia com uma
+   * coluna a mais de um lado e o alinhamento inteiro andaria — o tipo de defeito que se vê e não se
+   * explica.
+   */
+  const mostrar = (coluna: string): boolean => !colunasEscondidas.has(coluna);
+
+  const alternarColuna = (coluna: string): void => {
+    const novo = new Set(colunasEscondidas);
+    if (novo.has(coluna)) novo.delete(coluna);
+    else novo.add(coluna);
+    setColunasEscondidas(novo);
+    lembrar({ colunas: [...novo] });
+  };
 
   /**
    * O guardado entra UMA VEZ, quando chega — depois quem manda é o clique.
@@ -272,6 +367,7 @@ export function MinhaProgramacaoClient({
     if (aplicado || !prefs.carregado) return;
     setFrentes(prefs.programacao.frentes);
     setStatusEscondidos(new Set(prefs.programacao.status));
+    setColunasEscondidas(new Set(prefs.programacao.colunas ?? []));
     /*
       Os dias voltam do DESLOCAMENTO guardado — ver `programacaoPrefsSchema`. `-1` guardado ontem
       continua querendo dizer "ontem" hoje, que é o que faz o filtro sobreviver à virada do dia.
@@ -289,6 +385,7 @@ export function MinhaProgramacaoClient({
       dias: [...diasEscondidos].map((d) => deslocamentoDoDia(d, hoje)),
       // Sem efeito desde 04/09 — repassada como está para não apagar o que já estava guardado.
       mostrarOcultas: prefs.programacao.mostrarOcultas,
+      colunas: [...colunasEscondidas],
       ...mudanca,
     });
   };
@@ -308,7 +405,14 @@ export function MinhaProgramacaoClient({
     lembrar({ dias: [...novo].map((d) => deslocamentoDoDia(d, hoje)) });
   };
 
-  const consulta = useProgramacao(frentes, { atras: 2, adiante: 7 });
+  /*
+    A JANELA VAI ATÉ ONDE A PESSOA ESCOLHEU (2026-09-04, a pedido).
+
+    Era fixa em sete dias. Em 04/09 a operação conferiu DEZ LHs à mão e concluiu que o TMS não estava
+    recebendo — as dez estavam no banco, com coleta oito e nove dias à frente. A tela não ia até lá, e
+    não dizia que não ia.
+  */
+  const consulta = useProgramacao(frentes, { atras: DIAS_ATRAS, adiante: DIAS_ADIANTE });
 
   const alternarFrente = (valor: string) => {
     const proximas = proximasFrentes(frentes, valor);
@@ -331,7 +435,7 @@ export function MinhaProgramacaoClient({
         apaga —, e simplesmente deixou de ter efeito.
       */
       if (termo === "") return true;
-      return [l.externalTripId, l.origem, l.destino, l.motorista, l.placa]
+      return [l.externalTripId, l.origem, l.destino, l.motorista, l.segundoMotorista, l.placa]
         .filter(Boolean)
         .some((c) => String(c).toUpperCase().includes(termo));
     });
@@ -360,12 +464,17 @@ export function MinhaProgramacaoClient({
    * `visiveis` traria de volta linhas que ela acabou de esconder — o pior tipo de erro aqui, porque
    * a lista colada parece certa e ninguém confere placa por placa.
    *
-   * ── UMA PLACA POR ITEM, INCLUSIVE AS DUAS DA CARRETA ──────────────────────────────────────
+   * ── UMA LINHA POR LH, COM AS PLACAS LADO A LADO (2026-09-04, a pedido) ────────────────────
    *
    * O portal manda as duas num campo só, separadas por vírgula ("PVZ6F36,FYD0H47"). Medido em
-   * produção: das 196 viagens com placa num dia, **146 têm duas** — é a maioria, não a exceção. A
-   * lista sai portanto MAIOR que o número de LHs, e é isso que se quer: o que se cola numa planilha
-   * de placas é placa, não viagem.
+   * produção: das 196 viagens com placa num dia, **146 têm duas** — é a maioria, não a exceção.
+   *
+   * Elas iam uma por linha, e a lista saía maior que o número de LHs. O pedido mudou: agora cada LH
+   * é UMA linha, com as suas placas separadas por TABULAÇÃO.
+   *
+   * A tabulação não é enfeite — é o que faz a colagem cair em COLUNAS VIZINHAS da planilha, cavalo
+   * numa e carreta na outra. Com vírgula ou espaço as duas cairiam na mesma célula e alguém teria de
+   * separar à mão, que é o trabalho que copiar veio eliminar.
    *
    * A INTERNA ENTRA JUNTO quando existe. Ela é a placa que rodou e que o portal não aceitou (a
    * carreta no lugar do truck), e a coluna já a mostra como "+ ABC1D23" — copiar sem ela deixaria de
@@ -377,15 +486,18 @@ export function MinhaProgramacaoClient({
    */
   const placasNaTela = useMemo(
     () =>
-      porDia.flatMap(([, linhasDoDia]) =>
-        linhasDoDia.flatMap((l) => [
-          ...(l.placa ?? "")
-            .split(",")
-            .map((p) => p.trim())
-            .filter(Boolean),
-          ...(l.placaInterna ? [l.placaInterna.trim()] : []),
-        ]),
-      ),
+      porDia
+        .flatMap(([, linhasDoDia]) =>
+          linhasDoDia.map((l) => [
+            ...(l.placa ?? "")
+              .split(",")
+              .map((p) => p.trim())
+              .filter(Boolean),
+            ...(l.placaInterna ? [l.placaInterna.trim()] : []),
+          ]),
+        )
+        // LH sem placa nenhuma não vira linha em branco na planilha.
+        .filter((placasDaLh) => placasDaLh.length > 0),
     [porDia],
   );
 
@@ -483,8 +595,19 @@ export function MinhaProgramacaoClient({
               : t("dias")}
           </Button>
 
-          <span className="ml-auto text-xs text-muted-foreground">
-            {t("totalLinhas", { n: visiveis.length })}
+          {/*
+            O TOTAL E O FIM DA JANELA, LADO A LADO — e o segundo é o que faltava (2026-09-04).
+
+            "142 viagens" sem dizer ATÉ QUANDO é a metade da frase que importa. Em 04/09 a operação
+            conferiu dez LHs à mão e concluiu que o TMS não recebia; as dez tinham coleta oito dias à
+            frente, fora de uma janela que a tela nunca mencionou.
+
+            Aqui, e não só dentro do painel de filtros: o painel abre fechado, e um aviso que só
+            aparece para quem procura não avisa ninguém.
+          */}
+          <span className="text-muted-foreground ml-auto text-xs">
+            {t("totalLinhas", { n: visiveis.length })} ·{" "}
+            {t("deAte", { de: janela.inicio, ate: janela.fim })}
           </span>
 
           {painelDeDias ? (
@@ -576,6 +699,72 @@ export function MinhaProgramacaoClient({
                   </Button>
                 ) : null}
               </div>
+
+              {/*
+                ATÉ ONDE O QUADRO VAI — a tela passou a dizer (2026-09-04).
+
+                A janela sempre foi fixa e a tela nunca contou isso. Em 04/09 a operação conferiu DEZ
+                LHs à mão, uma a uma, e concluiu que o TMS não estava recebendo. As dez estavam no
+                banco, carimbadas pelo robô minutos antes — a coleta era oito e nove dias à frente,
+                fora de uma borda que ninguém via.
+
+                Esticar a janela chegou a ser uma escolha na tela, e o usuário preferiu voltar ao
+                fixo. A borda continua existindo; o que não pode é ela ser invisível — e é por isso
+                que esta frase fica, mesmo sem o controle ao lado.
+              */}
+              <div className="space-y-2 border-t pt-2">
+                <p className="text-muted-foreground text-xs">
+                  {t("ateQuandoVai", { de: janela.inicio, ate: janela.fim })}
+                </p>
+              </div>
+
+              {/*
+                AS COLUNAS MORAM NO MESMO PAINEL QUE OS DIAS E O STATUS (2026-09-04, a pedido).
+
+                São a mesma pergunta feita de três jeitos — "o que eu não quero ver agora" —, e um
+                segundo botão ao lado do primeiro faria a pessoa lembrar em qual dos dois está cada
+                escolha. Aqui é um lugar só: abriu, escolhe o que sobra na tela.
+
+                Marcado = à vista. Desmarcado e riscado = escondido, igual aos dias logo acima: a
+                gramática do painel é a mesma de cima a baixo.
+              */}
+              <div className="space-y-2 border-t pt-2">
+                <p className="text-muted-foreground text-xs">{t("quaisColunas")}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {COLUNAS_OCULTAVEIS.map((coluna) => {
+                    const escondida = colunasEscondidas.has(coluna);
+                    return (
+                      <button
+                        key={coluna}
+                        type="button"
+                        aria-pressed={!escondida}
+                        onClick={() => alternarColuna(coluna)}
+                        className={cn(
+                          "rounded-full border px-3 py-1 text-xs transition-colors",
+                          escondida
+                            ? "text-muted-foreground line-through opacity-60"
+                            : "border-primary bg-primary text-primary-foreground",
+                        )}
+                      >
+                        {t(coluna)}
+                      </button>
+                    );
+                  })}
+                </div>
+                {colunasEscondidas.size > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setColunasEscondidas(new Set());
+                      lembrar({ colunas: [] });
+                    }}
+                  >
+                    {t("verTodasAsColunas")}
+                  </Button>
+                ) : null}
+              </div>
             </div>
           ) : null}
         </CardContent>
@@ -633,20 +822,29 @@ export function MinhaProgramacaoClient({
                 <TableRow>
                   {/* A coluna das MARCAÇÕES: a cor (pessoal) e o status (de todos). */}
                   <TableHead className="w-8" />
-                  <TableHead className="w-24">{t("statusOperacional")}</TableHead>
+                  {/*
+                    CADA COLUNA PERGUNTA SE DEVE APARECER (2026-09-04, a pedido).
+
+                    `mostrar` lê a mesma preferência que o painel escreve, e o corpo da linha usa a
+                    MESMA função — se cabeçalho e célula divergissem, a tabela sairia com uma coluna
+                    a mais num lado e o alinhamento inteiro andaria.
+                  */}
+                  {mostrar("statusOperacional") ? (
+                    <TableHead className="w-24">{t("statusOperacional")}</TableHead>
+                  ) : null}
                   {/* SM e CTE: duas perguntas independentes, uma coluna cada. */}
-                  <TableHead className="w-16">{t("sm")}</TableHead>
-                  <TableHead className="w-16">{t("cte")}</TableHead>
+                  {mostrar("sm") ? <TableHead className="w-16">{t("sm")}</TableHead> : null}
+                  {mostrar("cte") ? <TableHead className="w-16">{t("cte")}</TableHead> : null}
                   <TableHead>{t("lh")}</TableHead>
-                  <TableHead>{t("rota")}</TableHead>
-                  <TableHead>{t("etaOrigem")}</TableHead>
-                  <TableHead>{t("cptOrigem")}</TableHead>
-                  <TableHead>{t("etaDestino")}</TableHead>
-                  <TableHead>{t("perfil")}</TableHead>
-                  <TableHead>{t("status")}</TableHead>
-                  <TableHead>{t("motorista")}</TableHead>
-                  <TableHead>{t("placa")}</TableHead>
-                  <TableHead>{t("contato")}</TableHead>
+                  {mostrar("rota") ? <TableHead>{t("rota")}</TableHead> : null}
+                  {mostrar("etaOrigem") ? <TableHead>{t("etaOrigem")}</TableHead> : null}
+                  {mostrar("cptOrigem") ? <TableHead>{t("cptOrigem")}</TableHead> : null}
+                  {mostrar("etaDestino") ? <TableHead>{t("etaDestino")}</TableHead> : null}
+                  {mostrar("perfil") ? <TableHead>{t("perfil")}</TableHead> : null}
+                  {mostrar("status") ? <TableHead>{t("status")}</TableHead> : null}
+                  {mostrar("motorista") ? <TableHead>{t("motorista")}</TableHead> : null}
+                  {mostrar("placa") ? <TableHead>{t("placa")}</TableHead> : null}
+                  {mostrar("contato") ? <TableHead>{t("contato")}</TableHead> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -704,37 +902,43 @@ export function MinhaProgramacaoClient({
                       de dois ângulos: uma marcação pessoal e uma de todos, no mesmo canto da linha.
                       A caixinha abre para baixo e some ao escolher — a linha não cresce.
                     */}
-                    <TableCell className="p-1">
-                      {/*
-                        O SM SAIU DAQUI e virou COLUNA (2026-09-04, a pedido).
+                    {mostrar("statusOperacional") ? (
+                      <TableCell className="p-1">
+                        {/*
+                          O SM SAIU DAQUI e virou COLUNA (2026-09-04, a pedido).
 
-                        Ele morava colado no status porque nasceu como um selo. Virando marcação de
-                        um clique, e ganhando um irmão (o CTE), os dois pedem coluna com título — um
-                        par de ícones sem cabeçalho no meio da linha não diz o que está marcando.
-                      */}
-                      <StatusDaLinha
-                        tripId={l.tripId}
-                        status={l.statusOperacional}
-                        podeMarcar={podeAtribuir}
-                      />
-                    </TableCell>
+                          Ele morava colado no status porque nasceu como um selo. Virando marcação de
+                          um clique, e ganhando um irmão (o CTE), os dois pedem coluna com título — um
+                          par de ícones sem cabeçalho no meio da linha não diz o que está marcando.
+                        */}
+                        <StatusDaLinha
+                          tripId={l.tripId}
+                          status={l.statusOperacional}
+                          podeMarcar={podeAtribuir}
+                        />
+                      </TableCell>
+                    ) : null}
 
-                    <TableCell className="p-1">
-                      <MarcaDaLinha
-                        tripId={l.tripId}
-                        valor={l.sm}
-                        campo="sm"
-                        podeMarcar={podeAtribuir}
-                      />
-                    </TableCell>
-                    <TableCell className="p-1">
-                      <MarcaDaLinha
-                        tripId={l.tripId}
-                        valor={l.cte}
-                        campo="cte"
-                        podeMarcar={podeAtribuir}
-                      />
-                    </TableCell>
+                    {mostrar("sm") ? (
+                      <TableCell className="p-1">
+                        <MarcaDaLinha
+                          tripId={l.tripId}
+                          valor={l.sm}
+                          campo="sm"
+                          podeMarcar={podeAtribuir}
+                        />
+                      </TableCell>
+                    ) : null}
+                    {mostrar("cte") ? (
+                      <TableCell className="p-1">
+                        <MarcaDaLinha
+                          tripId={l.tripId}
+                          valor={l.cte}
+                          campo="cte"
+                          podeMarcar={podeAtribuir}
+                        />
+                      </TableCell>
+                    ) : null}
 
                     <TableCell className="font-mono text-xs">
                       {/*
@@ -794,70 +998,82 @@ export function MinhaProgramacaoClient({
                         userId={userId}
                       />
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-xs">
-                      {l.origem ?? "—"}
-                      <span className="px-1 text-muted-foreground">→</span>
-                      {l.destino ?? "—"}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-xs tabular-nums">
-                      {l.etaOrigem ?? "—"}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-xs tabular-nums">
-                      {l.cptOrigem ?? "—"}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-xs tabular-nums">
-                      {l.etaDestino ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-xs uppercase">{l.perfil ?? "—"}</TableCell>
-                    <TableCell>
-                      {/*
-                        A DOCA VEM ANTES DO STATUS (30/08, a pedido).
-
-                        Saber que a viagem está "Carregando" sem saber ONDE manda quem acompanha
-                        perguntar por rádio — e a doca já existia no TMS, guardada no detalhe da
-                        viagem, a dois cliques de distância de quem precisa dela.
-
-                        Na MESMA célula, e não numa coluna nova: a linha já tem quinze colunas, e a
-                        doca só quer dizer alguma coisa junto do carregamento. Coluna própria seria
-                        uma faixa vazia em todas as linhas que não estão carregando.
-
-                        Só aparece quando está preenchida: um "Doca —" em cada linha do quadro seria
-                        ruído em cima de um dado que quase sempre não existe ainda.
-                      */}
-                      {/*
-                        EM CIMA DO STATUS, SEMPRE — `flex-col` e não `flex-wrap` (31/08, a pedido).
-
-                        Com `flex-wrap` a doca ficava ao lado quando havia largura, e embaixo quando
-                        não havia: a mesma tela mudava de forma conforme o monitor, e quem trabalha
-                        em dois computadores via dois layouts. Coluna fixa é previsível.
-
-                        `items-start` para o selo não esticar até a largura da célula.
-                      */}
-                      <div className="flex flex-col items-start gap-1">
+                    {mostrar("rota") ? (
+                      <TableCell className="whitespace-nowrap text-xs">
+                        {l.origem ?? "—"}
+                        <span className="px-1 text-muted-foreground">→</span>
+                        {l.destino ?? "—"}
+                      </TableCell>
+                    ) : null}
+                    {mostrar("etaOrigem") ? (
+                      <TableCell className="whitespace-nowrap text-xs tabular-nums">
+                        {l.etaOrigem ?? "—"}
+                      </TableCell>
+                    ) : null}
+                    {mostrar("cptOrigem") ? (
+                      <TableCell className="whitespace-nowrap text-xs tabular-nums">
+                        {l.cptOrigem ?? "—"}
+                      </TableCell>
+                    ) : null}
+                    {mostrar("etaDestino") ? (
+                      <TableCell className="whitespace-nowrap text-xs tabular-nums">
+                        {l.etaDestino ?? "—"}
+                      </TableCell>
+                    ) : null}
+                    {mostrar("perfil") ? (
+                      <TableCell className="text-xs uppercase">{l.perfil ?? "—"}</TableCell>
+                    ) : null}
+                    {mostrar("status") ? (
+                      <TableCell>
                         {/*
-                          E SOME DEPOIS QUE A VIAGEM SAI (31/08, a pedido).
+                          A DOCA VEM ANTES DO STATUS (30/08, a pedido).
 
-                          A doca responde "onde está carregando". Assim que o veículo entra em
-                          trânsito, ela deixa de ser instrução e vira história — e história ocupando
-                          espaço numa linha de quinze colunas é ruído sobre quem ainda está na
-                          estação.
+                          Saber que a viagem está "Carregando" sem saber ONDE manda quem acompanha
+                          perguntar por rádio — e a doca já existia no TMS, guardada no detalhe da
+                          viagem, a dois cliques de distância de quem precisa dela.
 
-                          Sumir da TELA, não do banco: `plates_internas` e `Doca (portal)` continuam
-                          gravados, e o faturamento os encontra. Medido em 30/08: 49 de 53 viagens
-                          já partidas mantiveram a doca guardada.
+                          Na MESMA célula, e não numa coluna nova: a linha já tem quinze colunas, e a
+                          doca só quer dizer alguma coisa junto do carregamento. Coluna própria seria
+                          uma faixa vazia em todas as linhas que não estão carregando.
+
+                          Só aparece quando está preenchida: um "Doca —" em cada linha do quadro seria
+                          ruído em cima de um dado que quase sempre não existe ainda.
                         */}
-                        {l.doca && !DEPOIS_DA_ESTACAO.has(l.status) ? (
-                          <span className="rounded border px-1 py-0.5 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
-                            {t("doca", { n: l.doca })}
-                          </span>
-                        ) : null}
-                        <TripStatusBadge
-                          status={l.status as TripDisplayStatus}
-                          portalAcceptance={l.acceptanceStatus}
-                          portalStatus={l.portalStatus}
-                        />
-                      </div>
-                    </TableCell>
+                        {/*
+                          EM CIMA DO STATUS, SEMPRE — `flex-col` e não `flex-wrap` (31/08, a pedido).
+
+                          Com `flex-wrap` a doca ficava ao lado quando havia largura, e embaixo quando
+                          não havia: a mesma tela mudava de forma conforme o monitor, e quem trabalha
+                          em dois computadores via dois layouts. Coluna fixa é previsível.
+
+                          `items-start` para o selo não esticar até a largura da célula.
+                        */}
+                        <div className="flex flex-col items-start gap-1">
+                          {/*
+                            E SOME DEPOIS QUE A VIAGEM SAI (31/08, a pedido).
+
+                            A doca responde "onde está carregando". Assim que o veículo entra em
+                            trânsito, ela deixa de ser instrução e vira história — e história ocupando
+                            espaço numa linha de quinze colunas é ruído sobre quem ainda está na
+                            estação.
+
+                            Sumir da TELA, não do banco: `plates_internas` e `Doca (portal)` continuam
+                            gravados, e o faturamento os encontra. Medido em 30/08: 49 de 53 viagens
+                            já partidas mantiveram a doca guardada.
+                          */}
+                          {l.doca && !DEPOIS_DA_ESTACAO.has(l.status) ? (
+                            <span className="rounded border px-1 py-0.5 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
+                              {t("doca", { n: l.doca })}
+                            </span>
+                          ) : null}
+                          <TripStatusBadge
+                            status={l.status as TripDisplayStatus}
+                            portalAcceptance={l.acceptanceStatus}
+                            portalStatus={l.portalStatus}
+                          />
+                        </div>
+                      </TableCell>
+                    ) : null}
                     {/*
                       O PREVISTO OCUPA A CÉLULA ENQUANTO ELA ESTIVER VAZIA (2026-08-26, a pedido).
                       Não é uma coluna nova: duas colunas de motorista lado a lado obrigariam quem
@@ -865,139 +1081,166 @@ export function MinhaProgramacaoClient({
                       só — o que está escalado, ou, na falta dele, o que se pretende. O selo em
                       cinza e o itálico existem para que ninguém confunda intenção com ordem.
                     */}
-                    <TableCell className="text-xs">
-                      {l.motorista ? (
-                        <span className="inline-flex items-center gap-1">
-                          {l.motorista}
-                          <SeloDeVinculo
-                            vinculo={l.vinculo}
-                            driverId={l.driverId}
-                            podeEditar={podeEditarVinculo}
+                    {mostrar("motorista") ? (
+                      <TableCell className="text-xs">
+                        {l.motorista ? (
+                          <span className="inline-flex items-center gap-1">
+                            {l.motorista}
+                            <SeloDeVinculo
+                              vinculo={l.vinculo}
+                              driverId={l.driverId}
+                              podeEditar={podeEditarVinculo}
+                            />
+                            {/*
+                              O MOTORISTA FOI TROCADO (31/08, a pedido).
+
+                              Medido antes de construir: 48 viagens tiveram mais de uma atribuição
+                              concluída, e em 32 o motorista de fato mudou. O ícone só aparece nessas —
+                              trocar só a placa não é troca de motorista, e o balão fala do anterior.
+
+                              O dado estava em `portal_commands` desde agosto, com o motorista, quem
+                              pediu e quando, e nenhuma tela o mostrava.
+                            */}
+                            {l.trocouMotorista ? (
+                              /*
+                                O `title` vai no `span`, e não no ícone: o componente do lucide não
+                                aceita a prop e o balão simplesmente não apareceria — sem erro, porque
+                                props desconhecidas somem em silêncio no React.
+                              */
+                              <span
+                                className="inline-flex"
+                                aria-label={t("motoristaTrocado")}
+                                title={[
+                                  l.motoristaAnterior
+                                    ? t("motoristaAnterior", { nome: l.motoristaAnterior })
+                                    : null,
+                                  l.trocadoPor ? t("quemAlterou", { nome: l.trocadoPor }) : null,
+                                  l.trocadoEm
+                                    ? new Date(l.trocadoEm).toLocaleString("pt-BR", {
+                                        timeZone: "America/Sao_Paulo",
+                                        day: "2-digit",
+                                        month: "2-digit",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })
+                                    : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join("\n")}
+                              >
+                                <ArrowLeftRight
+                                  className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400"
+                                  aria-hidden
+                                />
+                              </span>
+                            ) : null}
+                            <Copiar valor={l.motorista} rotulo={t("copiarMotorista")} />
+                          </span>
+                        ) : (
+                          <Previsto
+                            texto={l.previstoMotorista}
+                            rotulo={t("previsto")}
+                            rotuloDefinir={t("prever")}
+                            aoDefinir={podeAtribuir ? () => setPrevendo(l.tripId) : undefined}
                           />
-                          {/*
-                            O MOTORISTA FOI TROCADO (31/08, a pedido).
+                        )}
+                        {/*
+                          O SEGUNDO MOTORISTA, EMBAIXO DO PRIMEIRO (2026-09-04, a pedido).
 
-                            Medido antes de construir: 48 viagens tiveram mais de uma atribuição
-                            concluída, e em 32 o motorista de fato mudou. O ícone só aparece nessas —
-                            trocar só a placa não é troca de motorista, e o balão fala do anterior.
+                          Ele vinha na mesma listagem do portal desde sempre e era descartado no
+                          mapeador. Numa viagem de dois, mostrar só um é meia informação: quem escala
+                          não tem como saber se a dupla está fechada ou se ainda falta gente.
 
-                            O dado estava em `portal_commands` desde agosto, com o motorista, quem
-                            pediu e quando, e nenhuma tela o mostrava.
-                          */}
-                          {l.trocouMotorista ? (
-                            /*
-                              O `title` vai no `span`, e não no ícone: o componente do lucide não
-                              aceita a prop e o balão simplesmente não apareceria — sem erro, porque
-                              props desconhecidas somem em silêncio no React.
-                            */
-                            <span
-                              className="inline-flex"
-                              aria-label={t("motoristaTrocado")}
-                              title={[
-                                l.motoristaAnterior
-                                  ? t("motoristaAnterior", { nome: l.motoristaAnterior })
-                                  : null,
-                                l.trocadoPor ? t("quemAlterou", { nome: l.trocadoPor }) : null,
-                                l.trocadoEm
-                                  ? new Date(l.trocadoEm).toLocaleString("pt-BR", {
-                                      timeZone: "America/Sao_Paulo",
-                                      day: "2-digit",
-                                      month: "2-digit",
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })
-                                  : null,
-                              ]
-                                .filter(Boolean)
-                                .join("\n")}
-                            >
-                              <ArrowLeftRight
-                                className="h-3 w-3 shrink-0 text-amber-600 dark:text-amber-400"
-                                aria-hidden
-                              />
-                            </span>
-                          ) : null}
-                          <Copiar valor={l.motorista} rotulo={t("copiarMotorista")} />
-                        </span>
-                      ) : (
-                        <Previsto
-                          texto={l.previstoMotorista}
-                          rotulo={t("previsto")}
-                          rotuloDefinir={t("prever")}
-                          aoDefinir={podeAtribuir ? () => setPrevendo(l.tripId) : undefined}
-                        />
-                      )}
-                      {/*
-                        O CPF EMBAIXO DO NOME (31/08, a pedido).
+                          Só desenha quando existe. Um "—" fixo diria "não tem segundo" sobre quase
+                          todas as viagens, e uma linha a mais em cada uma delas — ruído em troca de
+                          nada, numa tabela que já tem quinze colunas.
 
-                        Ele já vinha na consulta e nenhuma coluna o mostrava. É o que a gerenciadora
-                        e o portal pedem para achar a pessoa, e sem ele aqui a busca era pelo nome —
-                        que é chave frágil e já custou três motoristas que existiam e o sistema
-                        jurava não existirem.
+                          O "2º" na frente é o que evita a leitura errada: sem ele, dois nomes
+                          empilhados parecem o mesmo campo repetido ou um nome que quebrou de linha.
+                        */}
+                        {l.segundoMotorista ? (
+                          <span className="text-muted-foreground flex items-center gap-1 text-[0.7rem]">
+                            <span className="font-semibold">2º</span>
+                            {l.segundoMotorista}
+                            <Copiar valor={l.segundoMotorista} rotulo={t("copiarMotorista")} />
+                          </span>
+                        ) : null}
+                        {/*
+                          O CPF EMBAIXO DO NOME (31/08, a pedido).
 
-                        Embaixo e em tom secundário: quem lê a coluna procura o NOME. O CPF é para
-                        levar a outro lugar, e é por isso que ele nasce com o botão de copiar ao
-                        lado em vez de convidar a digitação.
-                      */}
-                      {l.cpf ? (
-                        <span className="text-muted-foreground flex items-center gap-1 font-mono text-[0.65rem]">
-                          {cpfLegivel(l.cpf)}
-                          <Copiar valor={l.cpf} rotulo={t("copiarCpf")} />
-                        </span>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap font-mono text-xs">
-                      {l.placa ? (
-                        <span className="inline-flex items-center gap-1">
-                          {l.placa}
-                          <Copiar valor={l.placa} rotulo={t("copiarPlaca")} />
-                        </span>
-                      ) : (
-                        // Sem `aoDefinir` nesta coluna: o previsto é UMA decisão (quem e com quê), e
-                        // dois convites para a mesma janela na mesma linha só ocupam espaço.
-                        <Previsto
-                          texto={l.previstoPlaca}
-                          rotulo={t("previsto")}
-                          rotuloDefinir={t("prever")}
-                        />
-                      )}
-                      {/*
-                        A PLACA QUE NÃO FOI AO PORTAL, embaixo da que foi (30/08, a pedido).
+                          Ele já vinha na consulta e nenhuma coluna o mostrava. É o que a gerenciadora
+                          e o portal pedem para achar a pessoa, e sem ele aqui a busca era pelo nome —
+                          que é chave frágil e já custou três motoristas que existiam e o sistema
+                          jurava não existirem.
 
-                        O caso: uma CARRETA rodou no lugar de um TRUCK. O portal aceita uma placa só
-                        nessa LH — vai a do cavalo — e a segunda existia no banco sem nenhuma tela
-                        para mostrá-la. O faturamento precisa dela para pagar pela tarifa de carreta,
-                        e sem ela aqui a planilha paralela continuava sendo a fonte da verdade.
+                          Embaixo e em tom secundário: quem lê a coluna procura o NOME. O CPF é para
+                          levar a outro lugar, e é por isso que ele nasce com o botão de copiar ao
+                          lado em vez de convidar a digitação.
+                        */}
+                        {l.cpf ? (
+                          <span className="text-muted-foreground flex items-center gap-1 font-mono text-[0.65rem]">
+                            {cpfLegivel(l.cpf)}
+                            <Copiar valor={l.cpf} rotulo={t("copiarCpf")} />
+                          </span>
+                        ) : null}
+                      </TableCell>
+                    ) : null}
+                    {mostrar("placa") ? (
+                      <TableCell className="whitespace-nowrap font-mono text-xs">
+                        {l.placa ? (
+                          <span className="inline-flex items-center gap-1">
+                            {l.placa}
+                            <Copiar valor={l.placa} rotulo={t("copiarPlaca")} />
+                          </span>
+                        ) : (
+                          // Sem `aoDefinir` nesta coluna: o previsto é UMA decisão (quem e com quê), e
+                          // dois convites para a mesma janela na mesma linha só ocupam espaço.
+                          <Previsto
+                            texto={l.previstoPlaca}
+                            rotulo={t("previsto")}
+                            rotuloDefinir={t("prever")}
+                          />
+                        )}
+                        {/*
+                          A PLACA QUE NÃO FOI AO PORTAL, embaixo da que foi (30/08, a pedido).
 
-                        Embaixo e em tom secundário, não ao lado: quem lê a coluna procura a placa
-                        que a portaria vai conferir, e essa é a de cima. A segunda é contexto de
-                        quem fatura, e não pode disputar o olho de quem opera.
-                      */}
-                      {l.placaInterna ? (
-                        <span
-                          className="text-muted-foreground block text-[0.65rem]"
-                          title={t("placaInternaDetalhe")}
-                        >
-                          + {l.placaInterna}
-                          {/* Copiável como a de cima: o faturamento leva as DUAS. */}
-                          <Copiar valor={l.placaInterna} rotulo={t("copiarPlaca")} />
-                        </span>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-xs">
-                      {/* Discar no celular, copiar no computador — o `tel:` faz as duas. */}
-                      {l.telefone ? (
-                        <span className="inline-flex items-center gap-1">
-                          <a className="underline underline-offset-2" href={`tel:${l.telefone}`}>
-                            {l.telefone}
-                          </a>
-                          {/* Discar resolve no celular; copiar resolve no WhatsApp Web. */}
-                          <Copiar valor={l.telefone} rotulo={t("copiarTelefone")} />
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
+                          O caso: uma CARRETA rodou no lugar de um TRUCK. O portal aceita uma placa só
+                          nessa LH — vai a do cavalo — e a segunda existia no banco sem nenhuma tela
+                          para mostrá-la. O faturamento precisa dela para pagar pela tarifa de carreta,
+                          e sem ela aqui a planilha paralela continuava sendo a fonte da verdade.
+
+                          Embaixo e em tom secundário, não ao lado: quem lê a coluna procura a placa
+                          que a portaria vai conferir, e essa é a de cima. A segunda é contexto de
+                          quem fatura, e não pode disputar o olho de quem opera.
+                        */}
+                        {l.placaInterna ? (
+                          <span
+                            className="text-muted-foreground block text-[0.65rem]"
+                            title={t("placaInternaDetalhe")}
+                          >
+                            + {l.placaInterna}
+                            {/* Copiável como a de cima: o faturamento leva as DUAS. */}
+                            <Copiar valor={l.placaInterna} rotulo={t("copiarPlaca")} />
+                          </span>
+                        ) : null}
+                      </TableCell>
+                    ) : null}
+                    {mostrar("contato") ? (
+                      <TableCell className="whitespace-nowrap text-xs">
+                        {/* Discar no celular, copiar no computador — o `tel:` faz as duas. */}
+                        {l.telefone ? (
+                          <span className="inline-flex items-center gap-1">
+                            <a className="underline underline-offset-2" href={`tel:${l.telefone}`}>
+                              {l.telefone}
+                            </a>
+                            {/* Discar resolve no celular; copiar resolve no WhatsApp Web. */}
+                            <Copiar valor={l.telefone} rotulo={t("copiarTelefone")} />
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 ))}
               </TableBody>
@@ -1159,7 +1402,19 @@ function Previsto({
  * A confirmação é o próprio rótulo virando "copiado" por dois segundos, como no `Copiar` da linha —
  * um aviso flutuante para uma ação desta seria mais interrupção do que informação.
  */
-function CopiarPlacas({ placas, viagens }: { placas: string[]; viagens: number }) {
+/**
+ * OS DOIS SEPARADORES DA CÓPIA, escritos com escape e não com o caractere de verdade.
+ *
+ * Uma TABULAÇÃO literal no meio do código é invisível: some numa formatação automática, num
+ * copiar-e-colar, ou vira espaço sem ninguém notar — e o sintoma seria a colagem parando de cair em
+ * duas colunas, sem nada no diff que explique.
+ *
+ * A tabulação é o que a planilha lê como "próxima coluna"; a quebra, como "próxima linha".
+ */
+const SEPARADOR_DE_COLUNA = "\t";
+const QUEBRA_DE_LINHA = "\n";
+
+function CopiarPlacas({ placas, viagens }: { placas: string[][]; viagens: number }) {
   const t = useTranslations("Programacao");
   const [copiado, setCopiado] = useState(false);
 
@@ -1171,6 +1426,16 @@ function CopiarPlacas({ placas, viagens }: { placas: string[]; viagens: number }
 
   if (placas.length === 0) return null;
 
+  /*
+    TABULAÇÃO ENTRE AS PLACAS DA MESMA LH, QUEBRA ENTRE AS LHs (2026-09-04, a pedido).
+
+    A tabulação é o que faz a colagem cair em COLUNAS VIZINHAS da planilha — cavalo numa célula,
+    carreta na outra. Vírgula ou espaço jogariam as duas na mesma célula, e alguém teria de separar à
+    mão exatamente o que copiar veio eliminar.
+  */
+  const texto = placas.map((daLh) => daLh.join(SEPARADOR_DE_COLUNA)).join(QUEBRA_DE_LINHA);
+  const quantas = placas.reduce((n, daLh) => n + daLh.length, 0);
+
   return (
     <Button
       type="button"
@@ -1179,7 +1444,7 @@ function CopiarPlacas({ placas, viagens }: { placas: string[]; viagens: number }
       className="h-8"
       onClick={() => {
         void navigator.clipboard
-          .writeText(placas.join("\n"))
+          .writeText(texto)
           .then(() => setCopiado(true))
           .catch(() => setCopiado(false));
       }}
@@ -1190,8 +1455,8 @@ function CopiarPlacas({ placas, viagens }: { placas: string[]; viagens: number }
         <Copy className="mr-1.5 h-3.5 w-3.5" aria-hidden />
       )}
       {copiado
-        ? t("placasCopiadas", { placas: placas.length })
-        : t("copiarPlacasDoFiltro", { placas: placas.length, viagens })}
+        ? t("placasCopiadas", { placas: quantas })
+        : t("copiarPlacasDoFiltro", { placas: quantas, viagens })}
     </Button>
   );
 }
