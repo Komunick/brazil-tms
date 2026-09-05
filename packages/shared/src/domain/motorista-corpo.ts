@@ -115,6 +115,45 @@ export const CAMPOS_DO_CADASTRO = [
 export type CampoDoCadastro = (typeof CAMPOS_DO_CADASTRO)[number];
 
 /**
+ * QUAIS DOS CAMPOS ACIMA SÃO DATA — e por que isso precisa estar escrito (2026-09-05).
+ *
+ * Todos os campos são guardados como texto, e a tela de conferência os desenhava todos com o mesmo
+ * `<Input>` de texto. O efeito: a data de nascimento aparecia crua, `2035-04-25`, na ordem ISO.
+ *
+ * ── POR QUE ISSO NÃO É COSMÉTICO ──────────────────────────────────────────────────────────────
+ *
+ * Um cadastro real foi enviado à gerenciadora com `DataNascimento` = `2035-04-25` — a data de
+ * VENCIMENTO da CNH, que a leitura copiou no campo errado. Passou pela conferência de uma pessoa.
+ *
+ * E passou porque `2035-04-25` não é lido como data por quem lê em português: é uma sequência de
+ * números em ordem estrangeira, no meio de vinte campos. Escrito `25/04/2035`, o 2035 no fim salta
+ * aos olhos. **O formato errado não causou o erro, mas foi ele que deixou o erro passar.**
+ *
+ * Com `type="date"` o navegador desenha no formato local e ainda dá o seletor. O valor continua
+ * `AAAA-MM-DD` por dentro — nada muda no que é guardado nem no que vai para a gerenciadora.
+ */
+export const CAMPOS_DE_DATA = new Set<CampoDoCadastro>([
+  "dataNascimento",
+  "validade",
+  "primeiraHabilitacao",
+  "validadeMopp",
+]);
+
+/**
+ * DESTES, os que não podem estar no futuro — viram `max` no campo nativo.
+ *
+ * Nascer e tirar a primeira habilitação são fatos passados. `validade` e `validadeMopp` são o
+ * contrário: vencimento no futuro é o normal, e pôr `max` neles impediria o caso certo.
+ *
+ * Isto NÃO substitui `nascimentoPlausivel` — o navegador é conveniência, e uma tela pode ser
+ * contornada. A recusa de verdade continua no servidor.
+ */
+export const CAMPOS_DE_DATA_NO_PASSADO = new Set<CampoDoCadastro>([
+  "dataNascimento",
+  "primeiraHabilitacao",
+]);
+
+/**
  * O que o job junta antes de montar: os campos consolidados mais o que só o banco sabe.
  *
  * Os dois CÓDIGOS IBGE não vêm da foto nem do CEP diretamente — são resolvidos contra o catálogo de

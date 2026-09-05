@@ -59,9 +59,44 @@ JSON infla o corpo em um terço — num 4G de evento isso é a diferença entre 
 > **O servidor ainda o aceita como opcional**, para não quebrar quem tiver a versão antiga da
 > página aberta. O formulário deve exigi-lo mesmo assim.
 
-**Nada além disso.** Não peça nascimento, RG, nome da mãe, Renach, categoria ou validade da CNH —
-tudo isso é lido da foto depois. Pedir ao motorista o que está impresso no documento que ele acabou
-de fotografar é trabalho jogado fora, e num estande é o que faz a pessoa desistir.
+**Não peça RG, órgão emissor, Renach, categoria, número de registro, número de formulário, número de
+segurança nem as datas da CNH.** Tudo isso é lido da foto depois. Pedir ao motorista o que está
+impresso no documento que ele acabou de fotografar é trabalho jogado fora, e num estande é o que faz
+a pessoa desistir. Ninguém sabe o número do Renach de cor.
+
+### Os cinco que a pessoa sabe de cor (revisão de 2026-09-05)
+
+| Campo | Tipo | Obrigatório | Formato |
+|---|---|---|---|
+| `dataNascimento` | data | **sim** | `AAAA-MM-DD`. Use `max` = hoje no campo nativo |
+| `sexo` | `"M"` \| `"F"` | **sim** | dois botões, não uma lista |
+| `nomeMae` | texto | **sim** | nome completo, 3 a 100 caracteres |
+| `cidadeNatal` | texto | **sim** | cidade de nascimento, até 100 |
+| `ufNatal` | texto | **sim** | 2 letras |
+
+Como todo o resto, o servidor os aceita **opcionais** para não quebrar quem estiver com a página
+antiga aberta. O formulário é que exige.
+
+**Por que a regra acima muda para estes cinco, e só para estes.** Eles estão impressos na CNH, mas
+não é de lá que a pessoa os tira: ela responde sem olhar. São dois toques (sexo), uma data e dois
+nomes — não é o tipo de campo que faz alguém desistir num estande. RG e órgão emissor ficam de fora
+justamente por serem o contrário: estão no documento e ninguém os tem na cabeça.
+
+**O que aconteceu para isto mudar.** Um cadastro real foi enviado à gerenciadora com
+`DataNascimento` = `2035-04-25` — a data de **vencimento da CNH**, que a leitura copiou no campo
+errado. Uma pessoa nascida no futuro. **A gerenciadora aceitou**, porque não valida esse campo, e o
+motorista ficou lá dentro com data errada; desfazer no cadastro deles custa.
+
+Hoje esses cinco campos têm **uma fonte só**, a leitura da foto. Quando ela erra, não há com o que
+comparar. O guarda que existe no TMS pega data impossível (futuro, ou fora de 18 a 90 anos), mas não
+pega leitura plausível e errada — 1985 virando 1995 passa direto.
+
+**Perguntando, eles passam a ter duas fontes**, e o TMS compara: batendo, segue; divergindo, a tela
+de conferência marca o campo e a pessoa que confere olha a foto. O conferente deixa de ter que ler a
+CNH inteira e passa a olhar só onde as duas versões discordam.
+
+**Não é para o formulário comparar nada.** Ele só coleta e envia; quem compara é o TMS. E a pessoa
+digita o que sabe — se divergir da foto, isso é informação, não erro dela.
 
 ### Os arquivos
 
