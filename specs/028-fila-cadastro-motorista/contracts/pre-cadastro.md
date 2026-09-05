@@ -64,39 +64,38 @@ segurança nem as datas da CNH.** Tudo isso é lido da foto depois. Pedir ao mot
 impresso no documento que ele acabou de fotografar é trabalho jogado fora, e num estande é o que faz
 a pessoa desistir. Ninguém sabe o número do Renach de cor.
 
-### Os cinco que a pessoa sabe de cor (revisão de 2026-09-05)
+**Nada além disso.** Nascimento, sexo, nome da mãe e naturalidade também são lidos da foto.
 
-| Campo | Tipo | Obrigatório | Formato |
-|---|---|---|---|
-| `dataNascimento` | data | **sim** | `AAAA-MM-DD`. Use `max` = hoje no campo nativo |
-| `sexo` | `"M"` \| `"F"` | **sim** | dois botões, não uma lista |
-| `nomeMae` | texto | **sim** | nome completo, 3 a 100 caracteres |
-| `cidadeNatal` | texto | **sim** | cidade de nascimento, até 100 |
-| `ufNatal` | texto | **sim** | 2 letras |
-
-Como todo o resto, o servidor os aceita **opcionais** para não quebrar quem estiver com a página
-antiga aberta. O formulário é que exige.
-
-**Por que a regra acima muda para estes cinco, e só para estes.** Eles estão impressos na CNH, mas
-não é de lá que a pessoa os tira: ela responde sem olhar. São dois toques (sexo), uma data e dois
-nomes — não é o tipo de campo que faz alguém desistir num estande. RG e órgão emissor ficam de fora
-justamente por serem o contrário: estão no documento e ninguém os tem na cabeça.
-
-**O que aconteceu para isto mudar.** Um cadastro real foi enviado à gerenciadora com
-`DataNascimento` = `2035-04-25` — a data de **vencimento da CNH**, que a leitura copiou no campo
-errado. Uma pessoa nascida no futuro. **A gerenciadora aceitou**, porque não valida esse campo, e o
-motorista ficou lá dentro com data errada; desfazer no cadastro deles custa.
-
-Hoje esses cinco campos têm **uma fonte só**, a leitura da foto. Quando ela erra, não há com o que
-comparar. O guarda que existe no TMS pega data impossível (futuro, ou fora de 18 a 90 anos), mas não
-pega leitura plausível e errada — 1985 virando 1995 passa direto.
-
-**Perguntando, eles passam a ter duas fontes**, e o TMS compara: batendo, segue; divergindo, a tela
-de conferência marca o campo e a pessoa que confere olha a foto. O conferente deixa de ter que ler a
-CNH inteira e passa a olhar só onde as duas versões discordam.
-
-**Não é para o formulário comparar nada.** Ele só coleta e envia; quem compara é o TMS. E a pessoa
-digita o que sabe — se divergir da foto, isso é informação, não erro dela.
+> ### Perguntar esses quatro no formulário foi PROPOSTO E RECUSADO (2026-09-05)
+>
+> Fica registrado para não ser reaberto sem saber o que já se discutiu.
+>
+> **O que aconteceu.** Um cadastro real foi enviado à gerenciadora com `DataNascimento` =
+> `2035-04-25` — a data de **vencimento da CNH**, que a leitura copiou no campo errado. Uma pessoa
+> nascida no futuro. A gerenciadora **aceitou**, porque não valida esse campo, e o motorista ficou
+> lá dentro com data errada; desfazer no cadastro deles custa.
+>
+> **A proposta** era perguntar nascimento, sexo, nome da mãe, cidade e UF de nascimento — coisas que
+> a pessoa responde sem olhar documento. Isso daria uma SEGUNDA FONTE para esses campos, e o TMS
+> compararia com a leitura: batendo, segue; divergindo, a tela marca e o conferente olha a foto.
+>
+> **A decisão do usuário: não.** A conferência é feita por uma pessoa, e é ela quem deve pegar isso
+> — é literalmente o trabalho dela. Acrescentar campos no formulário cobra do motorista, no estande,
+> um cuidado que já existe do lado de dentro.
+>
+> **O que protege hoje, e é o que sustenta a decisão:**
+>
+> - `nascimentoPlausivel` recusa data impossível — futuro, ou idade fora de 18 a 90 anos. Foi ela
+>   que passou a barrar o caso do Sandro.
+> - Os campos de data na tela de conferência são `type="date"`, então aparecem no formato
+>   brasileiro. Era o formato ISO cru (`2035-04-25`) que fazia o erro não saltar aos olhos de quem
+>   confere vinte campos.
+> - E a procedência fica ao lado de cada campo: `cnh` pede o olho no documento, `digitado` já passou
+>   por alguém.
+>
+> **O que continua descoberto, e é o preço da decisão:** leitura plausível e errada. `1985` virando
+> `1995` passa por toda validação — só a comparação com uma segunda fonte pegaria. Fica com o
+> conferente.
 
 ### Os arquivos
 
