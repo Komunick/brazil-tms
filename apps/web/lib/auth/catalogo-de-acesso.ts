@@ -85,6 +85,16 @@ export const ROTULO_DA_ACAO: Record<string, string> = {
     `view_all_trips`.
   */
   decidir_spot: "Aceitar e ignorar oferta de spot — para a equipe",
+  /*
+    AS DUAS MARCAS DIZEM DE QUE SETOR SÃO, e não só o que fazem.
+
+    "Marcar SM" sozinho não ajuda quem monta um cargo: a pergunta que essa pessoa tem na cabeça é
+    "isso é do GR ou do Fiscal?". O nome do setor no rótulo responde antes de ela precisar perguntar
+    a alguém — e é o que evita que as duas sejam marcadas juntas por precaução, que é como uma
+    separação de setor morre.
+  */
+  marcar_sm: "Marcar a SM na programação — setor GR",
+  marcar_cte: "Marcar o CTE na programação — setor Fiscal",
 };
 
 /**

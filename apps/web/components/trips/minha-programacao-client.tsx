@@ -263,11 +263,17 @@ export function MinhaProgramacaoClient({
   userId,
   podeAtribuir,
   podeEditarVinculo,
+  podeMarcarSm,
+  podeMarcarCte,
 }: {
   userId: string;
   podeAtribuir: boolean;
   /** Editar o vínculo é `manage_fleet_data` — a mesma chave da aba de Motoristas. */
   podeEditarVinculo: boolean;
+  /** `marcar_sm` — do setor GR, que emite a SM. */
+  podeMarcarSm: boolean;
+  /** `marcar_cte` — do setor Fiscal, que emite o CTE. */
+  podeMarcarCte: boolean;
 }) {
   const t = useTranslations("Programacao");
   /**
@@ -925,7 +931,7 @@ export function MinhaProgramacaoClient({
                           tripId={l.tripId}
                           valor={l.sm}
                           campo="sm"
-                          podeMarcar={podeAtribuir}
+                          podeMarcar={podeMarcarSm}
                         />
                       </TableCell>
                     ) : null}
@@ -935,7 +941,7 @@ export function MinhaProgramacaoClient({
                           tripId={l.tripId}
                           valor={l.cte}
                           campo="cte"
-                          podeMarcar={podeAtribuir}
+                          podeMarcar={podeMarcarCte}
                         />
                       </TableCell>
                     ) : null}

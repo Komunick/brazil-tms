@@ -71,7 +71,36 @@ export type PermissionKey =
    * que ela já tinha. Esta chave é uma condição A MAIS, aplicada só quando a decisão vem do cartão
    * de spot — não um caminho paralelo. Ver o comentário da rota.
    */
-  | "decidir_spot";
+  | "decidir_spot"
+  /**
+   * MARCAR A SM NA PROGRAMAÇÃO — o V e o X da coluna SM (032, 2026-09-05).
+   *
+   * ── O DEFEITO QUE ISTO CONSERTA ───────────────────────────────────────────────────────────────
+   *
+   * A marcação nasceu reusando `assign_resources`, porque é a permissão da rota da programação
+   * inteira. O usuário relatou: "alguns usuários não estão conseguindo marcar". Medido em produção
+   * no mesmo dia: **26 dos 50 usuários ativos** estão no cargo *Programador*, que NÃO tem
+   * `assign_resources` — metade da casa, e justamente o cargo de quem vive nessa tela.
+   *
+   * O quanto isso estava torto se vê pelo que o mesmo cargo PODE: cancelar viagem, mudar status,
+   * editar o plano, subir documento. Não podia marcar um V numa coluna.
+   *
+   * ── POR QUE NÃO BASTAVA DAR `assign_resources` AO CARGO ───────────────────────────────────────
+   *
+   * Ela abre outras 12 rotas: atribuir motorista e placa, confirmar atribuição, disparar ação no
+   * portal do CLIENTE, criar Pré-SM, a aba GR. Marcar que a SM saiu é ANOTAÇÃO; atribuir é
+   * DESPACHO. Dar um para conseguir o outro é o mesmo erro que fez 20 pessoas virarem admin antes
+   * da 029.
+   *
+   * ── E POR QUE DUAS CHAVES, E NÃO UMA ──────────────────────────────────────────────────────────
+   *
+   * Porque são dois setores (usuário, 05/09): **GR emite a SM, Fiscal emite o CTE**. Uma chave só
+   * deixaria cada um marcar a coluna do outro — e a coluna existe para dizer que AQUELE setor fez a
+   * parte dele.
+   */
+  | "marcar_sm"
+  /** MARCAR O CTE NA PROGRAMAÇÃO — o par da de cima, do setor Fiscal. Ver `marcar_sm`. */
+  | "marcar_cte";
 
 export const ALL_PERMISSIONS: readonly PermissionKey[] = [
   "manage_users",
@@ -98,6 +127,8 @@ export const ALL_PERMISSIONS: readonly PermissionKey[] = [
   "view_freight_rates",
   "import_freight_rates",
   "decidir_spot",
+  "marcar_sm",
+  "marcar_cte",
 ];
 
 // Admin is a superset of every permission (matrix invariant).
@@ -129,6 +160,9 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlySet<PermissionKey>> = {
     "import_trips",
     "edit_trip_plan",
     "assign_resources",
+    // As duas marcas acompanham quem despacha — ver 0066: quem marcava antes não pode perder.
+    "marcar_sm",
+    "marcar_cte",
     "update_trip_status",
     "cancel_trip",
     "mark_completed",
@@ -146,6 +180,9 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlySet<PermissionKey>> = {
     "view_all_trips",
     "edit_trip_plan",
     "assign_resources",
+    // As duas marcas acompanham quem despacha — ver 0066: quem marcava antes não pode perder.
+    "marcar_sm",
+    "marcar_cte",
     "update_trip_status",
     "cancel_trip",
     "create_exceptions",
@@ -166,6 +203,9 @@ export const ROLE_PERMISSIONS: Record<Role, ReadonlySet<PermissionKey>> = {
   fleet_coordinator: new Set<PermissionKey>([
     "view_all_trips",
     "assign_resources",
+    // As duas marcas acompanham quem despacha — ver 0066: quem marcava antes não pode perder.
+    "marcar_sm",
+    "marcar_cte",
     "create_exceptions",
     "resolve_exceptions",
     "upload_documents",

@@ -80,14 +80,35 @@ describe("a semeadura reproduz `ROLE_PERMISSIONS`", () => {
    *
    *   0060 — os 7 cargos e as capacidades de cada um (fatia 029)
    *   0063 — `decidir_spot` para o Administrador, e o cargo SPOT (fatia 030)
+   *   0066 — `marcar_sm`/`marcar_cte` para quem já marcava, e os cargos GR e Fiscal (fatia 032)
    */
-  const original = ["0060_cargos_e_perfil", "0063_spot_decisao_da_equipe"]
+  const original = [
+    "0060_cargos_e_perfil",
+    "0063_spot_decisao_da_equipe",
+    "0066_cargos_gr_e_fiscal",
+  ]
     .map((tag) => readFileSync(join(__dirname, `../../migrations/${tag}.sql`), "utf8"))
     .join("\n");
 
+  /**
+   * O SQL SEM COMENTÁRIO — e é daqui que os pares saem (2026-09-05).
+   *
+   * A leitura era feita sobre o arquivo cru, e a `0066` a quebrou: o cabeçalho dela EXPLICA qual
+   * padrão este teste procura, escrevendo `where nome = 'X'), 'permissao')` como exemplo. O parser
+   * leu o exemplo e passou a acusar um cargo chamado "X".
+   *
+   * **Este projeto já errou isso três vezes.** As duas primeiras foram asserções casando com a
+   * frase que explicava a regra; esta é a mesma coisa do lado de quem LÊ. E o conserto é sempre o
+   * mesmo, nunca apagar a explicação: remover comentário antes de olhar.
+   *
+   * `executavel` já existia mais abaixo, para a asserção de `customer_viewer` — pelo mesmo motivo,
+   * e por isso aquela nunca quebrou. Ele sobe para cá e passa a servir aos dois.
+   */
+  const executavel = original.replace(/--[^\n]*/g, "");
+
   /** `('Despachante'), 'assign_resources'` → o par que a migração grava. */
   const gravados = new Map<string, Set<string>>();
-  for (const par of original.matchAll(/where nome = '([^']+)'\), '([a-z_]+)'\)/g)) {
+  for (const par of executavel.matchAll(/where nome = '([^']+)'\), '([a-z_]+)'\)/g)) {
     // Os dois grupos são obrigatórios no padrão, mas o tipo de `matchAll` não sabe disso.
     const nome = par[1]!;
     const permissao = par[2]!;
@@ -97,7 +118,7 @@ describe("a semeadura reproduz `ROLE_PERMISSIONS`", () => {
 
   /** O mesmo mapa nome→papel que a migração usa nos `update`. */
   const PAPEL_DO_CARGO = new Map<string, string>(
-    [...original.matchAll(/where nome = '([^']+)'\) where role = '([a-z_]+)'/g)].map(
+    [...executavel.matchAll(/where nome = '([^']+)'\) where role = '([a-z_]+)'/g)].map(
       (m): [string, string] => [m[1]!, m[2]!],
     ),
   );
@@ -131,13 +152,12 @@ describe("a semeadura reproduz `ROLE_PERMISSIONS`", () => {
       aparecesse aqui sem alguém tê-lo escrito seria semeadura que ninguém decidiu.
     */
     const alemDosPapeis = [...gravados.keys()].filter((nome) => !PAPEL_DO_CARGO.has(nome));
-    expect(alemDosPapeis.sort()).toEqual(["SPOT"]);
+    expect(alemDosPapeis.sort()).toEqual(["Fiscal", "GR", "SPOT"]);
     /*
       Conferido no SQL SEM COMENTÁRIOS. O cabeçalho da migração cita `customer_viewer` de propósito,
       para explicar por que ele fica de fora — e uma asserção sobre o arquivo inteiro proibiria
       justamente a explicação que evita alguém "consertar" a contagem para oito mais tarde.
     */
-    const executavel = original.replace(/--[^\n]*/g, "");
     expect(executavel).not.toContain("customer_viewer");
   });
 
