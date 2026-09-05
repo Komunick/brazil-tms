@@ -570,6 +570,29 @@ export interface PesquisaNaGerenciadora {
   dataExpiracao: string | null;
   /** O que impediu a aprovação, quando há. */
   justificativas: { codigo: number; descricao: string }[];
+  /**
+   * PESQUISA OU CONSULTA — `P` ou `C` (2026-09-05).
+   *
+   * É o `PE` / `CO` que aparece no cartão da tela da gerenciadora, e a gente descartava. A falta
+   * dele já custou uma conclusão errada: olhando dois cartões do mesmo CPF sem saber qual era qual,
+   * dá para achar que a empresa pagou duas pesquisas quando a segunda era uma consulta sobre a
+   * primeira.
+   *
+   * Nulo quando ela não manda — o campo é obrigatório no manual, mas confiar nisso e escrever
+   * `"P"` por omissão inventaria dado.
+   */
+  tipo: "P" | "C" | null;
+  /**
+   * O PHOTOCHECK — o link que o condutor abre para validar por foto, e quando ele vence.
+   *
+   * A tela deles tem quatro filtros disso (sem, em andamento, finalizado, expirado) e nós não
+   * tínhamos nada. Vem junto porque é a mesma resposta: não custa chamada nova.
+   *
+   * Nulo é o normal, não é falha — só as pesquisas que exigem photocheck trazem o link.
+   */
+  photocheckUrl: string | null;
+  /** `AAAA-MM-DD`. Depois disso o link não abre mais e o condutor precisa de outro. */
+  photocheckExpiracao: string | null;
 }
 
 /**
@@ -610,6 +633,10 @@ export async function pesquisaExistente(
         codigo: Number(j.Codigo ?? 0),
         descricao: String(j.Descricao ?? ""),
       })),
+      // Só `P` e `C` existem no manual. Qualquer outra coisa vira nulo em vez de virar dado.
+      tipo: r.Tipo === "P" || r.Tipo === "C" ? r.Tipo : null,
+      photocheckUrl: (r.PhotocheckUrl as string | undefined)?.trim() || null,
+      photocheckExpiracao: (r.PhotocheckExpiracao as string | undefined)?.trim() || null,
     };
   } catch (e) {
     if (e instanceof IntegraRecusou && e.codErro === COD_ERRO_SEM_PESQUISA) return null;

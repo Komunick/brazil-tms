@@ -53,6 +53,20 @@ export interface PesquisaEncontrada {
   codigo: number;
   situacao: string;
   dataExpiracao: string | null;
+  /**
+   * `P` = Pesquisa, `C` = Consulta — o `PE` / `CO` do cartão da gerenciadora (2026-09-05).
+   *
+   * OPCIONAL DE PROPÓSITO: os retratos gravados antes desta data não têm o campo, e inventar `"P"`
+   * para eles diria que uma consulta é pesquisa. Ausente significa "não sabemos", que é a verdade.
+   *
+   * Ele NÃO entra em `decidirPedidoDePesquisa`: consulta e pesquisa igualmente válidas bloqueiam um
+   * pedido novo, e a decisão continua sendo só sobre situação e validade.
+   */
+  tipo?: "P" | "C" | null;
+  /** O link do photocheck, quando a pesquisa exige. Nulo é o caso normal. */
+  photocheckUrl?: string | null;
+  /** `AAAA-MM-DD` — depois disso o link do photocheck não abre mais. */
+  photocheckExpiracao?: string | null;
 }
 
 export type MotivoDeNaoPedir = "ja_existe_valida" | "ja_esta_em_andamento";

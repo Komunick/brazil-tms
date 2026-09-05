@@ -593,12 +593,44 @@ export function ConferenciaClient({ id }: { id: string }): React.ReactElement {
                             codigo: pq.codigo,
                           })}
                         </Badge>
+                        {/*
+                          PESQUISA ou CONSULTA — o `PE`/`CO` do cartão da gerenciadora (05/09).
+
+                          Só aparece quando SABEMOS: retrato gravado antes desta data não tem o
+                          campo, e escrever "Pesquisa" por omissão afirmaria o que não se leu.
+                        */}
+                        {pq.tipo ? (
+                          <Badge variant="secondary">
+                            {pq.tipo === "P" ? t("tipoPesquisa") : t("tipoConsulta")}
+                          </Badge>
+                        ) : null}
                         {pq.dataExpiracao ? (
                           <span className="text-muted-foreground">
                             {t("conferenciaPesquisaValidade", {
                               data: dataPuraBr(pq.dataExpiracao),
                             })}
                           </span>
+                        ) : null}
+                        {/*
+                          O PHOTOCHECK, quando existe — e ele é AÇÃO, não informação.
+
+                          É o link que o CONDUTOR abre para validar por foto: enquanto não faz, a
+                          pesquisa não anda. Mostrar só a data deixaria alguém esperando por algo
+                          que depende de mandar o link para a pessoa.
+
+                          Abre em aba nova e com `noreferrer`: é endereço da gerenciadora, não nosso.
+                        */}
+                        {pq.photocheckUrl ? (
+                          <a
+                            href={pq.photocheckUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary underline underline-offset-2"
+                          >
+                            {pq.photocheckExpiracao
+                              ? t("photocheckAte", { data: dataPuraBr(pq.photocheckExpiracao) })
+                              : t("photocheck")}
+                          </a>
                         ) : null}
                       </li>
                     ))}
