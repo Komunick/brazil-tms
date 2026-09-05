@@ -39,6 +39,9 @@ const EXPECTED: Record<RoleType, PermissionKey[]> = {
     "import_trips",
     "edit_trip_plan",
     "assign_resources",
+    // As duas marcas seguem quem despacha (032) — ver o comentario de marcar_sm no catalogo.
+    "marcar_sm",
+    "marcar_cte",
     "update_trip_status",
     "cancel_trip",
     "mark_completed",
@@ -56,6 +59,9 @@ const EXPECTED: Record<RoleType, PermissionKey[]> = {
     "view_all_trips",
     "edit_trip_plan",
     "assign_resources",
+    // As duas marcas seguem quem despacha (032) — ver o comentario de marcar_sm no catalogo.
+    "marcar_sm",
+    "marcar_cte",
     "update_trip_status",
     "cancel_trip",
     "create_exceptions",
@@ -76,6 +82,9 @@ const EXPECTED: Record<RoleType, PermissionKey[]> = {
   fleet_coordinator: [
     "view_all_trips",
     "assign_resources",
+    // As duas marcas seguem quem despacha (032) — ver o comentario de marcar_sm no catalogo.
+    "marcar_sm",
+    "marcar_cte",
     "create_exceptions",
     "resolve_exceptions",
     "upload_documents",

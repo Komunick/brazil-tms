@@ -127,7 +127,13 @@ export async function PATCH(
 ): Promise<NextResponse> {
   try {
     const ctx = await requireAuth();
-    requirePermission(ctx, "assign_resources");
+    /*
+      A EXIGÊNCIA DESCEU PARA DENTRO DOS RAMOS (032, 2026-09-05).
+
+      Ela era `assign_resources` aqui em cima, para os três gestos. Isso fazia marcar a SM exigir a
+      permissão de ATRIBUIR MOTORISTA — e 26 dos 50 usuários ativos, todos do cargo que vive nesta
+      tela, não a têm. Cada ramo abaixo pede a sua; o de status continua pedindo a de sempre.
+    */
     const { id } = await params;
     /*
       O CORPO É LIDO UMA VEZ SÓ — `request.json()` consome o fluxo, e uma segunda chamada devolve
@@ -142,18 +148,32 @@ export async function PATCH(
     */
     const corpo: unknown = await request.json().catch(() => ({}));
 
+    /*
+      CADA MARCA EXIGE A CHAVE DO SEU SETOR (032, 2026-09-05).
+
+      `assign_resources`, exigido lá em cima, continua valendo para o PATCH — quem despacha também
+      anota. Estas são condições A MAIS, aplicadas só no ramo do campo correspondente; não são um
+      segundo caminho de autorização. É a mesma forma do `decidir_spot`.
+
+      Sem isto, marcar a SM exigia a permissão de ATRIBUIR: 26 dos 50 usuários ativos ficavam de
+      fora, e eram justamente os do cargo que vive nesta tela.
+    */
     const comSm = smSchema.safeParse(corpo);
     if (comSm.success && comSm.data.sm !== undefined) {
+      requirePermission(ctx, "marcar_sm");
       await marcarSm(id, ctx.userId, comSm.data.sm);
       return NextResponse.json({ programacao: await lerProgramacaoDaViagem(id) });
     }
 
     const comCte = cteSchema.safeParse(corpo);
     if (comCte.success && comCte.data.cte !== undefined) {
+      requirePermission(ctx, "marcar_cte");
       await marcarCte(id, ctx.userId, comCte.data.cte);
       return NextResponse.json({ programacao: await lerProgramacaoDaViagem(id) });
     }
 
+    // O status continua sendo despacho, e continua com a permissão de sempre.
+    requirePermission(ctx, "assign_resources");
     const { status } = statusSchema.parse(corpo);
     await marcarStatus(id, ctx.userId, status);
     return NextResponse.json({ programacao: await lerProgramacaoDaViagem(id) });

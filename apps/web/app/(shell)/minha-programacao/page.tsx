@@ -44,6 +44,18 @@ export default async function MinhaProgramacaoPage() {
           O botão escondido não é a garantia; a rota recusa de qualquer forma.
         */
         podeEditarVinculo={can(session.user, "manage_fleet_data")}
+        /*
+          AS DUAS MARCAS, CADA UMA DO SEU SETOR (032, 2026-09-05).
+
+          Elas exigiam `assign_resources`, a mesma de atribuir — e 26 dos 50 usuários ativos, todos
+          do cargo que vive nesta tela, não a têm. O sintoma foi "alguns usuários não estão
+          conseguindo marcar": o botão aparecia, era clicado, e a rota recusava calada.
+
+          Passar isto para a tela não é a garantia — a rota recusa de qualquer forma. É para o botão
+          não prometer o que não cumpre.
+        */
+        podeMarcarSm={can(session.user, "marcar_sm")}
+        podeMarcarCte={can(session.user, "marcar_cte")}
       />
     </div>
   );
