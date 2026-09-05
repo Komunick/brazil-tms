@@ -114,3 +114,44 @@ describe("pesquisaValida", () => {
     expect(pesquisaValida(p({ dataExpiracao: "sei lá" }), HOJE)).toBe(false);
   });
 });
+
+/**
+ * O TIPO (`P` = Pesquisa, `C` = Consulta) ENTROU EM 2026-09-05, e ele NÃO decide nada.
+ *
+ * ── POR QUE ESTE TESTE EXISTE ─────────────────────────────────────────────────────────────────
+ *
+ * O campo veio para a TELA: é o `PE`/`CO` do cartão da gerenciadora, e a falta dele já custou uma
+ * conclusão errada — olhando dois cartões do mesmo CPF sem distinguir um do outro, dá para achar
+ * que a empresa pagou duas pesquisas quando a segunda era uma consulta sobre a primeira.
+ *
+ * Tendo o campo à mão, o passo seguinte é tentador e errado: "consulta não é pesquisa, então não
+ * deveria segurar o pedido". Seguraria sim — uma consulta válida e adequada ao risco responde a
+ * mesma pergunta, e liberar o pedido em cima dela é pagar por algo que já se sabe.
+ *
+ * Se alguém acrescentar `tipo` a `decidirPedidoDePesquisa`, estes três casos caem.
+ */
+describe("o tipo não muda a decisão", () => {
+  it("uma CONSULTA válida segura o pedido igual a uma pesquisa", () => {
+    const d = decidirPedidoDePesquisa([p({ tipo: "C" })], HOJE);
+    expect(d.podePedir).toBe(false);
+    expect(d.motivo).toBe("ja_existe_valida");
+  });
+
+  it("pesquisa e consulta com os mesmos dados decidem igual", () => {
+    const comP = decidirPedidoDePesquisa([p({ tipo: "P" })], HOJE);
+    const comC = decidirPedidoDePesquisa([p({ tipo: "C" })], HOJE);
+    expect(comC.podePedir).toBe(comP.podePedir);
+    expect(comC.motivo).toBe(comP.motivo);
+  });
+
+  /**
+   * RETRATO ANTIGO não tem o campo. Ele precisa decidir exatamente como antes — senão a chegada do
+   * campo mudaria, sozinha, o veredito sobre tudo que foi conferido antes de 05/09.
+   */
+  it("sem o campo, decide igual a com ele", () => {
+    const semTipo = decidirPedidoDePesquisa([p()], HOJE);
+    const comTipo = decidirPedidoDePesquisa([p({ tipo: "P" })], HOJE);
+    expect(semTipo.podePedir).toBe(comTipo.podePedir);
+    expect(semTipo.motivo).toBe(comTipo.motivo);
+  });
+});

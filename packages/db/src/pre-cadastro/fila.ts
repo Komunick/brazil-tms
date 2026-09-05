@@ -384,6 +384,12 @@ export interface PreCadastroParaConferencia {
       codigo: number;
       situacao: string;
       dataExpiracao: string | null;
+      // Opcionais porque os retratos gravados antes de 2026-09-05 não os têm. Ver
+      // `PesquisaEncontrada` em `packages/shared` — ausente quer dizer "não sabemos", e é
+      // diferente de afirmar que é pesquisa ou que não há photocheck.
+      tipo?: "P" | "C" | null;
+      photocheckUrl?: string | null;
+      photocheckExpiracao?: string | null;
     }[];
     erro?: string;
   } | null;
@@ -899,6 +905,12 @@ export async function gravarConferenciaNaRaster(
       codigo: number;
       situacao: string;
       dataExpiracao: string | null;
+      // Opcionais porque os retratos gravados antes de 2026-09-05 não os têm. Ver
+      // `PesquisaEncontrada` em `packages/shared` — ausente quer dizer "não sabemos", e é
+      // diferente de afirmar que é pesquisa ou que não há photocheck.
+      tipo?: "P" | "C" | null;
+      photocheckUrl?: string | null;
+      photocheckExpiracao?: string | null;
     }[];
     erro?: string;
   },

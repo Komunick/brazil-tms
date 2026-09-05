@@ -77,6 +77,9 @@ export async function registerMotoristaConferirRaster(boss: PgBoss): Promise<voi
         codigo: number;
         situacao: string;
         dataExpiracao: string | null;
+        tipo: "P" | "C" | null;
+        photocheckUrl: string | null;
+        photocheckExpiracao: string | null;
       }[] = [];
       for (const vinculo of VINCULOS_DA_PESQUISA as readonly VinculoDaPesquisa[]) {
         const p = await pesquisaExistente(cred, { codFilial: COD_FILIAL, cpf, vinculo });
@@ -86,6 +89,10 @@ export async function registerMotoristaConferirRaster(boss: PgBoss): Promise<voi
             codigo: p.codigo,
             situacao: p.situacao,
             dataExpiracao: p.dataExpiracao,
+            // Vieram na MESMA resposta — nenhuma chamada nova, nenhum custo (2026-09-05).
+            tipo: p.tipo,
+            photocheckUrl: p.photocheckUrl,
+            photocheckExpiracao: p.photocheckExpiracao,
           });
         }
       }
