@@ -1214,7 +1214,7 @@
       "none": "—"
     },
     "board": {
-      "searchPlaceholder": "Buscar por ID externo, cliente ou rota",
+      "searchPlaceholder": "Buscar por LH, motorista, cliente ou rota",
       "filters": "Filtros",
       "views": "Visões",
       "viewToday": "Hoje",
