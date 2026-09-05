@@ -90,8 +90,19 @@ export async function GET(request: Request): Promise<NextResponse> {
        * 5 minutos existe pelo mesmo motivo — sem ele, um ciclo de 5 s daria alarme
        * a cada 25 segundos de silêncio.
        */
+      // Ciclo que nunca declarou ritmo nao pode ser julgado por ritmo.
+      //
+      // `portal_history` e assim: ele e gravado UMA VEZ por carga de pagina — o
+      // primeiro ciclo da execucao usa o modo `history`, e do segundo em diante
+      // usa `execution`. O registro fica com `interval_ms` nulo e a idade so
+      // cresce, o que faria este teste acusa-lo para sempre.
+      //
+      // `saudeDoCiclo` ja trata o mesmo caso como "sem_dado"; aqui vale a mesma
+      // regra, e pelo mesmo motivo.
+      if (!ciclo.intervalMs || ciclo.intervalMs <= 0) continue;
+
       const idadeMs = agora.getTime() - new Date(ciclo.receivedAt).getTime();
-      const limiteMs = Math.max(5 * 60_000, (ciclo.intervalMs ?? 6 * 60_000) * 5);
+      const limiteMs = Math.max(5 * 60_000, ciclo.intervalMs * 5);
       if (idadeMs > limiteMs) {
         ciclosParados += 1;
         parados.push(ciclo.robot);
