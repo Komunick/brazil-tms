@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         Brazil TMS — cadastro de motoristas
 // @namespace    braziltransports.com.br
-// @version      1.3.1
+// @version      1.4.0
 // @description  Lê o cadastro de motoristas do portal do cliente e entrega ao TMS. Somente leitura.
 // @match        https://logistics.myagencyservice.com.br/*
 // @connect      tms.braziltransports.com.br
+// @connect      status.braziltransports.com.br
 // @connect      tmsdev.braziltransports.com.br
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
@@ -66,6 +67,17 @@
      * vezes numa noite só.
      */
     token: "COLE_AQUI_O_TOKEN",
+
+    // ── Heartbeat para o Uptime Kuma ────────────────────────────────────────
+    // Moram aqui, e nao em constantes no topo, pelo mesmo motivo de tms e token:
+    // e o bloco CONFIG que o instalar.sh sabe preservar. Vazias ou com COLE_, o
+    // heartbeat nao envia nada e o robo roda exatamente como hoje.
+    /** Ex.: https://status.braziltransports.com.br/api/push */
+    hb_base: "COLE_A_BASE_DO_KUMA",
+    /** Token do monitor "BOT · portal-drivers · vivo". */
+    hb_vivo: "COLE_O_TOKEN_VIVO",
+    /** Token do monitor "BOT · portal-drivers · ciclo". */
+    hb_ciclo: "COLE_O_TOKEN_CICLO",
     /**
      * DOIS RITMOS, E QUEM ESCOLHE É A FILA.
      *
@@ -121,6 +133,126 @@
      */
     esperaAposCotaMs: 60 * 60 * 1000,
   };
+
+  const HB = criarHeartbeat(CONFIG);
+
+  function criarHeartbeat(cfg) {
+    const BASE = (cfg && cfg.hb_base) || "";
+    const TOKEN_VIVO = (cfg && cfg.hb_vivo) || "";
+    const TOKEN_CICLO = (cfg && cfg.hb_ciclo) || "";
+
+    const INTERVALO_VIVO_MS = 60000; // o monitor "vivo" usa tolerância de 180 s
+
+    // Placeholder do repositório ou campo vazio: o robô roda, só não é monitorado.
+    const semValor = (v) => !v || v.indexOf("COLE_") === 0;
+    const desligado = semValor(BASE);
+
+    /**
+     * Envio em três camadas, da mais confiável para a mais tolerante.
+     * Os 5 robôs já declaram `@grant GM_xmlhttpRequest`, então a primeira quase
+     * sempre resolve. As outras existem para o dia em que alguém criar um robô
+     * novo sem esse grant, ou para um portal com CSP mais fechada.
+     */
+    function disparar(url) {
+      try {
+        if (typeof GM_xmlhttpRequest === "function") {
+          GM_xmlhttpRequest({
+            method: "GET",
+            url,
+            timeout: 10000,
+            onerror() {},
+            ontimeout() {},
+            onload() {},
+          });
+          return;
+        }
+      } catch { /* cai para a próxima camada */ }
+
+      try {
+        fetch(url, { method: "GET", mode: "no-cors", cache: "no-store", keepalive: true })
+          .catch(() => {});
+        return;
+      } catch { /* cai para a próxima camada */ }
+
+      try {
+        new Image().src = url;
+      } catch { /* desiste em silêncio: o Kuma marca DOWN pela ausência */ }
+    }
+
+    function enviar(token, opcoes) {
+      if (desligado || semValor(token)) return;
+      const o = opcoes || {};
+      try {
+        const q = new URLSearchParams({
+          status: o.status || "up",
+          msg: String(o.msg == null ? "OK" : o.msg).slice(0, 250),
+        });
+        const ping = o.ping;
+        if (ping != null && isFinite(ping)) q.set("ping", String(Math.round(ping)));
+        disparar(BASE.replace(/\/+$/, "") + "/" + token + "?" + q.toString());
+      } catch { /* nunca propague erro do heartbeat para o robô */ }
+    }
+
+    // -- API pública ---------------------------------------------------------
+
+    const api = {
+      /** Sinal de vida. Automático a cada minuto; raramente precisa ser manual. */
+      vivo(msg) {
+        enviar(TOKEN_VIVO, { msg: msg || "script carregado" });
+      },
+
+      /**
+       * Ciclo de trabalho CONCLUÍDO COM SUCESSO.
+       * Chame no FIM do ciclo, não no começo — o que interessa é a entrega.
+       * @param {string} msg   o que foi processado, ex.: "38 viagens"
+       * @param {number} [ms]  duração do ciclo; vira o gráfico de latência no Kuma
+       */
+      ciclo(msg, ms) {
+        enviar(TOKEN_CICLO, { msg: msg || "ciclo concluido", ping: ms });
+      },
+
+      /**
+       * Ciclo FALHOU. Marca DOWN na hora, com o motivo, em vez de esperar a
+       * tolerância expirar. O diagnóstico chega minutos mais cedo, já escrito.
+       */
+      falhou(motivo) {
+        enviar(TOKEN_CICLO, { status: "down", msg: String(motivo || "erro no ciclo") });
+      },
+
+      /** Mede um ciclo inteiro e reporta sucesso ou falha automaticamente. */
+      async medir(fn, rotulo) {
+        const nome = rotulo || "ciclo";
+        const inicio = Date.now();
+        try {
+          const r = await fn();
+          const resumo =
+            typeof r === "string" ? r
+            : typeof r === "number" ? r + " item(ns)"
+            : nome + " concluido";
+          api.ciclo(resumo, Date.now() - inicio);
+          return r;
+        } catch (err) {
+          api.falhou(nome + ": " + ((err && err.message) || err));
+          throw err; // o robô continua tratando o erro como sempre tratou
+        }
+      },
+    };
+
+    // -- Sinal de vida automático --------------------------------------------
+    //
+    // Decisão deliberada: NÃO enviamos "down" no evento pagehide. Os robôs
+    // recarregam a página como parte do ciclo normal, e cada recarga viraria um
+    // par down/up no histórico — a disponibilidade do robô ficaria irreconhecível.
+    // Quem detecta aba fechada de verdade, em ~1 minuto, é o agente do host, que
+    // pergunta ao Chromium quais abas existem. Ver ../agente-bots/.
+    if (!desligado && !semValor(TOKEN_VIVO)) {
+      api.vivo();
+      setInterval(() => api.vivo(), INTERVALO_VIVO_MS);
+    }
+
+    return api;
+  }
+
 
   /**
    * A COTA SE RECONHECE PELA MENSAGEM, não pelo número.
@@ -427,10 +559,13 @@
      * com três robôs registrando 502 em rajada. Quinze minutos é tempo de o problema ser resolvido.
      */
     let estado = "quieto";
+    const inicioDoCiclo = Date.now();
     try {
       estado = await ciclo();
+      HB.ciclo(`ciclo ${estado}`, Date.now() - inicioDoCiclo);
     } catch (e) {
       erro("ciclo falhou:", String(e));
+      HB.falhou(String(e).slice(0, 200));
     }
     const espera =
       estado === "fila"

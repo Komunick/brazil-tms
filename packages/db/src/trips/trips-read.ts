@@ -755,6 +755,30 @@ function buildWhere(query: TripBoardQuery | TripExportQuery): SQL | undefined {
           ilike(destLoc.name, like),
           ilike(originLoc.code, like),
           ilike(destLoc.code, like),
+          /**
+           * O NOME DO MOTORISTA, PELAS DUAS FONTES (2026-09-04, a pedido).
+           *
+           * O relato foi "quero achar viagens de NARCISIO MANOEL DA SILVA e não acho, só por LH" — e
+           * era verdade: a busca cobria LH, cliente, origem e destino, e motorista não estava aqui.
+           *
+           * ── POR QUE DUAS FONTES, E NÃO SÓ A NOSSA ATRIBUIÇÃO ──────────────────────────────────
+           *
+           * Porque a nossa atribuição não sabe de todas as viagens. Medido em produção neste dia:
+           * 538 viagens CONCLUÍDAS não têm atribuição corrente nenhuma — 519 delas porque o
+           * motorista estava `inactive` e o espelho do portal recusa gravar motorista inativo. Uma
+           * busca só por `boardDriver.name` acharia zero dessas, e quem procurasse concluiria que a
+           * viagem não existe.
+           *
+           * E há o caso inverso, mais traiçoeiro: quando o cliente troca o condutor na origem, a
+           * nossa atribuição fica com o nome VELHO até o espelho conseguir aplicar. Medido: 37 de
+           * 683 pares divergem. Procurando pelo nome novo, só o campo do portal acha.
+           *
+           * As duas somam com OU, então quem procura acha a viagem por qualquer um dos dois nomes —
+           * que é exatamente o que se quer de uma busca. É a mesma lição que
+           * `placas-do-motorista.ts` já documenta: partir só de uma das pontas esconde metade.
+           */
+          ilike(boardDriver.name, like),
+          ilike(sql`(${trips.customerFields} ->> 'Motorista (portal)')`, like),
         ];
       }),
     );

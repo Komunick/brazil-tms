@@ -65,10 +65,38 @@ export async function GET(request: Request): Promise<NextResponse> {
 
     const ciclos: Record<string, string> = {};
     let ciclosLentos = 0;
+    let ciclosParados = 0;
+    const parados: string[] = [];
+
     for (const ciclo of status.ciclos) {
       const { saude } = saudeDoCiclo(ciclo.intervalMs, ciclo.durationMs);
       ciclos[ciclo.robot] = saude;
       if (saude === "lento") ciclosLentos += 1;
+
+      /**
+       * CICLO QUE PAROU DE APARECER (2026-09-05).
+       *
+       * `saudeDoCiclo` compara duração com intervalo: ela pega o ciclo LENTO, não o
+       * ciclo que sumiu. Um laço que morre para de gravar pulso, e o registro dele
+       * fica congelado no banco com a última razão saudável — verde para sempre.
+       *
+       * É exatamente o furo que o comentário do laço de spot descreve: em 29/08
+       * foram oito horas sem oferta sem dar para dizer se o mercado estava parado
+       * ou se o ciclo estava quebrado. O pulso resolveu do lado de quem grava;
+       * isto resolve do lado de quem olha.
+       *
+       * O fator de 5× é generoso de propósito. O laço de spot roda a cada 5 s: no
+       * limite justo, uma oscilação de rede de meio minuto já acusaria. E o piso de
+       * 5 minutos existe pelo mesmo motivo — sem ele, um ciclo de 5 s daria alarme
+       * a cada 25 segundos de silêncio.
+       */
+      const idadeMs = agora.getTime() - new Date(ciclo.receivedAt).getTime();
+      const limiteMs = Math.max(5 * 60_000, (ciclo.intervalMs ?? 6 * 60_000) * 5);
+      if (idadeMs > limiteMs) {
+        ciclosParados += 1;
+        parados.push(ciclo.robot);
+        ciclos[ciclo.robot] = "parado";
+      }
     }
 
     return NextResponse.json({
@@ -78,6 +106,8 @@ export async function GET(request: Request): Promise<NextResponse> {
       tarefas: { atrasadas: tarefasAtrasadas, falhas24h },
       ciclos,
       ciclosLentos,
+      ciclosParados,
+      parados,
       atribuicoesPendentes: status.atribuicoesPendentes,
       agora: status.agora,
     });

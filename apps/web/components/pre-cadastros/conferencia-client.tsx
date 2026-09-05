@@ -15,6 +15,8 @@ import {
   ShieldQuestion,
 } from "lucide-react";
 import {
+  CAMPOS_DE_DATA,
+  CAMPOS_DE_DATA_NO_PASSADO,
   decidirPedidoDePesquisa,
   formatDateTime,
   motivosDeNaoCadastrar,
@@ -387,6 +389,16 @@ export function ConferenciaClient({ id }: { id: string }): React.ReactElement {
     divergiria para o lado caro, liberando o botão sobre uma pesquisa que já existe.
   */
   const decisao = decidirPedidoDePesquisa(item.conferencia?.pesquisas ?? []);
+  /**
+   * HOJE EM SÃO PAULO, para o `max` dos campos de data que não podem estar no futuro.
+   *
+   * `en-CA` porque ela formata como `AAAA-MM-DD`, que é o que o campo nativo espera — e não porque
+   * a tela tenha algo de canadense. Usar `toISOString()` daria o dia em UTC, e depois das 21h em
+   * São Paulo isso já é amanhã: o `max` liberaria um dia a mais bem no fim da noite.
+   */
+  const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(
+    new Date(),
+  );
   const rotulo = (c: string): string => (t.has(`campo.${c}`) ? t(`campo.${c}`) : c);
   const faltandoLegivel = (c: string): string => (t.has(`faltando.${c}`) ? t(`faltando.${c}`) : c);
 
@@ -504,8 +516,24 @@ export function ConferenciaClient({ id }: { id: string }): React.ReactElement {
                             </span>
                           ) : null}
                         </div>
+                        {/*
+                          DATA É CAMPO DE DATA, e não texto (2026-09-05).
+
+                          Desenhado como texto, `dataNascimento` aparecia cru — `2035-04-25`, em
+                          ordem ISO. Foi assim que uma data de nascimento no futuro atravessou a
+                          conferência de uma pessoa e chegou à gerenciadora: no meio de vinte
+                          campos, aquilo não se lê como data, se lê como uma sequência de números.
+
+                          Com `type="date"` o navegador desenha no formato local — `25/04/2035`, e
+                          aí o 2035 salta. O valor continua `AAAA-MM-DD`, então nada muda no que é
+                          guardado nem no que é enviado.
+                        */}
                         <Input
                           id={`campo-${campo}`}
+                          type={CAMPOS_DE_DATA.has(campo) ? "date" : "text"}
+                          // Nascer e habilitar-se são fatos passados. O guarda de verdade está no
+                          // servidor; isto só evita o erro antes de ele ser digitado.
+                          max={CAMPOS_DE_DATA_NO_PASSADO.has(campo) ? hoje : undefined}
                           value={rascunho[campo] ?? ""}
                           disabled={jaFoi}
                           onChange={(e) => setRascunho((r) => ({ ...r, [campo]: e.target.value }))}
